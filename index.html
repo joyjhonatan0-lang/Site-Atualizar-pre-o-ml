@@ -29,6 +29,7 @@
         }
         .floating-config:hover { transform: scale(1.1); color: #fff159; }
         .product-img { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; background: #f9f9f9; }
+        .form-check-input { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -51,7 +52,7 @@
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
                 <div>
                     <h4 class="fw-bold m-0 text-dark">Gestão de Anúncios</h4>
-                    <p class="text-muted small m-0">Visualize todos os itens, estoque, preços e taxas da sua conta em tempo real.</p>
+                    <p class="text-muted small m-0">Visualize itens, estoques, altere preços e ative/pause anúncios com um clique.</p>
                 </div>
                 <div class="d-flex gap-2">
                     <input type="text" id="filtroTabela" class="form-control form-control-sm" placeholder="🔍 Buscar por título, MLB ou SKU..." onkeyup="filtrarTabela()" style="width: 280px;">
@@ -63,7 +64,7 @@
             <div class="row g-3 mb-4" id="cardsResumo" style="display: none;">
                 <div class="col-md-4">
                     <div class="stat-card">
-                        <span class="text-muted small fw-bold text-uppercase">Total de Anúncios</span>
+                        <span class="text-muted small fw-bold text-uppercase">Total Listado</span>
                         <h3 class="fw-bold m-0 mt-1 text-dark" id="statTotal">0</h3>
                     </div>
                 </div>
@@ -84,7 +85,7 @@
             <div id="tabela-anuncios-container">
                 <div class="alert alert-light border text-center py-5 rounded-4">
                     <i class="bi bi-cloud-arrow-down fs-1 text-muted"></i>
-                    <p class="text-muted mt-2">Clique em "Atualizar Lista" para carregar todos os seus anúncios.</p>
+                    <p class="text-muted mt-2">Clique em "Atualizar Lista" para carregar seus anúncios.</p>
                 </div>
             </div>
         </div>
@@ -114,7 +115,6 @@
 
             <hr class="my-4">
             <h6 class="fw-bold text-dark">Gerar Token Automaticamente via TG</h6>
-            <p class="text-muted small">Cole o código <strong>TG-...</strong> gerado no navegador e as suas credenciais:</p>
             <div class="row g-2 mb-2">
                 <div class="col-md-6">
                     <input type="text" id="inputClientID" class="form-control form-control-sm" placeholder="Client ID">
@@ -228,7 +228,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar todos os seus 2000+ anúncios com o Mercado Livre...</p></div>`;
+            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar anúncios com o Mercado Livre...</p></div>`;
             document.getElementById('cardsResumo').style.display = 'none';
 
             try {
@@ -292,7 +292,7 @@
                           `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                           `<td>` +
                               `<div class="form-check form-switch">` +
-                                  `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} disabled title="Status na conta">` +
+                                  `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} id="switch_${item.id}" onclick="alterarStatusAnuncio('${item.id}', this)" title="Ativar/Pausar">` +
                               `</div>` +
                           `</td>` +
                           `<td>${linkBtn}</td>` +
@@ -300,7 +300,44 @@
             });
 
             tabela += `</tbody></table></div>`;
-            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios sincronizados:</p>` + tabela;
+            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios:</p>` + tabela;
+        }
+
+        async function alterarStatusAnuncio(mlb, element) {
+            const renderUrl = localStorage.getItem('meli_render_url');
+            const token = localStorage.getItem('meli_access_token');
+            const novoStatus = element.checked ? 'active' : 'paused';
+
+            // Desativa temporariamente para evitar cliques duplos
+            element.disabled = true;
+
+            try {
+                const res = await fetch(`${renderUrl}/api/alterar-status`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mlb, status: novoStatus })
+                });
+                const data = await res.json();
+
+                if (!data.sucesso) {
+                    alert("Erro ao alterar status: " + (data.erro || "Tente novamente"));
+                    element.checked = !element.checked; // Reverte se der erro
+                } else {
+                    // Atualiza o status na lista local
+                    let item = dadosGlobaisAnuncios.find(i => i.id === mlb);
+                    if (item) item.status = novoStatus;
+                    
+                    // Atualiza os contadores
+                    let ativos = dadosGlobaisAnuncios.filter(i => i.status === 'active').length;
+                    document.getElementById('statAtivos').innerText = ativos;
+                    document.getElementById('statOutros').innerText = dadosGlobaisAnuncios.length - ativos;
+                }
+            } catch (e) {
+                alert("Erro de conexão ao alterar status.");
+                element.checked = !element.checked;
+            } finally {
+                element.disabled = false;
+            }
         }
 
         function filtrarTabela() {
@@ -337,7 +374,7 @@
                         `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                         `<td>` +
                             `<div class="form-check form-switch">` +
-                                `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} disabled>` +
+                                `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} id="switch_${item.id}" onclick="alterarStatusAnuncio('${item.id}', this)" title="Ativar/Pausar">` +
                             `</div>` +
                         `</td>` +
                         `<td>${linkBtn}</td>` +
