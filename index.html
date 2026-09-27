@@ -168,7 +168,7 @@
         }
 
         async function gerarTokenPeloSite() {
-            const renderUrl = document.getElementById('inputRenderUrl'].value.trim().replace(/\/$/, "");
+            const renderUrl = document.getElementById('inputRenderUrl').value.trim().replace(/\/$/, "");
             const clientId = document.getElementById('inputClientID').value.trim();
             const clientSecret = document.getElementById('inputClientSecret').value.trim();
             const code = document.getElementById('inputCodeTG').value.trim();
@@ -276,7 +276,6 @@
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
 
-                // Detalhes de frete e comissão igual ao painel do ML
                 let infoFrete = item.free_shipping ? `<span class="text-danger">Frete Grátis (R$ ${item.shipping_cost.toFixed(2)})</span>` : `Envio por conta do comprador`;
 
                 tabela += `<tr>` +
