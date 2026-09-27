@@ -35,7 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota para buscar TODOS os anúncios dinamicamente com base no total real da conta
+// Rota para buscar TODOS os anúncios contornando o limite de 1000 da API com ordenação
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -47,45 +47,34 @@ app.get('/api/anuncios', async (req, res) => {
         const userData = await userRes.json();
         if (!userData.id) return res.status(401).json({ erro: "Token inválido" });
 
-        let allIds = [];
-        let offset = 0;
+        let allIdsSet = new Set();
         let limit = 50;
-        let totalReal = 0;
-        let fetchMore = true;
 
-        // Faz a primeira requisição para descobrir o total exato de anúncios na conta
-        const primeiraRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=0`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const primeiraData = await primeiraRes.json();
-        
-        if (primeiraData.paging && primeiraData.paging.total) {
-            totalReal = primeiraData.paging.total;
-        }
+        // Estratégia de múltiplas ordenações para extrair mais de 1000 itens que a API restringe por offset
+        const sorts = ['date_asc', 'date_desc'];
 
-        if (primeiraData.results && primeiraData.results.length > 0) {
-            allIds = allIds.concat(primeiraData.results);
-            offset += limit;
-        } else {
-            fetchMore = false;
-        }
+        for (let sort of sorts) {
+            let offset = 0;
+            let fetchMore = true;
 
-        // Continua buscando em páginas até esgotar o total real da conta
-        while (fetchMore && offset < totalReal) {
-            const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const itemsData = await itemsRes.json();
-            const ids = itemsData.results || [];
-            
-            if (ids.length > 0) {
-                allIds = allIds.concat(ids);
-                offset += limit;
-            } else {
-                fetchMore = false;
+            while (fetchMore && offset <= 950) { // Respeita o limite de 1000 por ordenação
+                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}&sort=${sort}`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                const itemsData = await itemsRes.json();
+                const ids = itemsData.results || [];
+                
+                if (ids.length > 0) {
+                    ids.forEach(id => allIdsSet.add(id));
+                    offset += limit;
+                    if (ids.length < limit) fetchMore = false;
+                } else {
+                    fetchMore = false;
+                }
             }
         }
 
+        let allIds = Array.from(allIdsSet);
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
