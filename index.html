@@ -29,7 +29,13 @@
         }
         .floating-config:hover { transform: scale(1.1); color: #fff159; }
         .product-img { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; background: #f9f9f9; }
-        .form-check-input { cursor: pointer; }
+        
+        /* Estilo idêntico ao pop-up/tooltip do Mercado Livre */
+        .meli-popover-trigger { cursor: pointer; color: #3483fa; text-decoration: underline; }
+        .popover-detalhes {
+            font-size: 12px;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -267,7 +273,7 @@
             document.getElementById('cardsResumo').style.display = 'flex';
 
             let tabela = `<div class="table-responsive rounded-3 border bg-white shadow-sm"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>` +
-                         `<th>Anúncio</th><th>Preço</th><th>Condições</th><th>Você Recebe / Detalhes</th><th>Estoque</th><th>Status</th><th>Link</th>` +
+                         `<th>Anúncio</th><th>Preço</th><th>Condições</th><th>Você Recebe</th><th>Estoque</th><th>Status</th><th>Link</th>` +
                          `</tr></thead><tbody id="corpoTabela">`;
 
             itens.forEach(item => {
@@ -276,7 +282,14 @@
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
 
-                let infoFrete = item.free_shipping ? `<span class="text-danger">Frete Grátis (R$ ${item.shipping_cost.toFixed(2)})</span>` : `Envio por conta do comprador`;
+                // Texto do frete igualzinho ao print do Mercado Livre
+                let textoFrete = item.free_shipping ? `A pagar R$ ${item.shipping_cost.toFixed(2)}` : `Envio por conta do comprador`;
+
+                // Conteúdo idêntico ao popover/tooltip do Mercado Livre
+                let popoverContent = `Preço: R$ ${item.price.toFixed(2)}<br>` +
+                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${item.sale_fee.toFixed(2)}<br>` +
+                                     `Custo de envio: ${textoFrete}<br>` +
+                                     `<strong>Você recebe: R$ ${item.net_received.toFixed(2)}</strong>`;
 
                 tabela += `<tr>` +
                           `<td>` +
@@ -291,9 +304,9 @@
                           `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
                           `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
                           `<td>` +
-                              `<div class="fw-bold text-dark" style="font-size: 0.95rem;">R$ ${item.net_received.toFixed(2)}</div>` +
-                              `<div class="text-muted" style="font-size: 11px;">Comissão: R$ ${item.sale_fee.toFixed(2)}</div>` +
-                              `<div class="text-muted" style="font-size: 11px;">${infoFrete}</div>` +
+                              `<span class="fw-bold text-dark meli-popover-trigger" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true" data-bs-content="${popoverContent}" style="font-size: 0.95rem;">` +
+                                  `R$ ${item.net_received.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
+                              `</span>` +
                           `</td>` +
                           `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                           `<td>` +
@@ -306,7 +319,13 @@
             });
 
             tabela += `</tbody></table></div>`;
-            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios com taxas e fretes calculados:</p>` + tabela;
+            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios. Passe o mouse sobre o valor "Você Recebe" para ver o detalhamento completo das taxas e fretes:</p>` + tabela;
+            
+            // Ativa os popovers do Bootstrap
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
         }
 
         async function alterarStatusAnuncio(mlb, element) {
@@ -360,7 +379,12 @@
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
-                let infoFrete = item.free_shipping ? `<span class="text-danger">Frete Grátis (R$ ${item.shipping_cost.toFixed(2)})</span>` : `Envio por conta do comprador`;
+                let textoFrete = item.free_shipping ? `A pagar R$ ${item.shipping_cost.toFixed(2)}` : `Envio por conta do comprador`;
+
+                let popoverContent = `Preço: R$ ${item.price.toFixed(2)}<br>` +
+                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${item.sale_fee.toFixed(2)}<br>` +
+                                     `Custo de envio: ${textoFrete}<br>` +
+                                     `<strong>Você recebe: R$ ${item.net_received.toFixed(2)}</strong>`;
 
                 html += `<tr>` +
                         `<td>` +
@@ -375,9 +399,9 @@
                         `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
                         `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
                         `<td>` +
-                            `<div class="fw-bold text-dark" style="font-size: 0.95rem;">R$ ${item.net_received.toFixed(2)}</div>` +
-                            `<div class="text-muted" style="font-size: 11px;">Comissão: R$ ${item.sale_fee.toFixed(2)}</div>` +
-                            `<div class="text-muted" style="font-size: 11px;">${infoFrete}</div>` +
+                            `<span class="fw-bold text-dark meli-popover-trigger" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true" data-bs-content="${popoverContent}" style="font-size: 0.95rem;">` +
+                                `R$ ${item.net_received.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
+                            `</span>` +
                         `</td>` +
                         `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                         `<td>` +
@@ -389,6 +413,11 @@
                         `</tr>`;
             });
             corpo.innerHTML = html;
+
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
         }
 
         async function atualizarPrecosEmLote() {
