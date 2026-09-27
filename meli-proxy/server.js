@@ -35,7 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota definitiva para buscar TODOS os anúncios combinando status para superar o teto de 1000
+// Rota definitiva com fatiamento por blocos de data para contornar o limite de 1000 da API
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -49,30 +49,53 @@ app.get('/api/anuncios', async (req, res) => {
 
         let allIdsSet = new Set();
         let limit = 50;
-        
-        // Buscando separadamente por status (active, paused, under_review, etc.) para que cada consulta comece do offset 0
-        const statusList = ['active', 'paused', 'closed', 'under_review'];
 
-        for (let status of statusList) {
+        // Vamos fatiar a busca por anos/meses e status para garantir que nenhum bloco ultrapasse 1000 itens
+        const statuses = ['active', 'paused', 'closed'];
+        const anos = ['2026', '2025', '2024', '2023', '2022', '2021'];
+
+        for (let status of statuses) {
+            // 1. Busca padrão sem filtro de data até onde der (primeiro bloco)
             let offset = 0;
             let fetchMore = true;
-
-            while (fetchMore) {
-                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?status=${status}&limit=${limit}&offset=${offset}`, {
+            while (fetchMore && offset < 950) {
+                const r = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?status=${status}&limit=${limit}&offset=${offset}`, {
                     headers: { "Authorization": "Bearer " + token }
                 });
-                const itemsData = await itemsRes.json();
-                const ids = itemsData.results || [];
-                
+                const d = await r.json();
+                const ids = d.results || [];
                 if (ids.length > 0) {
                     ids.forEach(id => allIdsSet.add(id));
                     offset += limit;
-                    // Se veio menos que o limite, esgotou este status
-                    if (ids.length < limit || offset >= 2000) {
-                        fetchMore = false;
-                    }
+                    if (ids.length < limit) fetchMore = false;
                 } else {
                     fetchMore = false;
+                }
+            }
+
+            // 2. Busca refinada por anos para capturar o restante que a paginação bloqueia
+            for (let ano of anos) {
+                for (let mes = 1; mes <= 12; mes++) {
+                    let mesStr = mes < 10 ? `0${mes}` : `${mes}`;
+                    let dateFrom = `${ano}-${mesStr}-01T00:00:00Z`;
+                    let dateTo = mes === 12 ? `${parseInt(ano)+1}-01-01T00:00:00Z` : `${ano}-${mes+1 < 10 ? '0'+(mes+1) : mes+1}-01T00:00:00Z`;
+
+                    let subOffset = 0;
+                    let subMore = true;
+                    while (subMore && subOffset < 950) {
+                        const rSub = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?status=${status}&limit=${limit}&offset=${subOffset}&date_from=${dateFrom}&date_to=${dateTo}`, {
+                            headers: { "Authorization": "Bearer " + token }
+                        });
+                        const dSub = await rSub.json();
+                        const idsSub = dSub.results || [];
+                        if (idsSub.length > 0) {
+                            idsSub.forEach(id => allIdsSet.add(id));
+                            subOffset += limit;
+                            if (idsSub.length < limit) subMore = false;
+                        } else {
+                            subMore = false;
+                        }
+                    }
                 }
             }
         }
