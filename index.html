@@ -3,47 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atualizador de Preços - Mercado Livre</title>
+    <title>Painel Completo - Mercado Livre</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; padding-top: 40px; }
-        .card-custom { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); background: white; padding: 30px; }
-        .btn-meli { background-color: #ffe600; color: #2d327d; font-weight: bold; border: none; width: 100%; padding: 12px; border-radius: 6px; }
-        .btn-meli:hover { background-color: #f3dc00; }
+        body { background-color: #f4f6f9; padding-top: 30px; }
+        .card-custom { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); background: white; padding: 25px; margin-bottom: 20px; }
+        .nav-pills .nav-link.active { background-color: #ffe600; color: #2d327d; font-weight: bold; }
+        .nav-pills .nav-link { color: #495057; font-weight: 500; }
     </style>
 </head>
 <body>
 
-    <div class="container" style="max-width: 750px;">
-        <div class="card-custom">
-            <h3 class="mb-4 text-center">Painel de Preços - Mercado Livre</h3>
+    <div class="container" style="max-width: 900px;">
+        <h2 class="mb-4 text-center">Painel de Gestão - Mercado Livre</h2>
+
+        <!-- MENU DE ABAS -->
+        <ul class="nav nav-pills mb-3 justify-content-center" id="pills-tab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-config-btn" data-bs-toggle="pill" data-bs-target="#tab-config" type="button">⚙️ Configuração da Conta</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-precos-btn" data-bs-toggle="pill" data-bs-target="#tab-precos" type="button">💰 Atualizar Preços</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-anuncios-btn" data-bs-toggle="pill" data-bs-target="#tab-anuncios" type="button" onclick="carregarMeusAnuncios()">📦 Puxar Anúncios</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="pills-tabContent">
             
-            <!-- ETAPA DE AUTENTICAÇÃO / TOKEN -->
-            <div id="secao-token" class="mb-4 p-3 bg-light rounded border">
-                <label class="form-label fw-bold">Access Token do Mercado Livre:</label>
-                <div class="input-group">
-                    <input type="text" id="inputToken" class="form-control" placeholder="Cole seu Access Token aqui (App_AccessToken...)">
-                    <button class="btn btn-dark" onclick="salvarToken()">Salvar Token</button>
+            <!-- ABA 1: CONFIGURAÇÃO DA CONTA (TOKEN) -->
+            <div class="tab-pane fade show active" id="tab-config" role="tabpanel">
+                <div class="card-custom">
+                    <h4 class="mb-3">Configuração de Acesso</h4>
+                    <p class="text-muted">Insira o seu <b>Access Token</b> do Mercado Livre abaixo. Ele será guardado de forma segura no seu navegador para alimentar as consultas de preços e anúncios.</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Access Token:</label>
+                        <input type="text" id="inputToken" class="form-control" placeholder="Cole o token aqui (Ex: APP_USR-...)">
+                    </div>
+                    
+                    <button class="btn btn-warning fw-bold w-100" onclick="salvarToken()">Salvar Configuração</button>
+                    <div id="status-config" class="mt-3"></div>
                 </div>
-                <small class="text-muted">O token fica salvo no seu navegador para uso contínuo.</small>
             </div>
 
-            <!-- PAINEL DE ATUALIZAÇÃO EM MASSA -->
-            <div id="secao-painel">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Lista de Produtos (ID do Anúncio e Novo Preço):</label>
-                    <div class="form-text mb-2">Cole no formato: <code>MLB7621024462, 28.50</code> (um por linha)</div>
-                    <textarea id="listaProdutos" class="form-control" rows="8" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
+            <!-- ABA 2: ATUALIZAR PREÇOS -->
+            <div class="tab-pane fade" id="tab-precos" role="tabpanel">
+                <div class="card-custom">
+                    <h4 class="mb-3">Atualização de Preços em Massa</h4>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Lista de Produtos (ID do Anúncio e Novo Preço):</label>
+                        <div class="form-text mb-2">Formato: <code>MLB7621024462, 28.50</code> (um por linha)</div>
+                        <textarea id="listaProdutos" class="form-control" rows="6" placeholder="MLB7621024462, 28.50"></textarea>
+                    </div>
+                    <button class="btn btn-primary w-100 fw-bold" onclick="atualizarPrecosEmLote()">Executar Atualização de Preços</button>
+                    <div id="status-precos" class="mt-3"></div>
                 </div>
-                
-                <button class="btn btn-primary w-100 py-2 fw-bold" onclick="atualizarPrecosEmLote()">Iniciar Atualização em Massa</button>
-                <div id="status-processo" class="mt-4"></div>
             </div>
+
+            <!-- ABA 3: PUXAR ANÚNCIOS -->
+            <div class="tab-pane fade" id="tab-anuncios" role="tabpanel">
+                <div class="card-custom">
+                    <h4 class="mb-3">Seus Anúncios Ativos</h4>
+                    <p class="text-muted">Lista dos itens encontrados na sua conta:</p>
+                    <div id="lista-anuncios-resultado">
+                        <div class="alert alert-info">Clique na aba para carregar os seus anúncios.</div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
+    <!-- Bootstrap JS para as abas funcionarem -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Ao carregar a página, preenche o token se já estiver salvo
         window.onload = function() {
             const tokenSalvo = localStorage.getItem('meli_access_token');
             if (tokenSalvo) {
@@ -55,88 +90,117 @@
             const token = document.getElementById('inputToken').value.trim();
             if (token) {
                 localStorage.setItem('meli_access_token', token);
-                alert("Token salvo com sucesso!");
+                document.getElementById('status-config').innerHTML = `<div class="alert alert-success">Token guardado com sucesso! Já pode usar as outras abas.</div>`;
             } else {
-                alert("Por favor, insira um token válido.");
+                alert("Insira um token válido.");
             }
         }
 
+        // Função para atualizar preços
         async function atualizarPrecosEmLote() {
-            const token = document.getElementById('inputToken').value.trim();
+            const token = localStorage.getItem('meli_access_token');
             const texto = document.getElementById('listaProdutos').value.trim();
-            const statusDiv = document.getElementById('status-processo');
+            const statusDiv = document.getElementById('status-precos');
 
-            if (!token) {
-                alert("Insira o seu Access Token primeiro.");
-                return;
-            }
-
-            if (!texto) {
-                alert("Insira pelo menos um produto e preço.");
-                return;
-            }
+            if (!token) { alert("Configure o seu Access Token na primeira aba."); return; }
+            if (!texto) { alert("Insira os produtos."); return; }
 
             const linhas = texto.split('\n');
-            statusDiv.innerHTML = `<div class="alert alert-info">A processar ${linhas.length} itens... Aguarde.</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-info">A processar ${linhas.length} itens...</div>`;
 
-            let sucessos = 0;
-            let erros = 0;
-            let htmlLog = "<ul class='list-group'>";
+            let sucessos = 0, erros = 0;
+            let logHtml = "<ul class='list-group'>";
 
             for (let i = 0; i < linhas.length; i++) {
-                const linhaAtual = linhas[i].trim();
-                if (!linhaAtual) continue;
-
-                // Separa por vírgula, ponto e vírgula ou tabulação
-                const partes = linhaAtual.split(/[\t,;]+/);
+                const partes = linhas[i].split(/[\t,;]+/);
                 if (partes.length < 2) continue;
 
                 const mlb = partes[0].trim();
-                let precoStr = partes[1].trim().replace(',', '.');
-                const preco = parseFloat(precoStr);
-
-                if (isNaN(preco)) {
-                    erros++;
-                    htmlLog += `<li class='list-group-item list-group-item-danger'>${mlb}: Preço inválido</li>`;
-                    continue;
-                }
+                const preco = parseFloat(partes[1].trim().replace(',', '.'));
 
                 try {
-                    const resposta = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
+                    const res = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
                         method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ price: preco })
                     });
 
-                    if (resposta.ok) {
+                    if (res.ok) {
                         sucessos++;
-                        htmlLog += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
+                        logHtml += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
                     } else {
-                        const erroJson = await resposta.json();
-                        let msgErro = erroJson.message || "Erro desconhecido";
-                        if (erroJson.cause && erroJson.cause.length > 0 && erroJson.cause[0].message) {
-                            msgErro = erroJson.cause[0].message;
-                        }
                         erros++;
-                        htmlLog += `<li class='list-group-item list-group-item-warning'>${mlb} -> ${msgErro}</li>`;
+                        logHtml += `<li class='list-group-item list-group-item-warning'>${mlb} -> Erro ao atualizar</li>`;
                     }
-                } catch (e) {
+                } catch(e) {
                     erros++;
-                    htmlLog += `<li class='list-group-item list-group-item-danger'>${mlb} -> Falha de conexão</li>`;
                 }
-
-                // Pausa de 1.5 segundos entre as requisições para evitar o Erro 429 (Rate Limit) do Mercado Livre
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                await new Promise(r => setTimeout(r, 1500)); // Pausa de segurança contra Rate Limit
             }
 
-            htmlLog += "</ul>";
-            statusDiv.innerHTML = `
-                <div class="alert alert-secondary mb-3"><strong>Processo Concluído!</strong> Sucessos: ${sucessos} | Erros/Bloqueados: ${erros}</div>
-                ${htmlLog}
-            `;
+            logHtml += "</ul>";
+            statusDiv.innerHTML = `<div class="alert alert-secondary">Concluído! Sucessos: ${sucessos} | Erros: ${erros}</div>${logHtml}`;
+        }
+
+        // Função para puxar anúncios da conta
+        async function carregarMeusAnuncios() {
+            const token = localStorage.getItem('meli_access_token');
+            const container = document.getElementById('lista-anuncios-resultado');
+
+            if (!token) {
+                container.innerHTML = `<div class="alert alert-danger">Por favor, configure o seu Access Token na aba de Configuração primeiro.</div>`;
+                return;
+            }
+
+            container.innerHTML = `<div class="alert alert-info">A consultar os seus anúncios na API do Mercado Livre...</div>`;
+
+            try {
+                // 1. Descobrir o ID do usuário logado
+                const userRes = await fetch('https://api.mercadolibre.com/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const userData = await userRes.json();
+                
+                if (!userData.id) {
+                    container.innerHTML = `<div class="alert alert-danger">Token inválido ou expirado. Gere um novo token.</div>`;
+                    return;
+                }
+
+                // 2. Buscar os IDs dos anúncios do usuário
+                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const itemsData = await itemsRes.json();
+                const ids = itemsData.results || [];
+
+                if (ids.length === 0) {
+                    container.innerHTML = `<div class="alert alert-warning">Nenhum anúncio encontrado nesta conta.</div>`;
+                    return;
+                }
+
+                container.innerHTML = `<div class="alert alert-success">Encontrados ${ids.length} anúncios. A carregar detalhes dos primeiros...</div>`;
+                
+                // Pega os primeiros 10 para exibir na tabela
+                const primeirosIds = ids.slice(0, 10).join(',');
+                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${primeirosIds}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const multiData = await multiRes.json();
+
+                let tabela = `<table class="table table-striped"><thead><tr><th>ID (MLB)</th><th>Título</th><th>Preço Atual</th></tr></thead><tbody>`;
+                multiData.forEach(itemObj => {
+                    if(itemObj.code === 200) {
+                        const item = itemObj.body;
+                        tabela += `<tr><td>${item.id}</td><td>${item.title}</td><td>R$ ${item.price}</td></tr>`;
+                    }
+                });
+                tabela += `</tbody></table>`;
+
+                container.innerHTML = tabela;
+
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">Erro ao comunicar com a API do Mercado Livre.</div>`;
+            }
         }
     </script>
 
