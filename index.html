@@ -3,107 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercado Livre | Gestão e Simulação em Lote</title>
+    <title>Mercado Livre | Painel & Simulador Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .futuristic-table th { background: #18181b; color: #f4f4f5; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+        .input-simulacao { background: #fafafa; border: 1px solid #e4e4e7; text-align: center; border-radius: 4px; padding: 4px; font-size: 13px; font-weight: 500; }
+        .input-simulacao:focus { outline: none; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
-    <!-- Cabeçalho Principal -->
-    <header class="bg-[#ffe600] shadow-sm py-3 px-6 flex justify-between items-center">
+    <!-- Top Bar Futurista / Clean -->
+    <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md bg-opacity/80">
         <div class="flex items-center space-x-6">
-            <span class="text-xl font-bold tracking-tight text-gray-900">Mercado Livre | Gestão</span>
-            <nav class="flex space-x-2">
-                <button onclick="mudarAba('gestao')" id="btn-aba-gestao" class="bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition">Gestão de Anúncios</button>
-                <button onclick="mudarAba('simulacao')" id="btn-aba-simulacao" class="bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition">Simulação de Preços</button>
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span class="text-base font-bold tracking-wide text-white">ML Hub <span class="text-yellow-400">Pro</span></span>
+            </div>
+            <nav class="flex space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button onclick="mudarAba('gestao')" id="btn-gestao" class="px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950">Gestão de Anúncios</button>
+                <button onclick="mudarAba('simulacao')" id="btn-simulacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Simulação & Custos</button>
             </nav>
         </div>
-        <div>
-            <button onclick="carregarDados()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-medium transition shadow">
-                Atualizar Lista
+        <div class="flex items-center space-x-3">
+            <button onclick="carregarDados()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold transition shadow-lg shadow-yellow-400/10 flex items-center gap-2">
+                ⚡ Sincronizar API
             </button>
         </div>
     </header>
 
-    <!-- Conteúdo Principal -->
     <main class="max-w-[98%] mx-auto py-6">
-        
-        <!-- Tela de Carregamento -->
-        <div id="loading" class="text-center py-20 bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-yellow-400 border-t-transparent"></div>
-            <p class="mt-3 text-sm text-gray-600 font-medium">Sincronizando anúncios, fretes e comissões do Mercado Livre...</p>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
+            <p class="mt-4 text-sm text-slate-400 font-medium">Extraindo dados e custos de envio reais da API do Mercado Livre...</p>
         </div>
 
-        <!-- ABA 1: GESTÃO DE ANÚNCIOS -->
-        <section id="secao-gestao" class="hidden">
-            <div class="grid grid-cols-3 gap-4 mb-6">
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                    <span class="text-xs text-gray-500 uppercase font-semibold">Total Listado</span>
-                    <h2 id="total-listado" class="text-2xl font-bold text-gray-800">0</h2>
+        <!-- ABA 1: GESTÃO -->
+        <section id="secao-gestao" class="hidden space-y-6">
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Listado</span>
+                    <h2 id="total-listado" class="text-2xl font-black text-white mt-1">0</h2>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                    <span class="text-xs text-gray-500 uppercase font-semibold">Anúncios Ativos</span>
-                    <h2 id="total-ativos" class="text-2xl font-bold text-green-600">0</h2>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Anúncios Ativos</span>
+                    <h2 id="total-ativos" class="text-2xl font-black text-emerald-400 mt-1">0</h2>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                    <span class="text-xs text-gray-500 uppercase font-semibold">Outros Status</span>
-                    <h2 id="total-outros" class="text-2xl font-bold text-gray-600">0</h2>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Outros Status</span>
+                    <h2 id="total-outros" class="text-2xl font-black text-slate-300 mt-1">0</h2>
                 </div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
-                            <th class="p-3.5">Anúncio</th>
-                            <th class="p-3.5">Preço</th>
-                            <th class="p-3.5">Comissão / Frete</th>
-                            <th class="p-3.5">Você Recebe</th>
-                            <th class="p-3.5">Estoque</th>
-                            <th class="p-3.5">Status</th>
-                            <th class="p-3.5">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabela-gestao" class="divide-y divide-gray-100 text-sm">
-                        <!-- Preenchido dinamicamente -->
-                    </tbody>
-                </table>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse futuristic-table">
+                        <thead>
+                            <tr>
+                                <th class="p-3.5">Anúncio</th>
+                                <th class="p-3.5">Preço</th>
+                                <th class="p-3.5">Comissão / Frete</th>
+                                <th class="p-3.5">Você Recebe</th>
+                                <th class="p-3.5">Estoque</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-gestao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
-        <!-- ABA 2: SIMULAÇÃO DE PREÇOS -->
-        <section id="secao-simulacao" class="hidden">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-                <h2 class="text-base font-bold text-gray-800">Simulador e Calculadora de Margem</h2>
-                <p class="text-xs text-gray-500 mt-0.5">Preencha o Preço de Custo, Imposto (%) e Lucro Desejado (%) para calcular o preço ideal de venda e o retorno líquido.</p>
+        <!-- ABA 2: SIMULAÇÃO (Estilo Planilha Limpa e Funcional) -->
+        <section id="secao-simulacao" class="hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Insira o Custo, Imposto e Lucro Desejado. O sistema recalcula o preço ideal e a margem real instantaneamente.</p>
+                </div>
+                <span class="text-xs bg-yellow-400/10 text-yellow-400 font-semibold px-3 py-1 rounded-full border border-yellow-400/20" id="badge-contador">0 itens</span>
             </div>
 
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
-                            <th class="p-3.5">Anúncio</th>
-                            <th class="p-3.5">Preço Atual</th>
-                            <th class="p-3.5">Taxas / Envio</th>
-                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Preço de Custo (R$)</th>
-                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Imposto (%)</th>
-                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Lucro Desejado (%)</th>
-                            <th class="p-3.5 bg-emerald-50 text-emerald-900">Preço Sugerido</th>
-                            <th class="p-3.5 bg-emerald-50 text-emerald-900">Lucro Líquido Real</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabela-simulacao" class="divide-y divide-gray-100 text-sm">
-                        <!-- Preenchido dinamicamente -->
-                    </tbody>
-                </table>
+            <div class="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
+                                <th class="p-3">MLB</th>
+                                <th class="p-3">SKU</th>
+                                <th class="p-3">Título</th>
+                                <th class="p-3">Preço Atual</th>
+                                <th class="p-3">Frete</th>
+                                <th class="p-3">Tipo</th>
+                                <th class="p-3">Comissão %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Preço Custo (R$)</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Imposto %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Lucro Desejado %</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Novo Preço</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Lucro Simulado</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Margem Real</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-simulacao" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
     </main>
 
-    <!-- Botão Flutuante de Atalho (Engrenagem) -->
-    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
-        <button onclick="mudarAba('simulacao')" title="Ir para Simulação" style="background-color: #2563eb; color: white; border: none; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); cursor: pointer;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Botão Flutuante Estilo Engrenagem / Atalho -->
+    <div style="position: fixed; bottom: 24px; right: 24px; z-index: 9999;">
+        <button onclick="mudarAba('simulacao')" title="Abrir Simulador" style="background: #eab308; color: #020617; border: none; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(234, 179, 8, 0.3); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
@@ -111,20 +126,14 @@
     </div>
 
     <script>
-        // Substitua pelo URL real do seu servidor no Render
-        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
+        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com"; // Substitua se necessário
         let cacheItens = [];
 
         async function carregarDados() {
             const token = localStorage.getItem('ml_access_token');
             if (!token) {
-                const urlParams = new URLSearchParams(window.location.search);
-                const code = urlParams.get('code');
-                if (!code) {
-                    alert("Por favor, faça autenticação com o Mercado Livre.");
-                    return;
-                }
-                // Se houver lógica de troca de token via code, mantenha aqui ou insira seu token direto
+                alert("Token de acesso não encontrado. Faça login na sua conta do Mercado Livre.");
+                return;
             }
 
             document.getElementById('loading').classList.remove('hidden');
@@ -133,7 +142,7 @@
 
             try {
                 const response = await fetch(`${RENDER_URL}/api/anuncios`, {
-                    headers: { 'Authorization': localStorage.getItem('ml_access_token') }
+                    headers: { 'Authorization': token }
                 });
                 const data = await response.json();
 
@@ -144,10 +153,10 @@
                     montarTabelaSimulacao(cacheItens);
                     mudarAba('gestao');
                 } else {
-                    alert("Nenhum anúncio encontrado.");
+                    alert("Nenhum anúncio retornado pela API.");
                 }
             } catch (e) {
-                alert("Erro ao comunicar com o servidor proxy.");
+                alert("Erro de comunicação com o servidor backend no Render.");
             } finally {
                 document.getElementById('loading').classList.add('hidden');
             }
@@ -156,19 +165,19 @@
         function mudarAba(aba) {
             const secGestao = document.getElementById('secao-gestao');
             const secSimulacao = document.getElementById('secao-simulacao');
-            const btnGestao = document.getElementById('btn-aba-gestao');
-            const btnSimulacao = document.getElementById('btn-aba-simulacao');
+            const btnGestao = document.getElementById('btn-gestao');
+            const btnSimulacao = document.getElementById('btn-simulacao');
 
             if (aba === 'gestao') {
                 secGestao.classList.remove('hidden');
                 secSimulacao.classList.add('hidden');
-                btnGestao.className = "bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition";
-                btnSimulacao.className = "bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition";
+                btnGestao.className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+                btnSimulacao.className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
             } else {
                 secSimulacao.classList.remove('hidden');
                 secGestao.classList.add('hidden');
-                btnSimulacao.className = "bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition";
-                btnGestao.className = "bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition";
+                btnSimulacao.className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+                btnGestao.className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
             }
         }
 
@@ -177,6 +186,7 @@
             document.getElementById('total-listado').innerText = itens.length;
             document.getElementById('total-ativos').innerText = ativos;
             document.getElementById('total-outros').innerText = itens.length - ativos;
+            document.getElementById('badge-contador').innerText = `${itens.length} itens`;
         }
 
         function montarTabelaGestao(itens) {
@@ -184,26 +194,26 @@
             tbody.innerHTML = '';
             itens.forEach((item) => {
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition-colors";
+                tr.className = "hover:bg-slate-800/50 transition-colors";
                 tr.innerHTML = `
                     <td class="p-3.5">
                         <div class="flex items-center space-x-3">
-                            <img src="${item.thumbnail}" class="w-10 h-10 object-cover rounded border border-gray-200" />
+                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
                             <div>
-                                <span class="font-medium text-gray-800 block text-xs line-clamp-1">${item.title}</span>
-                                <span class="text-[11px] text-gray-400">${item.id} | SKU: ${item.sku}</span>
+                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
+                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
                             </div>
                         </div>
                     </td>
-                    <td class="p-3.5 font-semibold">R$ ${item.price.toFixed(2)}</td>
-                    <td class="p-3.5 text-xs text-gray-500">
+                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 text-slate-400">
                         Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
                         Frete: R$ ${item.shipping_cost.toFixed(2)}
                     </td>
-                    <td class="p-3.5 font-bold text-green-700">R$ ${item.net_received.toFixed(2)}</td>
-                    <td class="p-3.5 text-sm">${item.available_quantity} un.</td>
-                    <td class="p-3.5"><input type="checkbox" ${item.status === 'active' ? 'checked' : ''} disabled /></td>
-                    <td class="p-3.5"><a href="${item.permalink}" target="_blank" class="text-blue-600 hover:underline text-xs font-medium">Ver</a></td>
+                    <td class="p-3.5 font-bold text-emerald-400">R$ ${item.net_received.toFixed(2)}</td>
+                    <td class="p-3.5">${item.available_quantity} un.</td>
+                    <td class="p-3.5"><input type="checkbox" ${item.status === 'active' ? 'checked' : ''} disabled class="accent-emerald-500" /></td>
+                    <td class="p-3.5"><a href="${item.permalink}" target="_blank" class="text-blue-400 hover:underline font-medium">Ver</a></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -213,56 +223,53 @@
             const tbody = document.getElementById('tabela-simulacao');
             tbody.innerHTML = '';
             itens.forEach((item, index) => {
+                const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
+                const comissaoPercent = item.listing_type_id === 'gold_pro' ? 16 : 11;
+
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition-colors";
+                tr.className = "hover:bg-slate-50 transition-colors";
                 tr.innerHTML = `
-                    <td class="p-3.5">
-                        <div class="flex items-center space-x-3">
-                            <img src="${item.thumbnail}" class="w-10 h-10 object-cover rounded border border-gray-200" />
-                            <div>
-                                <span class="font-medium text-gray-800 block text-xs line-clamp-1">${item.title}</span>
-                                <span class="text-[11px] text-gray-400">${item.id}</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="p-3.5 font-semibold">R$ ${item.price.toFixed(2)}</td>
-                    <td class="p-3.5 text-xs text-gray-500">
-                        Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
-                        Frete: R$ ${item.shipping_cost.toFixed(2)}
-                    </td>
-                    <td class="p-3.5 bg-yellow-50/30">
-                        <input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-24 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
-                    </td>
-                    <td class="p-3.5 bg-yellow-50/30">
-                        <input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-20 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
-                    </td>
-                    <td class="p-3.5 bg-yellow-50/30">
-                        <input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-20 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
-                    </td>
-                    <td class="p-3.5 bg-emerald-50/50 font-bold text-emerald-700 text-sm" id="sugestao_${index}">R$ 0.00</td>
-                    <td class="p-3.5 bg-emerald-50/50 font-bold text-emerald-800 text-sm" id="lucro_real_${index}">R$ 0.00</td>
+                    <td class="p-3 font-mono font-medium text-slate-700">${item.id}</td>
+                    <td class="p-3 font-mono text-slate-600">${item.sku}</td>
+                    <td class="p-3 max-w-[200px] truncate text-slate-800 font-medium" title="${item.title}">${item.title}</td>
+                    <td class="p-3 font-bold text-slate-900">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
+                    <td class="p-3 text-slate-600">${comissaoPercent}%</td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
+                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
+                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
                 `;
                 tbody.appendChild(tr);
-                recalcular(index, item.sale_fee, item.shipping_cost, item.free_shipping);
+                recalcular(index, item.price, item.shipping_cost, comissaoPercent, item.free_shipping);
             });
         }
 
-        function recalcular(index, comissaoFixa, custoFrete, freteGratis) {
+        function recalcular(index, precoAtual, custoFrete, comissaoPercent, freteGratis) {
             const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
             const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
-            const lucroPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
+            const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
-            const comissaoPercentMedia = 0.13;
             const freteAplicado = freteGratis ? custoFrete : 0;
             
-            const divisor = 1 - ((comissaoPercentMedia * 100 + impostoPercent + lucroPercent) / 100);
-            let precoSugerido = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
+            // Fórmula padrão: Preço Sugerido = (Custo + Frete) / (1 - (Comissão% + Imposto% + LucroDesejado%) / 100)
+            const percentTotalDeducao = comissaoPercent + impostoPercent + lucroDesejadoPercent;
+            const divisor = 1 - (percentTotalDeducao / 100);
             
-            const valorImposto = precoSugerido * (impostoPercent / 100);
-            const lucroLiquidoReal = precoSugerido - custo - comissaoFixa - valorImposto - freteAplicado;
+            let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
-            document.getElementById(`sugestao_${index}`).innerText = `R$ ${precoSugerido.toFixed(2)}`;
-            document.getElementById(`lucro_real_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
+            // Valores monetários resultantes
+            const valorComissao = novoPreco * (comissaoPercent / 100);
+            const valorImposto = novoPreco * (impostoPercent / 100);
+            const lucroLiquidoReal = novoPreco - custo - valorComissao - valorImposto - freteAplicado;
+            const margemRealPercent = novoPreco > 0 ? (lucroLiquidoReal / novoPreco) * 100 : 0;
+
+            document.getElementById(`novo_preco_${index}`).innerText = `R$ ${novoPreco.toFixed(2)}`;
+            document.getElementById(`lucro_sim_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
+            document.getElementById(`margem_real_${index}`).innerText = `${margemRealPercent.toFixed(2)}%`;
         }
 
         window.onload = carregarDados;
