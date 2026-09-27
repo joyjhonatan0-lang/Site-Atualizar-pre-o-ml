@@ -35,7 +35,6 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota otimizada para buscar todos os anúncios rapidamente sem travar por timeout
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -49,32 +48,22 @@ app.get('/api/anuncios', async (req, res) => {
 
         let allIdsSet = new Set();
         let limit = 50;
+        let offset = 0;
+        let fetchMore = true;
 
-        // Buscando combinando ordenações diferentes de forma rápida para capturar acima de 1000 IDs
-        const sorts = ['date_asc', 'date_desc', 'price_asc', 'price_desc'];
-
-        for (let sort of sorts) {
-            let offset = 0;
-            let fetchMore = true;
-
-            while (fetchMore && offset < 1000) {
-                try {
-                    const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}&sort=${sort}`, {
-                        headers: { "Authorization": "Bearer " + token }
-                    });
-                    const itemsData = await itemsRes.json();
-                    const ids = itemsData.results || [];
-                    
-                    if (ids.length > 0) {
-                        ids.forEach(id => allIdsSet.add(id));
-                        offset += limit;
-                        if (ids.length < limit) fetchMore = false;
-                    } else {
-                        fetchMore = false;
-                    }
-                } catch (err) {
-                    fetchMore = false;
-                }
+        while (fetchMore && offset < 1000) {
+            const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const itemsData = await itemsRes.json();
+            const ids = itemsData.results || [];
+            
+            if (ids.length > 0) {
+                ids.forEach(id => allIdsSet.add(id));
+                offset += limit;
+                if (ids.length < limit) fetchMore = false;
+            } else {
+                fetchMore = false;
             }
         }
 
@@ -82,40 +71,35 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
-        // Detalha os itens em blocos paralelos rápidos de 20 em 20
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
-            try {
-                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee`, {
-                    headers: { "Authorization": "Bearer " + token }
-                });
-                const multiData = await multiRes.json();
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const multiData = await multiRes.json();
 
-                multiData.forEach(itemObj => {
-                    if (itemObj.code === 200) {
-                        const body = itemObj.body;
-                        let preco = body.price || 0;
-                        let taxa = body.sale_fee || 0;
-                        let liquido = preco - taxa;
+            multiData.forEach(itemObj => {
+                if (itemObj.code === 200) {
+                    const body = itemObj.body;
+                    let preco = body.price || 0;
+                    let taxa = body.sale_fee || 0;
+                    let liquido = preco - taxa;
 
-                        listaFinal.push({
-                            id: body.id,
-                            title: body.title,
-                            price: preco,
-                            status: body.status,
-                            listing_type_id: body.listing_type_id,
-                            available_quantity: body.available_quantity || 0,
-                            sku: body.seller_custom_field || 'Sem SKU',
-                            permalink: body.permalink,
-                            thumbnail: body.thumbnail || '',
-                            sale_fee: taxa,
-                            net_received: liquido > 0 ? liquido : 0
-                        });
-                    }
-                });
-            } catch (err) {
-                // Ignora falhas pontuais de lote para não quebrar a listagem
-            }
+                    listaFinal.push({
+                        id: body.id,
+                        title: body.title,
+                        price: preco,
+                        status: body.status,
+                        listing_type_id: body.listing_type_id,
+                        available_quantity: body.available_quantity || 0,
+                        sku: body.seller_custom_field || 'Sem SKU',
+                        permalink: body.permalink,
+                        thumbnail: body.thumbnail || '',
+                        sale_fee: taxa,
+                        net_received: liquido > 0 ? liquido : 0
+                    });
+                }
+            });
         }
 
         res.json({ itens: listaFinal });
@@ -141,6 +125,29 @@ app.put('/api/atualizar-preco', async (req, res) => {
             res.json({ sucesso: true });
         } else {
             res.json({ sucesso: false, erro: data.message || "Erro ao atualizar" });
+        }
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
+    }
+});
+
+// Nova rota para alterar o status (Ativar/Pausar) do anúncio
+app.put('/api/alterar-status', async (req, res) => {
+    const token = req.headers['authorization'];
+    const { mlb, status } = req.body; // status pode ser 'active' ou 'paused'
+    if (!token) return res.status(401).json({ sucesso: false, erro: "Token não fornecido" });
+
+    try {
+        const response = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            res.json({ sucesso: true });
+        } else {
+            res.json({ sucesso: false, erro: data.message || "Erro ao alterar status" });
         }
     } catch (e) {
         res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
