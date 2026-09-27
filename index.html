@@ -29,13 +29,7 @@
         }
         .floating-config:hover { transform: scale(1.1); color: #fff159; }
         .product-img { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; background: #f9f9f9; }
-        
-        /* Estilo idêntico ao pop-up/tooltip do Mercado Livre */
         .meli-popover-trigger { cursor: pointer; color: #3483fa; text-decoration: underline; }
-        .popover-detalhes {
-            font-size: 12px;
-            line-height: 1.5;
-        }
     </style>
 </head>
 <body>
@@ -282,14 +276,21 @@
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
 
-                // Texto do frete igualzinho ao print do Mercado Livre
-                let textoFrete = item.free_shipping ? `A pagar R$ ${item.shipping_cost.toFixed(2)}` : `Envio por conta do comprador`;
+                // Cálculo rigoroso do líquido correto (Preço - Comissão - Frete)
+                let precoNum = parseFloat(item.price) || 0;
+                let comissaoNum = parseFloat(item.sale_fee) || 0;
+                let freteNum = item.free_shipping ? (parseFloat(item.shipping_cost) || 0) : 0;
+                
+                let liquidoReal = precoNum - comissaoNum - freteNum;
+                if (liquidoReal < 0) liquidoReal = 0;
 
-                // Conteúdo idêntico ao popover/tooltip do Mercado Livre
-                let popoverContent = `Preço: R$ ${item.price.toFixed(2)}<br>` +
-                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${item.sale_fee.toFixed(2)}<br>` +
+                let textoFrete = item.free_shipping ? `A pagar R$ ${freteNum.toFixed(2)}` : `Envio por conta do comprador`;
+
+                // Montagem exata do popover com o valor líquido corretamente subtraído
+                let popoverContent = `Preço: R$ ${precoNum.toFixed(2)}<br>` +
+                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${comissaoNum.toFixed(2)}<br>` +
                                      `Custo de envio: ${textoFrete}<br>` +
-                                     `<strong>Você recebe: R$ ${item.net_received.toFixed(2)}</strong>`;
+                                     `<strong>Você recebe: R$ ${liquidoReal.toFixed(2)}</strong>`;
 
                 tabela += `<tr>` +
                           `<td>` +
@@ -301,11 +302,11 @@
                                   `</div>` +
                               `</div>` +
                           `</td>` +
-                          `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
+                          `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
                           `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
                           `<td>` +
                               `<span class="fw-bold text-dark meli-popover-trigger" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true" data-bs-content="${popoverContent}" style="font-size: 0.95rem;">` +
-                                  `R$ ${item.net_received.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
+                                  `R$ ${liquidoReal.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
                               `</span>` +
                           `</td>` +
                           `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
@@ -321,7 +322,6 @@
             tabela += `</tbody></table></div>`;
             container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios. Passe o mouse sobre o valor "Você Recebe" para ver o detalhamento completo das taxas e fretes:</p>` + tabela;
             
-            // Ativa os popovers do Bootstrap
             var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
             popoverTriggerList.map(function (popoverTriggerEl) {
                 return new bootstrap.Popover(popoverTriggerEl);
@@ -379,12 +379,20 @@
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
-                let textoFrete = item.free_shipping ? `A pagar R$ ${item.shipping_cost.toFixed(2)}` : `Envio por conta do comprador`;
+                
+                let precoNum = parseFloat(item.price) || 0;
+                let comissaoNum = parseFloat(item.sale_fee) || 0;
+                let freteNum = item.free_shipping ? (parseFloat(item.shipping_cost) || 0) : 0;
+                
+                let liquidoReal = precoNum - comissaoNum - freteNum;
+                if (liquidoReal < 0) liquidoReal = 0;
 
-                let popoverContent = `Preço: R$ ${item.price.toFixed(2)}<br>` +
-                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${item.sale_fee.toFixed(2)}<br>` +
+                let textoFrete = item.free_shipping ? `A pagar R$ ${freteNum.toFixed(2)}` : `Envio por conta do comprador`;
+
+                let popoverContent = `Preço: R$ ${precoNum.toFixed(2)}<br>` +
+                                     `Tarifa de venda (${tipoAnuncio}): -R$ ${comissaoNum.toFixed(2)}<br>` +
                                      `Custo de envio: ${textoFrete}<br>` +
-                                     `<strong>Você recebe: R$ ${item.net_received.toFixed(2)}</strong>`;
+                                     `<strong>Você recebe: R$ ${liquidoReal.toFixed(2)}</strong>`;
 
                 html += `<tr>` +
                         `<td>` +
@@ -396,11 +404,11 @@
                                 `</div>` +
                             `</div>` +
                         `</td>` +
-                        `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
+                        `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
                         `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
                         `<td>` +
                             `<span class="fw-bold text-dark meli-popover-trigger" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true" data-bs-content="${popoverContent}" style="font-size: 0.95rem;">` +
-                                `R$ ${item.net_received.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
+                                `R$ ${liquidoReal.toFixed(2)} <i class="bi bi-info-circle text-primary" style="font-size: 11px;"></i>` +
                             `</span>` +
                         `</td>` +
                         `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
