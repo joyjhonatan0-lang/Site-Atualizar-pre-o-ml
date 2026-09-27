@@ -88,12 +88,14 @@ app.get('/api/anuncios', async (req, res) => {
                     let freeShipping = shipping.free_shipping || false;
                     let modoEnvio = shipping.mode || 'not_specified';
                     
-                    let custoFrete = 0;
-                    if (freeShipping) {
-                        custoFrete = preco > 79 ? (comissao * 0.15) : 0;
+                    // Captura o custo do frete associado se houver repasse ou gratuidade
+                    let custoEnvio = 0;
+                    if (shipping.logistic_type) {
+                        // Estimativa baseada nas regras padrão do Mercado Livre para envios
+                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95;
                     }
 
-                    let liquido = preco - comissao - custoFrete;
+                    let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
 
                     listaFinal.push({
                         id: body.id,
@@ -106,9 +108,8 @@ app.get('/api/anuncios', async (req, res) => {
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
                         sale_fee: comissao,
-                        shipping_cost: custoFrete,
+                        shipping_cost: freeShipping ? custoEnvio : 0,
                         free_shipping: freeShipping,
-                        shipping_mode: modoEnvio,
                         net_received: liquido > 0 ? liquido : 0
                     });
                 }
