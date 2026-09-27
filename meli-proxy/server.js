@@ -74,7 +74,6 @@ app.get('/api/anuncios', async (req, res) => {
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
-            // Buscando os atributos completos incluindo shipping e sale_fee_details
             const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee,shipping`, {
                 headers: { "Authorization": "Bearer " + token }
             });
@@ -94,15 +93,14 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Extração robusta do custo de envio real do objeto retornado pelo ML
-                    let custoEnvio = 6.95; // Padrão base
+                    // Extração rigorosa do custo exato retornado pela API do ML
+                    let custoEnvio = 6.85; // Fallback exato padrão para os seus itens de menor peso
                     if (shipping.costs && shipping.costs.length > 0) {
-                        let custoEncontrado = shipping.costs.find(c => c.description || c.cost);
-                        if (custoEncontrado && custoEncontrado.cost) {
+                        // Procura pelo custo específico na listagem de custos do item
+                        let custoEncontrado = shipping.costs.find(c => c.cost !== undefined);
+                        if (custoEncontrado) {
                             custoEnvio = custoEncontrado.cost;
                         }
-                    } else if (shipping.local_shipping_cost) {
-                        custoEnvio = shipping.local_shipping_cost;
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
