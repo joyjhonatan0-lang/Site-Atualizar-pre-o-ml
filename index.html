@@ -95,7 +95,7 @@
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Cálculo exato: (Custo / [1 - (Comissão + Imposto + Lucro) / 100]) + Frete</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Cálculo exato igual ao Sheets: (Custo + Frete) / [1 - (Comissão + Imposto + Lucro) / 100]</p>
                 </div>
                 
                 <!-- PAINEL DE PREENCHIMENTO EM MASSA -->
@@ -283,8 +283,8 @@
             const percentTotalDeducao = (comissaoPercent + impostoPercent + lucroDesejadoPercent) / 100;
             const divisor = 1 - percentTotalDeducao;
             
-            // Fórmula correta idêntica à planilha: (Custo / Divisor) + Frete
-            let novoPreco = divisor > 0 ? (custo / divisor) + freteAplicado : custo * 1.5;
+            // Fórmula idêntica ao Sheets: (Custo + Frete) / Divisor
+            let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
             const valorComissao = novoPreco * (comissaoPercent / 100);
             const valorImposto = novoPreco * (impostoPercent / 100);
