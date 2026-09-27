@@ -7,31 +7,34 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Servidor proxy do Mercado Livre online!');
+    res.send('Servidor proxy do Mercado Livre online e operante!');
 });
 
 app.get('/api/anuncios', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
 
-    // Remove a palavra Bearer se o usuário colou com ela
     token = token.replace('Bearer ', '').trim();
 
     try {
+        console.log("Passo 1: Verificando usuário na API do Mercado Livre...");
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
         
         if (!userData.id) {
-            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre. Gere um novo token." });
+            console.log("Erro de Autenticação:", userData);
+            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre." });
         }
+        console.log("Usuário autenticado ID:", userData.id);
 
         let allIds = [];
         let limit = 50;
         let offset = 0;
         let fetchMore = true;
 
+        console.log("Passo 2: Buscando lista de IDs dos anúncios...");
         while (fetchMore && offset < 1000) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -48,10 +51,12 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
+        console.log(`Total de IDs encontrados: ${allIds.length}`);
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
 
+        console.log("Passo 3: Buscando detalhes dos anúncios em blocos...");
         for (let i = 0; i < allIds.length; i += 50) {
             const chunk = allIds.slice(i, i + 50);
             
@@ -61,13 +66,13 @@ app.get('/api/anuncios', async (req, res) => {
             const multiData = await multiRes.json();
 
             for (let itemObj of multiData) {
-                if (itemObj.code === 200) {
+                if (itemObj.code === 200 && itemObj.body) {
                     const body = itemObj.body;
                     let preco = body.price || 0;
                     let listingType = body.listing_type_id;
                     
                     let comissao = body.sale_fee;
-                    if (!comissao || comissao === 0) {
+                    if (!comissao || isNaN(comissao)) {
                         comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
                     }
 
@@ -75,7 +80,7 @@ app.get('/api/anuncios', async (req, res) => {
                     let freeShipping = shipping.free_shipping || false;
                     
                     let custoEnvio = 6.85;
-                    if (shipping.costs && shipping.costs.length > 0) {
+                    if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
                         let cObj = shipping.costs.find(c => c.cost !== undefined);
                         if (cObj) custoEnvio = cObj.cost;
                     }
@@ -85,13 +90,13 @@ app.get('/api/anuncios', async (req, res) => {
 
                     listaFinal.push({
                         id: body.id,
-                        title: body.title,
+                        title: body.title || 'Sem Título',
                         price: preco,
-                        status: body.status,
-                        listing_type_id: listingType,
+                        status: body.status || 'active',
+                        listing_type_id: listingType || 'gold_special',
                         available_quantity: body.available_quantity || 0,
                         sku: body.seller_custom_field || 'Sem SKU',
-                        permalink: body.permalink,
+                        permalink: body.permalink || '#',
                         thumbnail: body.thumbnail || '',
                         sale_fee: comissao,
                         shipping_cost: custoEnvio,
@@ -102,10 +107,12 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
+        console.log(`Processamento concluído com sucesso. Retornando ${listaFinal.length} itens.`);
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        res.status(500).json({ erro: "Erro interno ao processar dados com a API." });
+        console.error("EXCEÇÃO CRÍTICA NO SERVIDOR:", e);
+        res.status(500).json({ erro: "Erro interno: " + e.message });
     }
 });
 
