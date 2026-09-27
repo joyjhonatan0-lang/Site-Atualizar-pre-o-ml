@@ -40,7 +40,7 @@
         <!-- Modal / Aviso de Token se não existir -->
         <div id="aviso-token" class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center">
             <h3 class="text-yellow-400 font-bold text-base mb-2">Token de Acesso Necessário</h3>
-            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token do Mercado Livre para conectar ao sistema:</p>
+            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token atualizado do Mercado Livre para conectar ao sistema:</p>
             <div class="flex justify-center gap-2 max-w-md mx-auto">
                 <input type="text" id="input-token-manual" placeholder="Cole seu APP_USR-..." class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400" />
                 <button onclick="salvarTokenManual()" class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition">Salvar</button>
@@ -127,16 +127,6 @@
         </section>
 
     </main>
-
-    <!-- Botão Flutuante Engrenagem -->
-    <div style="position: fixed; bottom: 24px; right: 24px; z-index: 9999;">
-        <button onclick="mudarAba('simulacao')" title="Abrir Simulador" style="background: #eab308; color: #020617; border: none; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(234, 179, 8, 0.3); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-        </button>
-    </div>
 
     <script>
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
