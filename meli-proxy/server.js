@@ -78,21 +78,33 @@ app.get('/api/anuncios', async (req, res) => {
             });
             const multiData = await multiRes.json();
 
-            multiData.forEach(itemObj => {
+            for (let itemObj of multiData) {
                 if (itemObj.code === 200) {
                     const body = itemObj.body;
                     let preco = body.price || 0;
                     let comissao = body.sale_fee || 0;
+                    let listingType = body.listing_type_id;
+
+                    // Se a API básica não retornou a comissão (sale_fee = 0), consultamos a rota específica de custos do item
+                    if (!comissao || comissao === 0) {
+                        try {
+                            const feeRes = await fetch(`https://api.mercadolibre.com/items/${body.id}/sale_fee?price=${preco}&listing_type_id=${listingType}`, {
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                            const feeData = await feeRes.json();
+                            if (feeData.sale_fee) {
+                                comissao = feeData.sale_fee;
+                            }
+                        } catch (err) {}
+                    }
                     
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
-                    let modoEnvio = shipping.mode || 'not_specified';
                     
-                    // Captura o custo do frete associado se houver repasse ou gratuidade
+                    // Custo de envio real ou estimado de acordo com as regras do Mercado Livre
                     let custoEnvio = 0;
-                    if (shipping.logistic_type) {
-                        // Estimativa baseada nas regras padrão do Mercado Livre para envios
-                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95;
+                    if (freeShipping) {
+                        custoEnvio = preco > 79 ? comissao * 0.15 : 6.95; // Padrão base do Mercado Livre para frete grátis
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
@@ -102,18 +114,18 @@ app.get('/api/anuncios', async (req, res) => {
                         title: body.title,
                         price: preco,
                         status: body.status,
-                        listing_type_id: body.listing_type_id,
+                        listing_type_id: listingType,
                         available_quantity: body.available_quantity || 0,
                         sku: body.seller_custom_field || 'Sem SKU',
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
-                        sale_fee: comissao,
+                        sale_fee: comissao > 0 ? comissao : (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11),
                         shipping_cost: freeShipping ? custoEnvio : 0,
                         free_shipping: freeShipping,
-                        net_received: liquido > 0 ? liquido : 0
+                        net_received: liquido > 0 ? liquido : (preco - (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11))
                     });
                 }
-            });
+            }
         }
 
         res.json({ itens: listaFinal });
