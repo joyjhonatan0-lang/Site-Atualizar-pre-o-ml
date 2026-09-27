@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Servidor proxy do Mercado Livre online e operante!');
+    res.send('Servidor proxy do Mercado Livre online!');
 });
 
 app.get('/api/anuncios', async (req, res) => {
@@ -17,46 +17,30 @@ app.get('/api/anuncios', async (req, res) => {
     token = token.replace('Bearer ', '').trim();
 
     try {
-        console.log("Passo 1: Verificando usuário na API do Mercado Livre...");
+        // 1. Descobrir o ID do usuário logado
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
         
-        console.log("Dados do Usuário:", userData);
-
         if (!userData.id) {
-            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre." });
+            return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        let allIds = [];
-        let limit = 50;
-        let offset = 0;
-        let fetchMore = true;
+        // 2. Buscar os IDs dos anúncios do vendedor
+        const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        const itemsData = await itemsRes.json();
+        const allIds = itemsData.results || [];
 
-        console.log("Passo 2: Buscando lista de IDs dos anúncios...");
-        while (fetchMore && offset < 1000) {
-            const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const itemsData = await itemsRes.json();
-            const ids = itemsData.results || [];
-            
-            if (ids.length > 0) {
-                allIds = allIds.concat(ids);
-                offset += limit;
-                if (ids.length < limit) fetchMore = false;
-            } else {
-                fetchMore = false;
-            }
+        if (allIds.length === 0) {
+            return res.json({ itens: [] });
         }
-
-        console.log(`Total de IDs encontrados: ${allIds.length}`);
-        if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
 
-        console.log("Passo 3: Buscando detalhes dos anúncios em blocos...");
+        // 3. Buscar os detalhes dos anúncios em lote de até 50 itens
         for (let i = 0; i < allIds.length; i += 50) {
             const chunk = allIds.slice(i, i + 50);
             
@@ -108,12 +92,11 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
-        console.log(`Processamento concluído. Retornando ${listaFinal.length} itens.`);
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        console.error("EXCEÇÃO CRÍTICA NO SERVIDOR:", e);
-        res.status(500).json({ erro: "Erro interno: " + e.message });
+        console.error("ERRO:", e);
+        res.status(500).json({ erro: "Erro interno ao buscar anúncios." });
     }
 });
 
