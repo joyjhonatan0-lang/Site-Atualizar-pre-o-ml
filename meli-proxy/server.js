@@ -35,7 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota para buscar TODOS os anúncios contornando o limite de 1000 com varredura por ordenação
+// Rota definitiva para buscar TODOS os anúncios combinando status para superar o teto de 1000
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -49,15 +49,16 @@ app.get('/api/anuncios', async (req, res) => {
 
         let allIdsSet = new Set();
         let limit = 50;
-        const sorts = ['date_asc', 'date_desc', 'price_asc', 'price_desc'];
+        
+        // Buscando separadamente por status (active, paused, under_review, etc.) para que cada consulta comece do offset 0
+        const statusList = ['active', 'paused', 'closed', 'under_review'];
 
-        // Varrer com diferentes ordenações para acumular todos os IDs acima de 1000
-        for (let sort of sorts) {
+        for (let status of statusList) {
             let offset = 0;
             let fetchMore = true;
 
-            while (fetchMore && offset <= 950) {
-                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}&sort=${sort}`, {
+            while (fetchMore) {
+                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?status=${status}&limit=${limit}&offset=${offset}`, {
                     headers: { "Authorization": "Bearer " + token }
                 });
                 const itemsData = await itemsRes.json();
@@ -66,7 +67,10 @@ app.get('/api/anuncios', async (req, res) => {
                 if (ids.length > 0) {
                     ids.forEach(id => allIdsSet.add(id));
                     offset += limit;
-                    if (ids.length < limit) fetchMore = false;
+                    // Se veio menos que o limite, esgotou este status
+                    if (ids.length < limit || offset >= 2000) {
+                        fetchMore = false;
+                    }
                 } else {
                     fetchMore = false;
                 }
