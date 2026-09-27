@@ -37,10 +37,10 @@
 
     <main class="max-w-[98%] mx-auto py-6">
 
-        <!-- Modal / Aviso de Token se não existir -->
+        <!-- Modal / Aviso de Token -->
         <div id="aviso-token" class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center">
             <h3 class="text-yellow-400 font-bold text-base mb-2">Token de Acesso Necessário</h3>
-            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token atualizado do Mercado Livre para conectar ao sistema:</p>
+            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token atualizado do Mercado Livre:</p>
             <div class="flex justify-center gap-2 max-w-md mx-auto">
                 <input type="text" id="input-token-manual" placeholder="Cole seu APP_USR-..." class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400" />
                 <button onclick="salvarTokenManual()" class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition">Salvar</button>
@@ -92,12 +92,20 @@
 
         <!-- ABA 2: SIMULAÇÃO -->
         <section id="secao-simulacao" class="hidden space-y-4">
-            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Insira o Custo, Imposto e Lucro Desejado. O sistema recalcula o preço ideal e a margem real instantaneamente.</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Cálculo exato baseado na fórmula: (Custo + Frete) / [1 - (Comissão + Imposto + Lucro) / 100]</p>
                 </div>
-                <span class="text-xs bg-yellow-400/10 text-yellow-400 font-semibold px-3 py-1 rounded-full border border-yellow-400/20" id="badge-contador">0 itens</span>
+                
+                <!-- PAINEL DE PREENCHIMENTO EM MASSA -->
+                <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">Preencher em Massa:</span>
+                    <input type="number" step="0.01" id="massa-custo" placeholder="Custo R$" class="input-simulacao w-20" />
+                    <input type="number" step="0.1" id="massa-imposto" placeholder="Imposto %" class="input-simulacao w-20" />
+                    <input type="number" step="0.1" id="massa-lucro" placeholder="Lucro %" class="input-simulacao w-20" />
+                    <button onclick="aplicarEmMassa()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition">Aplicar</button>
+                </div>
             </div>
 
             <div class="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
@@ -205,7 +213,6 @@
             document.getElementById('total-listado').innerText = itens.length;
             document.getElementById('total-ativos').innerText = ativos;
             document.getElementById('total-outros').innerText = itens.length - ativos;
-            document.getElementById('badge-contador').innerText = `${itens.length} itens`;
         }
 
         function montarTabelaGestao(itens) {
@@ -255,26 +262,26 @@
                     <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
                     <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
                     <td class="p-3 text-slate-600">${comissaoPercent}%</td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.price}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
                     <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
                 `;
                 tbody.appendChild(tr);
-                recalcular(index, item.price, item.shipping_cost, comissaoPercent, item.free_shipping);
+                recalcular(index, item.shipping_cost, comissaoPercent, item.free_shipping);
             });
         }
 
-        function recalcular(index, precoAtual, custoFrete, comissaoPercent, freteGratis) {
+        function recalcular(index, custoFrete, comissaoPercent, freteGratis) {
             const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
             const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
             const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
             const freteAplicado = freteGratis ? custoFrete : 0;
-            const percentTotalDeducao = comissaoPercent + impostoPercent + lucroDesejadoPercent;
-            const divisor = 1 - (percentTotalDeducao / 100);
+            const somaPercentuais = comissaoPercent + impostoPercent + lucroDesejadoPercent;
+            const divisor = 1 - (somaPercentuais / 100);
             
             let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
@@ -286,6 +293,21 @@
             document.getElementById(`novo_preco_${index}`).innerText = `R$ ${novoPreco.toFixed(2)}`;
             document.getElementById(`lucro_sim_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
             document.getElementById(`margem_real_${index}`).innerText = `${margemRealPercent.toFixed(2)}%`;
+        }
+
+        function aplicarEmMassa() {
+            const custoMassa = document.getElementById('massa-custo').value;
+            const impostoMassa = document.getElementById('massa-imposto').value;
+            const lucroMassa = document.getElementById('massa-lucro').value;
+
+            cacheItens.forEach((item, index) => {
+                if (custoMassa !== '') document.getElementById(`custo_${index}`).value = custoMassa;
+                if (impostoMassa !== '') document.getElementById(`imposto_${index}`).value = impostoMassa;
+                if (lucroMassa !== '') document.getElementById(`lucro_${index}`).value = lucroMassa;
+
+                const comissaoPercent = item.listing_type_id === 'gold_pro' ? 16 : 11;
+                recalcular(index, item.shipping_cost, comissaoPercent, item.free_shipping);
+            });
         }
 
         window.onload = () => {
