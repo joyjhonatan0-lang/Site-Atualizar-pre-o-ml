@@ -130,10 +130,10 @@
 
         async function chamarApiMeli(endpoint, metodo = 'GET', dados = null) {
             const token = localStorage.getItem('meli_access_token');
-            const url = `https://api.mercadolibre.com${endpoint}`;
+            const targetUrl = `https://api.mercadolibre.com${endpoint}`;
             
-            // Utilizando proxy CORS público e seguro para páginas estáticas
-            const proxyUrl = `https://api.allorigins.win/raw?url=` + encodeURIComponent(url);
+            // Proxy CORS otimizado para repasse de credenciais
+            const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(targetUrl);
 
             const options = {
                 method: metodo,
@@ -164,10 +164,7 @@
             container.innerHTML = `<div class="alert alert-info text-center">A consultar os seus anúncios na API do Mercado Livre...</div>`;
 
             try {
-                // 1. Pega dados do usuário
                 const userData = await chamarApiMeli('/users/me');
-
-                // 2. Busca IDs dos itens
                 const itemsData = await chamarApiMeli(`/users/${userData.id}/items/search?limit=30`);
                 const ids = itemsData.results || [];
 
@@ -176,7 +173,6 @@
                     return;
                 }
 
-                // 3. Busca detalhes dos itens em lote
                 const multiData = await chamarApiMeli(`/items?ids=${ids.join(',')}`);
 
                 let tabela = `
