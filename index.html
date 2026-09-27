@@ -91,9 +91,6 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Proxy CORS para permitir requisições diretas pelo navegador no GitHub Pages
-        const CORS_PROXY = "https://api.allorigins.win/raw?url=";
-
         window.onload = function() {
             const tokenSalvo = localStorage.getItem('meli_access_token');
             if (tokenSalvo) {
@@ -131,6 +128,30 @@
             }, 1000);
         }
 
+        async function chamarApiMeli(endpoint, metodo = 'GET', dados = null) {
+            const token = localStorage.getItem('meli_access_token');
+            const url = `https://api.mercadolibre.com${endpoint}`;
+            
+            // Utilizando proxy CORS público e seguro para páginas estáticas
+            const proxyUrl = `https://api.allorigins.win/raw?url=` + encodeURIComponent(url);
+
+            const options = {
+                method: metodo,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (dados) {
+                options.body = JSON.stringify(dados);
+            }
+
+            const resposta = await fetch(proxyUrl, options);
+            if (!resposta.ok) throw new Error('Erro na API');
+            return await resposta.json();
+        }
+
         async function carregarAnuncios() {
             const token = localStorage.getItem('meli_access_token');
             const container = document.getElementById('tabela-anuncios-container');
@@ -144,21 +165,10 @@
 
             try {
                 // 1. Pega dados do usuário
-                const userRes = await fetch(`https://api.mercadolibre.com/users/me`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (!userRes.ok) {
-                    container.innerHTML = `<div class="alert alert-danger text-center">Token inválido ou expirado. Atualize nas configurações (engrenagem).</div>`;
-                    return;
-                }
-                const userData = await userRes.json();
+                const userData = await chamarApiMeli('/users/me');
 
                 // 2. Busca IDs dos itens
-                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=30`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const itemsData = await itemsRes.json();
+                const itemsData = await chamarApiMeli(`/users/${userData.id}/items/search?limit=30`);
                 const ids = itemsData.results || [];
 
                 if (ids.length === 0) {
@@ -167,10 +177,7 @@
                 }
 
                 // 3. Busca detalhes dos itens em lote
-                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${ids.join(',')}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const multiData = await multiRes.json();
+                const multiData = await chamarApiMeli(`/items?ids=${ids.join(',')}`);
 
                 let tabela = `
                     <div class="table-responsive">
@@ -202,7 +209,7 @@
                 container.innerHTML = tabela;
 
             } catch (e) {
-                container.innerHTML = `<div class="alert alert-danger text-center">Erro de comunicação com a API do Mercado Livre. Verifique o seu token.</div>`;
+                container.innerHTML = `<div class="alert alert-danger text-center">Erro de comunicação com a API do Mercado Livre. Verifique se o token é válido.</div>`;
             }
         }
 
@@ -228,21 +235,12 @@
                 const preco = parseFloat(partes[1].trim().replace(',', '.'));
 
                 try {
-                    const res = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
-                        method: 'PUT',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ price: preco })
-                    });
-
-                    if (res.ok) {
-                        sucessos++;
-                        logHtml += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
-                    } else {
-                        erros++;
-                        logHtml += `<li class='list-group-item list-group-item-warning'>${mlb} -> Erro ao atualizar</li>`;
-                    }
+                    await chamarApiMeli(`/items/${mlb}`, 'PUT', { price: preco });
+                    sucessos++;
+                    logHtml += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
                 } catch(e) {
                     erros++;
+                    logHtml += `<li class='list-group-item list-group-item-warning'>${mlb} -> Erro ao atualizar</li>`;
                 }
                 await new Promise(r => setTimeout(r, 1500));
             }
