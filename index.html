@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Gestão - Mercado Livre</title>
+    <title>Painel Completo - Mercado Livre</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f4f6f9; padding-top: 30px; }
@@ -20,31 +20,46 @@
         <!-- MENU DE ABAS -->
         <ul class="nav nav-pills mb-3 justify-content-center" id="pills-tab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab-config-btn" data-bs-toggle="pill" data-bs-target="#tab-config" type="button">⚙️ Sincronização e Token</button>
+                <button class="nav-link active" id="tab-config-api-btn" data-bs-toggle="pill" data-bs-target="#tab-config-api" type="button">⚙️ Configurações da API</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab-precos-btn" data-bs-toggle="pill" data-bs-target="#tab-precos" type="button">💰 Atualizar Preços</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-anuncios-btn" data-bs-toggle="pill" data-bs-target="#tab-anuncios" type="button" onclick="carregarMeusAnuncios()">📦 Puxar Anúncios</button>
+                <button class="nav-link" id="tab-anuncios-btn" data-bs-toggle="pill" data-bs-target="#tab-anuncios" type="button" onclick="carregarMeusAnunciosDirecto()">📦 Puxar Anúncios</button>
             </li>
         </ul>
 
         <div class="tab-content" id="pills-tabContent">
             
-            <!-- ABA 1: SINCRONIZAÇÃO COM A PLANILHA -->
-            <div class="tab-pane fade show active" id="tab-config" role="tabpanel">
+            <!-- ABA 1: CONFIGURAÇÕES DA API E CREDENCIAIS -->
+            <div class="tab-pane fade show active" id="tab-config-api" role="tabpanel">
                 <div class="card-custom">
-                    <h4 class="mb-3">Conexão Automática com a Planilha</h4>
-                    <p class="text-muted">O site busca o token atualizado diretamente do seu Google Apps Script (Web App).</p>
+                    <h4 class="mb-3">Credenciais da Aplicação</h4>
+                    <p class="text-muted">Insira os dados da sua aplicação do Mercado Livre e o seu Token de Acesso. Eles ficarão salvos apenas no seu navegador.</p>
                     
                     <div class="mb-3">
-                        <label class="form-label fw-bold">URL do Web App (Apps Script):</label>
-                        <input type="text" id="inputUrlApi" class="form-control" placeholder="Cole aqui a URL terminada em /exec">
+                        <label class="form-label fw-bold">Client ID:</label>
+                        <input type="text" id="inputClientId" class="form-control" placeholder="Ex: 8447530383468116">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Client Secret:</label>
+                        <input type="password" id="inputClientSecret" class="form-control" placeholder="Cole o seu Client Secret aqui">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Redirect URI:</label>
+                        <input type="text" id="inputRedirectUri" class="form-control" placeholder="Ex: https://seuusuario.github.io/seu-repositorio/">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Access Token Atual:</label>
+                        <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o seu Access Token (APP_USR-...)">
                     </div>
                     
-                    <button class="btn btn-warning fw-bold w-100 mb-3" onclick="salvarUrlApi()">Salvar URL e Sincronizar Token</button>
-                    <div id="status-config" class="mt-2"></div>
+                    <button class="btn btn-warning fw-bold w-100 mb-3" onclick="salvarConfiguracoesApi()">Salvar Configurações no Navegador</button>
+                    <div id="status-config-api" class="mt-2"></div>
                 </div>
             </div>
 
@@ -79,37 +94,43 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         window.onload = function() {
-            const urlSalva = localStorage.getItem('meli_webapp_url');
-            if (urlSalva) {
-                document.getElementById('inputUrlApi').value = urlSalva;
+            // Carrega os dados salvos anteriormente no navegador se existirem
+            if (localStorage.getItem('meli_client_id')) {
+                document.getElementById('inputClientId').value = localStorage.getItem('meli_client_id');
+            } else {
+                document.getElementById('inputClientId').value = "8447530383468116"; // Já preenche o seu Client ID
+            }
+            if (localStorage.getItem('meli_client_secret')) {
+                document.getElementById('inputClientSecret').value = localStorage.getItem('meli_client_secret');
+            }
+            if (localStorage.getItem('meli_redirect_uri')) {
+                document.getElementById('inputRedirectUri').value = localStorage.getItem('meli_redirect_uri');
+            } else {
+                document.getElementById('inputRedirectUri').value = window.location.origin + window.location.pathname;
+            }
+            if (localStorage.getItem('meli_access_token')) {
+                document.getElementById('inputAccessToken').value = localStorage.getItem('meli_access_token');
             }
         };
 
-        function salvarUrlApi() {
-            const url = document.getElementById('inputUrlApi').value.trim();
-            if (url) {
-                localStorage.setItem('meli_webapp_url', url);
-                sincronizarTokenAutomatico(url);
-            } else {
-                alert("Insira uma URL válida.");
-            }
-        }
+        function salvarConfiguracoesApi() {
+            const clientId = document.getElementById('inputClientId').value.trim();
+            const clientSecret = document.getElementById('inputClientSecret').value.trim();
+            const redirectUri = document.getElementById('inputRedirectUri').value.trim();
+            const accessToken = document.getElementById('inputAccessToken').value.trim();
+            const statusDiv = document.getElementById('status-config-api');
 
-        async function sincronizarTokenAutomatico(url) {
-            const statusDiv = document.getElementById('status-config');
-            statusDiv.innerHTML = `<div class="alert alert-info">A sincronizar token...</div>`;
-            try {
-                const resposta = await fetch(url);
-                const dados = await resposta.json();
-                if (dados.access_token) {
-                    localStorage.setItem('meli_access_token', dados.access_token);
-                    statusDiv.innerHTML = `<div class="alert alert-success">Token sincronizado com sucesso!</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">Erro ao obter o token.</div>`;
-                }
-            } catch (e) {
-                statusDiv.innerHTML = `<div class="alert alert-danger">Erro de conexão com o Web App.</div>`;
+            if (!clientId || !accessToken) {
+                statusDiv.innerHTML = `<div class="alert alert-danger">Preencha pelo menos o Client ID e o Access Token.</div>`;
+                return;
             }
+
+            localStorage.setItem('meli_client_id', clientId);
+            localStorage.setItem('meli_client_secret', clientSecret);
+            localStorage.setItem('meli_redirect_uri', redirectUri);
+            localStorage.setItem('meli_access_token', accessToken);
+
+            statusDiv.innerHTML = `<div class="alert alert-success">Configurações e Token salvos com sucesso no navegador! Já pode usar as outras abas.</div>`;
         }
 
         async function atualizarPrecosEmLote() {
@@ -117,8 +138,8 @@
             const texto = document.getElementById('listaProdutos').value.trim();
             const statusDiv = document.getElementById('status-precos');
 
-            if (!token) { alert("Sincronize o token na primeira aba."); return; }
-            if (!texto) { alert("Insira os produtos."); return; }
+            if (!token) { alert("Configure o seu Access Token na aba de Configurações da API."); return; }
+            if (!texto) { alert("Insira os produtos e preços."); return; }
 
             const linhas = texto.split('\n');
             statusDiv.innerHTML = `<div class="alert alert-info">A processar ${linhas.length} itens...</div>`;
@@ -150,49 +171,65 @@
                 } catch(e) {
                     erros++;
                 }
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 1500)); // Pausa de segurança contra Rate Limit (Erro 429)
             }
 
             logHtml += "</ul>";
             statusDiv.innerHTML = `<div class="alert alert-secondary">Concluído! Sucessos: ${sucessos} | Erros: ${erros}</div>${logHtml}`;
         }
 
-        async function carregarMeusAnuncios() {
-            const url = localStorage.getItem('meli_webapp_url');
+        async function carregarMeusAnunciosDirecto() {
+            const token = localStorage.getItem('meli_access_token');
             const container = document.getElementById('lista-anuncios-resultado');
 
-            if (!url) {
-                container.innerHTML = `<div class="alert alert-danger">Configure a URL do Web App na aba de Sincronização primeiro.</div>`;
+            if (!token) {
+                container.innerHTML = `<div class="alert alert-danger">Access Token não configurado. Vá na aba de Configurações da API e insira o seu token.</div>`;
                 return;
             }
 
-            container.innerHTML = `<div class="alert alert-info">A consultar os seus anúncios através da planilha...</div>`;
+            container.innerHTML = `<div class="alert alert-info">A consultar os seus anúncios na API do Mercado Livre...</div>`;
 
             try {
-                const resposta = await fetch(url + "?acao=anuncios");
-                const dados = await resposta.json();
-
-                if (dados.erro) {
-                    container.innerHTML = `<div class="alert alert-danger">Erro: ${dados.erro}</div>`;
+                const userRes = await fetch('https://api.mercadolibre.com/users/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const userData = await userRes.json();
+                
+                if (!userData.id) {
+                    container.innerHTML = `<div class="alert alert-danger">Token inválido ou expirado. Atualize o token nas configurações.</div>`;
                     return;
                 }
 
-                const itens = dados.itens || [];
-                if (itens.length === 0) {
-                    container.innerHTML = `<div class="alert alert-warning">Nenhum anúncio encontrado.</div>`;
+                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=15`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const itemsData = await itemsRes.json();
+                const ids = itemsData.results || [];
+
+                if (ids.length === 0) {
+                    container.innerHTML = `<div class="alert alert-warning">Nenhum anúncio encontrado nesta conta.</div>`;
                     return;
                 }
+
+                const primeirosIds = ids.join(',');
+                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${primeirosIds}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const multiData = await multiRes.json();
 
                 let tabela = `<table class="table table-striped"><thead><tr><th>ID (MLB)</th><th>Título</th><th>Preço Atual</th></tr></thead><tbody>`;
-                itens.forEach(item => {
-                    tabela += `<tr><td>${item.id}</td><td>${item.title}</td><td>R$ ${item.price}</td></tr>`;
+                multiData.forEach(itemObj => {
+                    if(itemObj.code === 200) {
+                        const item = itemObj.body;
+                        tabela += `<tr><td>${item.id}</td><td>${item.title}</td><td>R$ ${item.price}</td></tr>`;
+                    }
                 });
                 tabela += `</tbody></table>`;
 
                 container.innerHTML = tabela;
 
             } catch (error) {
-                container.innerHTML = `<div class="alert alert-danger">Erro de comunicação com o servidor.</div>`;
+                container.innerHTML = `<div class="alert alert-danger">Erro de comunicação com a API do Mercado Livre.</div>`;
             }
         }
     </script>
