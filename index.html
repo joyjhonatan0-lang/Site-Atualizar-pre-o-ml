@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Mercado Livre - Gestão Profissional</title>
-    <!-- Bootstrap 5 & Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -25,76 +24,67 @@
 </head>
 <body>
 
-    <!-- NAVBAR SUPERIOR -->
     <nav class="navbar navbar-expand-lg navbar-custom mb-4 py-3">
         <div class="container">
             <a class="navbar-brand fw-bold text-dark" href="#"><i class="bi bi-shop text-warning"></i> Painel Mercado Livre</a>
             <div class="navbar-nav ms-auto">
-                <button class="btn btn-outline-dark btn-sm rounded-pill px-3" onclick="mudarAba('anuncios')">
-                    <i class="bi bi-box-seam"></i> Anúncios
-                </button>
-                <button class="btn btn-outline-dark btn-sm rounded-pill px-3 ms-2" onclick="mudarAba('precos')">
-                    <i class="bi bi-currency-dollar"></i> Atualizar Preços
-                </button>
+                <button class="btn btn-outline-dark btn-sm rounded-pill px-3" onclick="mudarAba('anuncios')"><i class="bi bi-box-seam"></i> Anúncios</button>
+                <button class="btn btn-outline-dark btn-sm rounded-pill px-3 ms-2" onclick="mudarAba('precos')"><i class="bi bi-currency-dollar"></i> Atualizar Preços</button>
             </div>
         </div>
     </nav>
 
     <div class="container" style="max-width: 950px;">
-
-        <!-- SEÇÃO 1: ANÚNCIOS -->
+        <!-- SEÇÃO ANÚNCIOS -->
         <div id="secao-anuncios" class="card-custom">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="fw-bold m-0"><i class="bi bi-box-seam text-primary"></i> Meus Anúncios</h3>
                 <button class="btn btn-dark btn-sm" onclick="carregarAnuncios()"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button>
             </div>
             <div id="tabela-anuncios-container">
-                <div class="alert alert-light border text-center py-4">Clique em "Atualizar Lista" para carregar os seus anúncios ativos.</div>
+                <div class="alert alert-light border text-center py-4">Clique em "Atualizar Lista" para carregar os seus anúncios.</div>
             </div>
         </div>
 
-        <!-- SEÇÃO 2: ATUALIZAR PREÇOS -->
+        <!-- SEÇÃO PREÇOS -->
         <div id="secao-precos" class="card-custom" style="display: none;">
             <h3 class="fw-bold mb-3"><i class="bi bi-currency-dollar text-success"></i> Atualização de Preços em Massa</h3>
-            <p class="text-muted">Cole o ID do anúncio (MLB) e o novo preço separados por vírgula ou tabulação (um por linha).</p>
+            <p class="text-muted">Cole o ID do anúncio (MLB) e o novo preço separados por vírgula (um por linha).</p>
             <div class="mb-3">
                 <textarea id="listaProdutos" class="form-control" rows="6" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
             </div>
-            <button class="btn btn-primary w-100 py-2 fw-bold" onclick="atualizarPrecosEmLote()">Executar Atualização de Preços</button>
+            <button class="btn btn-primary w-100 py-2 fw-bold" onclick="atualizarPrecosEmLote()">Executar Atualização</button>
             <div id="status-precos" class="mt-3"></div>
         </div>
 
-        <!-- SEÇÃO 3: CONFIGURAÇÕES -->
+        <!-- SEÇÃO CONFIGURAÇÕES -->
         <div id="secao-config" class="card-custom" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="fw-bold m-0"><i class="bi bi-gear text-secondary"></i> Configurações da Conta</h3>
+                <h3 class="fw-bold m-0"><i class="bi bi-gear text-secondary"></i> Configurações</h3>
                 <button class="btn btn-close" onclick="mudarAba('anuncios')"></button>
             </div>
-            <p class="text-muted">Insira o seu <b>Access Token definitivo</b> (começado com <code>APP_USR-...</code>).</p>
-            
             <div class="mb-3">
-                <label class="form-label fw-bold">Access Token:</label>
-                <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o seu token APP_USR-... aqui">
+                <label class="form-label fw-bold">URL do Servidor no Render:</label>
+                <input type="text" id="inputRenderUrl" class="form-control" placeholder="https://site-atualizar-pre-o-ml.onrender.com">
             </div>
-            
-            <button class="btn btn-meli w-100 py-2 fw-bold" onclick="salvarToken()">Salvar Access Token</button>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Access Token (APP_USR-...):</label>
+                <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o seu APP_USR-... aqui">
+            </div>
+            <button class="btn btn-meli w-100 py-2 fw-bold" onclick="salvarConfig()">Salvar e Conectar</button>
             <div id="status-config" class="mt-3"></div>
         </div>
-
     </div>
 
-    <!-- BOTÃO FLUTUANTE DE CONFIGURAÇÕES -->
-    <div class="floating-config" onclick="mudarAba('config')" title="Configurações">
-        <i class="bi bi-gear-fill"></i>
-    </div>
+    <div class="floating-config" onclick="mudarAba('config')" title="Configurações"><i class="bi bi-gear-fill"></i></div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         window.onload = function() {
-            const tokenSalvo = localStorage.getItem('meli_access_token');
-            if (tokenSalvo) {
-                document.getElementById('inputAccessToken').value = tokenSalvo;
+            if (localStorage.getItem('meli_render_url')) document.getElementById('inputRenderUrl').value = localStorage.getItem('meli_render_url');
+            if (localStorage.getItem('meli_access_token')) document.getElementById('inputAccessToken').value = localStorage.getItem('meli_access_token');
+            
+            if (localStorage.getItem('meli_access_token') && localStorage.getItem('meli_render_url')) {
                 carregarAnuncios();
             } else {
                 mudarAba('config');
@@ -105,116 +95,74 @@
             document.getElementById('secao-anuncios').style.display = 'none';
             document.getElementById('secao-precos').style.display = 'none';
             document.getElementById('secao-config').style.display = 'none';
-
             if (aba === 'anuncios') document.getElementById('secao-anuncios').style.display = 'block';
             if (aba === 'precos') document.getElementById('secao-precos').style.display = 'block';
             if (aba === 'config') document.getElementById('secao-config').style.display = 'block';
         }
 
-        function salvarToken() {
+        function salvarConfig() {
+            const renderUrl = document.getElementById('inputRenderUrl').value.trim().replace(/\/$/, "");
             const token = document.getElementById('inputAccessToken').value.trim();
             const statusDiv = document.getElementById('status-config');
 
-            if (!token) {
-                statusDiv.innerHTML = `<div class="alert alert-danger">Insira um token válido.</div>`;
+            if (!renderUrl || !token) {
+                statusDiv.innerHTML = `<div class="alert alert-danger">Preencha todos os campos.</div>`;
                 return;
             }
 
+            localStorage.setItem('meli_render_url', renderUrl);
             localStorage.setItem('meli_access_token', token);
-            statusDiv.innerHTML = `<div class="alert alert-success">Access Token guardado com sucesso! Redirecionando...</div>`;
-            setTimeout(() => {
-                mudarAba('anuncios');
-                carregarAnuncios();
-            }, 1000);
-        }
-
-        async function chamarApiMeli(endpoint, metodo = 'GET', dados = null) {
-            const token = localStorage.getItem('meli_access_token');
-            const targetUrl = `https://api.mercadolibre.com${endpoint}`;
-            
-            // Proxy CORS otimizado para repasse de credenciais
-            const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(targetUrl);
-
-            const options = {
-                method: metodo,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            };
-
-            if (dados) {
-                options.body = JSON.stringify(dados);
-            }
-
-            const resposta = await fetch(proxyUrl, options);
-            if (!resposta.ok) throw new Error('Erro na API');
-            return await resposta.json();
+            statusDiv.innerHTML = `<div class="alert alert-success">Salvo com sucesso! A carregar...</div>`;
+            setTimeout(() => { mudarAba('anuncios'); carregarAnuncios(); }, 1000);
         }
 
         async function carregarAnuncios() {
+            const renderUrl = localStorage.getItem('meli_render_url');
             const token = localStorage.getItem('meli_access_token');
             const container = document.getElementById('tabela-anuncios-container');
 
-            if (!token) {
-                container.innerHTML = `<div class="alert alert-warning text-center">Nenhum Access Token configurado. Clique na engrenagem no canto inferior direito.</div>`;
+            if (!renderUrl || !token) {
+                container.innerHTML = `<div class="alert alert-warning text-center">Configure a URL do Render e o Token nas configurações (engrenagem).</div>`;
                 return;
             }
 
-            container.innerHTML = `<div class="alert alert-info text-center">A consultar os seus anúncios na API do Mercado Livre...</div>`;
+            container.innerHTML = `<div class="alert alert-info text-center">A consultar os seus anúncios através do Render...</div>`;
 
             try {
-                const userData = await chamarApiMeli('/users/me');
-                const itemsData = await chamarApiMeli(`/users/${userData.id}/items/search?limit=30`);
-                const ids = itemsData.results || [];
+                const res = await fetch(`${renderUrl}/api/anuncios`, {
+                    headers: { 'Authorization': token }
+                });
+                const dados = await res.json();
 
-                if (ids.length === 0) {
-                    container.innerHTML = `<div class="alert alert-warning text-center">Nenhum anúncio encontrado nesta conta.</div>`;
+                if (dados.erro) {
+                    container.innerHTML = `<div class="alert alert-danger text-center">Erro: ${dados.erro}</div>`;
                     return;
                 }
 
-                const multiData = await chamarApiMeli(`/items?ids=${ids.join(',')}`);
+                const itens = dados.itens || [];
+                if (itens.length === 0) {
+                    container.innerHTML = `<div class="alert alert-warning text-center">Nenhum anúncio encontrado.</div>`;
+                    return;
+                }
 
-                let tabela = `
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>ID (MLB)</th>
-                                    <th>Título do Anúncio</th>
-                                    <th>Preço Atual</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-
-                multiData.forEach(itemObj => {
-                    if (itemObj.code === 200) {
-                        const item = itemObj.body;
-                        tabela += `
-                            <tr>
-                                <td class="fw-bold text-secondary">${item.id}</td>
-                                <td>${item.title}</td>
-                                <td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>
-                            </tr>
-                        `;
-                    }
+                let tabela = `<div class="table-responsive"><table class="table table-hover align-middle"><thead class="table-light"><tr><th>ID (MLB)</th><th>Título</th><th>Preço</th></tr></thead><tbody>`;
+                itens.forEach(item => {
+                    tabela += `<tr><td class="fw-bold text-secondary">${item.id}</td><td>${item.title}</td><td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td></tr>`;
                 });
-
                 tabela += `</tbody></table></div>`;
                 container.innerHTML = tabela;
-
             } catch (e) {
-                container.innerHTML = `<div class="alert alert-danger text-center">Erro de comunicação com a API do Mercado Livre. Verifique se o token é válido.</div>`;
+                container.innerHTML = `<div class="alert alert-danger text-center">Erro ao comunicar com o servidor no Render.</div>`;
             }
         }
 
         async function atualizarPrecosEmLote() {
+            const renderUrl = localStorage.getItem('meli_render_url');
             const token = localStorage.getItem('meli_access_token');
             const texto = document.getElementById('listaProdutos').value.trim();
             const statusDiv = document.getElementById('status-precos');
 
-            if (!token) { alert("Configure o seu Access Token nas configurações."); return; }
+            if (!token || !renderUrl) { alert("Configure o sistema primeiro."); return; }
             if (!texto) { alert("Insira os produtos."); return; }
 
             const linhas = texto.split('\n');
@@ -231,20 +179,29 @@
                 const preco = parseFloat(partes[1].trim().replace(',', '.'));
 
                 try {
-                    await chamarApiMeli(`/items/${mlb}`, 'PUT', { price: preco });
-                    sucessos++;
-                    logHtml += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
+                    const res = await fetch(`${renderUrl}/api/atualizar-preco`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mlb, price: preco })
+                    });
+                    const data = await res.json();
+
+                    if (data.sucesso) {
+                        sucessos++;
+                        logHtml += `<li class='list-group-item list-group-item-success'>${mlb} -> R$ ${preco.toFixed(2)} (OK)</li>`;
+                    } else {
+                        erros++;
+                        logHtml += `<li class='list-group-item list-group-item-warning'>${mlb} -> Erro ao atualizar</li>`;
+                    }
                 } catch(e) {
                     erros++;
-                    logHtml += `<li class='list-group-item list-group-item-warning'>${mlb} -> Erro ao atualizar</li>`;
                 }
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 1000));
             }
 
             logHtml += "</ul>";
             statusDiv.innerHTML = `<div class="alert alert-secondary">Concluído! Sucessos: ${sucessos} | Erros: ${erros}</div>${logHtml}`;
         }
     </script>
-
 </body>
 </html>
