@@ -93,18 +93,10 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Extração inteligente do custo real de envio presente na matriz de custos do item
-                    let custoEnvio = 6.85; // Valor padrão para os itens da sua linha
+                    let custoEnvio = 6.85;
                     if (shipping.costs && shipping.costs.length > 0) {
-                        let custoValido = shipping.costs.find(c => c.cost !== undefined && c.cost > 0);
-                        if (custoValido) {
-                            custoEnvio = custoValido.cost;
-                        }
-                    }
-
-                    // Ajuste pontual para o ID específico se necessário ou leitura dinâmica
-                    if (body.id === 'MLB7596890214') {
-                        custoEnvio = 6.85;
+                        let cObj = shipping.costs.find(c => c.cost !== undefined);
+                        if (cObj) custoEnvio = cObj.cost;
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
@@ -152,28 +144,6 @@ app.put('/api/atualizar-preco', async (req, res) => {
             res.json({ sucesso: true });
         } else {
             res.json({ sucesso: false, erro: data.message || "Erro ao atualizar" });
-        }
-    } catch (e) {
-        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
-    }
-});
-
-app.put('/api/alterar-status', async (req, res) => {
-    const token = req.headers['authorization'];
-    const { mlb, status } = req.body;
-    if (!token) return res.status(401).json({ sucesso: false, erro: "Token não fornecido" });
-
-    try {
-        const response = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
-            method: 'PUT',
-            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: status })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            res.json({ sucesso: true });
-        } else {
-            res.json({ sucesso: false, erro: data.message || "Erro ao alterar status" });
         }
     } catch (e) {
         res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
