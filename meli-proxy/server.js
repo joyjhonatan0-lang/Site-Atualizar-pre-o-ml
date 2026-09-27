@@ -7,51 +7,31 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Servidor proxy do Mercado Livre rodando com sucesso!');
-});
-
-app.post('/api/gerar-token', async (req, res) => {
-    const { code, clientId, clientSecret, redirectUri } = req.body;
-    try {
-        const response = await fetch('https://api.mercadolibre.com/oauth/token', {
-            method: 'POST',
-            headers: { 'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                client_id: clientId,
-                client_secret: clientSecret,
-                code: code,
-                redirect_uri: redirectUri || 'https://www.google.com'
-            })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            res.json({ sucesso: true, access_token: data.access_token });
-        } else {
-            res.json({ sucesso: false, erro: data.error_description || "Erro ao gerar token" });
-        }
-    } catch (e) {
-        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
-    }
+    res.send('Servidor proxy do Mercado Livre online!');
 });
 
 app.get('/api/anuncios', async (req, res) => {
-    const token = req.headers['authorization'];
+    let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    // Remove a palavra Bearer se o usuário colou com ela
+    token = token.replace('Bearer ', '').trim();
 
     try {
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
-        if (!userData.id) return res.status(401).json({ erro: "Token inválido ou expirado" });
+        
+        if (!userData.id) {
+            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre. Gere um novo token." });
+        }
 
         let allIds = [];
         let limit = 50;
         let offset = 0;
         let fetchMore = true;
 
-        // Limita a busca para garantir velocidade máxima
         while (fetchMore && offset < 1000) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -72,7 +52,6 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // Processamento em blocos paralelos otimizados
         for (let i = 0; i < allIds.length; i += 50) {
             const chunk = allIds.slice(i, i + 50);
             
@@ -126,7 +105,7 @@ app.get('/api/anuncios', async (req, res) => {
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        res.status(500).json({ erro: "Erro ao comunicar com a API do Mercado Livre" });
+        res.status(500).json({ erro: "Erro interno ao processar dados com a API." });
     }
 });
 
