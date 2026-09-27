@@ -17,30 +17,33 @@ app.get('/api/anuncios', async (req, res) => {
     token = token.replace('Bearer ', '').trim();
 
     try {
-        // 1. Descobrir o ID do usuário logado
+        console.log("Passo 1: Verificando usuário na API do Mercado Livre...");
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
         
+        console.log("Dados do Usuário:", userData);
+
         if (!userData.id) {
-            return res.status(401).json({ erro: "Token inválido ou expirado." });
+            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre." });
         }
 
-        // 2. Buscar os IDs dos anúncios do vendedor
+        console.log("Passo 2: Buscando IDs dos anúncios...");
         const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`, {
             headers: { "Authorization": "Bearer " + token }
         });
         const itemsData = await itemsRes.json();
         const allIds = itemsData.results || [];
 
+        console.log(`Total de IDs encontrados: ${allIds.length}`);
         if (allIds.length === 0) {
             return res.json({ itens: [] });
         }
 
         let listaFinal = [];
 
-        // 3. Buscar os detalhes dos anúncios em lote de até 50 itens
+        console.log("Passo 3: Buscando detalhes dos anúncios...");
         for (let i = 0; i < allIds.length; i += 50) {
             const chunk = allIds.slice(i, i + 50);
             
@@ -92,11 +95,12 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
+        console.log(`Processamento concluído. Retornando ${listaFinal.length} itens.`);
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        console.error("ERRO:", e);
-        res.status(500).json({ erro: "Erro interno ao buscar anúncios." });
+        console.error("ERRO CRÍTICO NO SERVIDOR:", e);
+        res.status(500).json({ erro: "Erro interno ao buscar anúncios: " + e.message });
     }
 });
 
