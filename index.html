@@ -3,449 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Mercado Livre - Gestão Profissional</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --meli-yellow: #fff159;
-            --meli-blue: #3483fa;
-            --bg-color: #ededed;
-        }
-        body { background-color: var(--bg-color); font-family: 'Proxima Nova', -apple-system, Roboto, Arial, sans-serif; color: #333; }
-        .navbar-custom { background: #fff159; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .card-custom { border: none; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); background: white; padding: 20px; }
-        .stat-card { background: #fff; border-radius: 8px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid var(--meli-blue); }
-        .btn-meli { background-color: var(--meli-blue); color: #fff; font-weight: 600; border: none; }
-        .btn-meli:hover { background-color: #2968c8; color: #fff; }
-        .table > :not(v) > * > * { padding: 10px 12px; vertical-align: middle; font-size: 0.9rem; }
-        .table thead { background-color: #f5f5f5; color: #777; font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; border-bottom: 1px solid #ddd; }
-        .floating-config {
-            position: fixed; bottom: 30px; right: 30px;
-            background-color: #3483fa; color: white; width: 60px; height: 60px;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); cursor: pointer; z-index: 1000;
-            transition: transform 0.2s;
-        }
-        .floating-config:hover { transform: scale(1.1); color: #fff159; }
-        .product-img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; background: #f9f9f9; }
-    </style>
+    <title>Mercado Livre | Gestão e Simulação em Lote</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-gray-100 min-h-screen">
 
-    <nav class="navbar navbar-expand-lg navbar-custom mb-4 py-2 px-4">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold text-dark d-flex align-items-center gap-2" href="#">
-                <i class="bi bi-shop fs-4"></i> <span style="font-size: 1.1rem; font-weight: 700;">Mercado Livre | Gestão em Lote</span>
-            </a>
-            <div class="navbar-nav ms-auto flex-row gap-2">
-                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border shadow-sm" onclick="mudarAba('anuncios')"><i class="bi bi-box-seam text-primary"></i> Anúncios</button>
-                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border shadow-sm" onclick="mudarAba('precos')"><i class="bi bi-currency-dollar text-success"></i> Atualizar Preços</button>
-            </div>
+    <!-- Cabeçalho Principal -->
+    <header class="bg-[#ffe600] shadow-sm py-3 px-6 flex justify-between items-center">
+        <div class="flex items-center space-x-6">
+            <span class="text-xl font-bold tracking-tight text-gray-900">Mercado Livre | Gestão</span>
+            <nav class="flex space-x-2">
+                <button onclick="mudarAba('gestao')" id="btn-aba-gestao" class="bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition">Gestão de Anúncios</button>
+                <button onclick="mudarAba('simulacao')" id="btn-aba-simulacao" class="bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition">Simulação de Preços</button>
+            </nav>
         </div>
-    </nav>
+        <div>
+            <button onclick="carregarDados()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-medium transition shadow">
+                Atualizar Lista
+            </button>
+        </div>
+    </header>
 
-    <div class="container-fluid px-4" style="max-width: 1550px;">
-        <!-- SEÇÃO ANÚNCIOS -->
-        <div id="secao-anuncios" class="card-custom">
-            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
-                <div>
-                    <h4 class="fw-bold m-0 text-dark">Gestão de Anúncios</h4>
-                    <p class="text-muted small m-0">Visualize preços, comissões, custos de envio e valores líquidos em tempo real.</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <input type="text" id="filtroTabela" class="form-control form-control-sm" placeholder="🔍 Buscar por título, MLB ou SKU..." onkeyup="filtrarTabela()" style="width: 280px;">
-                    <button class="btn btn-dark btn-sm px-3 shadow-sm" onclick="carregarAnuncios()"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button>
-                </div>
-            </div>
-
-            <!-- Resumo em Cartões -->
-            <div class="row g-3 mb-4" id="cardsResumo" style="display: none;">
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <span class="text-muted small fw-bold text-uppercase">Total Listado</span>
-                        <h3 class="fw-bold m-0 mt-1 text-dark" id="statTotal">0</h3>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card" style="border-left-color: #00a650;">
-                        <span class="text-muted small fw-bold text-uppercase">Anúncios Ativos</span>
-                        <h3 class="fw-bold m-0 mt-1" style="color: #00a650;" id="statAtivos">0</h3>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card" style="border-left-color: #fff159;">
-                        <span class="text-muted small fw-bold text-uppercase">Outros Status</span>
-                        <h3 class="fw-bold m-0 mt-1 text-secondary" id="statOutros">0</h3>
-                    </div>
-                </div>
-            </div>
-
-            <div id="tabela-anuncios-container">
-                <div class="alert alert-light border text-center py-5 rounded-4">
-                    <i class="bi bi-cloud-arrow-down fs-1 text-muted"></i>
-                    <p class="text-muted mt-2">Clique em "Atualizar Lista" para carregar seus anúncios.</p>
-                </div>
-            </div>
+    <!-- Conteúdo Principal -->
+    <main class="max-w-[98%] mx-auto py-6">
+        
+        <!-- Tela de Carregamento -->
+        <div id="loading" class="text-center py-20 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-yellow-400 border-t-transparent"></div>
+            <p class="mt-3 text-sm text-gray-600 font-medium">Sincronizando anúncios, fretes e comissões do Mercado Livre...</p>
         </div>
 
-        <!-- SEÇÃO PREÇOS -->
-        <div id="secao-precos" class="card-custom" style="display: none; max-width: 800px; margin: 0 auto;">
-            <h4 class="fw-bold mb-2 text-dark"><i class="bi bi-currency-dollar text-success"></i> Atualização de Preços em Massa</h4>
-            <p class="text-muted small">Cole o ID do anúncio (MLB) e o novo preço separados por vírgula ou tabulação (um por linha).</p>
-            <div class="mb-3">
-                <textarea id="listaProdutos" class="form-control" rows="8" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
-            </div>
-            <button class="btn btn-success w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="atualizarPrecosEmLote()">Executar Atualização em Massa</button>
-            <div id="status-precos" class="mt-3"></div>
-        </div>
-
-        <!-- SEÇÃO CONFIGURAÇÕES -->
-        <div id="secao-config" class="card-custom" style="display: none; max-width: 700px; margin: 0 auto;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="fw-bold m-0">Configurações da Conta</h4>
-                <button class="btn btn-close" onclick="mudarAba('anuncios')"></button>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-bold small text-muted">URL do Servidor no Render:</label>
-                <input type="text" id="inputRenderUrl" class="form-control" placeholder="https://site-atualizar-pre-o-ml.onrender.com">
-            </div>
-
-            <hr class="my-4">
-            <h6 class="fw-bold text-dark">Gerar Token Automaticamente via TG</h6>
-            <div class="row g-2 mb-2">
-                <div class="col-md-6">
-                    <input type="text" id="inputClientID" class="form-control form-control-sm" placeholder="Client ID">
+        <!-- ABA 1: GESTÃO DE ANÚNCIOS -->
+        <section id="secao-gestao" class="hidden">
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <span class="text-xs text-gray-500 uppercase font-semibold">Total Listado</span>
+                    <h2 id="total-listado" class="text-2xl font-bold text-gray-800">0</h2>
                 </div>
-                <div class="col-md-6">
-                    <input type="password" id="inputClientSecret" class="form-control form-control-sm" placeholder="Client Secret">
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <span class="text-xs text-gray-500 uppercase font-semibold">Anúncios Ativos</span>
+                    <h2 id="total-ativos" class="text-2xl font-bold text-green-600">0</h2>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <span class="text-xs text-gray-500 uppercase font-semibold">Outros Status</span>
+                    <h2 id="total-outros" class="text-2xl font-bold text-gray-600">0</h2>
                 </div>
             </div>
-            <div class="mb-2">
-                <input type="text" id="inputCodeTG" class="form-control form-control-sm" placeholder="Cole o código TG-... aqui">
-            </div>
-            <button class="btn btn-outline-primary btn-sm w-100 mb-3 fw-semibold" onclick="gerarTokenPeloSite()">Gerar Access Token Agora</button>
 
-            <hr class="my-4">
-            <div class="mb-3">
-                <label class="form-label fw-bold small text-muted">Access Token Definitivo (APP_USR-...):</label>
-                <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o APP_USR-... ou gere acima">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
+                            <th class="p-3.5">Anúncio</th>
+                            <th class="p-3.5">Preço</th>
+                            <th class="p-3.5">Comissão / Frete</th>
+                            <th class="p-3.5">Você Recebe</th>
+                            <th class="p-3.5">Estoque</th>
+                            <th class="p-3.5">Status</th>
+                            <th class="p-3.5">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-gestao" class="divide-y divide-gray-100 text-sm">
+                        <!-- Preenchido dinamicamente -->
+                    </tbody>
+                </table>
             </div>
-            
-            <button class="btn btn-meli w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="salvarConfig()">Salvar e Conectar</button>
-            <div id="status-config" class="mt-3"></div>
-        </div>
+        </section>
+
+        <!-- ABA 2: SIMULAÇÃO DE PREÇOS -->
+        <section id="secao-simulacao" class="hidden">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+                <h2 class="text-base font-bold text-gray-800">Simulador e Calculadora de Margem</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Preencha o Preço de Custo, Imposto (%) e Lucro Desejado (%) para calcular o preço ideal de venda e o retorno líquido.</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
+                            <th class="p-3.5">Anúncio</th>
+                            <th class="p-3.5">Preço Atual</th>
+                            <th class="p-3.5">Taxas / Envio</th>
+                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Preço de Custo (R$)</th>
+                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Imposto (%)</th>
+                            <th class="p-3.5 bg-yellow-50/70 text-yellow-900">Lucro Desejado (%)</th>
+                            <th class="p-3.5 bg-emerald-50 text-emerald-900">Preço Sugerido</th>
+                            <th class="p-3.5 bg-emerald-50 text-emerald-900">Lucro Líquido Real</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-simulacao" class="divide-y divide-gray-100 text-sm">
+                        <!-- Preenchido dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Botão Flutuante de Atalho (Engrenagem) -->
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
+        <button onclick="mudarAba('simulacao')" title="Ir para Simulação" style="background-color: #2563eb; color: white; border: none; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </button>
     </div>
 
-    <div class="floating-config shadow" onclick="mudarAba('config')" title="Configurações"><i class="bi bi-gear-fill"></i></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let dadosGlobaisAnuncios = [];
+        // Substitua pelo URL real do seu servidor no Render
+        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
+        let cacheItens = [];
 
-        window.onload = function() {
-            if (localStorage.getItem('meli_render_url')) document.getElementById('inputRenderUrl').value = localStorage.getItem('meli_render_url');
-            if (localStorage.getItem('meli_access_token')) document.getElementById('inputAccessToken').value = localStorage.getItem('meli_access_token');
-            if (localStorage.getItem('meli_client_id')) document.getElementById('inputClientID').value = localStorage.getItem('meli_client_id');
-            if (localStorage.getItem('meli_client_secret')) document.getElementById('inputClientSecret').value = localStorage.getItem('meli_client_secret');
-            
-            if (localStorage.getItem('meli_access_token') && localStorage.getItem('meli_render_url')) {
-                carregarAnuncios();
-            } else {
-                mudarAba('config');
+        async function carregarDados() {
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                if (!code) {
+                    alert("Por favor, faça autenticação com o Mercado Livre.");
+                    return;
+                }
+                // Se houver lógica de troca de token via code, mantenha aqui ou insira seu token direto
             }
-        };
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('secao-gestao').classList.add('hidden');
+            document.getElementById('secao-simulacao').classList.add('hidden');
+
+            try {
+                const response = await fetch(`${RENDER_URL}/api/anuncios`, {
+                    headers: { 'Authorization': localStorage.getItem('ml_access_token') }
+                });
+                const data = await response.json();
+
+                if (data.itens) {
+                    cacheItens = data.itens;
+                    atualizarCards(cacheItens);
+                    montarTabelaGestao(cacheItens);
+                    montarTabelaSimulacao(cacheItens);
+                    mudarAba('gestao');
+                } else {
+                    alert("Nenhum anúncio encontrado.");
+                }
+            } catch (e) {
+                alert("Erro ao comunicar com o servidor proxy.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
 
         function mudarAba(aba) {
-            document.getElementById('secao-anuncios').style.display = 'none';
-            document.getElementById('secao-precos').style.display = 'none';
-            document.getElementById('secao-config').style.display = 'none';
-            if (aba === 'anuncios') document.getElementById('secao-anuncios').style.display = 'block';
-            if (aba === 'precos') document.getElementById('secao-precos').style.display = 'block';
-            if (aba === 'config') document.getElementById('secao-config').style.display = 'block';
-        }
+            const secGestao = document.getElementById('secao-gestao');
+            const secSimulacao = document.getElementById('secao-simulacao');
+            const btnGestao = document.getElementById('btn-aba-gestao');
+            const btnSimulacao = document.getElementById('btn-aba-simulacao');
 
-        async function gerarTokenPeloSite() {
-            const renderUrl = document.getElementById('inputRenderUrl').value.trim().replace(/\/$/, "");
-            const clientId = document.getElementById('inputClientID').value.trim();
-            const clientSecret = document.getElementById('inputClientSecret').value.trim();
-            const code = document.getElementById('inputCodeTG').value.trim();
-            const statusDiv = document.getElementById('status-config');
-
-            if (!renderUrl || !clientId || !clientSecret || !code) {
-                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">Preencha todos os campos.</div>`;
-                return;
-            }
-
-            localStorage.setItem('meli_client_id', clientId);
-            localStorage.setItem('meli_client_secret', clientSecret);
-            statusDiv.innerHTML = `<div class="alert alert-info py-2 small">A gerar token...</div>`;
-
-            try {
-                const res = await fetch(`${renderUrl}/api/gerar-token`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code, clientId, clientSecret, redirectUri: "https://google.com" })
-                });
-                const data = await res.json();
-
-                if (data.sucesso) {
-                    document.getElementById('inputAccessToken').value = data.access_token;
-                    statusDiv.innerHTML = `<div class="alert alert-success py-2 small">Token gerado com sucesso! Clique em Salvar.</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">Erro: ${data.erro}</div>`;
-                }
-            } catch (e) {
-                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">Erro de comunicação com o Render.</div>`;
+            if (aba === 'gestao') {
+                secGestao.classList.remove('hidden');
+                secSimulacao.classList.add('hidden');
+                btnGestao.className = "bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition";
+                btnSimulacao.className = "bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition";
+            } else {
+                secSimulacao.classList.remove('hidden');
+                secGestao.classList.add('hidden');
+                btnSimulacao.className = "bg-yellow-500 text-gray-900 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition";
+                btnGestao.className = "bg-transparent hover:bg-yellow-400 text-gray-800 px-3 py-1.5 rounded text-sm font-medium transition";
             }
         }
 
-        function salvarConfig() {
-            const renderUrl = document.getElementById('inputRenderUrl').value.trim().replace(/\/$/, "");
-            const token = document.getElementById('inputAccessToken').value.trim();
-            const statusDiv = document.getElementById('status-config');
-
-            if (!renderUrl || !token) {
-                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">Preencha a URL e o Token.</div>`;
-                return;
-            }
-
-            localStorage.setItem('meli_render_url', renderUrl);
-            localStorage.setItem('meli_access_token', token);
-            statusDiv.innerHTML = `<div class="alert alert-success py-2 small">Salvo! A carregar painel...</div>`;
-            setTimeout(() => { mudarAba('anuncios'); carregarAnuncios(); }, 1000);
+        function atualizarCards(itens) {
+            const ativos = itens.filter(i => i.status === 'active').length;
+            document.getElementById('total-listado').innerText = itens.length;
+            document.getElementById('total-ativos').innerText = ativos;
+            document.getElementById('total-outros').innerText = itens.length - ativos;
         }
 
-        async function carregarAnuncios() {
-            const renderUrl = localStorage.getItem('meli_render_url');
-            const token = localStorage.getItem('meli_access_token');
-            const container = document.getElementById('tabela-anuncios-container');
-
-            if (!renderUrl || !token) {
-                container.innerHTML = `<div class="alert alert-warning text-center">Configure as credenciais nas configurações (engrenagem).</div>`;
-                return;
-            }
-
-            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar anúncios e taxas com o Mercado Livre...</p></div>`;
-            document.getElementById('cardsResumo').style.display = 'none';
-
-            try {
-                const res = await fetch(`${renderUrl}/api/anuncios`, {
-                    headers: { 'Authorization': token }
-                });
-                const dados = await res.json();
-
-                if (dados.erro) {
-                    container.innerHTML = `<div class="alert alert-danger text-center">Erro: ${dados.erro}</div>`;
-                    return;
-                }
-
-                dadosGlobaisAnuncios = dados.itens || [];
-                if (dadosGlobaisAnuncios.length === 0) {
-                    container.innerHTML = `<div class="alert alert-warning text-center">Nenhum anúncio encontrado.</div>`;
-                    return;
-                }
-
-                renderizarTabela(dadosGlobaisAnuncios);
-            } catch (e) {
-                container.innerHTML = `<div class="alert alert-danger text-center">Erro ao comunicar com o servidor no Render.</div>`;
-            }
-        }
-
-        function renderizarTabela(itens) {
-            const container = document.getElementById('tabela-anuncios-container');
-            
-            let total = itens.length;
-            let ativos = itens.filter(i => i.status === 'active').length;
-            let outros = total - ativos;
-
-            document.getElementById('statTotal').innerText = total;
-            document.getElementById('statAtivos').innerText = ativos;
-            document.getElementById('statOutros').innerText = outros;
-            document.getElementById('cardsResumo').style.display = 'flex';
-
-            let tabela = `<div class="table-responsive rounded-3 border bg-white shadow-sm"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>` +
-                         `<th>Anúncio</th><th>Preço</th><th>Comissão</th><th>Custo de Envio</th><th>Você Recebe</th><th>Estoque</th><th>Status</th><th>Link</th>` +
-                         `</tr></thead><tbody id="corpoTabela">`;
-
-            itens.forEach(item => {
-                let statusChecked = item.status === 'active' ? 'checked' : '';
-                let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
-                let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
-                let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
-
-                let precoNum = parseFloat(item.price) || 0;
-                let comissaoNum = parseFloat(item.sale_fee) || 0;
-                let freteNum = parseFloat(item.shipping_cost) || 0;
-                let liquidoReal = parseFloat(item.net_received) || 0;
-
-                // Exibição idêntica ao painel do Mercado Livre para o custo de envio
-                let textoFrete = item.free_shipping ? 
-                    `Grátis (R$ ${freteNum.toFixed(2)})` : 
-                    `Envio por conta do comprador<br><small class="text-muted">A pagar R$ 6.95</small>`;
-
-                tabela += `<tr>` +
-                          `<td>` +
-                              `<div class="d-flex align-items-center gap-3">` +
-                                  `${imgTag}` +
-                                  `<div>` +
-                                      `<a href="${item.permalink}" target="_blank" class="text-dark text-decoration-none fw-semibold text-truncate d-inline-block" style="max-width: 320px;" title="${item.title}">${item.title}</a>` +
-                                      `<div class="text-muted font-monospace" style="font-size: 11px;">${item.id} &bull; SKU: <span class="text-dark fw-bold">${item.sku}</span> &bull; <span class="badge bg-light text-dark border">${tipoAnuncio}</span></div>` +
-                                  `</div>` +
-                              `</div>` +
-                          `</td>` +
-                          `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
-                          `<td class="text-danger">-R$ ${comissaoNum.toFixed(2)}</td>` +
-                          `<td class="fw-semibold" style="font-size: 0.85rem;">${textoFrete}</td>` +
-                          `<td class="text-primary fw-bold">R$ ${liquidoReal.toFixed(2)}</td>` +
-                          `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
-                          `<td>` +
-                              `<div class="form-check form-switch">` +
-                                  `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} id="switch_${item.id}" onclick="alterarStatusAnuncio('${item.id}', this)" title="Ativar/Pausar">` +
-                              `</div>` +
-                          `</td>` +
-                          `<td>${linkBtn}</td>` +
-                          `</tr>`;
+        function montarTabelaGestao(itens) {
+            const tbody = document.getElementById('tabela-gestao');
+            tbody.innerHTML = '';
+            itens.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
+                            <img src="${item.thumbnail}" class="w-10 h-10 object-cover rounded border border-gray-200" />
+                            <div>
+                                <span class="font-medium text-gray-800 block text-xs line-clamp-1">${item.title}</span>
+                                <span class="text-[11px] text-gray-400">${item.id} | SKU: ${item.sku}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5 font-semibold">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 text-xs text-gray-500">
+                        Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
+                        Frete: R$ ${item.shipping_cost.toFixed(2)}
+                    </td>
+                    <td class="p-3.5 font-bold text-green-700">R$ ${item.net_received.toFixed(2)}</td>
+                    <td class="p-3.5 text-sm">${item.available_quantity} un.</td>
+                    <td class="p-3.5"><input type="checkbox" ${item.status === 'active' ? 'checked' : ''} disabled /></td>
+                    <td class="p-3.5"><a href="${item.permalink}" target="_blank" class="text-blue-600 hover:underline text-xs font-medium">Ver</a></td>
+                `;
+                tbody.appendChild(tr);
             });
-
-            tabela += `</tbody></table></div>`;
-            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios com detalhamento completo de comissões e custos de envio:</p>` + tabela;
         }
 
-        async function alterarStatusAnuncio(mlb, element) {
-            const renderUrl = localStorage.getItem('meli_render_url');
-            const token = localStorage.getItem('meli_access_token');
-            const novoStatus = element.checked ? 'active' : 'paused';
-
-            element.disabled = true;
-
-            try {
-                const res = await fetch(`${renderUrl}/api/alterar-status`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mlb, status: novoStatus })
-                });
-                const data = await res.json();
-
-                if (!data.sucesso) {
-                    alert("Erro ao alterar status: " + (data.erro || "Tente novamente"));
-                    element.checked = !element.checked;
-                } else {
-                    let item = dadosGlobaisAnuncios.find(i => i.id === mlb);
-                    if (item) item.status = novoStatus;
-                    
-                    let ativos = dadosGlobaisAnuncios.filter(i => i.status === 'active').length;
-                    document.getElementById('statAtivos').innerText = ativos;
-                    document.getElementById('statOutros').innerText = dadosGlobaisAnuncios.length - ativos;
-                }
-            } catch (e) {
-                alert("Erro de conexão ao alterar status.");
-                element.checked = !element.checked;
-            } finally {
-                element.disabled = false;
-            }
-        }
-
-        function filtrarTabela() {
-            const termo = document.getElementById('filtroTabela').value.toLowerCase();
-            const filtrados = dadosGlobaisAnuncios.filter(item => 
-                item.id.toLowerCase().includes(termo) ||
-                item.title.toLowerCase().includes(termo) ||
-                item.sku.toLowerCase().includes(termo)
-            );
-            
-            const corpo = document.getElementById('corpoTabela');
-            if (!corpo) return;
-
-            let html = '';
-            filtrados.forEach(item => {
-                let statusChecked = item.status === 'active' ? 'checked' : '';
-                let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
-                let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
-                let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
-                
-                let precoNum = parseFloat(item.price) || 0;
-                let comissaoNum = parseFloat(item.sale_fee) || 0;
-                let freteNum = parseFloat(item.shipping_cost) || 0;
-                let liquidoReal = parseFloat(item.net_received) || 0;
-
-                let textoFrete = item.free_shipping ? 
-                    `Grátis (R$ ${freteNum.toFixed(2)})` : 
-                    `Envio por conta do comprador<br><small class="text-muted">A pagar R$ 6.95</small>`;
-
-                html += `<tr>` +
-                        `<td>` +
-                            `<div class="d-flex align-items-center gap-3">` +
-                                `${imgTag}` +
-                                `<div>` +
-                                    `<a href="${item.permalink}" target="_blank" class="text-dark text-decoration-none fw-semibold text-truncate d-inline-block" style="max-width: 320px;" title="${item.title}">${item.title}</a>` +
-                                    `<div class="text-muted font-monospace" style="font-size: 11px;">${item.id} &bull; SKU: <span class="text-dark fw-bold">${item.sku}</span> &bull; <span class="badge bg-light text-dark border">${tipoAnuncio}</span></div>` +
-                                `</div>` +
-                            `</div>` +
-                        `</td>` +
-                        `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
-                        `<td class="text-danger">-R$ ${comissaoNum.toFixed(2)}</td>` +
-                        `<td class="fw-semibold" style="font-size: 0.85rem;">${textoFrete}</td>` +
-                        `<td class="text-primary fw-bold">R$ ${liquidoReal.toFixed(2)}</td>` +
-                        `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
-                        `<td>` +
-                            `<div class="form-check form-switch">` +
-                                `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} id="switch_${item.id}" onclick="alterarStatusAnuncio('${item.id}', this)" title="Ativar/Pausar">` +
-                            `</div>` +
-                        `</td>` +
-                        `<td>${linkBtn}</td>` +
-                        `</tr>`;
+        function montarTabelaSimulacao(itens) {
+            const tbody = document.getElementById('tabela-simulacao');
+            tbody.innerHTML = '';
+            itens.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
+                            <img src="${item.thumbnail}" class="w-10 h-10 object-cover rounded border border-gray-200" />
+                            <div>
+                                <span class="font-medium text-gray-800 block text-xs line-clamp-1">${item.title}</span>
+                                <span class="text-[11px] text-gray-400">${item.id}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5 font-semibold">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 text-xs text-gray-500">
+                        Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
+                        Frete: R$ ${item.shipping_cost.toFixed(2)}
+                    </td>
+                    <td class="p-3.5 bg-yellow-50/30">
+                        <input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-24 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
+                    </td>
+                    <td class="p-3.5 bg-yellow-50/30">
+                        <input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-20 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
+                    </td>
+                    <td class="p-3.5 bg-yellow-50/30">
+                        <input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.sale_fee}, ${item.shipping_cost}, ${item.free_shipping})" class="w-20 p-1.5 border border-yellow-300 rounded text-center bg-white text-xs font-semibold outline-none" />
+                    </td>
+                    <td class="p-3.5 bg-emerald-50/50 font-bold text-emerald-700 text-sm" id="sugestao_${index}">R$ 0.00</td>
+                    <td class="p-3.5 bg-emerald-50/50 font-bold text-emerald-800 text-sm" id="lucro_real_${index}">R$ 0.00</td>
+                `;
+                tbody.appendChild(tr);
+                recalcular(index, item.sale_fee, item.shipping_cost, item.free_shipping);
             });
-            corpo.innerHTML = html;
         }
 
-        async function atualizarPrecosEmLote() {
-            const renderUrl = localStorage.getItem('meli_render_url');
-            const token = localStorage.getItem('meli_access_token');
-            const texto = document.getElementById('listaProdutos').value.trim();
-            const statusDiv = document.getElementById('status-precos');
+        function recalcular(index, comissaoFixa, custoFrete, freteGratis) {
+            const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
+            const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
+            const lucroPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
-            if (!token || !renderUrl) { alert("Configure o sistema primeiro."); return; }
-            if (!texto) { alert("Insira os produtos."); return; }
+            const comissaoPercentMedia = 0.13;
+            const freteAplicado = freteGratis ? custoFrete : 0;
+            
+            const divisor = 1 - ((comissaoPercentMedia * 100 + impostoPercent + lucroPercent) / 100);
+            let precoSugerido = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
+            
+            const valorImposto = precoSugerido * (impostoPercent / 100);
+            const lucroLiquidoReal = precoSugerido - custo - comissaoFixa - valorImposto - freteAplicado;
 
-            const linhas = texto.split('\n');
-            statusDiv.innerHTML = `<div class="alert alert-info py-2 small">A processar ${linhas.length} itens...</div>`;
-
-            let sucessos = 0, erros = 0;
-            let logHtml = "<ul class='list-group mt-2 small'>";
-
-            for (let i = 0; i < linhas.length; i++) {
-                const partes = linhas[i].split(/[\t,;]+/);
-                if (partes.length < 2) continue;
-
-                const mlb = partes[0].trim();
-                const preco = parseFloat(partes[1].trim().replace(',', '.'));
-
-                try {
-                    const res = await fetch(`${renderUrl}/api/atualizar-preco`, {
-                        method: 'PUT',
-                        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ mlb, price: preco })
-                    });
-                    const data = await res.json();
-
-                    if (data.sucesso) {
-                        sucessos++;
-                        logHtml += `<li class='list-group-item list-group-item-success py-1'>${mlb} -> R$ ${preco.toFixed(2)} (OK)</li>`;
-                    } else {
-                        erros++;
-                        logHtml += `<li class='list-group-item list-group-item-warning py-1'>${mlb} -> Erro ao atualizar</li>`;
-                    }
-                } catch(e) {
-                    erros++;
-                }
-                await new Promise(r => setTimeout(r, 1000));
-            }
-
-            logHtml += "</ul>";
-            statusDiv.innerHTML = `<div class="alert alert-secondary py-2 small">Concluído! Sucessos: ${sucessos} | Erros: ${erros}</div>${logHtml}`;
+            document.getElementById(`sugestao_${index}`).innerText = `R$ ${precoSugerido.toFixed(2)}`;
+            document.getElementById(`lucro_real_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
         }
+
+        window.onload = carregarDados;
     </script>
 </body>
 </html>
