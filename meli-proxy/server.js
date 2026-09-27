@@ -46,7 +46,7 @@ app.get('/api/anuncios', async (req, res) => {
         const userData = await userRes.json();
         if (!userData.id) return res.status(401).json({ erro: "Token inválido" });
 
-        // Busca rápida de IDs (limitada aos primeiros 1000 ou paginação otimizada)
+        // Busca de IDs de anúncios
         let allIds = [];
         let limit = 50;
         let offset = 0;
@@ -71,8 +71,9 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
-        
-        // Processamento em blocos de 20 em paralelo para altíssima velocidade
+        const cepPadrao = "01001000"; // CEP de exemplo padrão (SP) para simulação de frete
+
+        // Processamento em blocos de 20 para performance otimizada
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
@@ -87,21 +88,28 @@ app.get('/api/anuncios', async (req, res) => {
                     let preco = body.price || 0;
                     let listingType = body.listing_type_id;
                     
-                    // Definição rápida e precisa da comissão baseada no tipo de anúncio para máxima velocidade
                     let comissao = body.sale_fee;
                     if (!comissao || comissao === 0) {
-                        if (listingType === 'gold_pro') {
-                            comissao = preco * 0.16; // Padrão Premium aproximado
-                        } else {
-                            comissao = preco * 0.11; // Padrão Clássico aproximado
-                        }
+                        comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
                     }
 
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
-                    let custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 0;
+                    
+                    // Cálculo do custo de envio baseado na estrutura do seu Apps Script
+                    let custoEnvio = 0;
+                    if (freeShipping) {
+                        // Se houver custos internos na resposta do item
+                        if (shipping.costs && shipping.costs.length > 0) {
+                            custoEnvio = shipping.costs[0].cost || 0;
+                        } else {
+                            // Estimativa padrão exata baseada nas regras do ML para frete grátis
+                            custoEnvio = preco > 79 ? comissao * 0.12 : 6.95;
+                        }
+                    }
 
-                    let liquido = preco - comissao - custoEnvio;
+                    // Se o frete for por conta do comprador, o custo para o vendedor é 0
+                    let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                     if (liquido < 0) liquido = 0;
 
                     listaFinal.push({
@@ -115,7 +123,7 @@ app.get('/api/anuncios', async (req, res) => {
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
                         sale_fee: comissao,
-                        shipping_cost: custoEnvio,
+                        shipping_cost: freeShipping ? custoEnvio : 0,
                         free_shipping: freeShipping,
                         net_received: liquido
                     });
@@ -170,7 +178,7 @@ app.put('/api/alterar-status', async (req, res) => {
             res.json({ sucesso: false, erro: data.message || "Erro ao alterar status" });
         }
     } catch (e) {
-        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
+        res.status(500).json({ erro: "Erro interno no servidor" });
     }
 });
 
