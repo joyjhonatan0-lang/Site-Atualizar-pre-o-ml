@@ -70,6 +70,7 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
+        const cepPadrao = "01001000"; // CEP base para consulta na API do Mercado Livre
 
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
@@ -84,6 +85,7 @@ app.get('/api/anuncios', async (req, res) => {
                     const body = itemObj.body;
                     let preco = body.price || 0;
                     let listingType = body.listing_type_id;
+                    let itemId = body.id;
                     
                     let comissao = body.sale_fee;
                     if (!comissao || comissao === 0) {
@@ -93,21 +95,42 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Extração rigorosa do custo exato retornado pela API do ML
-                    let custoEnvio = 6.85; // Fallback exato padrão para os seus itens de menor peso
-                    if (shipping.costs && shipping.costs.length > 0) {
-                        // Procura pelo custo específico na listagem de custos do item
-                        let custoEncontrado = shipping.costs.find(c => c.cost !== undefined);
-                        if (custoEncontrado) {
-                            custoEnvio = custoEncontrado.cost;
+                    let custoEnvio = 0;
+
+                    // 1. Tenta buscar o custo diretamente da API oficial de shipping_options do item (igual ao seu Apps Script)
+                    try {
+                        const shipOptRes = await fetch(`https://api.mercadolibre.com/items/${itemId}/shipping_options?zip_code=${cepPadrao}`, {
+                            headers: { "Authorization": "Bearer " + token }
+                        });
+                        const shipOptData = await shipOptRes.json();
+                        
+                        if (shipOptData && shipOptData.options && shipOptData.options.length > 0) {
+                            // Procura a opção padrão ou a primeira disponível com custo
+                            let optValida = shipOptData.options.find(o => o.cost !== undefined || o.list_cost !== undefined);
+                            if (optValida) {
+                                custoEnvio = optValida.cost !== undefined ? optValida.cost : optValida.list_cost;
+                            }
                         }
+                    } catch (err) {
+                        // Ignora falhas pontuais de rede na sub-requisição
+                    }
+
+                    // 2. Se a API de opções não retornou, tenta extrair dos custos embutidos no item
+                    if (custoEnvio === 0 && shipping.costs && shipping.costs.length > 0) {
+                        let cObj = shipping.costs.find(c => c.cost !== undefined);
+                        if (cObj) custoEnvio = cObj.cost;
+                    }
+
+                    // 3. Fallback final caso o item não traga valor de frete pela API
+                    if (custoEnvio === 0) {
+                        custoEnvio = 6.85; 
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                     if (liquido < 0) liquido = 0;
 
                     listaFinal.push({
-                        id: body.id,
+                        id: itemId,
                         title: body.title,
                         price: preco,
                         status: body.status,
