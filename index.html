@@ -52,7 +52,7 @@
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
                 <div>
                     <h4 class="fw-bold m-0 text-dark">Gestão de Anúncios</h4>
-                    <p class="text-muted small m-0">Visualize itens, estoques, altere preços e ative/pause anúncios com um clique.</p>
+                    <p class="text-muted small m-0">Visualize preços, comissões, custos de frete e valores líquidos em tempo real.</p>
                 </div>
                 <div class="d-flex gap-2">
                     <input type="text" id="filtroTabela" class="form-control form-control-sm" placeholder="🔍 Buscar por título, MLB ou SKU..." onkeyup="filtrarTabela()" style="width: 280px;">
@@ -168,7 +168,7 @@
         }
 
         async function gerarTokenPeloSite() {
-            const renderUrl = document.getElementById('inputRenderUrl').value.trim().replace(/\/$/, "");
+            const renderUrl = document.getElementById('inputRenderUrl'].value.trim().replace(/\/$/, "");
             const clientId = document.getElementById('inputClientID').value.trim();
             const clientSecret = document.getElementById('inputClientSecret').value.trim();
             const code = document.getElementById('inputCodeTG').value.trim();
@@ -228,7 +228,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar anúncios com o Mercado Livre...</p></div>`;
+            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar anúncios e taxas com o Mercado Livre...</p></div>`;
             document.getElementById('cardsResumo').style.display = 'none';
 
             try {
@@ -267,7 +267,7 @@
             document.getElementById('cardsResumo').style.display = 'flex';
 
             let tabela = `<div class="table-responsive rounded-3 border bg-white shadow-sm"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>` +
-                         `<th>Anúncio</th><th>Preço</th><th>Condições</th><th>Você Recebe</th><th>Estoque</th><th>Status</th><th>Link</th>` +
+                         `<th>Anúncio</th><th>Preço</th><th>Condições</th><th>Você Recebe / Detalhes</th><th>Estoque</th><th>Status</th><th>Link</th>` +
                          `</tr></thead><tbody id="corpoTabela">`;
 
             itens.forEach(item => {
@@ -275,6 +275,9 @@
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
+
+                // Detalhes de frete e comissão igual ao painel do ML
+                let infoFrete = item.free_shipping ? `<span class="text-danger">Frete Grátis (R$ ${item.shipping_cost.toFixed(2)})</span>` : `Envio por conta do comprador`;
 
                 tabela += `<tr>` +
                           `<td>` +
@@ -288,7 +291,11 @@
                           `</td>` +
                           `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
                           `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
-                          `<td class="text-secondary fw-semibold">R$ ${item.net_received.toFixed(2)}</td>` +
+                          `<td>` +
+                              `<div class="fw-bold text-dark" style="font-size: 0.95rem;">R$ ${item.net_received.toFixed(2)}</div>` +
+                              `<div class="text-muted" style="font-size: 11px;">Comissão: R$ ${item.sale_fee.toFixed(2)}</div>` +
+                              `<div class="text-muted" style="font-size: 11px;">${infoFrete}</div>` +
+                          `</td>` +
                           `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                           `<td>` +
                               `<div class="form-check form-switch">` +
@@ -300,7 +307,7 @@
             });
 
             tabela += `</tbody></table></div>`;
-            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios:</p>` + tabela;
+            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios com taxas e fretes calculados:</p>` + tabela;
         }
 
         async function alterarStatusAnuncio(mlb, element) {
@@ -308,7 +315,6 @@
             const token = localStorage.getItem('meli_access_token');
             const novoStatus = element.checked ? 'active' : 'paused';
 
-            // Desativa temporariamente para evitar cliques duplos
             element.disabled = true;
 
             try {
@@ -321,13 +327,11 @@
 
                 if (!data.sucesso) {
                     alert("Erro ao alterar status: " + (data.erro || "Tente novamente"));
-                    element.checked = !element.checked; // Reverte se der erro
+                    element.checked = !element.checked;
                 } else {
-                    // Atualiza o status na lista local
                     let item = dadosGlobaisAnuncios.find(i => i.id === mlb);
                     if (item) item.status = novoStatus;
                     
-                    // Atualiza os contadores
                     let ativos = dadosGlobaisAnuncios.filter(i => i.status === 'active').length;
                     document.getElementById('statAtivos').innerText = ativos;
                     document.getElementById('statOutros').innerText = dadosGlobaisAnuncios.length - ativos;
@@ -357,6 +361,7 @@
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
                 let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
                 let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
+                let infoFrete = item.free_shipping ? `<span class="text-danger">Frete Grátis (R$ ${item.shipping_cost.toFixed(2)})</span>` : `Envio por conta do comprador`;
 
                 html += `<tr>` +
                         `<td>` +
@@ -370,7 +375,11 @@
                         `</td>` +
                         `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
                         `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
-                        `<td class="text-secondary fw-semibold">R$ ${item.net_received.toFixed(2)}</td>` +
+                        `<td>` +
+                            `<div class="fw-bold text-dark" style="font-size: 0.95rem;">R$ ${item.net_received.toFixed(2)}</div>` +
+                            `<div class="text-muted" style="font-size: 11px;">Comissão: R$ ${item.sale_fee.toFixed(2)}</div>` +
+                            `<div class="text-muted" style="font-size: 11px;">${infoFrete}</div>` +
+                        `</td>` +
                         `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                         `<td>` +
                             `<div class="form-check form-switch">` +
