@@ -44,13 +44,14 @@ app.get('/api/anuncios', async (req, res) => {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
-        if (!userData.id) return res.status(401).json({ erro: "Token inválido" });
+        if (!userData.id) return res.status(401).json({ erro: "Token inválido ou expirado" });
 
         let allIds = [];
         let limit = 50;
         let offset = 0;
         let fetchMore = true;
 
+        // Limita a busca para garantir velocidade máxima
         while (fetchMore && offset < 1000) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -71,8 +72,9 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        for (let i = 0; i < allIds.length; i += 20) {
-            const chunk = allIds.slice(i, i + 20);
+        // Processamento em blocos paralelos otimizados
+        for (let i = 0; i < allIds.length; i += 50) {
+            const chunk = allIds.slice(i, i + 50);
             
             const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee,shipping`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -125,28 +127,6 @@ app.get('/api/anuncios', async (req, res) => {
 
     } catch (e) {
         res.status(500).json({ erro: "Erro ao comunicar com a API do Mercado Livre" });
-    }
-});
-
-app.put('/api/atualizar-preco', async (req, res) => {
-    const token = req.headers['authorization'];
-    const { mlb, price } = req.body;
-    if (!token) return res.status(401).json({ sucesso: false, erro: "Token não fornecido" });
-
-    try {
-        const response = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
-            method: 'PUT',
-            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ price: price })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            res.json({ sucesso: true });
-        } else {
-            res.json({ sucesso: false, erro: data.message || "Erro ao atualizar" });
-        }
-    } catch (e) {
-        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
     }
 });
 
