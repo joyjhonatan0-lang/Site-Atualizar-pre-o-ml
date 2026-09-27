@@ -6,7 +6,7 @@
     <title>Atualizador de Preços - Mercado Livre</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; padding-top: 50px; }
+        body { background-color: #f8f9fa; padding-top: 40px; }
         .card-custom { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); background: white; padding: 30px; }
         .btn-meli { background-color: #ffe600; color: #2d327d; font-weight: bold; border: none; width: 100%; padding: 12px; border-radius: 6px; }
         .btn-meli:hover { background-color: #f3dc00; }
@@ -14,108 +14,92 @@
 </head>
 <body>
 
-    <div class="container" style="max-width: 700px;">
+    <div class="container" style="max-width: 750px;">
         <div class="card-custom">
-            <h3 class="mb-3 text-center">Atualizador em Massa - Mercado Livre</h3>
+            <h3 class="mb-4 text-center">Painel de Preços - Mercado Livre</h3>
             
-            <!-- ETAPA 1: LOGIN -->
-            <div id="secao-login" style="display: none;">
-                <p class="text-muted text-center mb-4">Conecte-se com a sua conta do Mercado Livre para gerenciar os seus anúncios.</p>
-                <button class="btn btn-meli" onclick="iniciarLoginMeli()">Entrar com o Mercado Livre</button>
+            <!-- ETAPA DE AUTENTICAÇÃO / TOKEN -->
+            <div id="secao-token" class="mb-4 p-3 bg-light rounded border">
+                <label class="form-label fw-bold">Access Token do Mercado Livre:</label>
+                <div class="input-group">
+                    <input type="text" id="inputToken" class="form-control" placeholder="Cole seu Access Token aqui (App_AccessToken...)">
+                    <button class="btn btn-dark" onclick="salvarToken()">Salvar Token</button>
+                </div>
+                <small class="text-muted">O token fica salvo no seu navegador para uso contínuo.</small>
             </div>
 
-            <!-- ETAPA 2: PAINEL DE ATUALIZAÇÃO -->
-            <div id="secao-painel" style="display: none;">
-                <div class="alert alert-success py-2 text-center">Conta conectada com sucesso!</div>
-                
+            <!-- PAINEL DE ATUALIZAÇÃO EM MASSA -->
+            <div id="secao-painel">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">Cole os dados (ID do Anúncio e Novo Preço, separados por vírgula ou tabulação):</label>
-                    <textarea id="listaProdutos" class="form-control" rows="6" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
+                    <label class="form-label fw-bold">Lista de Produtos (ID do Anúncio e Novo Preço):</label>
+                    <div class="form-text mb-2">Cole no formato: <code>MLB7621024462, 28.50</code> (um por linha)</div>
+                    <textarea id="listaProdutos" class="form-control" rows="8" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
                 </div>
                 
-                <button class="btn btn-primary w-100" onclick="atualizarPrecos()">Iniciar Atualização de Preços</button>
-                <div id="status-processo" class="mt-3"></div>
+                <button class="btn btn-primary w-100 py-2 fw-bold" onclick="atualizarPrecosEmLote()">Iniciar Atualização em Massa</button>
+                <div id="status-processo" class="mt-4"></div>
             </div>
         </div>
     </div>
 
     <script>
-        const CLIENT_ID = "8447530383468116";
-        const REDIRECT_URI = window.location.origin + window.location.pathname;
-        const CODE_VERIFIER = "meu_codigo_verificador_seguro_1234567890_pkce";
-
-        async function gerarCodeChallenge(verifier) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(verifier);
-            const digest = await crypto.subtle.digest('SHA-256', data);
-            let base64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
-            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
-
-        async function iniciarLoginMeli() {
-            const codeChallenge = await gerarCodeChallenge(CODE_VERIFIER);
-            const authUrl = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-            window.location.href = authUrl;
-        }
-
-        window.onload = async function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
+        // Ao carregar a página, preenche o token se já estiver salvo
+        window.onload = function() {
             const tokenSalvo = localStorage.getItem('meli_access_token');
-
             if (tokenSalvo) {
-                document.getElementById('secao-painel').style.display = 'block';
-            } else if (code) {
-                document.getElementById('secao-login').style.display = 'block';
-                document.getElementById('secao-login').innerHTML = `<p class="text-center text-info">A autenticar com o Mercado Livre...</p>`;
-                
-                // Nota: A troca do code por token via browser costuma bloquear por CORS na API do Meli. 
-                // Se preferir, podemos usar o seu token gerado anteriormente ou configurar um endpoint. 
-                // Por segurança no front-end puro, vamos solicitar o token ou exibi-lo.
-                document.getElementById('secao-login').innerHTML = `
-                    <div class="alert alert-warning">
-                        Código obtido com sucesso! Para evitar bloqueio de segurança do navegador (CORS) do Mercado Livre, insira o seu <b>Access Token</b> abaixo:
-                    </div>
-                    <input type="text" id="inputTokenManual" class="form-control mb-3" placeholder="Cole seu Access Token aqui">
-                    <button class="btn btn-success w-100" onclick="salvarTokenManual()">Salvar Token e Entrar</button>
-                `;
-            } else {
-                document.getElementById('secao-login').style.display = 'block';
+                document.getElementById('inputToken').value = tokenSalvo;
             }
         };
 
-        function salvarTokenManual() {
-            const token = document.getElementById('inputTokenManual').value.trim();
-            if(token) {
+        function salvarToken() {
+            const token = document.getElementById('inputToken').value.trim();
+            if (token) {
                 localStorage.setItem('meli_access_token', token);
-                location.href = REDIRECT_URI; // Recarrega limpo
+                alert("Token salvo com sucesso!");
             } else {
-                alert("Insira um token válido.");
+                alert("Por favor, insira um token válido.");
             }
         }
 
-        async function atualizarPrecos() {
-            const token = localStorage.getItem('meli_access_token');
+        async function atualizarPrecosEmLote() {
+            const token = document.getElementById('inputToken').value.trim();
             const texto = document.getElementById('listaProdutos').value.trim();
             const statusDiv = document.getElementById('status-processo');
 
+            if (!token) {
+                alert("Insira o seu Access Token primeiro.");
+                return;
+            }
+
             if (!texto) {
-                alert("Insira pelo menos um produto.");
+                alert("Insira pelo menos um produto e preço.");
                 return;
             }
 
             const linhas = texto.split('\n');
-            statusDiv.innerHTML = `<div class="alert alert-info">A processar ${linhas.length} itens...</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-info">A processar ${linhas.length} itens... Aguarde.</div>`;
 
             let sucessos = 0;
             let erros = 0;
+            let htmlLog = "<ul class='list-group'>";
 
             for (let i = 0; i < linhas.length; i++) {
-                const partes = linhas[i].split(/[\t,]+/);
+                const linhaAtual = linhas[i].trim();
+                if (!linhaAtual) continue;
+
+                // Separa por vírgula, ponto e vírgula ou tabulação
+                const partes = linhaAtual.split(/[\t,;]+/);
                 if (partes.length < 2) continue;
 
                 const mlb = partes[0].trim();
-                const preco = parseFloat(partes[1].trim().replace(',', '.'));
+                let precoStr = partes[1].trim().replace(',', '.');
+                const preco = parseFloat(precoStr);
+
+                if (isNaN(preco)) {
+                    erros++;
+                    htmlLog += `<li class='list-group-item list-group-item-danger'>${mlb}: Preço inválido</li>`;
+                    continue;
+                }
 
                 try {
                     const resposta = await fetch(`https://api.mercadolibre.com/items/${mlb}`, {
@@ -129,18 +113,30 @@
 
                     if (resposta.ok) {
                         sucessos++;
+                        htmlLog += `<li class='list-group-item list-group-item-success'>${mlb} -> Atualizado para R$ ${preco.toFixed(2)} (OK)</li>`;
                     } else {
+                        const erroJson = await resposta.json();
+                        let msgErro = erroJson.message || "Erro desconhecido";
+                        if (erroJson.cause && erroJson.cause.length > 0 && erroJson.cause[0].message) {
+                            msgErro = erroJson.cause[0].message;
+                        }
                         erros++;
+                        htmlLog += `<li class='list-group-item list-group-item-warning'>${mlb} -> ${msgErro}</li>`;
                     }
                 } catch (e) {
                     erros++;
+                    htmlLog += `<li class='list-group-item list-group-item-danger'>${mlb} -> Falha de conexão</li>`;
                 }
 
-                // Pausa de 1.5 segundos para evitar Erro 429
-                await new Promise(r => setTimeout(r, 1500));
+                // Pausa de 1.5 segundos entre as requisições para evitar o Erro 429 (Rate Limit) do Mercado Livre
+                await new Promise(resolve => setTimeout(resolve, 1500));
             }
 
-            statusDiv.innerHTML = `<div class="alert alert-success">Processo concluído! Sucessos: ${sucessos} | Erros/Bloqueados: ${erros}</div>`;
+            htmlLog += "</ul>";
+            statusDiv.innerHTML = `
+                <div class="alert alert-secondary mb-3"><strong>Processo Concluído!</strong> Sucessos: ${sucessos} | Erros/Bloqueados: ${erros}</div>
+                ${htmlLog}
+            `;
         }
     </script>
 
