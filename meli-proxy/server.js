@@ -46,7 +46,6 @@ app.get('/api/anuncios', async (req, res) => {
         const userData = await userRes.json();
         if (!userData.id) return res.status(401).json({ erro: "Token inválido" });
 
-        // Busca de IDs de anúncios
         let allIds = [];
         let limit = 50;
         let offset = 0;
@@ -71,9 +70,7 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
-        const cepPadrao = "01001000"; // CEP de exemplo padrão (SP) para simulação de frete
 
-        // Processamento em blocos de 20 para performance otimizada
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
@@ -96,19 +93,15 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Cálculo do custo de envio baseado na estrutura do seu Apps Script
+                    // Extração do custo de envio real retornado pelo ML ou cálculo da tabela padrão
                     let custoEnvio = 0;
-                    if (freeShipping) {
-                        // Se houver custos internos na resposta do item
-                        if (shipping.costs && shipping.costs.length > 0) {
-                            custoEnvio = shipping.costs[0].cost || 0;
-                        } else {
-                            // Estimativa padrão exata baseada nas regras do ML para frete grátis
-                            custoEnvio = preco > 79 ? comissao * 0.12 : 6.95;
-                        }
+                    if (shipping.costs && shipping.costs.length > 0) {
+                        custoEnvio = shipping.costs[0].cost || 0;
+                    } else {
+                        // Se for frete grátis ou tabela de envio padrão do Mercado Livre para o peso/preço
+                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95; 
                     }
 
-                    // Se o frete for por conta do comprador, o custo para o vendedor é 0
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                     if (liquido < 0) liquido = 0;
 
@@ -123,7 +116,7 @@ app.get('/api/anuncios', async (req, res) => {
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
                         sale_fee: comissao,
-                        shipping_cost: freeShipping ? custoEnvio : 0,
+                        shipping_cost: custoEnvio,
                         free_shipping: freeShipping,
                         net_received: liquido
                     });
@@ -178,7 +171,7 @@ app.put('/api/alterar-status', async (req, res) => {
             res.json({ sucesso: false, erro: data.message || "Erro ao alterar status" });
         }
     } catch (e) {
-        res.status(500).json({ erro: "Erro interno no servidor" });
+        res.status(500).json({ sucesso: false, erro: "Erro interno no servidor" });
     }
 });
 
