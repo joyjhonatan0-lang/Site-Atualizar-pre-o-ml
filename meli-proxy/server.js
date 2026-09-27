@@ -84,19 +84,15 @@ app.get('/api/anuncios', async (req, res) => {
                     let preco = body.price || 0;
                     let comissao = body.sale_fee || 0;
                     
-                    // Identifica as regras de envio (Frete)
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     let modoEnvio = shipping.mode || 'not_specified';
                     
-                    // Estimativa de custo de frete com base no tipo de envio e gratuidade
                     let custoFrete = 0;
                     if (freeShipping) {
-                        // Se for frete grátis, geralmente há um custo repassado ao vendedor dependendo do peso/preço
-                        custoFrete = preco > 79 ? (comissao * 0.15) : 0; // Exemplo de proporção ou valor fixo padrão
+                        custoFrete = preco > 79 ? (comissao * 0.15) : 0;
                     }
 
-                    // Valor líquido real que o vendedor recebe ("Você recebe")
                     let liquido = preco - comissao - custoFrete;
 
                     listaFinal.push({
