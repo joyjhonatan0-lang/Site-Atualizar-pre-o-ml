@@ -85,7 +85,7 @@ app.get('/api/anuncios', async (req, res) => {
                     let comissao = body.sale_fee || 0;
                     let listingType = body.listing_type_id;
 
-                    // Consulta comissão caso venha zerada
+                    // Consulta comissão oficial caso venha zerada
                     if (!comissao || comissao === 0) {
                         try {
                             const feeRes = await fetch(`https://api.mercadolibre.com/items/${body.id}/sale_fee?price=${preco}&listing_type_id=${listingType}`, {
@@ -101,19 +101,14 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Tratamento rigoroso do custo de envio (se o ML cobra repasse ou frete grátis)
+                    // Custo de envio real: só desconta se for frete grátis subsidiado/pago pelo vendedor. 
+                    // Se o frete for por conta do comprador, o custo para o vendedor é 0 (R$ 0,00).
                     let custoEnvio = 0;
-                    if (shipping.logistic_type) {
-                        if (freeShipping) {
-                            custoEnvio = preco > 79 ? comissao * 0.12 : 6.95; 
-                        } else {
-                            // Quando o envio é por conta do comprador, o custo para o vendedor é 0, 
-                            // a menos que haja alguma taxa de manuseio específica da categoria.
-                            custoEnvio = 0; 
-                        }
+                    if (freeShipping) {
+                        custoEnvio = preco > 79 ? comissao * 0.12 : 6.95; 
                     }
 
-                    // Subtração exata: Preço - Comissão - Custo de Envio = O que sobra (Líquido)
+                    // Subtração exata iguaozinha ao painel do ML: Preço - Comissão - Custo de Envio (0 se o comprador paga o frete)
                     let liquido = preco - comissao - custoEnvio;
 
                     let comissaoFallback = comissao > 0 ? comissao : (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
