@@ -65,17 +65,17 @@
             <div id="status-precos" class="mt-3"></div>
         </div>
 
-        <!-- SEÇÃO 3: CONFIGURAÇÕES (MODAL / PAINEL OCULTO) -->
+        <!-- SEÇÃO 3: CONFIGURAÇÕES -->
         <div id="secao-config" class="card-custom" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="fw-bold m-0"><i class="bi bi-gear text-secondary"></i> Configurações da Conta</h3>
                 <button class="btn btn-close" onclick="mudarAba('anuncios')"></button>
             </div>
-            <p class="text-muted">Insira o seu **Access Token** válido do Mercado Livre (geralmente começa com <code>APP_USR-...</code>).</p>
+            <p class="text-muted">Insira o seu <b>Access Token</b> válido do Mercado Livre (deve começar com <code>APP_USR-...</code>).</p>
             
             <div class="mb-3">
                 <label class="form-label fw-bold">Access Token:</label>
-                <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o seu Access Token atualizado aqui">
+                <input type="text" id="inputAccessToken" class="form-control" placeholder="Cole o seu token APP_USR-... aqui">
             </div>
             
             <button class="btn btn-meli w-100 py-2" onclick="salvarToken()">Salvar Access Token</button>
@@ -84,7 +84,7 @@
 
     </div>
 
-    <!-- BOTÃO FLUTUANTE DE CONFIGURAÇÕES (ÍCONE DE ENGRENAGEM) -->
+    <!-- BOTÃO FLUTUANTE DE CONFIGURAÇÕES -->
     <div class="floating-config" onclick="mudarAba('config')" title="Configurações">
         <i class="bi bi-gear-fill"></i>
     </div>
@@ -96,9 +96,9 @@
             const tokenSalvo = localStorage.getItem('meli_access_token');
             if (tokenSalvo) {
                 document.getElementById('inputAccessToken').value = tokenSalvo;
-                carregarAnuncios(); // Já carrega os anúncios ao abrir se tiver token
+                carregarAnuncios();
             } else {
-                mudarAba('config'); // Abre nas configurações se não tiver token
+                mudarAba('config');
             }
         };
 
@@ -116,12 +116,13 @@
             const token = document.getElementById('inputAccessToken').value.trim();
             const statusDiv = document.getElementById('status-config');
 
-            if (token) {
+            if (token.startsWith('APP_USR-') || token.length > 20) {
                 localStorage.setItem('meli_access_token', token);
-                statusDiv.innerHTML = `<div class="alert alert-success">Token guardado com sucesso!</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-success">Token guardado com sucesso! Redirecionando...</div>`;
                 setTimeout(() => mudarAba('anuncios'), 1000);
             } else {
-                statusDiv.innerHTML = `<div class="alert alert-danger">Insira um token válido.</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-warning">Atenção: O token geralmente começa com "APP_USR-". Verifique se copiou o token correto.</div>`;
+                localStorage.setItem('meli_access_token', token); // Salva mesmo assim caso o formato mude
             }
         }
 
@@ -149,7 +150,7 @@
                 }
 
                 // 2. Busca itens
-                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=20`, {
+                const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const itemsData = await itemsRes.json();
