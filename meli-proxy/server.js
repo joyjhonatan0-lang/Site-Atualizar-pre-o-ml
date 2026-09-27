@@ -85,7 +85,7 @@ app.get('/api/anuncios', async (req, res) => {
                     let comissao = body.sale_fee || 0;
                     let listingType = body.listing_type_id;
 
-                    // Se a API básica não retornou a comissão (sale_fee = 0), consultamos a rota específica de custos do item
+                    // Consulta comissão caso venha zerada
                     if (!comissao || comissao === 0) {
                         try {
                             const feeRes = await fetch(`https://api.mercadolibre.com/items/${body.id}/sale_fee?price=${preco}&listing_type_id=${listingType}`, {
@@ -101,13 +101,23 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Custo de envio real ou estimado de acordo com as regras do Mercado Livre
+                    // Tratamento rigoroso do custo de envio (se o ML cobra repasse ou frete grátis)
                     let custoEnvio = 0;
-                    if (freeShipping) {
-                        custoEnvio = preco > 79 ? comissao * 0.15 : 6.95; // Padrão base do Mercado Livre para frete grátis
+                    if (shipping.logistic_type) {
+                        if (freeShipping) {
+                            custoEnvio = preco > 79 ? comissao * 0.12 : 6.95; 
+                        } else {
+                            // Quando o envio é por conta do comprador, o custo para o vendedor é 0, 
+                            // a menos que haja alguma taxa de manuseio específica da categoria.
+                            custoEnvio = 0; 
+                        }
                     }
 
-                    let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
+                    // Subtração exata: Preço - Comissão - Custo de Envio = O que sobra (Líquido)
+                    let liquido = preco - comissao - custoEnvio;
+
+                    let comissaoFallback = comissao > 0 ? comissao : (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
+                    let liquidoFinal = liquido > 0 ? liquido : (preco - comissaoFallback);
 
                     listaFinal.push({
                         id: body.id,
@@ -119,10 +129,10 @@ app.get('/api/anuncios', async (req, res) => {
                         sku: body.seller_custom_field || 'Sem SKU',
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
-                        sale_fee: comissao > 0 ? comissao : (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11),
-                        shipping_cost: freeShipping ? custoEnvio : 0,
+                        sale_fee: comissaoFallback,
+                        shipping_cost: custoEnvio,
                         free_shipping: freeShipping,
-                        net_received: liquido > 0 ? liquido : (preco - (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11))
+                        net_received: liquidoFinal
                     });
                 }
             }
