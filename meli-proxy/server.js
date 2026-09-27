@@ -35,7 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota para buscar TODOS os anúncios contornando o limite de 1000 da API com ordenação
+// Rota para buscar TODOS os anúncios contornando o limite de 1000 com varredura por ordenação
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -49,15 +49,14 @@ app.get('/api/anuncios', async (req, res) => {
 
         let allIdsSet = new Set();
         let limit = 50;
+        const sorts = ['date_asc', 'date_desc', 'price_asc', 'price_desc'];
 
-        // Estratégia de múltiplas ordenações para extrair mais de 1000 itens que a API restringe por offset
-        const sorts = ['date_asc', 'date_desc'];
-
+        // Varrer com diferentes ordenações para acumular todos os IDs acima de 1000
         for (let sort of sorts) {
             let offset = 0;
             let fetchMore = true;
 
-            while (fetchMore && offset <= 950) { // Respeita o limite de 1000 por ordenação
+            while (fetchMore && offset <= 950) {
                 const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}&sort=${sort}`, {
                     headers: { "Authorization": "Bearer " + token }
                 });
@@ -80,7 +79,7 @@ app.get('/api/anuncios', async (req, res) => {
         let listaFinal = [];
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,sale_fee`, {
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             const multiData = await multiRes.json();
@@ -88,16 +87,22 @@ app.get('/api/anuncios', async (req, res) => {
             multiData.forEach(itemObj => {
                 if (itemObj.code === 200) {
                     const body = itemObj.body;
+                    let preco = body.price || 0;
+                    let taxa = body.sale_fee || 0;
+                    let liquido = preco - taxa;
+
                     listaFinal.push({
                         id: body.id,
                         title: body.title,
-                        price: body.price,
+                        price: preco,
                         status: body.status,
                         listing_type_id: body.listing_type_id,
                         available_quantity: body.available_quantity || 0,
                         sku: body.seller_custom_field || 'Sem SKU',
                         permalink: body.permalink,
-                        sale_fee: body.sale_fee || 0
+                        thumbnail: body.thumbnail || '',
+                        sale_fee: taxa,
+                        net_received: liquido > 0 ? liquido : 0
                     });
                 }
             });
