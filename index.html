@@ -71,11 +71,11 @@
                 <h3 class="fw-bold m-0"><i class="bi bi-gear text-secondary"></i> Configurações da Aplicação</h3>
                 <button class="btn btn-close" onclick="mudarAba('anuncios')"></button>
             </div>
-            <p class="text-muted">Passo 1: Clique no botão abaixo para abrir a página oficial do Mercado Livre e obter um código <b>TG-...</b> novo. Passo 2: Cole-o abaixo e salve.</p>
+            <p class="text-muted">Cole o seu <b>Access Token definitivo</b> (começado com <code>APP_USR-...</code>) ou gere um código <b>TG-...</b> novo pelo botão abaixo.</p>
             
             <div class="mb-3">
                 <a id="linkAutorizacion" href="#" target="_blank" class="btn btn-outline-primary w-100 py-2 fw-bold mb-2">
-                    <i class="bi bi-box-arrow-up-right"></i> 1. Gerar Novo Código de Autorização no Mercado Livre
+                    <i class="bi bi-box-arrow-up-right"></i> Gerar Novo Código TG no Mercado Livre
                 </a>
             </div>
 
@@ -96,11 +96,11 @@
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Novo Código (TG-...) ou Access Token:</label>
-                <input type="text" id="inputTokenOrCode" class="form-control" placeholder="Cole o novo TG-... gerado aqui">
+                <label class="form-label fw-bold">Token (APP_USR-...) ou Código (TG-...):</label>
+                <input type="text" id="inputTokenOrCode" class="form-control" placeholder="Cole aqui o seu token ou código TG">
             </div>
             
-            <button class="btn btn-meli w-100 py-2 fw-bold" onclick="processarCredenciais()">2. Salvar e Gerar Token Definitivo</button>
+            <button id="btnSalvar" class="btn btn-meli w-100 py-2 fw-bold" onclick="processarCredenciais()">Salvar Credenciais / Token</button>
             <div id="status-config" class="mt-3"></div>
         </div>
 
@@ -133,7 +133,6 @@
         function atualizarLinkAuth() {
             const clientId = document.getElementById('inputClientId').value.trim();
             const redirectUri = document.getElementById('inputRedirectUri').value.trim();
-            // Correção da URL oficial de autorização do Mercado Livre (.com)
             const urlAuth = `https://auth.mercadolibre.com/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
             document.getElementById('linkAutorizacion').href = urlAuth;
         }
@@ -154,6 +153,7 @@
             const redirectUri = document.getElementById('inputRedirectUri').value.trim();
             const valorInput = document.getElementById('inputTokenOrCode').value.trim();
             const statusDiv = document.getElementById('status-config');
+            const btnSalvar = document.getElementById('btnSalvar');
 
             localStorage.setItem('meli_client_id', clientId);
             localStorage.setItem('meli_client_secret', clientSecret);
@@ -164,6 +164,9 @@
                 return;
             }
 
+            btnSalvar.disabled = true;
+
+            // Se for um código TG, troca por Access Token
             if (valorInput.startsWith('TG-')) {
                 statusDiv.innerHTML = `<div class="alert alert-info">A trocar o código TG pelo Access Token definitivo...</div>`;
                 
@@ -186,17 +189,28 @@
                         localStorage.setItem('meli_access_token', data.access_token);
                         document.getElementById('inputTokenOrCode').value = data.access_token;
                         statusDiv.innerHTML = `<div class="alert alert-success">Sucesso! Token gerado e guardado. Redirecionando...</div>`;
-                        setTimeout(() => mudarAba('anuncios'), 1200);
+                        setTimeout(() => {
+                            btnSalvar.disabled = false;
+                            mudarAba('anuncios');
+                            carregarAnuncios();
+                        }, 1200);
                     } else {
-                        statusDiv.innerHTML = `<div class="alert alert-danger">Erro ao gerar token: ${data.message || 'Código TG inválido ou já utilizado.'}</div>`;
+                        btnSalvar.disabled = false;
+                        statusDiv.innerHTML = `<div class="alert alert-danger">Erro: ${data.message || 'Código TG inválido ou já utilizado. Gere um novo.'}</div>`;
                     }
                 } catch (e) {
+                    btnSalvar.disabled = false;
                     statusDiv.innerHTML = `<div class="alert alert-danger">Erro de rede ao conectar com a API.</div>`;
                 }
             } else {
+                // Se já for o token definitivo (APP_USR-...)
                 localStorage.setItem('meli_access_token', valorInput);
                 statusDiv.innerHTML = `<div class="alert alert-success">Access Token guardado com sucesso! Redirecionando...</div>`;
-                setTimeout(() => mudarAba('anuncios'), 1000);
+                setTimeout(() => {
+                    btnSalvar.disabled = false;
+                    mudarAba('anuncios');
+                    carregarAnuncios();
+                }, 1000);
             }
         }
 
