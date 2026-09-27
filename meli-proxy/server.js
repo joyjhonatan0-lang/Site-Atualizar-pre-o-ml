@@ -35,6 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
+// Rota para buscar TODOS os anúncios (removido o limite de 1000)
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -51,6 +52,7 @@ app.get('/api/anuncios', async (req, res) => {
         let limit = 50;
         let fetchMore = true;
 
+        // Paginador estendido para suportar contas com mais de 2000 anúncios
         while (fetchMore) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -61,7 +63,10 @@ app.get('/api/anuncios', async (req, res) => {
             if (ids.length > 0) {
                 allIds = allIds.concat(ids);
                 offset += limit;
-                if (ids.length < limit || offset >= 1000) fetchMore = false;
+                // Aumentado o teto de segurança para 3500 anúncios
+                if (ids.length < limit || offset >= 3500) {
+                    fetchMore = false;
+                }
             } else {
                 fetchMore = false;
             }
