@@ -35,7 +35,6 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota para buscar TODOS os anúncios com status, tipo e taxas
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -52,7 +51,6 @@ app.get('/api/anuncios', async (req, res) => {
         let limit = 50;
         let fetchMore = true;
 
-        // Paginador para puxar TODOS os anúncios da conta
         while (fetchMore) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -63,7 +61,7 @@ app.get('/api/anuncios', async (req, res) => {
             if (ids.length > 0) {
                 allIds = allIds.concat(ids);
                 offset += limit;
-                if (ids.length < limit || offset >= 1000) fetchMore = false; // Limite de segurança de 1000 itens
+                if (ids.length < limit || offset >= 1000) fetchMore = false;
             } else {
                 fetchMore = false;
             }
@@ -72,10 +70,9 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
-        // O Mercado Livre aceita multi-get em blocos de até 20 IDs
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,sale_fee`, {
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,sale_fee`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             const multiData = await multiRes.json();
@@ -89,6 +86,9 @@ app.get('/api/anuncios', async (req, res) => {
                         price: body.price,
                         status: body.status,
                         listing_type_id: body.listing_type_id,
+                        available_quantity: body.available_quantity || 0,
+                        sku: body.seller_custom_field || 'Sem SKU',
+                        permalink: body.permalink,
                         sale_fee: body.sale_fee || 0
                     });
                 }
