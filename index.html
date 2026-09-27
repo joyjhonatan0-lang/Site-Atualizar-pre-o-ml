@@ -280,7 +280,10 @@
                 let freteNum = parseFloat(item.shipping_cost) || 0;
                 let liquidoReal = parseFloat(item.net_received) || 0;
 
-                let textoFrete = item.free_shipping ? `R$ ${freteNum.toFixed(2)}` : `<span class="text-muted">Comprador</span>`;
+                // Exibição idêntica ao painel do Mercado Livre para o custo de envio
+                let textoFrete = item.free_shipping ? 
+                    `Grátis (R$ ${freteNum.toFixed(2)})` : 
+                    `Envio por conta do comprador<br><small class="text-muted">A pagar R$ 6.95</small>`;
 
                 tabela += `<tr>` +
                           `<td>` +
@@ -294,7 +297,7 @@
                           `</td>` +
                           `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
                           `<td class="text-danger">-R$ ${comissaoNum.toFixed(2)}</td>` +
-                          `<td class="text-warning-emphasis fw-semibold">${textoFrete}</td>` +
+                          `<td class="fw-semibold" style="font-size: 0.85rem;">${textoFrete}</td>` +
                           `<td class="text-primary fw-bold">R$ ${liquidoReal.toFixed(2)}</td>` +
                           `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                           `<td>` +
@@ -367,7 +370,9 @@
                 let freteNum = parseFloat(item.shipping_cost) || 0;
                 let liquidoReal = parseFloat(item.net_received) || 0;
 
-                let textoFrete = item.free_shipping ? `R$ ${freteNum.toFixed(2)}` : `<span class="text-muted">Comprador</span>`;
+                let textoFrete = item.free_shipping ? 
+                    `Grátis (R$ ${freteNum.toFixed(2)})` : 
+                    `Envio por conta do comprador<br><small class="text-muted">A pagar R$ 6.95</small>`;
 
                 html += `<tr>` +
                         `<td>` +
@@ -381,7 +386,7 @@
                         `</td>` +
                         `<td class="text-success fw-bold">R$ ${precoNum.toFixed(2)}</td>` +
                         `<td class="text-danger">-R$ ${comissaoNum.toFixed(2)}</td>` +
-                        `<td class="text-dark fw-semibold">${textoFrete}</td>` +
+                        `<td class="fw-semibold" style="font-size: 0.85rem;">${textoFrete}</td>` +
                         `<td class="text-primary fw-bold">R$ ${liquidoReal.toFixed(2)}</td>` +
                         `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
                         `<td>` +
