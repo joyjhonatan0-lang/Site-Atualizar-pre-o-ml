@@ -65,8 +65,11 @@ app.get('/api/anuncios', async (req, res) => {
             });
             const multiData = await multiRes.json();
 
-            for (let itemObj of multiData) {
-                if (itemObj.code === 200 && itemObj.body) {
+            // Blindagem: Garante que multiData seja sempre um Array navegável
+            const itensArray = Array.isArray(multiData) ? multiData : [];
+
+            for (let itemObj of itensArray) {
+                if (itemObj && itemObj.code === 200 && itemObj.body) {
                     const body = itemObj.body;
                     let preco = body.price || 0;
                     let listingType = body.listing_type_id;
