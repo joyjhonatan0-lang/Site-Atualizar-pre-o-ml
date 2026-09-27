@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Servidor proxy do Mercado Livre online e operante!');
+    res.send('Servidor proxy do Mercado Livre online!');
 });
 
 app.get('/api/anuncios', async (req, res) => {
@@ -17,31 +17,30 @@ app.get('/api/anuncios', async (req, res) => {
     token = token.replace('Bearer ', '').trim();
 
     try {
-        console.log("Passo 1: Verificando usuário na API do Mercado Livre...");
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
         const userData = await userRes.json();
         
+        console.log("Dados do Usuário retornado:", userData);
+
         if (!userData.id) {
-            console.log("Erro de Autenticação:", userData);
-            return res.status(401).json({ erro: "Token inválido ou expirado pelo Mercado Livre." });
+            return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
-        console.log("Usuário autenticado ID:", userData.id);
 
         let allIds = [];
         let limit = 50;
         let offset = 0;
         let fetchMore = true;
 
-        console.log("Passo 2: Buscando lista de IDs dos anúncios...");
         while (fetchMore && offset < 1000) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             const itemsData = await itemsRes.json();
-            const ids = itemsData.results || [];
+            console.log(`Busca offset ${offset}:`, itemsData);
             
+            const ids = itemsData.results || [];
             if (ids.length > 0) {
                 allIds = allIds.concat(ids);
                 offset += limit;
@@ -51,12 +50,11 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
-        console.log(`Total de IDs encontrados: ${allIds.length}`);
-        if (allIds.length === 0) return res.json({ itens: [] });
+        console.log(`Total de IDs coletados: ${allIds.length}`);
+        if (allIds.length === 0) return res.json({ itens: [], aviso: "Nenhum anúncio encontrado para esta conta." });
 
         let listaFinal = [];
 
-        console.log("Passo 3: Buscando detalhes dos anúncios em blocos...");
         for (let i = 0; i < allIds.length; i += 50) {
             const chunk = allIds.slice(i, i + 50);
             
@@ -64,8 +62,6 @@ app.get('/api/anuncios', async (req, res) => {
                 headers: { "Authorization": "Bearer " + token }
             });
             const multiData = await multiRes.json();
-
-            // Blindagem: Garante que multiData seja sempre um Array navegável
             const itensArray = Array.isArray(multiData) ? multiData : [];
 
             for (let itemObj of itensArray) {
@@ -110,11 +106,10 @@ app.get('/api/anuncios', async (req, res) => {
             }
         }
 
-        console.log(`Processamento concluído com sucesso. Retornando ${listaFinal.length} itens.`);
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        console.error("EXCEÇÃO CRÍTICA NO SERVIDOR:", e);
+        console.error("ERRO CRÍTICO:", e);
         res.status(500).json({ erro: "Erro interno: " + e.message });
     }
 });
