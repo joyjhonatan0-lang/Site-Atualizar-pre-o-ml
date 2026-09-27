@@ -35,7 +35,7 @@ app.post('/api/gerar-token', async (req, res) => {
     }
 });
 
-// Rota para buscar TODOS os anúncios (removido o limite de 1000)
+// Rota para buscar TODOS os anúncios dinamicamente com base no total real da conta
 app.get('/api/anuncios', async (req, res) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -50,10 +50,28 @@ app.get('/api/anuncios', async (req, res) => {
         let allIds = [];
         let offset = 0;
         let limit = 50;
+        let totalReal = 0;
         let fetchMore = true;
 
-        // Paginador estendido para suportar contas com mais de 2000 anúncios
-        while (fetchMore) {
+        // Faz a primeira requisição para descobrir o total exato de anúncios na conta
+        const primeiraRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=0`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        const primeiraData = await primeiraRes.json();
+        
+        if (primeiraData.paging && primeiraData.paging.total) {
+            totalReal = primeiraData.paging.total;
+        }
+
+        if (primeiraData.results && primeiraData.results.length > 0) {
+            allIds = allIds.concat(primeiraData.results);
+            offset += limit;
+        } else {
+            fetchMore = false;
+        }
+
+        // Continua buscando em páginas até esgotar o total real da conta
+        while (fetchMore && offset < totalReal) {
             const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
@@ -63,10 +81,6 @@ app.get('/api/anuncios', async (req, res) => {
             if (ids.length > 0) {
                 allIds = allIds.concat(ids);
                 offset += limit;
-                // Aumentado o teto de segurança para 3500 anúncios
-                if (ids.length < limit || offset >= 3500) {
-                    fetchMore = false;
-                }
             } else {
                 fetchMore = false;
             }
