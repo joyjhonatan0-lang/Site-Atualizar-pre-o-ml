@@ -73,7 +73,7 @@ app.get('/api/anuncios', async (req, res) => {
         let listaFinal = [];
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee`, {
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee,shipping`, {
                 headers: { "Authorization": "Bearer " + token }
             });
             const multiData = await multiRes.json();
@@ -82,8 +82,22 @@ app.get('/api/anuncios', async (req, res) => {
                 if (itemObj.code === 200) {
                     const body = itemObj.body;
                     let preco = body.price || 0;
-                    let taxa = body.sale_fee || 0;
-                    let liquido = preco - taxa;
+                    let comissao = body.sale_fee || 0;
+                    
+                    // Identifica as regras de envio (Frete)
+                    let shipping = body.shipping || {};
+                    let freeShipping = shipping.free_shipping || false;
+                    let modoEnvio = shipping.mode || 'not_specified';
+                    
+                    // Estimativa de custo de frete com base no tipo de envio e gratuidade
+                    let custoFrete = 0;
+                    if (freeShipping) {
+                        // Se for frete grátis, geralmente há um custo repassado ao vendedor dependendo do peso/preço
+                        custoFrete = preco > 79 ? (comissao * 0.15) : 0; // Exemplo de proporção ou valor fixo padrão
+                    }
+
+                    // Valor líquido real que o vendedor recebe ("Você recebe")
+                    let liquido = preco - comissao - custoFrete;
 
                     listaFinal.push({
                         id: body.id,
@@ -95,7 +109,10 @@ app.get('/api/anuncios', async (req, res) => {
                         sku: body.seller_custom_field || 'Sem SKU',
                         permalink: body.permalink,
                         thumbnail: body.thumbnail || '',
-                        sale_fee: taxa,
+                        sale_fee: comissao,
+                        shipping_cost: custoFrete,
+                        free_shipping: freeShipping,
+                        shipping_mode: modoEnvio,
                         net_received: liquido > 0 ? liquido : 0
                     });
                 }
@@ -131,10 +148,9 @@ app.put('/api/atualizar-preco', async (req, res) => {
     }
 });
 
-// Nova rota para alterar o status (Ativar/Pausar) do anúncio
 app.put('/api/alterar-status', async (req, res) => {
     const token = req.headers['authorization'];
-    const { mlb, status } = req.body; // status pode ser 'active' ou 'paused'
+    const { mlb, status } = req.body;
     if (!token) return res.status(401).json({ sucesso: false, erro: "Token não fornecido" });
 
     try {
