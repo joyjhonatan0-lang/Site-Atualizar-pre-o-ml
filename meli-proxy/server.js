@@ -71,10 +71,10 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // Processamento rápido em blocos de 20 itens
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
+            // Buscando os atributos completos incluindo shipping e sale_fee_details
             const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,seller_custom_field,permalink,thumbnail,sale_fee,shipping`, {
                 headers: { "Authorization": "Bearer " + token }
             });
@@ -94,13 +94,15 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Extração otimizada e precisa do custo de envio do próprio payload do item
-                    let custoEnvio = 0;
+                    // Extração robusta do custo de envio real do objeto retornado pelo ML
+                    let custoEnvio = 6.95; // Padrão base
                     if (shipping.costs && shipping.costs.length > 0) {
-                        custoEnvio = shipping.costs[0].cost || 0;
-                    } else {
-                        // Tabela padrão dinâmica do Mercado Livre baseada no tipo de anúncio e preço
-                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95;
+                        let custoEncontrado = shipping.costs.find(c => c.description || c.cost);
+                        if (custoEncontrado && custoEncontrado.cost) {
+                            custoEnvio = custoEncontrado.cost;
+                        }
+                    } else if (shipping.local_shipping_cost) {
+                        custoEnvio = shipping.local_shipping_cost;
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
