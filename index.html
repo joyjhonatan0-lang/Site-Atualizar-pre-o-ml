@@ -10,54 +10,52 @@
         :root {
             --meli-yellow: #fff159;
             --meli-blue: #3483fa;
-            --bg-color: #f4f6f9;
+            --bg-color: #ededed;
         }
-        body { background-color: var(--bg-color); font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }
-        .navbar-custom { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .card-custom { border: none; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.04); background: white; padding: 25px; }
-        .stat-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); border-left: 4px solid var(--meli-blue); }
-        .btn-meli { background-color: var(--meli-yellow); color: #2d327d; font-weight: 600; border: none; }
-        .btn-meli:hover { background-color: #f3dc00; color: #1f2253; }
-        .table > :not(v) > * > * { padding: 12px 16px; }
-        .table thead { background-color: #fafbfc; color: #6c757d; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #edf2f7; }
+        body { background-color: var(--bg-color); font-family: 'Proxima Nova', -apple-system, Roboto, Arial, sans-serif; color: #333; }
+        .navbar-custom { background: #fff159; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .card-custom { border: none; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); background: white; padding: 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid var(--meli-blue); }
+        .btn-meli { background-color: var(--meli-blue); color: #fff; font-weight: 600; border: none; }
+        .btn-meli:hover { background-color: #2968c8; color: #fff; }
+        .table > :not(v) > * > * { padding: 12px 14px; vertical-align: middle; }
+        .table thead { background-color: #f5f5f5; color: #999; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; border-bottom: 1px solid #ddd; }
         .floating-config {
             position: fixed; bottom: 30px; right: 30px;
-            background-color: #2d327d; color: white; width: 60px; height: 60px;
+            background-color: #3483fa; color: white; width: 60px; height: 60px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); cursor: pointer; z-index: 1000;
+            font-size: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); cursor: pointer; z-index: 1000;
             transition: transform 0.2s;
         }
-        .floating-config:hover { transform: scale(1.1); color: var(--meli-yellow); }
+        .floating-config:hover { transform: scale(1.1); color: #fff159; }
+        .product-img { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; background: #f9f9f9; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-custom mb-4 py-3">
-        <div class="container-fluid px-4">
+    <nav class="navbar navbar-expand-lg navbar-custom mb-4 py-2 px-4">
+        <div class="container-fluid">
             <a class="navbar-brand fw-bold text-dark d-flex align-items-center gap-2" href="#">
-                <div style="background: var(--meli-yellow); width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <i class="bi bi-shop text-dark fs-5"></i>
-                </div>
-                Painel Mercado Livre
+                <i class="bi bi-shop fs-4"></i> <span style="font-size: 1.1rem; font-weight: 700;">Mercado Livre | Gestão em Lote</span>
             </a>
             <div class="navbar-nav ms-auto flex-row gap-2">
-                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border" onclick="mudarAba('anuncios')"><i class="bi bi-box-seam text-primary"></i> Anúncios</button>
-                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border" onclick="mudarAba('precos')"><i class="bi bi-currency-dollar text-success"></i> Atualizar Preços</button>
+                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border shadow-sm" onclick="mudarAba('anuncios')"><i class="bi bi-box-seam text-primary"></i> Anúncios</button>
+                <button class="btn btn-light btn-sm rounded-pill px-3 fw-semibold border shadow-sm" onclick="mudarAba('precos')"><i class="bi bi-currency-dollar text-success"></i> Atualizar Preços</button>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid px-4" style="max-width: 1400px;">
+    <div class="container-fluid px-4" style="max-width: 1450px;">
         <!-- SEÇÃO ANÚNCIOS -->
         <div id="secao-anuncios" class="card-custom">
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
                 <div>
-                    <h3 class="fw-bold m-0"><i class="bi bi-box-seam text-primary"></i> Gestão de Anúncios</h3>
-                    <p class="text-muted small m-0">Visualize status, estoque, taxas e links diretos da sua conta.</p>
+                    <h4 class="fw-bold m-0 text-dark">Gestão de Anúncios</h4>
+                    <p class="text-muted small m-0">Visualize todos os itens, estoque, preços e taxas da sua conta em tempo real.</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <input type="text" id="filtroTabela" class="form-control form-control-sm" placeholder="🔍 Pesquisar na tabela..." onkeyup="filtrarTabela()" style="width: 220px;">
-                    <button class="btn btn-dark btn-sm px-3" onclick="carregarAnuncios()"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button>
+                    <input type="text" id="filtroTabela" class="form-control form-control-sm" placeholder="🔍 Buscar por título, MLB ou SKU..." onkeyup="filtrarTabela()" style="width: 280px;">
+                    <button class="btn btn-dark btn-sm px-3 shadow-sm" onclick="carregarAnuncios()"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button>
                 </div>
             </div>
 
@@ -65,20 +63,20 @@
             <div class="row g-3 mb-4" id="cardsResumo" style="display: none;">
                 <div class="col-md-4">
                     <div class="stat-card">
-                        <span class="text-muted small fw-semibold text-uppercase">Total de Anúncios</span>
+                        <span class="text-muted small fw-bold text-uppercase">Total de Anúncios</span>
                         <h3 class="fw-bold m-0 mt-1 text-dark" id="statTotal">0</h3>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="stat-card" style="border-left-color: #28a745;">
-                        <span class="text-muted small fw-semibold text-uppercase">Anúncios Ativos</span>
-                        <h3 class="fw-bold m-0 mt-1 text-success" id="statAtivos">0</h3>
+                    <div class="stat-card" style="border-left-color: #00a650;">
+                        <span class="text-muted small fw-bold text-uppercase">Anúncios Ativos</span>
+                        <h3 class="fw-bold m-0 mt-1" style="color: #00a650;" id="statAtivos">0</h3>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="stat-card" style="border-left-color: #ffc107;">
-                        <span class="text-muted small fw-semibold text-uppercase">Outros Status</span>
-                        <h3 class="fw-bold m-0 mt-1 text-warning" id="statOutros">0</h3>
+                    <div class="stat-card" style="border-left-color: #fff159;">
+                        <span class="text-muted small fw-bold text-uppercase">Outros Status</span>
+                        <h3 class="fw-bold m-0 mt-1 text-secondary" id="statOutros">0</h3>
                     </div>
                 </div>
             </div>
@@ -93,7 +91,7 @@
 
         <!-- SEÇÃO PREÇOS -->
         <div id="secao-precos" class="card-custom" style="display: none; max-width: 800px; margin: 0 auto;">
-            <h3 class="fw-bold mb-2"><i class="bi bi-currency-dollar text-success"></i> Atualização de Preços em Massa</h3>
+            <h4 class="fw-bold mb-2 text-dark"><i class="bi bi-currency-dollar text-success"></i> Atualização de Preços em Massa</h4>
             <p class="text-muted small">Cole o ID do anúncio (MLB) e o novo preço separados por vírgula ou tabulação (um por linha).</p>
             <div class="mb-3">
                 <textarea id="listaProdutos" class="form-control" rows="8" placeholder="MLB7621024462, 28.50&#10;MLB7621024448, 31.00"></textarea>
@@ -105,7 +103,7 @@
         <!-- SEÇÃO CONFIGURAÇÕES -->
         <div id="secao-config" class="card-custom" style="display: none; max-width: 700px; margin: 0 auto;">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="fw-bold m-0"><i class="bi bi-gear text-secondary"></i> Configurações da Conta</h3>
+                <h4 class="fw-bold m-0">Configurações da Conta</h4>
                 <button class="btn btn-close" onclick="mudarAba('anuncios')"></button>
             </div>
             
@@ -128,7 +126,7 @@
             <div class="mb-2">
                 <input type="text" id="inputCodeTG" class="form-control form-control-sm" placeholder="Cole o código TG-... aqui">
             </div>
-            <button class="btn btn-outline-secondary btn-sm w-100 mb-3 fw-semibold" onclick="gerarTokenPeloSite()">Gerar Access Token Agora</button>
+            <button class="btn btn-outline-primary btn-sm w-100 mb-3 fw-semibold" onclick="gerarTokenPeloSite()">Gerar Access Token Agora</button>
 
             <hr class="my-4">
             <div class="mb-3">
@@ -230,7 +228,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar todos os anúncios com o Mercado Livre...</p></div>`;
+            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-3 small">A sincronizar todos os seus 2000+ anúncios com o Mercado Livre...</p></div>`;
             document.getElementById('cardsResumo').style.display = 'none';
 
             try {
@@ -268,29 +266,41 @@
             document.getElementById('statOutros').innerText = outros;
             document.getElementById('cardsResumo').style.display = 'flex';
 
-            let tabela = `<div class="table-responsive rounded-3 border bg-white"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>` +
-                         `<th>ID do Anúncio</th><th>SKU</th><th>Título</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Link</th><th>Tipo</th>` +
+            let tabela = `<div class="table-responsive rounded-3 border bg-white shadow-sm"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>` +
+                         `<th>Anúncio</th><th>Preço</th><th>Condições</th><th>Você Recebe</th><th>Estoque</th><th>Status</th><th>Link</th>` +
                          `</tr></thead><tbody id="corpoTabela">`;
 
             itens.forEach(item => {
-                let statusBadge = item.status === 'active' ? '<span class="badge bg-success bg-opacity-10 text-success px-2 py-1">Ativo</span>' : `<span class="badge bg-secondary bg-opacity-10 text-secondary px-2 py-1">${item.status}</span>`;
+                let statusChecked = item.status === 'active' ? 'checked' : '';
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
-                let linkCurtto = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
+                let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
+                let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
 
                 tabela += `<tr>` +
-                          `<td class="fw-bold text-secondary font-monospace small">${item.id}</td>` +
-                          `<td><span class="badge bg-light text-dark border">${item.sku}</span></td>` +
-                          `<td style="max-width: 300px;" class="text-truncate" title="${item.title}">${item.title}</td>` +
+                          `<td>` +
+                              `<div class="d-flex align-items-center gap-3">` +
+                                  `${imgTag}` +
+                                  `<div>` +
+                                      `<a href="${item.permalink}" target="_blank" class="text-dark text-decoration-none fw-semibold text-truncate d-inline-block" style="max-width: 380px;" title="${item.title}">${item.title}</a>` +
+                                      `<div class="text-muted font-monospace" style="font-size: 11px;">${item.id} &bull; SKU: <span class="text-dark fw-bold">${item.sku}</span></div>` +
+                                  `</div>` +
+                              `</div>` +
+                          `</td>` +
                           `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
-                          `<td class="fw-semibold text-center">${item.available_quantity}</td>` +
-                          `<td>${statusBadge}</td>` +
-                          `<td>${linkCurtto}</td>` +
-                          `<td><small class="text-muted fw-semibold">${tipoAnuncio}</small></td>` +
+                          `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
+                          `<td class="text-secondary fw-semibold">R$ ${item.net_received.toFixed(2)}</td>` +
+                          `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
+                          `<td>` +
+                              `<div class="form-check form-switch">` +
+                                  `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} disabled title="Status na conta">` +
+                              `</div>` +
+                          `</td>` +
+                          `<td>${linkBtn}</td>` +
                           `</tr>`;
             });
 
             tabela += `</tbody></table></div>`;
-            container.innerHTML = tabela;
+            container.innerHTML = `<p class="text-muted small mb-2">Exibindo <strong>${itens.length}</strong> anúncios sincronizados:</p>` + tabela;
         }
 
         function filtrarTabela() {
@@ -306,19 +316,31 @@
 
             let html = '';
             filtrados.forEach(item => {
-                let statusBadge = item.status === 'active' ? '<span class="badge bg-success bg-opacity-10 text-success px-2 py-1">Ativo</span>' : `<span class="badge bg-secondary bg-opacity-10 text-secondary px-2 py-1">${item.status}</span>`;
+                let statusChecked = item.status === 'active' ? 'checked' : '';
                 let tipoAnuncio = item.listing_type_id === 'gold_pro' ? 'Premium' : (item.listing_type_id === 'gold_special' ? 'Clássico' : item.listing_type_id);
-                let linkCurtto = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
+                let imgTag = item.thumbnail ? `<img src="${item.thumbnail}" class="product-img">` : `<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted">Sem foto</div>`;
+                let linkBtn = item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 12px;"><i class="bi bi-box-arrow-up-right"></i> Ver</a>` : 'N/D';
 
                 html += `<tr>` +
-                        `<td class="fw-bold text-secondary font-monospace small">${item.id}</td>` +
-                        `<td><span class="badge bg-light text-dark border">${item.sku}</span></td>` +
-                        `<td style="max-width: 300px;" class="text-truncate" title="${item.title}">${item.title}</td>` +
+                        `<td>` +
+                            `<div class="d-flex align-items-center gap-3">` +
+                                `${imgTag}` +
+                                `<div>` +
+                                    `<a href="${item.permalink}" target="_blank" class="text-dark text-decoration-none fw-semibold text-truncate d-inline-block" style="max-width: 380px;" title="${item.title}">${item.title}</a>` +
+                                    `<div class="text-muted font-monospace" style="font-size: 11px;">${item.id} &bull; SKU: <span class="text-dark fw-bold">${item.sku}</span></div>` +
+                                `</div>` +
+                            `</div>` +
+                        `</td>` +
                         `<td class="text-success fw-bold">R$ ${item.price.toFixed(2)}</td>` +
-                        `<td class="fw-semibold text-center">${item.available_quantity}</td>` +
-                        `<td>${statusBadge}</td>` +
-                        `<td>${linkCurtto}</td>` +
-                        `<td><small class="text-muted fw-semibold">${tipoAnuncio}</small></td>` +
+                        `<td><span class="badge bg-light text-dark border">${tipoAnuncio}</span></td>` +
+                        `<td class="text-secondary fw-semibold">R$ ${item.net_received.toFixed(2)}</td>` +
+                        `<td class="fw-bold text-center">${item.available_quantity} un.</td>` +
+                        `<td>` +
+                            `<div class="form-check form-switch">` +
+                                `<input class="form-check-input" type="checkbox" role="switch" ${statusChecked} disabled>` +
+                            `</div>` +
+                        `</td>` +
+                        `<td>${linkBtn}</td>` +
                         `</tr>`;
             });
             corpo.innerHTML = html;
