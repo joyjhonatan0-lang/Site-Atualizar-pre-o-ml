@@ -70,6 +70,7 @@ app.get('/api/anuncios', async (req, res) => {
         if (allIds.length === 0) return res.json({ itens: [] });
 
         let listaFinal = [];
+        const cepPadrao = "01001000"; // CEP padrão para simulação (SP)
 
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
@@ -84,6 +85,7 @@ app.get('/api/anuncios', async (req, res) => {
                     const body = itemObj.body;
                     let preco = body.price || 0;
                     let listingType = body.listing_type_id;
+                    let itemId = body.id;
                     
                     let comissao = body.sale_fee;
                     if (!comissao || comissao === 0) {
@@ -93,20 +95,41 @@ app.get('/api/anuncios', async (req, res) => {
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
                     
-                    // Extração do custo de envio real retornado pelo ML ou cálculo da tabela padrão
                     let custoEnvio = 0;
+                    let tipoTextoEnvio = "";
+
+                    // 1. Tenta obter direto do objeto do item se disponível
                     if (shipping.costs && shipping.costs.length > 0) {
                         custoEnvio = shipping.costs[0].cost || 0;
-                    } else {
-                        // Se for frete grátis ou tabela de envio padrão do Mercado Livre para o peso/preço
-                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95; 
+                    }
+
+                    // 2. Se não veio direto, busca via API de opções de envio por CEP (igual ao seu Apps Script)
+                    if (custoEnvio === 0) {
+                        try {
+                            const shipOptRes = await fetch(`https://api.mercadolibre.com/items/${itemId}/shipping_options?zip_code=${cepPadrao}`, {
+                                headers: { "Authorization": "Bearer " + token }
+                            });
+                            const shipOptData = await shipOptRes.json();
+                            
+                            if (shipOptData && shipOptData.options && shipOptData.options.length > 0) {
+                                let opt = shipOptData.options[0];
+                                custoEnvio = opt.list_cost || opt.cost || 0;
+                            }
+                        } catch (err) {
+                            // Ignora erro individual de fetch e mantém fallback
+                        }
+                    }
+
+                    // Fallback final caso a API de opções retorne vazio
+                    if (custoEnvio === 0) {
+                        custoEnvio = freeShipping ? (preco > 79 ? comissao * 0.12 : 6.95) : 6.95;
                     }
 
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                     if (liquido < 0) liquido = 0;
 
                     listaFinal.push({
-                        id: body.id,
+                        id: itemId,
                         title: body.title,
                         price: preco,
                         status: body.status,
