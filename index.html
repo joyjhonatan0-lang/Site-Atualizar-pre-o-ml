@@ -13,8 +13,8 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
-    <!-- Top Bar Futurista / Clean -->
-    <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md bg-opacity/80">
+    <!-- Top Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50">
         <div class="flex items-center space-x-6">
             <div class="flex items-center space-x-2">
                 <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
@@ -26,6 +26,9 @@
             </nav>
         </div>
         <div class="flex items-center space-x-3">
+            <button onclick="solicitarToken()" class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition">
+                🔑 Inserir Token
+            </button>
             <button onclick="carregarDados()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold transition shadow-lg shadow-yellow-400/10 flex items-center gap-2">
                 ⚡ Sincronizar API
             </button>
@@ -34,14 +37,24 @@
 
     <main class="max-w-[98%] mx-auto py-6">
 
+        <!-- Modal / Aviso de Token se não existir -->
+        <div id="aviso-token" class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center">
+            <h3 class="text-yellow-400 font-bold text-base mb-2">Token de Acesso Necessário</h3>
+            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token do Mercado Livre para conectar ao sistema:</p>
+            <div class="flex justify-center gap-2 max-w-md mx-auto">
+                <input type="text" id="input-token-manual" placeholder="Cole seu APP_USR-..." class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400" />
+                <button onclick="salvarTokenManual()" class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition">Salvar</button>
+            </div>
+        </div>
+
         <!-- Loading State -->
-        <div id="loading" class="text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
+        <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
             <p class="mt-4 text-sm text-slate-400 font-medium">Extraindo dados e custos de envio reais da API do Mercado Livre...</p>
         </div>
 
         <!-- ABA 1: GESTÃO -->
-        <section id="secao-gestao" class="hidden space-y-6">
+        <section id="secao-gestao" class="space-y-6">
             <div class="grid grid-cols-3 gap-4">
                 <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                     <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Listado</span>
@@ -77,7 +90,7 @@
             </div>
         </section>
 
-        <!-- ABA 2: SIMULAÇÃO (Estilo Planilha Limpa e Funcional) -->
+        <!-- ABA 2: SIMULAÇÃO -->
         <section id="secao-simulacao" class="hidden space-y-4">
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
                 <div>
@@ -115,7 +128,7 @@
 
     </main>
 
-    <!-- Botão Flutuante Estilo Engrenagem / Atalho -->
+    <!-- Botão Flutuante Engrenagem -->
     <div style="position: fixed; bottom: 24px; right: 24px; z-index: 9999;">
         <button onclick="mudarAba('simulacao')" title="Abrir Simulador" style="background: #eab308; color: #020617; border: none; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(234, 179, 8, 0.3); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
             <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -126,19 +139,33 @@
     </div>
 
     <script>
-        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com"; // Substitua se necessário
+        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
         let cacheItens = [];
+
+        function solicitarToken() {
+            document.getElementById('aviso-token').classList.remove('hidden');
+        }
+
+        function salvarTokenManual() {
+            const tokenVal = document.getElementById('input-token-manual').value.trim();
+            if(!tokenVal) {
+                alert("Digite um token válido.");
+                return;
+            }
+            localStorage.setItem('ml_access_token', tokenVal);
+            document.getElementById('aviso-token').classList.add('hidden');
+            carregarDados();
+        }
 
         async function carregarDados() {
             const token = localStorage.getItem('ml_access_token');
             if (!token) {
-                alert("Token de acesso não encontrado. Faça login na sua conta do Mercado Livre.");
+                solicitarToken();
                 return;
             }
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('secao-gestao').classList.add('hidden');
-            document.getElementById('secao-simulacao').classList.add('hidden');
+            document.getElementById('aviso-token').classList.add('hidden');
 
             try {
                 const response = await fetch(`${RENDER_URL}/api/anuncios`, {
@@ -151,12 +178,14 @@
                     atualizarCards(cacheItens);
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
-                    mudarAba('gestao');
                 } else {
-                    alert("Nenhum anúncio retornado pela API.");
+                    alert(data.erro || "Erro ao carregar anúncios.");
+                    if(data.erro && data.erro.includes("Token")) {
+                        solicitarToken();
+                    }
                 }
             } catch (e) {
-                alert("Erro de comunicação com o servidor backend no Render.");
+                alert("Erro de comunicação com o servidor no Render.");
             } finally {
                 document.getElementById('loading').classList.add('hidden');
             }
@@ -254,14 +283,11 @@
             const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
             const freteAplicado = freteGratis ? custoFrete : 0;
-            
-            // Fórmula padrão: Preço Sugerido = (Custo + Frete) / (1 - (Comissão% + Imposto% + LucroDesejado%) / 100)
             const percentTotalDeducao = comissaoPercent + impostoPercent + lucroDesejadoPercent;
             const divisor = 1 - (percentTotalDeducao / 100);
             
             let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
-            // Valores monetários resultantes
             const valorComissao = novoPreco * (comissaoPercent / 100);
             const valorImposto = novoPreco * (impostoPercent / 100);
             const lucroLiquidoReal = novoPreco - custo - valorComissao - valorImposto - freteAplicado;
@@ -272,7 +298,14 @@
             document.getElementById(`margem_real_${index}`).innerText = `${margemRealPercent.toFixed(2)}%`;
         }
 
-        window.onload = carregarDados;
+        window.onload = () => {
+            const token = localStorage.getItem('ml_access_token');
+            if(token) {
+                carregarDados();
+            } else {
+                solicitarToken();
+            }
+        };
     </script>
 </body>
 </html>
