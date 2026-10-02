@@ -10,6 +10,31 @@ app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
 });
 
+// Função auxiliar robusta para buscar o custo de envio exato da API do Mercado Livre
+async function obterCustoEnvioExato(itemId, token) {
+    let custoEnvio = 6.85;
+    try {
+        const shipRes = await fetch(`https://api.mercadolibre.com/items/${itemId}/shipping_options`, {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        if (shipRes.ok) {
+            const shipData = await shipRes.json();
+            // Procura a opção de frete grátis ou a primeira opção válida de custo
+            if (shipData && shipData.options && Array.isArray(shipData.options)) {
+                const opcao Gratis = shipData.options.find(opt => opt.free_shipping && opt.list_cost > 0);
+                if (opcaoGratis) {
+                    custoEnvio = opcaoGratis.list_cost;
+                } else if (shipData.options.length > 0 && shipData.options[0].cost !== undefined) {
+                    custoEnvio = shipData.options[0].cost;
+                }
+            }
+        }
+    } catch (err) {
+        // Mantém o padrão caso dê timeout em algum item isolado
+    }
+    return custoEnvio;
+}
+
 // 1. Rota para puxar TODOS os anúncios
 app.get('/api/anuncios', async (req, res) => {
     let token = req.headers['authorization'];
@@ -104,16 +129,9 @@ app.get('/api/anuncios', async (req, res) => {
                         
                         let shipping = body.shipping || {};
                         let freeShipping = shipping.free_shipping || false;
-                        let custoEnvio = 6.85;
-
-                        if (shipping.logistic_type === 'fulfillment') {
-                            custoEnvio = 18.50;
-                        }
-
-                        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-                            let cObj = shipping.costs.find(c => c.cost !== undefined);
-                            if (cObj) custoEnvio = cObj.cost;
-                        }
+                        
+                        // Busca o custo de envio exato via shipping_options
+                        let custoEnvio = await obterCustoEnvioExato(idItem, token);
 
                         let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                         if (liquido < 0) liquido = 0;
@@ -183,7 +201,7 @@ app.post('/api/sincronizar-precos', async (req, res) => {
     }
 });
 
-// 3. NOVA ROTA: Sincronizar APENAS OS FRETES das MLBs informadas
+// 3. ROTA: Sincronizar APENAS OS FRETES REAIS das MLBs informadas
 app.post('/api/sincronizar-fretes', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -198,36 +216,26 @@ app.post('/api/sincronizar-fretes', async (req, res) => {
     let fretesMap = {};
 
     try {
-        for (let i = 0; i < ids.length; i += 20) {
-            const blocoIds = ids.slice(i, i + 20).join(',');
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+        for (let i = 0; i < ids.length; i++) {
+            const idItem = ids[i];
+            
+            // Busca dados básicos para ver se é frete grátis
+            const itemRes = await fetch(`https://api.mercadolibre.com/items/${idItem}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
-            const multiData = await multiRes.json();
+            const itemData = await itemRes.json();
             
-            if (Array.isArray(multiData)) {
-                multiData.forEach(itemObj => {
-                    if (itemObj.code === 200 && itemObj.body) {
-                        let shipping = itemObj.body.shipping || {};
-                        let freeShipping = shipping.free_shipping || false;
-                        let custoEnvio = 6.85;
-
-                        if (shipping.logistic_type === 'fulfillment') {
-                            custoEnvio = 18.50;
-                        }
-
-                        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-                            let cObj = shipping.costs.find(c => c.cost !== undefined);
-                            if (cObj) custoEnvio = cObj.cost;
-                        }
-
-                        fretesMap[itemObj.body.id] = {
-                            custo: custoEnvio,
-                            gratis: freeShipping
-                        };
-                    }
-                });
+            let freeShipping = false;
+            if (itemRes.ok && itemData.shipping) {
+                freeShipping = itemData.shipping.free_shipping || false;
             }
+
+            let custoEnvio = await obterCustoEnvioExato(idItem, token);
+
+            fretesMap[idItem] = {
+                custo: custoEnvio,
+                gratis: freeShipping
+            };
         }
         res.json({ fretes: fretesMap });
     } catch (e) {
@@ -271,7 +279,7 @@ app.post('/api/atualizar-preco', async (req, res) => {
 });
 
 // 5. Rota de atualização em lote simultâneo
-app.post('/api/atualizar-precos-lote', async (req, res) => {
+app.post('/api/atualizar-precos', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
 
