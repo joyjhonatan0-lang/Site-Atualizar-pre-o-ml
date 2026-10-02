@@ -19,9 +19,8 @@ async function obterCustoEnvioExato(itemId, token) {
         });
         if (shipRes.ok) {
             const shipData = await shipRes.json();
-            // Procura a opção de frete grátis ou a primeira opção válida de custo
             if (shipData && shipData.options && Array.isArray(shipData.options)) {
-                const opcao Gratis = shipData.options.find(opt => opt.free_shipping && opt.list_cost > 0);
+                const opcaoGratis = shipData.options.find(opt => opt.free_shipping && opt.list_cost > 0);
                 if (opcaoGratis) {
                     custoEnvio = opcaoGratis.list_cost;
                 } else if (shipData.options.length > 0 && shipData.options[0].cost !== undefined) {
@@ -30,7 +29,7 @@ async function obterCustoEnvioExato(itemId, token) {
             }
         }
     } catch (err) {
-        // Mantém o padrão caso dê timeout em algum item isolado
+        // Mantém o valor padrão caso ocorra algum erro pontual
     }
     return custoEnvio;
 }
@@ -130,7 +129,6 @@ app.get('/api/anuncios', async (req, res) => {
                         let shipping = body.shipping || {};
                         let freeShipping = shipping.free_shipping || false;
                         
-                        // Busca o custo de envio exato via shipping_options
                         let custoEnvio = await obterCustoEnvioExato(idItem, token);
 
                         let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
@@ -219,7 +217,6 @@ app.post('/api/sincronizar-fretes', async (req, res) => {
         for (let i = 0; i < ids.length; i++) {
             const idItem = ids[i];
             
-            // Busca dados básicos para ver se é frete grátis
             const itemRes = await fetch(`https://api.mercadolibre.com/items/${idItem}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
