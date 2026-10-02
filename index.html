@@ -3,649 +3,323 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercado Livre | Painel & Simulador Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>ML Hub Pro</title>
     <style>
-        .futuristic-table th { background: #18181b; color: #f4f4f5; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
-        .input-simulacao { background: #fafafa; border: 1px solid #e4e4e7; text-align: center; border-radius: 4px; padding: 4px; font-size: 13px; font-weight: 500; }
-        .input-simulacao:focus { outline: none; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
+            --border-color: #1f2937;
+            --accent-yellow: #f39c12;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--accent-yellow);
+        }
+
+        .menu-nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active, .tab-btn:hover {
+            background-color: var(--accent-yellow);
+            color: #000;
+            border-color: var(--accent-yellow);
+        }
+
+        .conteudo-aba {
+            display: none;
+            padding: 30px;
+        }
+
+        .conteudo-aba.ativo {
+            display: block;
+        }
+
+        /* Dashboard Styles */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card-metric {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card-metric h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .valor-destaque {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .top-produtos-section {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .top-produtos-section h2 {
+            margin-top: 0;
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: var(--accent-yellow);
+        }
+
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .styled-table th, .styled-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .styled-table th {
+            color: var(--text-muted);
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .styled-table td {
+            font-size: 14px;
+        }
+
+        .btn-acao {
+            background-color: var(--accent-yellow);
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+<body>
 
-    <!-- Top Bar -->
-    <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50">
-        <div class="flex items-center space-x-6">
-            <div class="flex items-center space-x-2">
-                <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
-                <span class="text-base font-bold tracking-wide text-white">ML Hub <span class="text-yellow-400">Pro</span></span>
-            </div>
-            <nav class="flex space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                <button onclick="mudarAba('gestao')" id="btn-gestao" class="px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950">Gestão de Anúncios</button>
-                <button onclick="mudarAba('simulacao')" id="btn-simulacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Simulação & Custos</button>
-                <button onclick="mudarAba('atualizacao')" id="btn-atualizacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Atualização de Preço</button>
-            </nav>
-        </div>
-        
-        <!-- PAINEL DE BOTÕES DE API NA HEADER -->
-        <div class="flex items-center space-x-2">
-            <button onclick="carregarDados()" class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition flex items-center gap-1" title="Puxar Anúncios da API">
-                📦 Puxar Anúncios
-            </button>
-            <button onclick="sincronizarPrecosApi()" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-2 rounded-lg text-xs font-bold border border-emerald-400/30 transition flex items-center gap-1" title="Puxar Preços Reais">
-                💰 Puxar Preços
-            </button>
-            <button onclick="sincronizarFretesApi()" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-lg text-xs font-bold border border-blue-400/30 transition flex items-center gap-1" title="Puxar Fretes Reais">
-                🚚 Puxar Fretes
-            </button>
-            <button onclick="solicitarToken()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 transition">
-                🔑 Token
-            </button>
+    <header>
+        <div class="logo">⚡ ML Hub Pro</div>
+        <div class="menu-nav">
+            <button class="tab-btn active" onclick="mudarAba('inicio', event)">Início / Dashboard</button>
+            <button class="tab-btn" onclick="mudarAba('gestao', event)">Gestão de Anúncios</button>
+            <button class="tab-btn" onclick="mudarAba('simulacao', event)">Simulação & Custos</button>
+            <button class="tab-btn" onclick="mudarAba('atualizacao', event)">Atualização de Preço</button>
         </div>
     </header>
 
-    <main class="max-w-[98%] mx-auto py-6">
+    <!-- NOVA ABA 1: TELA INICIAL / DASHBOARD -->
+    <div id="secao-inicio" class="conteudo-aba ativo">
+        <h1>Painel Executivo da Conta</h1>
+        <p style="color: var(--text-muted); margin-bottom: 25px;">Acompanhe o desempenho comercial e o ranking dos seus produtos nos últimos 60 dias.</p>
+        
+        <button class="btn-acao" onclick="carregarDashboard()">🔄 Atualizar Métricas</button>
 
-        <!-- Modal / Aviso de Token -->
-        <div id="aviso-token" class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center">
-            <h3 class="text-yellow-400 font-bold text-base mb-2">Token de Acesso Necessário</h3>
-            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token atualizado do Mercado Livre:</p>
-            <div class="flex justify-center gap-2 max-w-md mx-auto">
-                <input type="text" id="input-token-manual" placeholder="Cole seu APP_USR-..." class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400" />
-                <button onclick="salvarTokenManual()" class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition">Salvar</button>
+        <div class="cards-grid">
+            <div class="card-metric">
+                <h3>Total de Vendas (60 Dias)</h3>
+                <p id="total-vendas-60d" class="valor-destaque">Carregando...</p>
+            </div>
+            <div class="card-metric">
+                <h3>Faturamento Total (60 Dias)</h3>
+                <p id="total-faturamento-60d" class="valor-destaque">R$ 0,00</p>
+            </div>
+            <div class="card-metric">
+                <h3>Total de Anúncios</h3>
+                <p id="total-ativos-dashboard" class="valor-destaque">0</p>
             </div>
         </div>
 
-        <!-- Barra de Pesquisa Ultra Rápida -->
-        <form onsubmit="event.preventDefault(); executarBusca();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
-            <button type="submit" class="pl-2 pr-3 text-slate-400 text-lg hover:text-yellow-400 transition cursor-pointer" title="Clique para Buscar">🔍</button>
-            <input type="text" id="input-busca" placeholder="Digite ou cole o MLB, SKU ou Título e aperte ENTER..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
-            <button type="button" onclick="limparBusca()" class="text-xs text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg transition">Limpar</button>
-        </form>
-
-        <!-- Loading State -->
-        <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
-            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
-            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando dados na API do Mercado Livre...</p>
+        <div class="top-produtos-section">
+            <h2>🔥 Top 10 Anúncios Mais Vendidos</h2>
+            <div style="overflow-x: auto;">
+                <table class="styled-table">
+                    <thead>
+                        <tr>
+                            <th>Posição</th>
+                            <th>Anúncio</th>
+                            <th>SKU</th>
+                            <th>Preço Unitário</th>
+                            <th>Unidades Vendidas (60d)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-top-10">
+                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Carregando métricas do Mercado Livre...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
+    </div>
 
-        <!-- ABA 1: GESTÃO -->
-        <section id="secao-gestao" class="space-y-6">
-            <div class="grid grid-cols-3 gap-4">
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Listado</span>
-                    <h2 id="total-listado" class="text-2xl font-black text-white mt-1">0</h2>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Anúncios Ativos</span>
-                    <h2 id="total-ativos" class="text-2xl font-black text-emerald-400 mt-1">0</h2>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Outros Status</span>
-                    <h2 id="total-outros" class="text-2xl font-black text-slate-300 mt-1">0</h2>
-                </div>
-            </div>
+    <!-- ABA 2: GESTÃO DE ANÚNCIOS (Seu código original de listagem) -->
+    <div id="secao-gestao" class="conteudo-aba">
+        <!-- Cole aqui o conteúdo da sua aba de gestão anterior -->
+        <h2>Gestão de Anúncios</h2>
+        <p>Seus anúncios carregam aqui...</p>
+    </div>
 
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse futuristic-table">
-                        <thead>
-                            <tr>
-                                <th class="p-3.5">Anúncio</th>
-                                <th class="p-3.5">Preço</th>
-                                <th class="p-3.5">Comissão / Frete</th>
-                                <th class="p-3.5">Você Recebe</th>
-                                <th class="p-3.5">Estoque</th>
-                                <th class="p-3.5">Status</th>
-                                <th class="p-3.5">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-gestao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
+    <!-- ABA 3: SIMULAÇÃO & CUSTOS -->
+    <div id="secao-simulacao" class="conteudo-aba">
+        <h2>Simulação & Custos</h2>
+        <p>Ferramenta de viabilidade financeira...</p>
+    </div>
 
-        <!-- ABA 2: SIMULAÇÃO -->
-        <section id="secao-simulacao" class="hidden space-y-4">
-            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                    <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]</p>
-                </div>
-                
-                <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                    <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">Preencher em Massa:</span>
-                    <input type="number" step="0.01" id="massa-custo" placeholder="Custo R$" class="input-simulacao w-20" />
-                    <input type="number" step="0.1" id="massa-taxa" placeholder="Taxa %" class="input-simulacao w-16" />
-                    <input type="number" step="0.1" id="massa-imposto" placeholder="Imposto %" class="input-simulacao w-16" />
-                    <input type="number" step="0.1" id="massa-lucro" placeholder="Lucro %" class="input-simulacao w-16" />
-                    <button onclick="aplicarEmMassa()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition">Aplicar</button>
-                </div>
-            </div>
-
-            <div class="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
-                                <th class="p-3">MLB</th>
-                                <th class="p-3">SKU</th>
-                                <th class="p-3">Título</th>
-                                <th class="p-3">Preço Atual</th>
-                                <th class="p-3">Frete</th>
-                                <th class="p-3">Tipo</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Taxa %</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Custo (R$)</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Imposto %</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Lucro %</th>
-                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Novo Preço</th>
-                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Lucro Simulado</th>
-                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Margem Real</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-simulacao" class="divide-y divide-slate-200"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- ABA 3: ATUALIZAÇÃO DE PREÇO EM MASSA -->
-        <section id="secao-atualizacao" class="hidden space-y-4">
-            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
-                <div>
-                    <h2 class="text-sm font-bold text-white">Atualização de Preço (Apenas Anúncios Fora da Margem)</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Envio simultâneo em lotes de 20 para máxima velocidade.</p>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm flex items-center space-x-2">
-                        <span class="text-slate-400 text-xs">Para atualizar:</span>
-                        <span id="contador-atualizacao" class="font-bold text-amber-400 text-base">0</span>
-                    </div>
-                    <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
-                        🚀 Iniciar Atualização em Lotes (20 em 20)
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse futuristic-table">
-                        <thead>
-                            <tr>
-                                <th class="p-3.5 w-10"><input type="checkbox" id="selecionar-todos" onclick="alternarTodos(this)" class="accent-yellow-400" /></th>
-                                <th class="p-3.5">Anúncio</th>
-                                <th class="p-3.5">Preço Atual</th>
-                                <th class="p-3.5 text-emerald-400">Novo Preço</th>
-                                <th class="p-3.5">Situação / Margem</th>
-                                <th class="p-3.5">Status API (Motivo do Erro)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-atualizacao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-    </main>
+    <!-- ABA 4: ATUALIZAÇÃO DE PREÇO -->
+    <div id="secao-atualizacao" class="conteudo-aba">
+        <h2>Atualização de Preço</h2>
+        <p>Painel de alteração em massa...</p>
+    </div>
 
     <script>
-        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
-        let cacheItens = [];
-        let novosPrecosCalculados = {};
-        let abaAtualAtiva = 'gestao';
+        const API_URL = "https://seu-projeto.onrender.com"; // Substitua pela URL do seu Render
 
-        function solicitarToken() {
-            document.getElementById('aviso-token').classList.remove('hidden');
-        }
+        function mudarAba(abaId, evento) {
+            document.querySelectorAll('.conteudo-aba').forEach(el => el.classList.remove('ativo'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
 
-        function salvarTokenManual() {
-            const tokenVal = document.getElementById('input-token-manual').value.trim();
-            if(!tokenVal) {
-                alert("Digite um token válido.");
-                return;
-            }
-            localStorage.setItem('ml_access_token', tokenVal);
-            document.getElementById('aviso-token').classList.add('hidden');
-            carregarDados();
-        }
-
-        // Busca otimizada filtrando direto nos dados em memória (Instantâneo e sem travamentos)
-        function executarBusca() {
-            const termo = document.getElementById('input-busca').value.toLowerCase().trim();
-            
-            let itensFiltrados = cacheItens;
-            if (termo !== '') {
-                itensFiltrados = cacheItens.filter(item => 
-                    String(item.id).toLowerCase().includes(termo) ||
-                    String(item.sku).toLowerCase().includes(termo) ||
-                    String(item.title).toLowerCase().includes(termo)
-                );
+            document.getElementById('secao-' + abaId).classList.add('ativo');
+            if (evento && evento.target) {
+                evento.target.classList.add('active');
             }
 
-            // Atualiza apenas a tabela da aba ativa para máxima performance
-            if (abaAtualAtiva === 'gestao') {
-                montarTabelaGestao(itensFiltrados);
-            } else if (abaAtualAtiva === 'simulacao') {
-                montarTabelaSimulacao(itensFiltrados);
-            } else if (abaAtualAtiva === 'atualizacao') {
-                montarTabelaAtualizacao(itensFiltrados);
+            if (abaId === 'inicio') {
+                carregarDashboard();
             }
         }
 
-        function limparBusca() {
-            document.getElementById('input-busca').value = '';
-            executarBusca();
-        }
-
-        async function carregarDados() {
-            const token = localStorage.getItem('ml_access_token');
-            if (!token) {
-                solicitarToken();
-                return;
-            }
-
-            document.getElementById('loading-text').innerText = "Buscando todos os seus anúncios na API do Mercado Livre...";
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('aviso-token').classList.add('hidden');
+        async function carregarDashboard() {
+            const token = localStorage.getItem('ml_token'); 
+            if (!token) return;
 
             try {
-                const response = await fetch(`${RENDER_URL}/api/anuncios`, {
-                    headers: { 'Authorization': token }
+                const userRes = await fetch("https://api.mercadolibre.com/users/me", {
+                    headers: { "Authorization": "Bearer " + token }
                 });
-                const data = await response.json();
+                const userData = await userRes.json();
+                if (!userData.id) return;
 
-                if (data.itens) {
-                    cacheItens = data.itens;
-                    atualizarCards(cacheItens);
-                    executarBusca(); // Renderiza com base no filtro atual
-                    alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
-                } else {
-                    alert(data.erro || "Erro ao carregar anúncios.");
-                    if(data.erro && data.erro.includes("Token")) {
-                        solicitarToken();
+                const data60DiasAtras = new Date();
+                data60DiasAtras.setDate(data60DiasAtras.getDate() - 60);
+                const fechaInicio = data60DiasAtras.toISOString();
+
+                const ordersRes = await fetch(`https://api.mercadolibre.com/orders/search?seller=${userData.id}&order.date_created.from=${fechaInicio}&limit=50`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                const ordersData = await ordersRes.json();
+                const orders = ordersData.results || [];
+
+                let totalPecas = 0;
+                let faturamento = 0;
+                let contagemItens = {};
+
+                orders.forEach(order => {
+                    if (order.status === 'paid') {
+                        order.order_items.forEach(item => {
+                            const qtd = item.quantity || 1;
+                            const unitPrice = item.unit_price || 0;
+                            totalPecas += qtd;
+                            faturamento += (qtd * unitPrice);
+
+                            const itemId = item.item.id;
+                            const itemTitle = item.item.title;
+                            const itemSku = item.item.seller_sku || 'N/A';
+
+                            if (!contagemItens[itemId]) {
+                                contagemItens[itemId] = { id: itemId, title: itemTitle, sku: itemSku, price: unitPrice, vendido: 0 };
+                            }
+                            contagemItens[itemId].vendido += qtd;
+                        });
                     }
-                }
-            } catch (e) {
-                alert("Erro de comunicação com o servidor no Render.");
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
-            }
-        }
-
-        async function sincronizarPrecosApi() {
-            const token = localStorage.getItem('ml_access_token');
-            if (!token) {
-                solicitarToken();
-                return;
-            }
-
-            if (!cacheItens || cacheItens.length === 0) {
-                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
-                return;
-            }
-
-            document.getElementById('loading-text').innerText = "Puxando preços atuais das MLBs ativas...";
-            document.getElementById('loading').classList.remove('hidden');
-
-            try {
-                const mlbs = cacheItens.map(i => i.id);
-                const response = await fetch(`${RENDER_URL}/api/sincronizar-precos`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
-                    },
-                    body: JSON.stringify({ ids: mlbs })
                 });
 
-                const data = await response.json();
+                document.getElementById('total-vendas-60d').innerText = totalPecas + " un.";
+                document.getElementById('total-faturamento-60d').innerText = "R$ " + faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
-                if (response.ok && data.precos) {
-                    cacheItens.forEach(item => {
-                        if (data.precos[item.id] !== undefined) {
-                            item.price = data.precos[item.id];
-                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
-                        }
-                    });
+                const anunciosRes = await fetch(`${API_URL}/api/anuncios`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                const anunciosData = await anunciosRes.json();
+                if (anunciosData.itens) {
+                    document.getElementById('total-ativos-dashboard').innerText = anunciosData.itens.length;
+                }
 
-                    atualizarCards(cacheItens);
-                    executarBusca();
-                    alert("Preços reais sincronizados com sucesso para as MLBs existentes!");
+                const ranking = Object.values(contagemItens).sort((a, b) => b.vendido - a.vendido).slice(0, 10);
+                let htmlTabela = '';
+
+                if (ranking.length === 0) {
+                    htmlTabela = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Nenhuma venda paga encontrada nos últimos 60 dias.</td></tr>`;
                 } else {
-                    alert(data.erro || "Erro ao sincronizar preços.");
+                    ranking.forEach((prod, index) => {
+                        htmlTabela += `
+                            <tr>
+                                <td><strong>#${index + 1}</strong></td>
+                                <td>${prod.title}</td>
+                                <td>${prod.sku}</td>
+                                <td>R$ ${prod.price.toFixed(2)}</td>
+                                <td><strong>${prod.vendido} un.</strong></td>
+                            </tr>
+                        `;
+                    });
                 }
+                document.getElementById('tabela-top-10').innerHTML = htmlTabela;
+
             } catch (e) {
-                alert("Erro de comunicação com o servidor ao puxar preços.");
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
+                console.error("Erro ao carregar o painel:", e);
             }
         }
 
-        async function sincronizarFretesApi() {
-            const token = localStorage.getItem('ml_access_token');
-            if (!token) {
-                solicitarToken();
-                return;
-            }
-
-            if (!cacheItens || cacheItens.length === 0) {
-                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
-                return;
-            }
-
-            document.getElementById('loading-text').innerText = "Puxando custos de frete atualizados das MLBs ativas...";
-            document.getElementById('loading').classList.remove('hidden');
-
-            try {
-                const mlbs = cacheItens.map(i => i.id);
-                
-                const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
-                    },
-                    body: JSON.stringify({ ids: mlbs })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.fretes) {
-                    cacheItens.forEach(item => {
-                        if (data.fretes[item.id]) {
-                            item.shipping_cost = data.fretes[item.id].custo;
-                            item.free_shipping = data.fretes[item.id].gratis;
-                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
-                        }
-                    });
-
-                    atualizarCards(cacheItens);
-                    executarBusca();
-                    alert("Fretes reais sincronizados com sucesso para as MLBs existentes!");
-                } else {
-                    alert(data.erro || "Erro ao sincronizar fretes.");
-                }
-            } catch (e) {
-                alert("Erro de comunicação com o servidor ao puxar fretes.");
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
-            }
-        }
-
-        function mudarAba(aba) {
-            abaAtualAtiva = aba;
-            document.getElementById('secao-gestao').classList.add('hidden');
-            document.getElementById('secao-simulacao').classList.add('hidden');
-            document.getElementById('secao-atualizacao').classList.add('hidden');
-            
-            document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
-            document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
-            document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
-
-            if (aba === 'gestao') {
-                document.getElementById('secao-gestao').classList.remove('hidden');
-                document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-            } else if (aba === 'simulacao') {
-                document.getElementById('secao-simulacao').classList.remove('hidden');
-                document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-            } else if (aba === 'atualizacao') {
-                document.getElementById('secao-atualizacao').classList.remove('hidden');
-                document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-            }
-            executarBusca();
-        }
-
-        function atualizarCards(itens) {
-            const ativos = itens.filter(i => i.status === 'active').length;
-            document.getElementById('total-listado').innerText = itens.length;
-            document.getElementById('total-ativos').innerText = ativos;
-            document.getElementById('total-outros').innerText = itens.length - ativos;
-        }
-
-        function montarTabelaGestao(itens) {
-            const tbody = document.getElementById('tabela-gestao');
-            tbody.innerHTML = '';
-            itens.forEach((item) => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-800/50 transition-colors";
-                tr.innerHTML = `
-                    <td class="p-3.5">
-                        <div class="flex items-center space-x-3">
-                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
-                            <div>
-                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
-                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
-                    <td class="p-3.5 text-slate-400">
-                        Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
-                        Frete: R$ ${item.shipping_cost.toFixed(2)}
-                    </td>
-                    <td class="p-3.5 font-bold text-emerald-400">R$ ${item.net_received.toFixed(2)}</td>
-                    <td class="p-3.5">${item.available_quantity} un.</td>
-                    <td class="p-3.5"><input type="checkbox" ${item.status === 'active' ? 'checked' : ''} disabled class="accent-emerald-500" /></td>
-                    <td class="p-3.5"><a href="${item.permalink}" target="_blank" class="text-blue-400 hover:underline font-medium">Ver</a></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function montarTabelaSimulacao(itens) {
-            const tbody = document.getElementById('tabela-simulacao');
-            tbody.innerHTML = '';
-            itens.forEach((item) => {
-                // Encontra o índice real no cache global para manter a consistência dos inputs
-                const index = cacheItens.findIndex(i => i.id === item.id);
-                const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
-                const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12;
-
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors";
-                tr.innerHTML = `
-                    <td class="p-3 font-mono font-medium text-slate-700">${item.id}</td>
-                    <td class="p-3 font-mono text-slate-600">${item.sku}</td>
-                    <td class="p-3 max-w-[200px] truncate text-slate-800 font-medium" title="${item.title}">${item.title}</td>
-                    <td class="p-3 font-bold text-slate-900">R$ ${item.price.toFixed(2)}</td>
-                    <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="taxa_${index}" value="${comissaoPadrao}" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="10.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-20" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="12.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
-                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
-                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
-                `;
-                tbody.appendChild(tr);
-                recalcular(index, item.shipping_cost, item.free_shipping);
-            });
-        }
-
-        function recalcular(index, custoFrete, freteGratis) {
-            const taxaPercent = parseFloat(document.getElementById(`taxa_${index}`).value) || 0;
-            const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
-            const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
-            const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
-
-            const freteAplicado = freteGratis ? custoFrete : 6.85;
-            const somaPercentual = taxaPercent + impostoPercent + lucroDesejadoPercent;
-            const divisor = 1 - (somaPercentual / 100);
-            
-            let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
-
-            const valorTaxa = novoPreco * (taxaPercent / 100);
-            const valorImposto = novoPreco * (impostoPercent / 100);
-            const lucroLiquidoReal = novoPreco - custo - valorTaxa - valorImposto - freteAplicado;
-            const margemRealPercent = novoPreco > 0 ? (lucroLiquidoReal / novoPreco) * 100 : 0;
-
-            const elNovoPreco = document.getElementById(`novo_preco_${index}`);
-            const elLucroSim = document.getElementById(`lucro_sim_${index}`);
-            const elMargemReal = document.getElementById(`margem_real_${index}`);
-
-            if (elNovoPreco) elNovoPreco.innerText = `R$ ${novoPreco.toFixed(2)}`;
-            if (elLucroSim) elLucroSim.innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
-            if (elMargemReal) elMargemReal.innerText = `${margemRealPercent.toFixed(2)}%`;
-
-            novosPrecosCalculados[index] = {
-                preco: novoPreco,
-                foraDaMargem: Math.abs(novoPreco - cacheItens[index].price) > 0.05
-            };
-        }
-
-        function aplicarEmMassa() {
-            const custoMassa = document.getElementById('massa-custo').value;
-            const taxaMassa = document.getElementById('massa-taxa').value;
-            const impostoMassa = document.getElementById('massa-imposto').value;
-            const lucroMassa = document.getElementById('massa-lucro').value;
-
-            cacheItens.forEach((item, index) => {
-                if (custoMassa !== '') {
-                    const elCusto = document.getElementById(`custo_${index}`);
-                    if (elCusto) elCusto.value = custoMassa;
-                }
-                if (taxaMassa !== '') {
-                    const elTaxa = document.getElementById(`taxa_${index}`);
-                    if (elTaxa) elTaxa.value = taxaMassa;
-                }
-                if (impostoMassa !== '') {
-                    const elImposto = document.getElementById(`imposto_${index}`);
-                    if (elImposto) elImposto.value = impostoMassa;
-                }
-                if (lucroMassa !== '') {
-                    const elLucro = document.getElementById(`lucro_${index}`);
-                    if (elLucro) elLucro.value = lucroMassa;
-                }
-
-                recalcular(index, item.shipping_cost, item.free_shipping);
-            });
-        }
-
-        function montarTabelaAtualizacao(itens) {
-            const tbody = document.getElementById('tabela-atualizacao');
-            tbody.innerHTML = '';
-            
-            let contadorForaDaMargem = 0;
-
-            itens.forEach((item) => {
-                const index = cacheItens.findIndex(i => i.id === item.id);
-                const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
-                
-                if (!dadosSim.foraDaMargem) return;
-
-                contadorForaDaMargem++;
-                const novoPreco = dadosSim.preco;
-                const tr = document.createElement('tr');
-                tr.id = `linha_atualizacao_${index}`;
-                tr.className = "hover:bg-slate-800/50 transition-colors";
-                tr.innerHTML = `
-                    <td class="p-3.5"><input type="checkbox" value="${index}" checked class="check-item accent-yellow-400" /></td>
-                    <td class="p-3.5">
-                        <div class="flex items-center space-x-3">
-                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
-                            <div>
-                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
-                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
-                    <td class="p-3.5 font-black text-emerald-400">R$ ${novoPreco.toFixed(2)}</td>
-                    <td class="p-3.5"><span class="text-amber-400 font-bold">Fora da Margem</span></td>
-                    <td class="p-3.5" id="status_api_${index}"><span class="text-slate-500">Pendente</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('contador-atualizacao').innerText = contadorForaDaMargem;
-        }
-
-        function alternarTodos(master) {
-            const checkboxes = document.querySelectorAll('.check-item');
-            checkboxes.forEach(cb => cb.checked = master.checked);
-        }
-
-        async function atualizarPrecosMassaApi() {
-            const token = localStorage.getItem('ml_access_token');
-            if(!token) {
-                solicitarToken();
-                return;
-            }
-
-            const checkboxes = document.querySelectorAll('.check-item:checked');
-            if(checkboxes.length === 0) {
-                alert("Nenhum anúncio selecionado para atualização.");
-                return;
-            }
-
-            if(!confirm(`Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`)) {
-                return;
-            }
-
-            let itensParaAtualizar = [];
-            checkboxes.forEach(cb => {
-                const index = cb.value;
-                const item = cacheItens[index];
-                const dadosSim = novosPrecosCalculados[index];
-                const novoPreco = dadosSim ? dadosSim.preco : item.price;
-
-                itensParaAtualizar.push({
-                    index: index,
-                    id: item.id,
-                    price: parseFloat(novoPreco.toFixed(2))
-                });
-            });
-
-            const tamanhoLote = 20;
-            
-            for (let i = 0; i < itensParaAtualizar.length; i += tamanhoLote) {
-                const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
-
-                lote.forEach(item => {
-                    const elStatus = document.getElementById(`status_api_${item.index}`);
-                    if (elStatus) elStatus.innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
-                });
-
-                try {
-                    const response = await fetch(`${RENDER_URL}/api/atualizar-precos`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': token
-                        },
-                        body: JSON.stringify({ itens: lote.map(i => ({ id: i.id, price: i.price })) })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    lote.forEach(item => {
-                        const elStatus = document.getElementById(`status_api_${item.index}`);
-                        if (response.ok) {
-                            if (elStatus) elStatus.innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
-                            cacheItens[item.index].price = item.price;
-                        } else {
-                            const erroMsg = data.erro || "Falha na API";
-                            if (elStatus) elStatus.innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
-                        }
-                    });
-                } catch (e) {
-                    lote.forEach(item => {
-                        const elStatus = document.getElementById(`status_api_${item.index}`);
-                        if (elStatus) elStatus.innerHTML = `<span class="text-red-500 font-bold">Erro de Rede</span>`;
-                    });
-                }
-                
-                if (i + tamanhoLote < itensParaAtualizar.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            }
-            
-            alert("Processo de envio em massa finalizado!");
-            atualizarCards(cacheItens);
-            executarBusca();
-        }
+        window.onload = () => {
+            carregarDashboard();
+        };
     </script>
 </body>
 </html>
