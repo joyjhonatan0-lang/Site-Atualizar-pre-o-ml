@@ -95,7 +95,7 @@
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Cálculo exato igual ao Sheets: (Custo + Frete) / [1 - (Comissão + Imposto + Lucro) / 100]</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - (Comissão + Imposto + Lucro) / 100]</p>
                 </div>
                 
                 <!-- PAINEL DE PREENCHIMENTO EM MASSA -->
@@ -262,9 +262,9 @@
                     <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
                     <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
                     <td class="p-3 text-slate-600">${comissaoPercent}%</td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="0.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="10.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
                     <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="15.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="12.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
                     <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
@@ -280,10 +280,11 @@
             const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
             const freteAplicado = freteGratis ? custoFrete : 0;
-            const percentTotalDeducao = (comissaoPercent + impostoPercent + lucroDesejadoPercent) / 100;
-            const divisor = 1 - percentTotalDeducao;
             
-            // Fórmula idêntica ao Sheets: (Custo + Frete) / Divisor
+            // Fórmula idêntica ao Sheets: (Custo + Frete) / (1 - (Comissão + Imposto + Lucro) / 100)
+            const somaPercentual = comissaoPercent + impostoPercent + lucroDesejadoPercent;
+            const divisor = 1 - (somaPercentual / 100);
+            
             let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
             const valorComissao = novoPreco * (comissaoPercent / 100);
