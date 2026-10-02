@@ -130,5 +130,46 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
+// NOVA ROTA ADICIONADA: Atualização individual/lote de preço direto na API do ML com captura de erro detalhada
+app.post('/api/atualizar-preco', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { id, price } = req.body;
+
+    if (!id || price === undefined) {
+        return res.status(400).json({ erro: "ID ou preço não informados." });
+    }
+
+    try {
+        const mlRes = await fetch(`https://api.mercadolibre.com/items/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ price: Number(price) })
+        });
+
+        const mlData = await mlRes.json();
+
+        if (mlRes.ok) {
+            res.json({ sucesso: true, resultado: mlData });
+        } else {
+            let mensagemErro = "Erro ao atualizar preço";
+            if (mlData.message) {
+                mensagemErro = mlData.message;
+            } else if (mlData.cause && Array.isArray(mlData.cause) && mlData.cause.length > 0 && mlData.cause[0].message) {
+                mensagemErro = mlData.cause[0].message;
+            }
+            res.status(400).json({ erro: mensagemErro });
+        }
+    } catch (e) {
+        console.error("ERRO AO ATUALIZAR PREÇO:", e);
+        res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
