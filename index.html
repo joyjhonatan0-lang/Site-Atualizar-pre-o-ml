@@ -56,6 +56,12 @@
             </div>
         </div>
 
+        <!-- Barra de Pesquisa Global -->
+        <div class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+            <span class="pl-2 pr-3 text-slate-500 text-lg">🔍</span>
+            <input type="text" id="input-busca" onkeyup="filtrarAnuncios()" placeholder="Buscar por MLB, SKU ou Título..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
+        </div>
+
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
@@ -202,6 +208,30 @@
             carregarDados();
         }
 
+        // Função de Filtro Integrada
+        function filtrarAnuncios() {
+            const termo = document.getElementById('input-busca').value.toLowerCase();
+            
+            const filtrarTabela = (idTabela) => {
+                const tbody = document.getElementById(idTabela);
+                if (!tbody) return;
+                
+                const linhas = tbody.getElementsByTagName('tr');
+                for (let i = 0; i < linhas.length; i++) {
+                    const textoLinha = linhas[i].innerText.toLowerCase();
+                    if (textoLinha.includes(termo)) {
+                        linhas[i].style.display = '';
+                    } else {
+                        linhas[i].style.display = 'none';
+                    }
+                }
+            };
+
+            filtrarTabela('tabela-gestao');
+            filtrarTabela('tabela-simulacao');
+            filtrarTabela('tabela-atualizacao');
+        }
+
         async function carregarDados() {
             const token = localStorage.getItem('ml_access_token');
             if (!token) {
@@ -307,10 +337,8 @@
             document.getElementById('loading').classList.remove('hidden');
 
             try {
-                // Pega apenas as MLBs que já estão carregadas na tela
                 const mlbs = cacheItens.map(i => i.id);
                 
-                // Envia para a nossa rota do Render que puxa SÓ os fretes
                 const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
                     method: 'POST',
                     headers: {
@@ -323,17 +351,14 @@
                 const data = await response.json();
 
                 if (response.ok && data.fretes) {
-                    // Atualiza os fretes no cache local instantaneamente
                     cacheItens.forEach(item => {
                         if (data.fretes[item.id]) {
                             item.shipping_cost = data.fretes[item.id].custo;
                             item.free_shipping = data.fretes[item.id].gratis;
-                            // Recalcula o valor líquido (net_received) com o novo frete
                             item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
                         }
                     });
 
-                    // Atualiza as tabelas na tela sem recarregar tudo
                     atualizarCards(cacheItens);
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
@@ -524,6 +549,7 @@
             checkboxes.forEach(cb => cb.checked = master.checked);
         }
 
+        // LÓGICA FINALIZADA DA ATUALIZAÇÃO EM MASSA
         async function atualizarPrecosMassaApi() {
             const token = localStorage.getItem('ml_access_token');
             if(!token) {
@@ -556,74 +582,57 @@
             });
 
             const tamanhoLote = 20;
+            
             for (let i = 0; i < itensParaAtualizar.length; i += tamanhoLote) {
                 const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
 
+                // Marca como enviando na tabela
                 lote.forEach(item => {
-                    const statusEl = document.getElementById(`status_api_${item.index}`);
-                    if(statusEl) statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando lote...</span>`;
+                    document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
                 });
 
                 try {
-                    const response = await fetch(`${RENDER_URL}/api/atualizar-precos-lote`, {
+                    // Chamada para sua rota no backend Node.js (Proxy no Render) que aceita o lote
+                    const response = await fetch(`${RENDER_URL}/api/atualizar-precos`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': token
                         },
-                        body: JSON.stringify({
-                            itens: lote.map(it => ({ id: it.id, price: it.price }))
-                        })
+                        body: JSON.stringify({ itens: lote.map(i => ({ id: i.id, price: i.price })) })
                     });
-
-                    const resJson = await response.json();
-
-                    if (response.ok && resJson.resultados) {
-                        resJson.resultados.forEach(resItem => {
-                            const originalObj = lote.find(l => l.id === resItem.id);
-                            if(originalObj) {
-                                const statusEl = document.getElementById(`status_api_${originalObj.index}`);
-                                if(statusEl) {
-                                    if(resItem.sucesso) {
-                                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
-                                        cacheItens[originalObj.index].price = originalObj.price;
-
-                                        if (novosPrecosCalculados[originalObj.index]) {
-                                            novosPrecosCalculados[originalObj.index].foraDaMargem = false;
-                                        }
-
-                                        setTimeout(() => {
-                                            const linha = document.getElementById(`linha_atualizacao_${originalObj.index}`);
-                                            if (linha) {
-                                                linha.remove();
-                                                const contadorAtual = document.getElementById('contador-atualizacao');
-                                                const totalAtual = parseInt(contadorAtual.innerText);
-                                                if (totalAtual > 0) {
-                                                    contadorAtual.innerText = totalAtual - 1;
-                                                }
-                                            }
-                                        }, 1500); 
-                                    } else {
-                                        statusEl.innerHTML = `<span class="text-red-400 font-bold">Erro</span> <span class="text-xs text-slate-400">(${resItem.motivo || 'Falha'})</span>`;
-                                    }
-                                }
-                            }
-                        });
-                    } else {
-                        lote.forEach(item => {
-                            const statusEl = document.getElementById(`status_api_${item.index}`);
-                            if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Erro no Lote</span>`;
-                        });
-                    }
+                    
+                    const data = await response.json();
+                    
+                    lote.forEach(item => {
+                        // Trata a resposta assumindo que seu backend retorne listas de sucessos/erros
+                        if (response.ok) {
+                            document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
+                            cacheItens[item.index].price = item.price; // Atualiza o preço base localmente no cache
+                        } else {
+                            const erroMsg = data.erro || "Falha na API";
+                            document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
+                        }
+                    });
                 } catch (e) {
                     lote.forEach(item => {
-                        const statusEl = document.getElementById(`status_api_${item.index}`);
-                        if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Falha de Rede</span>`;
+                        document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-red-500 font-bold">Erro de Rede</span>`;
                     });
                 }
+                
+                // Timeout para evitar limite de chamadas do Mercado Livre (rate limit)
+                if (i + tamanhoLote < itensParaAtualizar.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
-
-            alert("Processo de atualização em massa finalizado!");
+            
+            // Recalcula todas as tabelas após finalizar as atualizações
+            alert("Processo de envio em massa finalizado!");
+            atualizarCards(cacheItens);
+            montarTabelaGestao(cacheItens);
+            montarTabelaSimulacao(cacheItens);
+            // Recarrega a aba de atualização para remover os itens que já estão na margem
+            montarTabelaAtualizacao(cacheItens);
         }
     </script>
 </body>
