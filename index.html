@@ -139,8 +139,8 @@
         <section id="secao-atualizacao" class="hidden space-y-4">
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
                 <div>
-                    <h2 class="text-sm font-bold text-white">Atualização de Preço em Massa (Fora da Margem)</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Identifica automaticamente os anúncios fora da margem e gerencia erros individualmente.</p>
+                    <h2 class="text-sm font-bold text-white">Atualização de Preço (Apenas Anúncios Fora da Margem)</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Gerenciamento automático de erros e envio em lote para a API.</p>
                 </div>
                 <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
                     🚀 Iniciar Atualização em Massa
@@ -357,18 +357,18 @@
         function montarTabelaAtualizacao(itens) {
             const tbody = document.getElementById('tabela-atualizacao');
             tbody.innerHTML = '';
+            
             itens.forEach((item, index) => {
                 const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
-                const novoPreco = dadosSim.preco;
                 
-                // Marca automaticamente se estiver fora da margem para facilitar a seleção
-                const premarcado = dadosSim.foraDaMargem ? 'checked' : '';
-                const statusMargemText = dadosSim.foraDaMargem ? '<span class="text-amber-400 font-bold">Fora da Margem</span>' : '<span class="text-emerald-400">Na Margem</span>';
+                // Pula e oculta se estiver na margem (exibe apenas os fora da margem)
+                if (!dadosSim.foraDaMargem) return;
 
+                const novoPreco = dadosSim.preco;
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-800/50 transition-colors";
                 tr.innerHTML = `
-                    <td class="p-3.5"><input type="checkbox" value="${index}" ${premarcado} class="check-item accent-yellow-400" /></td>
+                    <td class="p-3.5"><input type="checkbox" value="${index}" checked class="check-item accent-yellow-400" /></td>
                     <td class="p-3.5">
                         <div class="flex items-center space-x-3">
                             <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
@@ -380,7 +380,7 @@
                     </td>
                     <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
                     <td class="p-3.5 font-black text-emerald-400">R$ ${novoPreco.toFixed(2)}</td>
-                    <td class="p-3.5">${statusMargemText}</td>
+                    <td class="p-3.5"><span class="text-amber-400 font-bold">Fora da Margem</span></td>
                     <td class="p-3.5" id="status_api_${index}"><span class="text-slate-500">Pendente</span></td>
                 `;
                 tbody.appendChild(tr);
@@ -416,6 +416,8 @@
                 const novoPreco = dadosSim ? dadosSim.preco : item.price;
                 const statusEl = document.getElementById(`status_api_${index}`);
 
+                if(statusEl && statusEl.innerHTML.includes("OK")) continue; // Pula os que já deram OK
+
                 statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando...</span>`;
 
                 try {
@@ -433,17 +435,15 @@
                     const resJson = await response.json();
 
                     if(response.ok) {
-                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK (Atualizado)</span>`;
+                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
                     } else {
-                        // Registra detalhadamente o erro na coluna específica para visualização do motivo
                         const msgErro = resJson.erro || resJson.message || "Erro desconhecido";
                         statusEl.innerHTML = `<span class="text-rose-400 font-semibold" title="${msgErro}">${msgErro}</span>`;
                     }
                 } catch (e) {
-                    statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão/Rede</span>`;
+                    statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão</span>`;
                 }
 
-                // Pequena pausa para evitar gargalos na API
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
             alert("Processo de atualização em lote finalizado!");
