@@ -59,7 +59,7 @@
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
-            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Sincronizando dados com a API do Mercado Livre...</p>
+            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando seus mais de 2.000 anúncios na API do Mercado Livre (Isso pode levar alguns segundos)...</p>
         </div>
 
         <!-- ABA 1: GESTÃO -->
@@ -204,7 +204,7 @@
             }
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading-text').innerText = "Puxando anúncios e dados da API do Mercado Livre...";
+            document.getElementById('loading-text').innerText = "Buscando seus mais de 2.000 anúncios na API do Mercado Livre (Isso pode levar alguns segundos)...";
             document.getElementById('aviso-token').classList.add('hidden');
 
             try {
@@ -219,7 +219,7 @@
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
                     montarTabelaAtualizacao(cacheItens);
-                    alert("Anúncios puxados com sucesso!");
+                    alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
                 } else {
                     alert(data.erro || "Erro ao carregar anúncios.");
                     if(data.erro && data.erro.includes("Token")) {
