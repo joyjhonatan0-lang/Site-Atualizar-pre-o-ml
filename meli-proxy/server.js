@@ -16,12 +16,6 @@ app.get('/api/anuncios', async (req, res) => {
 
     token = token.replace('Bearer ', '').trim();
 
-    // Verifica se a requisição pediu para adicionar apenas os novos (modo append)
-    // Os IDs existentes podem ser passados via query string ?existingIds=MLB123,MLB456 ou similar
-    const existingIdsParam = req.query.existingIds;
-    const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
-    const isAppendMode = existingIdsSet.size > 0;
-
     try {
         // 1. Puxar ID do usuário
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
@@ -65,20 +59,11 @@ app.get('/api/anuncios', async (req, res) => {
             return res.json({ itens: [] });
         }
 
-        // Se estiver no modo append, filtra apenas os IDs que AINDA NÃO estão no painel do usuário
-        let targetIds = allIds;
-        if (isAppendMode) {
-            targetIds = allIds.filter(id => !existingIdsSet.has(id));
-            if (targetIds.length === 0) {
-                return res.json({ itens: [], mensagem: "Nenhum anúncio novo encontrado." });
-            }
-        }
-
         let listaFinal = [];
 
-        // 3. Buscar detalhes em lotes de 20 apenas para os IDs-alvo
-        for (let i = 0; i < targetIds.length; i += 20) {
-            const chunk = targetIds.slice(i, i + 20);
+        // 3. Buscar detalhes em lotes de 20
+        for (let i = 0; i < allIds.length; i += 20) {
+            const chunk = allIds.slice(i, i + 20);
             
             try {
                 const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
@@ -217,6 +202,7 @@ app.post('/api/atualizar-precos-lote', async (req, res) => {
                 if (mlRes.ok) {
                     return { id: item.id, sucesso: true };
                 } else {
+                    // Captura o motivo real e detalhado enviado pela API do Mercado Livre
                     let mensagemErro = mlData.message || 
                                        (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
                                        JSON.stringify(mlData);
