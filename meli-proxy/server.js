@@ -17,13 +17,11 @@ app.get('/api/anuncios', async (req, res) => {
 
     token = token.replace('Bearer ', '').trim();
 
-    // Suporte ao parâmetro existingIds para append inteligente de novos anúncios
     const existingIdsParam = req.query.existingIds;
     const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
     const isAppendMode = existingIdsSet.size > 0;
 
     try {
-        // Puxar ID do usuário
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
@@ -33,7 +31,6 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // Usar o search_type=scan para ultrapassar o limite de 1000 itens
         let allIds = [];
         let scrollId = null;
         let hasMore = true;
@@ -65,7 +62,6 @@ app.get('/api/anuncios', async (req, res) => {
             return res.json({ itens: [] });
         }
 
-        // Se estiver no modo append, busca detalhes apenas dos IDs que ainda não estão salvos
         let targetIds = allIds;
         if (isAppendMode) {
             targetIds = allIds.filter(id => !existingIdsSet.has(id));
@@ -76,7 +72,6 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // Buscar detalhes em lotes de 20
         for (let i = 0; i < targetIds.length; i += 20) {
             const chunk = targetIds.slice(i, i + 20);
             
@@ -148,18 +143,17 @@ app.get('/api/anuncios', async (req, res) => {
         res.json({ itens: listaFinal });
 
     } catch (e) {
-        console.error("ERRO NA API:", e);
         res.status(500).json({ erro: "Erro ao processar dados da API: " + e.message });
     }
 });
 
-// 2. NOVA ROTA: Sincronizar APENAS OS PREÇOS das MLBs informadas
+// 2. ROTA: Sincronizar APENAS OS PREÇOS das MLBs informadas
 app.post('/api/sincronizar-precos', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
 
     token = token.replace('Bearer ', '').trim();
-    const { ids } = req.body; // Array com as MLBs recebidas do front
+    const { ids } = req.body;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ erro: "Lista de IDs inválida." });
@@ -168,36 +162,80 @@ app.post('/api/sincronizar-precos', async (req, res) => {
     let precosMap = {};
 
     try {
-        // Dividimos em blocos de 20 para respeitar limites da API do Mercado Livre
         for (let i = 0; i < ids.length; i += 20) {
             const blocoIds = ids.slice(i, i + 20).join(',');
-            
             const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
                 headers: { "Authorization": "Bearer " + token }
             });
-            
             const multiData = await multiRes.json();
             
             if (Array.isArray(multiData)) {
                 multiData.forEach(itemObj => {
                     if (itemObj.code === 200 && itemObj.body) {
-                        // Salva apenas o preço com a chave sendo a MLB
                         precosMap[itemObj.body.id] = itemObj.body.price;
                     }
                 });
             }
         }
-
-        // Retorna o mapa de preços para o frontend atualizar instantaneamente
         res.json({ precos: precosMap });
-
     } catch (e) {
-        console.error("Erro ao sincronizar preços:", e);
-        res.status(500).json({ erro: "Erro ao buscar preços na API do Mercado Livre: " + e.message });
+        res.status(500).json({ erro: "Erro ao buscar preços: " + e.message });
     }
 });
 
-// 3. Rota de atualização de preço individual
+// 3. NOVA ROTA: Sincronizar APENAS OS FRETES das MLBs informadas
+app.post('/api/sincronizar-fretes', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ erro: "Lista de IDs inválida." });
+    }
+
+    let fretesMap = {};
+
+    try {
+        for (let i = 0; i < ids.length; i += 20) {
+            const blocoIds = ids.slice(i, i + 20).join(',');
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const multiData = await multiRes.json();
+            
+            if (Array.isArray(multiData)) {
+                multiData.forEach(itemObj => {
+                    if (itemObj.code === 200 && itemObj.body) {
+                        let shipping = itemObj.body.shipping || {};
+                        let freeShipping = shipping.free_shipping || false;
+                        let custoEnvio = 6.85;
+
+                        if (shipping.logistic_type === 'fulfillment') {
+                            custoEnvio = 18.50;
+                        }
+
+                        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+                            let cObj = shipping.costs.find(c => c.cost !== undefined);
+                            if (cObj) custoEnvio = cObj.cost;
+                        }
+
+                        fretesMap[itemObj.body.id] = {
+                            custo: custoEnvio,
+                            gratis: freeShipping
+                        };
+                    }
+                });
+            }
+        }
+        res.json({ fretes: fretesMap });
+    } catch (e) {
+        res.status(500).json({ erro: "Erro ao buscar fretes: " + e.message });
+    }
+});
+
+// 4. Rota de atualização de preço individual
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -232,7 +270,7 @@ app.post('/api/atualizar-preco', async (req, res) => {
     }
 });
 
-// 4. Rota de atualização em lote simultâneo (20 em 20)
+// 5. Rota de atualização em lote simultâneo
 app.post('/api/atualizar-precos-lote', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
