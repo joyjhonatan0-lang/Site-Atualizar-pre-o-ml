@@ -67,7 +67,7 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-corpo" class="divide-y divide-slate-800/60 text-sm">
-                        <tr><td colspan="7" class="p-8 text-center text-slate-500">Clique em "Puxar Anúncios" para carregar seus dados.</td></tr>
+                        <tr><td colspan="7" class="p-8 text-center text-slate-500">A carregar anúncios salvos...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -112,7 +112,6 @@
                     <p class="text-sm text-slate-400 mt-1">Envie os novos preços calculados diretamente para o Mercado Livre com alto desempenho.</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <!-- Contador de anúncios para atualizar -->
                     <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm">
                         <span class="text-slate-400">Anúncios para atualizar:</span> 
                         <span id="contador-atualizacao" class="font-bold text-blue-400 ml-1">0</span>
@@ -143,6 +142,21 @@
 
     <script>
         let meusAnuncios = [];
+
+        // Ao abrir a página, tenta carregar os anúncios salvos no navegador para abrir instantaneamente
+        window.onload = function() {
+            let salvos = localStorage.getItem('ml_anuncios_salvos');
+            if (salvos) {
+                try {
+                    meusAnuncios = JSON.parse(salvos);
+                    atualizarInterface();
+                } catch (e) {
+                    console.error("Erro ao carregar cache:", e);
+                }
+            } else {
+                atualizarInterface();
+            }
+        };
 
         function mudarAba(aba) {
             document.getElementById('aba-gestao').classList.add('hidden');
@@ -183,9 +197,7 @@
                 return;
             }
 
-            // Pega IDs já existentes para enviar ao backend (modo append inteligente)
             let existingIds = meusAnuncios.map(item => item.id).join(',');
-
             alert("Buscando anúncios no Mercado Livre...");
 
             try {
@@ -198,6 +210,8 @@
                     let novosItens = data.itens || [];
                     if (novosItens.length > 0) {
                         meusAnuncios = meusAnuncios.concat(novosItens);
+                        // Salva permanentemente no navegador para não precisar baixar de novo no F5
+                        localStorage.setItem('ml_anuncios_salvos', JSON.stringify(meusAnuncios));
                         atualizarInterface();
                         alert(`${novosItens.length} novo(s) anúncio(s) adicionado(s) com sucesso!`);
                     } else {
@@ -224,7 +238,7 @@
             document.getElementById('kpi-outros').innerText = outros;
 
             if (total === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500">Nenhum anúncio cadastrado.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500">Nenhum anúncio carregado. Clique em "Puxar Anúncios".</td></tr>`;
                 return;
             }
 
@@ -286,7 +300,7 @@
             let custo = parseFloat(document.getElementById(`custo-${index}`).value) || 0;
             let lucroDesejado = parseFloat(document.getElementById(`lucro-${index}`).value) || 0;
             let imposto = parseFloat(document.getElementById(`imposto-${index}`).value) || 0;
-            let taxaComissao = 12.0; // 12% padrão
+            let taxaComissao = 12.0;
             let frete = item.shipping_cost || 0;
 
             let denominador = 1 - ((taxaComissao + imposto + lucroDesejado) / 100);
@@ -300,7 +314,6 @@
             document.getElementById(`liquido-est-${index}`).innerText = `R$ ${liquidoEst.toFixed(2)}`;
             document.getElementById(`margem-est-${index}`).innerText = `${margemEst.toFixed(1)}%`;
             
-            // Guarda o novo preço calculado no objeto do item para o lote
             item.novoPrecoSugerido = Number(precoIdeal.toFixed(2));
         }
 
@@ -308,7 +321,6 @@
             let tbody = document.getElementById('tabela-atualizacao-corpo');
             tbody.innerHTML = '';
 
-            // Atualiza o contador na aba
             let qtd = meusAnuncios.length;
             document.getElementById('contador-atualizacao').innerText = qtd;
 
@@ -353,7 +365,6 @@
 
             if (!confirm(`Deseja atualizar o preço de ${itensParaAtualizar.length} anúncio(s) em lote agora?`)) return;
 
-            // Feedback visual de carregamento
             meusAnuncios.forEach((_, index) => {
                 document.getElementById(`status-lote-${index}`).innerText = "Processando...";
                 document.getElementById(`status-lote-${index}`).className = "p-4 text-xs text-blue-400 font-medium";
@@ -379,7 +390,6 @@
                             if (resItem.sucesso) {
                                 statusEl.innerText = "Atualizado com sucesso!";
                                 statusEl.className = "p-4 text-xs text-emerald-400 font-bold";
-                                // Atualiza o preço oficial na memória do app
                                 meusAnuncios[originalIndex].price = itensParaAtualizar.find(i => i.id === resItem.id).price;
                             } else {
                                 statusEl.innerText = "Erro: " + resItem.erro;
@@ -387,6 +397,8 @@
                             }
                         }
                     });
+                    // Atualiza o cache salvo
+                    localStorage.setItem('ml_anuncios_salvos', JSON.stringify(meusAnuncios));
                     alert("Processo de atualização em lote concluído!");
                 } else {
                     alert("Erro ao processar lote: " + (data.erro || "Desconhecido"));
