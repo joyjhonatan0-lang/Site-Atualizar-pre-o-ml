@@ -165,7 +165,7 @@ app.post('/api/atualizar-preco', async (req, res) => {
         if (mlRes.ok) {
             res.json({ sucesso: true, resultado: mlData });
         } else {
-            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || "Erro ao atualizar preço";
+            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || JSON.stringify(mlData);
             res.status(400).json({ erro: mensagemErro });
         }
     } catch (e) {
@@ -173,7 +173,7 @@ app.post('/api/atualizar-preco', async (req, res) => {
     }
 });
 
-// NOVA ROTA: Atualização em lote simultâneo (20 em 20 em paralelo)
+// Rota de atualização em lote simultâneo (20 em 20 em paralelo) com captura do motivo real do erro
 app.post('/api/atualizar-precos-lote', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -202,11 +202,14 @@ app.post('/api/atualizar-precos-lote', async (req, res) => {
                 if (mlRes.ok) {
                     return { id: item.id, sucesso: true };
                 } else {
-                    let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || "Erro ao atualizar";
+                    // Captura o motivo real e detalhado enviado pela API do Mercado Livre
+                    let mensagemErro = mlData.message || 
+                                       (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
+                                       JSON.stringify(mlData);
                     return { id: item.id, sucesso: false, erro: mensagemErro };
                 }
             } catch (err) {
-                return { id: item.id, sucesso: false, erro: "Erro de conexão" };
+                return { id: item.id, sucesso: false, erro: "Erro de conexão: " + err.message };
             }
         });
 
