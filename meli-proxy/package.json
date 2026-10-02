@@ -1,7 +1,7 @@
 {
   "name": "ml-hub-pro",
-  "version": "4.0.0",
-  "description": "ML Hub Pro - integração com Mercado Livre",
+  "version": "5.0.0",
+  "description": "ML Hub Pro - gerenciamento de múltiplas contas Mercado Livre",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
