@@ -59,7 +59,7 @@
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
-            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando todos os seus anúncios na API do Mercado Livre...</p>
+            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando dados na API do Mercado Livre...</p>
         </div>
 
         <!-- ABA 1: GESTÃO -->
@@ -210,6 +210,7 @@
                 return;
             }
 
+            document.getElementById('loading-text').innerText = "Buscando todos os seus anúncios na API do Mercado Livre...";
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('aviso-token').classList.add('hidden');
 
@@ -239,9 +240,60 @@
             }
         }
 
+        // AGORA PUXA APENAS O PREÇO DOS ANÚNCIOS JÁ CARREGADOS NA TELA
         async function sincronizarPrecosApi() {
-            await carregarDados();
-            alert("Preços reais puxados e atualizados da API!");
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                solicitarToken();
+                return;
+            }
+
+            if (!cacheItens || cacheItens.length === 0) {
+                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+                return;
+            }
+
+            document.getElementById('loading-text').innerText = "Puxando preços atuais das MLBs ativas...";
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                const mlbs = cacheItens.map(i => i.id);
+                const response = await fetch(`${RENDER_URL}/api/sincronizar-precos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ ids: mlbs })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.precos) {
+                    // Atualiza apenas os preços no cache local
+                    cacheItens.forEach(item => {
+                        if (data.precos[item.id] !== undefined) {
+                            item.price = data.precos[item.id];
+                            // Recalcula o 'net_received' básico se necessário
+                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
+                        }
+                    });
+
+                    // Atualiza as tabelas e simulações sem perder a listagem
+                    atualizarCards(cacheItens);
+                    montarTabelaGestao(cacheItens);
+                    montarTabelaSimulacao(cacheItens);
+                    montarTabelaAtualizacao(cacheItens);
+
+                    alert("Preços reais sincronizados com sucesso para as MLBs existentes!");
+                } else {
+                    alert(data.erro || "Erro ao sincronizar preços.");
+                }
+            } catch (e) {
+                alert("Erro de comunicação com o servidor ao puxar preços.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
         }
 
         async function sincronizarFretesApi() {
@@ -415,7 +467,6 @@
                 tbody.appendChild(tr);
             });
 
-            // Atualiza o contador na interface
             document.getElementById('contador-atualizacao').innerText = contadorForaDaMargem;
         }
 
@@ -487,25 +538,21 @@
                                     if(resItem.sucesso) {
                                         statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
                                         
-                                        // 1. Atualiza o preço atual do item na memória do sistema para o novo preço
                                         cacheItens[originalObj.index].price = originalObj.price;
 
-                                        // 2. Remove o item da lista recalculando o status 'foraDaMargem' para falso
                                         if (novosPrecosCalculados[originalObj.index]) {
                                             novosPrecosCalculados[originalObj.index].foraDaMargem = false;
                                         }
 
-                                        // 3. Remove a linha visualmente da tabela com animação suave e atualiza o contador
                                         setTimeout(() => {
                                             const linha = document.getElementById(`linha_atualizacao_${originalObj.index}`);
                                             if (linha) {
                                                 linha.remove();
-                                                // Decrementa o contador na interface
                                                 let contadorEl = document.getElementById('contador-atualizacao');
                                                 let atual = parseInt(contadorEl.innerText) || 1;
                                                 contadorEl.innerText = Math.max(0, atual - 1);
                                             }
-                                        }, 1000); // Aguarda 1 segundo para o usuário ver o "OK" verde
+                                        }, 1000);
 
                                     } else {
                                         statusEl.innerHTML = `<span class="text-rose-400 font-semibold cursor-help" title="${resItem.erro}">❌ ${resItem.erro}</span>`;
