@@ -59,7 +59,7 @@
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
-            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando seus mais de 2.000 anúncios na API do Mercado Livre (Isso pode levar alguns segundos)...</p>
+            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando todos os seus anúncios na API do Mercado Livre...</p>
         </div>
 
         <!-- ABA 1: GESTÃO -->
@@ -148,10 +148,10 @@
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
                 <div>
                     <h2 class="text-sm font-bold text-white">Atualização de Preço (Apenas Anúncios Fora da Margem)</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Gerenciamento automático de erros e envio em lote para a API.</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Envio simultâneo em lotes de 20 para máxima velocidade.</p>
                 </div>
                 <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
-                    🚀 Iniciar Atualização em Massa
+                    🚀 Iniciar Atualização em Lotes (20 em 20)
                 </button>
             </div>
 
@@ -165,7 +165,7 @@
                                 <th class="p-3.5">Preço Atual</th>
                                 <th class="p-3.5 text-emerald-400">Novo Preço</th>
                                 <th class="p-3.5">Situação / Margem</th>
-                                <th class="p-3.5">Coluna de Erro / Status API</th>
+                                <th class="p-3.5">Status API</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-atualizacao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
@@ -204,7 +204,6 @@
             }
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading-text').innerText = "Buscando seus mais de 2.000 anúncios na API do Mercado Livre (Isso pode levar alguns segundos)...";
             document.getElementById('aviso-token').classList.add('hidden');
 
             try {
@@ -424,48 +423,76 @@
                 return;
             }
 
-            if(!confirm(`Deseja atualizar ${checkboxes.length} anúncio(s) selecionado(s) no Mercado Livre?`)) {
+            if(!confirm(`Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`)) {
                 return;
             }
 
-            for(let cb of checkboxes) {
+            let itensParaAtualizar = [];
+            checkboxes.forEach(cb => {
                 const index = cb.value;
                 const item = cacheItens[index];
                 const dadosSim = novosPrecosCalculados[index];
                 const novoPreco = dadosSim ? dadosSim.preco : item.price;
-                const statusEl = document.getElementById(`status_api_${index}`);
 
-                if(statusEl && statusEl.innerHTML.includes("OK")) continue;
+                itensParaAtualizar.push({
+                    index: index,
+                    id: item.id,
+                    price: parseFloat(novoPreco.toFixed(2))
+                });
+            });
 
-                statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando...</span>`;
+            const tamanhoLote = 20;
+            for (let i = 0; i < itensParaAtualizar.length; i += tamanhoLote) {
+                const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
+
+                lote.forEach(item => {
+                    const statusEl = document.getElementById(`status_api_${item.index}`);
+                    if(statusEl) statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando lote...</span>`;
+                });
 
                 try {
-                    const response = await fetch(`${RENDER_URL}/api/atualizar-preco`, {
+                    const response = await fetch(`${RENDER_URL}/api/atualizar-precos-lote`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': token
                         },
                         body: JSON.stringify({
-                            id: item.id,
-                            price: parseFloat(novoPreco.toFixed(2))
+                            itens: lote.map(it => ({ id: it.id, price: it.price }))
                         })
                     });
+
                     const resJson = await response.json();
 
-                    if(response.ok) {
-                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
+                    if (response.ok && resJson.resultados) {
+                        resJson.resultados.forEach(resItem => {
+                            const originalObj = lote.find(l => l.id === resItem.id);
+                            if(originalObj) {
+                                const statusEl = document.getElementById(`status_api_${originalObj.index}`);
+                                if(statusEl) {
+                                    if(resItem.sucesso) {
+                                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
+                                    } else {
+                                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold" title="${resItem.erro}">${resItem.erro}</span>`;
+                                    }
+                                }
+                            }
+                        });
                     } else {
-                        const msgErro = resJson.erro || resJson.message || "Erro desconhecido";
-                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold" title="${msgErro}">${msgErro}</span>`;
+                        lote.forEach(item => {
+                            const statusEl = document.getElementById(`status_api_${item.index}`);
+                            if(statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro no Lote</span>`;
+                        });
                     }
                 } catch (e) {
-                    statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão</span>`;
+                    lote.forEach(item => {
+                        const statusEl = document.getElementById(`status_api_${item.index}`);
+                        if(statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão</span>`;
+                    });
                 }
-
-                await new Promise(resolve => setTimeout(resolve, 300));
             }
-            alert("Processo de atualização em lote finalizado!");
+
+            alert("Processo de atualização em lotes simultâneos finalizado!");
         }
 
         window.onload = () => {
