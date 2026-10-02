@@ -1,2148 +1,2683 @@
-const express = require('express');
-const cors = require('cors');
-const crypto = require('crypto');
+// ============================================================
+// ML HUB PRO - BACKEND
+// Mercado Livre + Access Token manual + OAuth opcional
+// ============================================================
+
+const express = require("express");
+const cors = require("cors");
+const crypto = require("crypto");
 
 const app = express();
 
 const PORT = process.env.PORT || 10000;
 
-const ML_API = 'https://api.mercadolibre.com';
-const ML_AUTH = 'https://auth.mercadolivre.com.br';
-const ML_SITE = 'MLB';
+const ML_API =
+  "https://api.mercadolibre.com";
 
-const FRONTEND_URL = (
-  process.env.FRONTEND_URL ||
-  'https://joyjhonatan0-lang.github.io/Site-Atualizar-preco-ml/'
-).replace(/\/$/, '');
+const ML_AUTH =
+  "https://auth.mercadolivre.com.br";
 
-const ML_CLIENT_ID = process.env.ML_CLIENT_ID || '';
-const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET || '';
+const ML_SITE =
+  "MLB";
+
+const FRONTEND_URL =
+  "https://joyjhonatan0-lang.github.io/Site-Atualizar-preco-ml/";
+
+
+// ============================================================
+// VARIÁVEIS DE AMBIENTE
+// ============================================================
+
+const ML_CLIENT_ID =
+  process.env.ML_CLIENT_ID || "";
+
+const ML_CLIENT_SECRET =
+  process.env.ML_CLIENT_SECRET || "";
 
 const ML_REDIRECT_URI =
-  process.env.ML_REDIRECT_URI ||
-  'https://site-atualizar-pre-o-ml.onrender.com/oauth/callback';
+  process.env.ML_REDIRECT_URI || "";
 
-/*
-|--------------------------------------------------------------------------
-| MEMÓRIA
-|--------------------------------------------------------------------------
-|
-| accounts:
-|   Guarda as contas Mercado Livre autorizadas.
-|
-| sessions:
-|   Guarda a sessão do navegador e quais contas ela pode utilizar.
-|
-| oauthStates:
-|   Protege o fluxo OAuth contra CSRF.
-|
-| IMPORTANTE:
-| Esta versão funciona imediatamente no Render, mas os dados ficam
-| em memória. Se o Render reiniciar o serviço, será necessário
-| autorizar novamente as contas.
-|
-| Para produção definitiva, recomendo colocar os tokens em banco
-| criptografado.
-|
-*/
 
-const accounts = new Map();
-const sessions = new Map();
-const oauthStates = new Map();
-
-/*
-|--------------------------------------------------------------------------
-| MIDDLEWARE
-|--------------------------------------------------------------------------
-*/
-
-app.use(express.json({ limit: '2mb' }));
+// ============================================================
+// CORS
+// ============================================================
 
 const allowedOrigins = [
-  FRONTEND_URL,
-  'https://joyjhonatan0-lang.github.io'
+
+  FRONTEND_URL.replace(/\/$/, ""),
+
+  "https://joyjhonatan0-lang.github.io",
+
+  "http://localhost:3000",
+
+  "http://localhost:5173",
+
+  "http://127.0.0.1:5500",
+
+  "http://localhost:5500"
+
 ];
+
 
 app.use(
   cors({
+
     origin: function (origin, callback) {
+
+      // Permite chamadas sem Origin
+      // como curl/Postman/server-to-server
       if (!origin) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      const normalized =
+        origin.replace(/\/$/, "");
+
+      if (
+        allowedOrigins.includes(
+          normalized
+        )
+      ) {
+
+        return callback(
+          null,
+          true
+        );
+
       }
 
-      return callback(
-        new Error('Origem não autorizada pelo CORS: ' + origin)
+      console.warn(
+        "Origin bloqueada pelo CORS:",
+        origin
       );
+
+      return callback(
+        new Error(
+          "Origin não autorizada pelo CORS."
+        )
+      );
+
     },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS"
+    ],
+
     allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-ML-Session'
-    ]
+      "Content-Type",
+      "Authorization",
+      "Accept"
+    ],
+
+    credentials: true
+
   })
 );
 
-app.use((req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store');
-  next();
-});
 
-/*
-|--------------------------------------------------------------------------
-| UTILITÁRIOS
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// BODY
+// ============================================================
 
-function randomId(size = 32) {
-  return crypto.randomBytes(size).toString('hex');
+app.use(
+  express.json({
+    limit: "2mb"
+  })
+);
+
+
+// ============================================================
+// LOG BÁSICO
+// ============================================================
+
+app.use(
+  (req, res, next) => {
+
+    console.log(
+      `[${new Date().toISOString()}]`,
+      req.method,
+      req.path
+    );
+
+    next();
+
+  }
+);
+
+
+// ============================================================
+// SESSÕES OAUTH
+// ============================================================
+
+// OAuth é opcional.
+// Para o seu caso principal, o site usará Access Token manual.
+
+const sessions =
+  new Map();
+
+const oauthStates =
+  new Map();
+
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+
+function jsonError(
+  res,
+  status,
+  message,
+  extra = {}
+) {
+
+  return res
+    .status(status)
+    .json({
+
+      erro: message,
+
+      ...extra
+
+    });
+
 }
 
-function now() {
-  return Date.now();
-}
 
-function cleanToken(token) {
-  if (!token) return null;
+function normalizeToken(
+  token
+) {
 
-  let value = String(token).trim();
+  let value =
+    String(token || "")
+      .trim();
 
-  if (value.toLowerCase().startsWith('bearer ')) {
-    value = value.substring(7).trim();
+  if (
+    value
+      .toLowerCase()
+      .startsWith("bearer ")
+  ) {
+
+    value =
+      value
+        .slice(7)
+        .trim();
+
   }
 
-  return value || null;
+  return value;
+
 }
 
-function safeError(error) {
-  if (!error) return 'Erro desconhecido';
 
-  if (typeof error === 'string') {
-    return error;
+function getBearerToken(
+  req
+) {
+
+  const header =
+    req.headers.authorization;
+
+  if (!header) {
+    return null;
   }
 
-  return (
-    error.message ||
-    error.error_description ||
-    error.error ||
-    'Erro desconhecido'
+  if (
+    !header
+      .toLowerCase()
+      .startsWith("bearer ")
+  ) {
+
+    return null;
+
+  }
+
+  return normalizeToken(
+    header
+      .slice(7)
   );
+
 }
 
-function frontendRedirect(path = '') {
-  return FRONTEND_URL + path;
-}
 
-function accountPublic(account) {
-  if (!account) return null;
+// ============================================================
+// CHAMADA AO MERCADO LIVRE
+// ============================================================
 
-  return {
-    id: account.id,
-    seller_id: account.seller_id,
-    nickname: account.nickname || '',
-    first_name: account.first_name || '',
-    last_name: account.last_name || '',
-    email: account.email || '',
-    country_id: account.country_id || '',
-    site_id: account.site_id || ML_SITE,
-    conectado_em: account.connectedAt,
-    token_expira_em: account.expiresAt,
-    ativo: !!account.active
-  };
-}
+async function mlFetch(
+  path,
+  token,
+  options = {}
+) {
 
-function createSession() {
-  const sessionId = randomId(32);
+  const cleanToken =
+    normalizeToken(token);
 
-  sessions.set(sessionId, {
-    id: sessionId,
-    accountIds: [],
-    activeAccountId: null,
-    createdAt: now(),
-    lastAccess: now()
-  });
 
-  return sessionId;
-}
+  if (!cleanToken) {
 
-function getSessionId(req) {
-  const header = req.headers['x-ml-session'];
+    throw new Error(
+      "Access Token não informado."
+    );
 
-  if (header) {
-    return String(header).trim();
   }
 
-  return null;
-}
-
-function getSession(req) {
-  const sessionId = getSessionId(req);
-
-  if (!sessionId) {
-    return null;
-  }
-
-  const session = sessions.get(sessionId);
-
-  if (!session) {
-    return null;
-  }
-
-  session.lastAccess = now();
-
-  return session;
-}
-
-function requireSession(req, res) {
-  const session = getSession(req);
-
-  if (!session) {
-    res.status(401).json({
-      erro: 'Sessão do ML Hub Pro não encontrada.',
-      codigo: 'SESSION_REQUIRED'
-    });
-
-    return null;
-  }
-
-  return session;
-}
-
-function getAccountForRequest(req, res) {
-  const session = requireSession(req, res);
-
-  if (!session) {
-    return null;
-  }
-
-  const requestedAccount =
-    req.headers['x-ml-account'] ||
-    req.body?.account_id ||
-    req.query?.account_id ||
-    session.activeAccountId;
-
-  if (!requestedAccount) {
-    res.status(400).json({
-      erro: 'Nenhuma conta Mercado Livre foi selecionada.',
-      codigo: 'ACCOUNT_REQUIRED'
-    });
-
-    return null;
-  }
-
-  if (!session.accountIds.includes(requestedAccount)) {
-    res.status(403).json({
-      erro: 'Essa conta não pertence à sessão atual.',
-      codigo: 'ACCOUNT_NOT_ALLOWED'
-    });
-
-    return null;
-  }
-
-  const account = accounts.get(requestedAccount);
-
-  if (!account) {
-    res.status(404).json({
-      erro: 'Conta Mercado Livre não encontrada.',
-      codigo: 'ACCOUNT_NOT_FOUND'
-    });
-
-    return null;
-  }
-
-  return {
-    session,
-    account
-  };
-}
-
-/*
-|--------------------------------------------------------------------------
-| MERCADO LIVRE API
-|--------------------------------------------------------------------------
-*/
-
-async function mlRequest(account, path, options = {}) {
-  if (!account) {
-    throw new Error('Conta Mercado Livre não encontrada.');
-  }
-
-  const token = await getValidAccessToken(account);
 
   const headers = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
+
+    "Accept":
+      "application/json",
+
+    "Authorization":
+      `Bearer ${cleanToken}`,
+
     ...(options.headers || {})
+
   };
 
-  const response = await fetch(`${ML_API}${path}`, {
-    method: options.method || 'GET',
-    headers,
-    body: options.body
-  });
 
-  const text = await response.text();
+  const response =
+    await fetch(
+      ML_API + path,
+      {
+        ...options,
+        headers
+      }
+    );
+
 
   let data = null;
 
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text;
-  }
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) || "";
 
-  /*
-   * Se o token estiver inválido, tenta renovar uma vez.
-   */
+
   if (
-    response.status === 401 &&
-    account.refresh_token
+    contentType.includes(
+      "application/json"
+    )
   ) {
-    await refreshAccountToken(account);
-
-    const newToken = cleanToken(account.access_token);
-
-    const retryResponse = await fetch(`${ML_API}${path}`, {
-      method: options.method || 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${newToken}`,
-        ...(options.headers || {})
-      },
-      body: options.body
-    });
-
-    const retryText = await retryResponse.text();
-
-    let retryData = null;
 
     try {
-      retryData = retryText ? JSON.parse(retryText) : null;
-    } catch {
-      retryData = retryText;
+
+      data =
+        await response.json();
+
+    } catch (error) {
+
+      data = null;
+
     }
 
-    if (!retryResponse.ok) {
-      const error = new Error(
-        retryData?.message ||
-        retryData?.error_description ||
-        retryData?.error ||
-        `Mercado Livre retornou HTTP ${retryResponse.status}`
+  } else {
+
+    try {
+
+      const text =
+        await response.text();
+
+      data =
+        text
+          ? {
+              message: text
+            }
+          : null;
+
+    } catch (error) {
+
+      data = null;
+
+    }
+
+  }
+
+
+  if (!response.ok) {
+
+    const error =
+      new Error(
+        data?.message ||
+        data?.error ||
+        data?.cause?.[0]?.message ||
+        `Mercado Livre HTTP ${response.status}`
       );
 
-      error.status = retryResponse.status;
-      error.data = retryData;
+    error.status =
+      response.status;
 
-      throw error;
-    }
-
-    return retryData;
-  }
-
-  if (!response.ok) {
-    const error = new Error(
-      data?.message ||
-      data?.error_description ||
-      data?.error ||
-      `Mercado Livre retornou HTTP ${response.status}`
-    );
-
-    error.status = response.status;
-    error.data = data;
+    error.data =
+      data;
 
     throw error;
+
   }
+
 
   return data;
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| TOKEN
-|--------------------------------------------------------------------------
-*/
 
-async function exchangeAuthorizationCode(code) {
-  if (!ML_CLIENT_ID || !ML_CLIENT_SECRET) {
-    throw new Error(
-      'ML_CLIENT_ID ou ML_CLIENT_SECRET não configurado no Render.'
-    );
+// ============================================================
+// PEGAR TOKEN DA REQUISIÇÃO
+// ============================================================
+//
+// PRIORIDADE:
+//
+// 1. Authorization: Bearer TOKEN
+//
+// 2. Sessão OAuth por cookie
+//
+// Isso permite que cada conta do frontend
+// envie seu próprio Access Token.
+//
+// ============================================================
+
+function getSessionToken(
+  req
+) {
+
+  // ----------------------------------------------------------
+  // TOKEN MANUAL
+  // ----------------------------------------------------------
+
+  const bearer =
+    getBearerToken(req);
+
+  if (bearer) {
+
+    return {
+      token: bearer,
+      source: "manual"
+    };
+
   }
 
-  const body = new URLSearchParams();
 
-  body.set('grant_type', 'authorization_code');
-  body.set('client_id', ML_CLIENT_ID);
-  body.set('client_secret', ML_CLIENT_SECRET);
-  body.set('code', code);
-  body.set('redirect_uri', ML_REDIRECT_URI);
+  // ----------------------------------------------------------
+  // TOKEN DA SESSÃO OAUTH
+  // ----------------------------------------------------------
 
-  const response = await fetch(`${ML_API}/oauth/token`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: body.toString()
-  });
+  const sessionId =
+    req.headers["x-session-id"] ||
+    null;
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const error = new Error(
-      data.error_description ||
-      data.message ||
-      data.error ||
-      `Falha no OAuth: HTTP ${response.status}`
-    );
-
-    error.status = response.status;
-    error.data = data;
-
-    throw error;
-  }
-
-  return data;
-}
-
-async function refreshAccountToken(account) {
-  if (!account.refresh_token) {
-    throw new Error(
-      'Esta conta não possui refresh_token. É necessário conectar novamente.'
-    );
-  }
-
-  const body = new URLSearchParams();
-
-  body.set('grant_type', 'refresh_token');
-  body.set('client_id', ML_CLIENT_ID);
-  body.set('client_secret', ML_CLIENT_SECRET);
-  body.set('refresh_token', account.refresh_token);
-
-  const response = await fetch(`${ML_API}/oauth/token`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: body.toString()
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    account.invalid = true;
-
-    const error = new Error(
-      data.error_description ||
-      data.message ||
-      data.error ||
-      `Falha ao renovar token: HTTP ${response.status}`
-    );
-
-    error.status = response.status;
-    error.data = data;
-
-    throw error;
-  }
-
-  account.access_token = data.access_token;
-
-  /*
-   * O Mercado Livre gera um novo refresh_token.
-   * O anterior não deve continuar sendo usado.
-   */
-  if (data.refresh_token) {
-    account.refresh_token = data.refresh_token;
-  }
-
-  account.expiresAt =
-    now() + ((Number(data.expires_in) || 21600) * 1000);
-
-  account.invalid = false;
-
-  return account.access_token;
-}
-
-async function getValidAccessToken(account) {
-  if (!account.access_token) {
-    throw new Error(
-      'A conta não possui Access Token. Conecte novamente.'
-    );
-  }
-
-  /*
-   * Renova 5 minutos antes de expirar.
-   */
-  const safetyWindow = 5 * 60 * 1000;
 
   if (
-    account.expiresAt &&
-    now() >= account.expiresAt - safetyWindow
+    sessionId &&
+    sessions.has(sessionId)
   ) {
-    await refreshAccountToken(account);
+
+    const session =
+      sessions.get(sessionId);
+
+    if (
+      session &&
+      session.access_token
+    ) {
+
+      return {
+        token:
+          session.access_token,
+
+        source:
+          "oauth",
+
+        sessionId
+
+      };
+
+    }
+
   }
 
-  return cleanToken(account.access_token);
+
+  // ----------------------------------------------------------
+  // COOKIE DE SESSÃO
+  // ----------------------------------------------------------
+
+  const cookieHeader =
+    req.headers.cookie || "";
+
+  const cookies =
+    parseCookies(
+      cookieHeader
+    );
+
+  const cookieSessionId =
+    cookies.ml_session;
+
+
+  if (
+    cookieSessionId &&
+    sessions.has(
+      cookieSessionId
+    )
+  ) {
+
+    const session =
+      sessions.get(
+        cookieSessionId
+      );
+
+    if (
+      session &&
+      session.access_token
+    ) {
+
+      return {
+        token:
+          session.access_token,
+
+        source:
+          "oauth",
+
+        sessionId:
+          cookieSessionId
+
+      };
+
+    }
+
+  }
+
+
+  return null;
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| TESTE DA CONFIGURAÇÃO
-|--------------------------------------------------------------------------
-*/
 
-app.get('/api/config/status', (req, res) => {
-  res.json({
-    ok: true,
-    mercado_livre: {
-      client_id_configurado: !!ML_CLIENT_ID,
-      client_secret_configurado: !!ML_CLIENT_SECRET,
-      redirect_uri: ML_REDIRECT_URI,
-      auth_url: ML_AUTH,
-      api_url: ML_API
-    },
-    frontend: FRONTEND_URL
-  });
-});
+function requireToken(
+  req,
+  res,
+  next
+) {
 
-/*
-|--------------------------------------------------------------------------
-| ROOT / HEALTH
-|--------------------------------------------------------------------------
-*/
+  const auth =
+    getSessionToken(req);
 
-app.get('/', (req, res) => {
-  res.json({
-    ok: true,
-    sistema: 'ML Hub Pro',
-    status: 'online',
-    multi_contas: true,
-    oauth: true,
-    timestamp: new Date().toISOString()
-  });
-});
 
-app.get('/health', (req, res) => {
-  res.json({
-    ok: true,
-    status: 'online'
-  });
-});
+  if (!auth?.token) {
 
-/*
-|--------------------------------------------------------------------------
-| OAUTH
-|--------------------------------------------------------------------------
-*/
+    return jsonError(
+      res,
+      401,
+      "Access Token não informado. Envie Authorization: Bearer SEU_ACCESS_TOKEN."
+    );
 
-/*
- * Inicia uma nova conexão.
- *
- * Cada vez que o usuário clicar em "Adicionar conta",
- * uma nova autorização será iniciada.
- */
-app.get('/oauth/authorize', (req, res) => {
-  try {
-    if (!ML_CLIENT_ID || !ML_CLIENT_SECRET) {
-      return res.status(500).send(`
-        <h1>Configuração incompleta</h1>
-        <p>ML_CLIENT_ID ou ML_CLIENT_SECRET não configurado.</p>
-        <p>Configure essas variáveis no Render.</p>
-      `);
-    }
+  }
 
-    /*
-     * Recupera sessão existente.
-     * Se não existir, cria uma.
-     */
-    let sessionId = getSessionId(req);
 
-    if (!sessionId || !sessions.has(sessionId)) {
-      sessionId = createSession();
-    }
+  req.mlToken =
+    auth.token;
 
-    const state = randomId(32);
+  req.authSource =
+    auth.source;
 
-    oauthStates.set(state, {
-      state,
-      sessionId,
-      createdAt: now()
+  req.mlSessionId =
+    auth.sessionId || null;
+
+
+  next();
+
+}
+
+
+// ============================================================
+// COOKIES
+// ============================================================
+
+function parseCookies(
+  header
+) {
+
+  const result = {};
+
+  if (!header) {
+    return result;
+  }
+
+  header
+    .split(";")
+    .forEach(
+      part => {
+
+        const index =
+          part.indexOf("=");
+
+        if (index === -1) {
+          return;
+        }
+
+        const key =
+          part
+            .slice(0, index)
+            .trim();
+
+        const value =
+          part
+            .slice(index + 1)
+            .trim();
+
+        result[key] =
+          decodeURIComponent(value);
+
+      }
+    );
+
+  return result;
+
+}
+
+
+// ============================================================
+// HEALTH CHECK
+// ============================================================
+
+app.get(
+  "/",
+  (req, res) => {
+
+    res.json({
+
+      ok: true,
+
+      nome:
+        "ML Hub Pro API",
+
+      status:
+        "online",
+
+      timestamp:
+        new Date().toISOString()
+
     });
 
-    const params = new URLSearchParams();
+  }
+);
 
-    params.set('response_type', 'code');
-    params.set('client_id', ML_CLIENT_ID);
-    params.set('redirect_uri', ML_REDIRECT_URI);
-    params.set('state', state);
 
-    /*
-     * Solicitamos acesso offline para permitir renovação
-     * através do refresh_token.
-     */
-    params.set('scope', 'offline_access read write');
+app.get(
+  "/health",
+  (req, res) => {
+
+    res.json({
+
+      ok: true,
+
+      status:
+        "online"
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// API /ME
+// ============================================================
+
+app.get(
+  "/api/me",
+  requireToken,
+  async (req, res) => {
+
+    try {
+
+      const data =
+        await mlFetch(
+          "/users/me",
+          req.mlToken
+        );
+
+
+      return res.json({
+
+        id:
+          data?.id || null,
+
+        user_id:
+          data?.id || null,
+
+        nickname:
+          data?.nickname || "",
+
+        first_name:
+          data?.first_name || "",
+
+        last_name:
+          data?.last_name || "",
+
+        country_id:
+          data?.country_id || "",
+
+        site_id:
+          data?.site_id || "",
+
+        seller_reputation:
+          data?.seller_reputation || null,
+
+        source:
+          req.authSource
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Erro /api/me:",
+        error
+      );
+
+
+      return jsonError(
+        res,
+        error.status === 401
+          ? 401
+          : 502,
+        error.message ||
+          "Não foi possível validar o Access Token.",
+        {
+          mercado_livre:
+            error.data || null
+        }
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// OAUTH - AUTORIZAR
+// ============================================================
+
+app.get(
+  "/oauth/authorize",
+  (req, res) => {
+
+    if (
+      !ML_CLIENT_ID ||
+      !ML_REDIRECT_URI
+    ) {
+
+      return jsonError(
+        res,
+        500,
+        "OAuth não configurado no servidor. Configure ML_CLIENT_ID e ML_REDIRECT_URI no Render."
+      );
+
+    }
+
+
+    const state =
+      crypto
+        .randomBytes(24)
+        .toString("hex");
+
+
+    oauthStates.set(
+      state,
+      {
+        createdAt:
+          Date.now()
+      }
+    );
+
+
+    // Limpa states antigos
+    limparOAuthStates();
+
+
+    const params =
+      new URLSearchParams({
+
+        response_type:
+          "code",
+
+        client_id:
+          ML_CLIENT_ID,
+
+        redirect_uri:
+          ML_REDIRECT_URI,
+
+        state
+
+      });
+
 
     const url =
       `${ML_AUTH}/authorization?${params.toString()}`;
 
-    /*
-     * O sessionId será entregue ao frontend depois do callback.
-     * Não enviamos Access Token para o navegador.
-     */
-
-    return res.redirect(url);
-  } catch (error) {
-    console.error('Erro /oauth/authorize:', error);
-
-    return res.status(500).send(`
-      <h1>Erro ao iniciar conexão</h1>
-      <pre>${escapeHtml(safeError(error))}</pre>
-    `);
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| CALLBACK OAUTH
-|--------------------------------------------------------------------------
-*/
-
-app.get('/oauth/callback', async (req, res) => {
-  const {
-    code,
-    state,
-    error,
-    error_description
-  } = req.query;
-
-  try {
-    if (error) {
-      return res.status(400).send(`
-        <!doctype html>
-        <html lang="pt-BR">
-        <head>
-          <meta charset="UTF-8">
-          <title>Erro Mercado Livre</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              padding: 40px;
-              background: #f5f5f5;
-            }
-            .box {
-              max-width: 700px;
-              margin: auto;
-              background: white;
-              padding: 30px;
-              border-radius: 14px;
-              box-shadow: 0 5px 30px rgba(0,0,0,.08);
-            }
-            .error {
-              color: #b00020;
-              font-weight: bold;
-            }
-            button {
-              border: 0;
-              padding: 12px 18px;
-              border-radius: 8px;
-              cursor: pointer;
-              background: #ffe600;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="box">
-            <h1>Não foi possível conectar a conta</h1>
-
-            <p class="error">
-              ${escapeHtml(error || 'erro_desconhecido')}
-            </p>
-
-            <p>
-              ${escapeHtml(
-                error_description ||
-                'O Mercado Livre recusou a autorização.'
-              )}
-            </p>
-
-            <p>
-              Verifique principalmente o Redirect URI cadastrado
-              no aplicativo do Mercado Livre.
-            </p>
-
-            <button onclick="history.back()">
-              Voltar
-            </button>
-          </div>
-        </body>
-        </html>
-      `);
-    }
-
-    if (!state) {
-      return res.status(400).send('State OAuth ausente.');
-    }
-
-    const oauth = oauthStates.get(String(state));
-
-    if (!oauth) {
-      return res.status(400).send(`
-        <h1>OAuth inválido</h1>
-        <p>O state expirou ou já foi utilizado.</p>
-      `);
-    }
-
-    /*
-     * State é de uso único.
-     */
-    oauthStates.delete(String(state));
-
-    /*
-     * State válido por apenas 10 minutos.
-     */
-    if (now() - oauth.createdAt > 10 * 60 * 1000) {
-      return res.status(400).send(`
-        <h1>OAuth expirado</h1>
-        <p>Inicie a conexão novamente.</p>
-      `);
-    }
-
-    if (!code) {
-      return res.status(400).send(`
-        <h1>Authorization code não recebido</h1>
-      `);
-    }
-
-    const session = sessions.get(oauth.sessionId);
-
-    if (!session) {
-      return res.status(400).send(`
-        <h1>Sessão expirada</h1>
-        <p>Inicie a conexão novamente.</p>
-      `);
-    }
-
-    /*
-     * Troca CODE por Access Token + Refresh Token.
-     */
-    const tokenData = await exchangeAuthorizationCode(
-      String(code)
-    );
-
-    if (!tokenData.access_token) {
-      throw new Error(
-        'O Mercado Livre não retornou access_token.'
-      );
-    }
-
-    /*
-     * Descobre o seller autorizado.
-     */
-    const meResponse = await fetch(
-      `${ML_API}/users/me`,
-      {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization:
-            `Bearer ${tokenData.access_token}`
-        }
-      }
-    );
-
-    const me = await meResponse.json().catch(() => ({}));
-
-    if (!meResponse.ok) {
-      throw new Error(
-        me.message ||
-        me.error ||
-        `Não foi possível consultar /users/me: HTTP ${meResponse.status}`
-      );
-    }
-
-    const sellerId = String(
-      tokenData.user_id ||
-      me.id
-    );
-
-    /*
-     * Se essa conta já foi autorizada anteriormente,
-     * atualizamos os tokens.
-     *
-     * Caso seja uma conta nova, criamos outra.
-     */
-    let existingAccount = null;
-
-    for (const account of accounts.values()) {
-      if (
-        String(account.seller_id) === sellerId
-      ) {
-        existingAccount = account;
-        break;
-      }
-    }
-
-    const account =
-      existingAccount || {
-        id: `acc_${randomId(16)}`,
-        connectedAt: new Date().toISOString(),
-        createdAt: now()
-      };
-
-    account.seller_id = sellerId;
-    account.nickname = me.nickname || '';
-    account.first_name = me.first_name || '';
-    account.last_name = me.last_name || '';
-    account.email = me.email || '';
-    account.country_id = me.country_id || '';
-    account.site_id = me.site_id || ML_SITE;
-
-    account.access_token = tokenData.access_token;
-
-    if (tokenData.refresh_token) {
-      account.refresh_token =
-        tokenData.refresh_token;
-    }
-
-    account.expiresAt =
-      now() +
-      ((Number(tokenData.expires_in) || 21600) * 1000);
-
-    account.invalid = false;
-    account.active = true;
-
-    accounts.set(account.id, account);
-
-    /*
-     * Coloca a conta na sessão caso ainda não esteja.
-     */
-    if (!session.accountIds.includes(account.id)) {
-      session.accountIds.push(account.id);
-    }
-
-    /*
-     * Essa passa a ser a conta ativa.
-     */
-    session.activeAccountId = account.id;
-
-    session.lastAccess = now();
-
-    /*
-     * Em vez de colocar tokens na URL,
-     * enviamos somente um identificador de sessão.
-     */
-    const params = new URLSearchParams();
-
-    params.set('ml_session', oauth.sessionId);
-    params.set('connected', '1');
-    params.set('account', account.id);
 
     return res.redirect(
-      `${FRONTEND_URL}/?${params.toString()}`
-    );
-  } catch (error) {
-    console.error(
-      'Erro no OAuth callback:',
-      error
+      url
     );
 
-    const status =
-      error.status >= 400 &&
-      error.status < 600
-        ? error.status
-        : 500;
-
-    const apiError =
-      error.data?.error ||
-      error.data?.message ||
-      '';
-
-    const description =
-      error.data?.error_description ||
-      safeError(error);
-
-    return res.status(status).send(`
-      <!doctype html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <title>Erro OAuth Mercado Livre</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 30px;
-          }
-
-          .box {
-            max-width: 800px;
-            margin: auto;
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 5px 30px rgba(0,0,0,.08);
-          }
-
-          .danger {
-            color: #b00020;
-          }
-
-          code {
-            background: #eee;
-            padding: 3px 6px;
-            border-radius: 5px;
-          }
-        </style>
-      </head>
-
-      <body>
-        <div class="box">
-
-          <h1>Erro ao conectar Mercado Livre</h1>
-
-          <p>
-            <strong>HTTP:</strong>
-            ${status}
-          </p>
-
-          ${
-            apiError
-              ? `
-                <p>
-                  <strong>Erro:</strong>
-                  <span class="danger">
-                    ${escapeHtml(apiError)}
-                  </span>
-                </p>
-              `
-              : ''
-          }
-
-          <p>
-            <strong>Mensagem:</strong>
-            ${escapeHtml(description)}
-          </p>
-
-          <hr>
-
-          <p>
-            Redirect URI usado:
-          </p>
-
-          <code>
-            ${escapeHtml(ML_REDIRECT_URI)}
-          </code>
-
-          <p style="margin-top:20px">
-            Confira se esse endereço é exatamente igual ao
-            Redirect URI cadastrado no aplicativo Mercado Livre.
-          </p>
-
-          <button
-            onclick="window.location.href='${escapeJs(
-              FRONTEND_URL
-            )}'"
-          >
-            Voltar para o ML Hub Pro
-          </button>
-
-        </div>
-      </body>
-      </html>
-    `);
   }
-});
+);
 
-/*
-|--------------------------------------------------------------------------
-| SESSÃO / CONTAS
-|--------------------------------------------------------------------------
-*/
 
-app.get('/api/auth/status', (req, res) => {
-  const session = getSession(req);
+// ============================================================
+// OAUTH - CALLBACK
+// ============================================================
 
-  if (!session) {
+app.get(
+  "/oauth/callback",
+  async (req, res) => {
+
+    const {
+      code,
+      state,
+      error,
+      error_description
+    } = req.query;
+
+
+    if (error) {
+
+      return res.status(400).send(
+        `
+          <html>
+            <body style="font-family:Arial;padding:40px;">
+              <h2>Erro na autorização</h2>
+              <p>${escapeHtmlServer(
+                error_description ||
+                error
+              )}</p>
+              <a href="${FRONTEND_URL}">
+                Voltar para o site
+              </a>
+            </body>
+          </html>
+        `
+      );
+
+    }
+
+
+    if (
+      !code ||
+      !state
+    ) {
+
+      return res.status(400).send(
+        `
+          <html>
+            <body style="font-family:Arial;padding:40px;">
+              <h2>Callback OAuth inválido</h2>
+              <a href="${FRONTEND_URL}">
+                Voltar para o site
+              </a>
+            </body>
+          </html>
+        `
+      );
+
+    }
+
+
+    const stateData =
+      oauthStates.get(
+        state
+      );
+
+
+    if (!stateData) {
+
+      return res.status(400).send(
+        `
+          <html>
+            <body style="font-family:Arial;padding:40px;">
+              <h2>Estado OAuth inválido ou expirado.</h2>
+              <a href="${FRONTEND_URL}">
+                Voltar para o site
+              </a>
+            </body>
+          </html>
+        `
+      );
+
+    }
+
+
+    oauthStates.delete(
+      state
+    );
+
+
+    try {
+
+      const body =
+        new URLSearchParams({
+
+          grant_type:
+            "authorization_code",
+
+          client_id:
+            ML_CLIENT_ID,
+
+          client_secret:
+            ML_CLIENT_SECRET,
+
+          code:
+            code,
+
+          redirect_uri:
+            ML_REDIRECT_URI
+
+        });
+
+
+      const response =
+        await fetch(
+          `${ML_API}/oauth/token`,
+          {
+
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/x-www-form-urlencoded",
+
+              "Accept":
+                "application/json"
+            },
+
+            body:
+              body.toString()
+
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        console.error(
+          "Erro ao trocar code por token:",
+          data
+        );
+
+        return res.status(502).send(
+          `
+            <html>
+              <body style="font-family:Arial;padding:40px;">
+                <h2>Mercado Livre recusou a autorização.</h2>
+                <p>${escapeHtmlServer(
+                  data?.message ||
+                  data?.error ||
+                  "Erro desconhecido"
+                )}</p>
+                <a href="${FRONTEND_URL}">
+                  Voltar para o site
+                </a>
+              </body>
+            </html>
+          `
+        );
+
+      }
+
+
+      const sessionId =
+        crypto
+          .randomBytes(32)
+          .toString("hex");
+
+
+      sessions.set(
+        sessionId,
+        {
+
+          access_token:
+            data.access_token,
+
+          refresh_token:
+            data.refresh_token || null,
+
+          expires_in:
+            data.expires_in || null,
+
+          createdAt:
+            Date.now()
+
+        }
+      );
+
+
+      return res
+        .status(302)
+        .setHeader(
+          "Set-Cookie",
+          `ml_session=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=86400`
+        )
+        .setHeader(
+          "Location",
+          FRONTEND_URL
+        )
+        .end();
+
+
+    } catch (error) {
+
+      console.error(
+        "Erro no OAuth callback:",
+        error
+      );
+
+      return res.status(500).send(
+        `
+          <html>
+            <body style="font-family:Arial;padding:40px;">
+              <h2>Erro interno no OAuth.</h2>
+              <a href="${FRONTEND_URL}">
+                Voltar para o site
+              </a>
+            </body>
+          </html>
+        `
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// OAUTH STATUS
+// ============================================================
+
+app.get(
+  "/api/auth/status",
+  (req, res) => {
+
+    const auth =
+      getSessionToken(req);
+
+
     return res.json({
-      conectado: false,
-      contas: [],
-      conta_ativa: null
+
+      conectado:
+        Boolean(auth?.token),
+
+      origem:
+        auth?.source || null
+
     });
+
   }
+);
 
-  const validAccounts = session.accountIds
-    .map(id => accounts.get(id))
-    .filter(Boolean);
 
-  return res.json({
-    conectado: validAccounts.length > 0,
-    session_id: getSessionId(req),
-    contas: validAccounts.map(accountPublic),
-    conta_ativa: accountPublic(
-      accounts.get(session.activeAccountId)
-    )
-  });
-});
+// ============================================================
+// OAUTH LOGOUT
+// ============================================================
 
-/*
- * Cria uma sessão sem precisar conectar uma conta.
- */
-app.post('/api/session', (req, res) => {
-  const sessionId = createSession();
+app.post(
+  "/oauth/logout",
+  (req, res) => {
 
-  res.json({
-    ok: true,
-    session_id: sessionId
-  });
-});
+    const cookies =
+      parseCookies(
+        req.headers.cookie || ""
+      );
 
-/*
- * Lista as contas conectadas.
- */
-app.get('/api/contas', (req, res) => {
-  const session = requireSession(req, res);
+    const sessionId =
+      cookies.ml_session;
 
-  if (!session) return;
 
-  const contas = session.accountIds
-    .map(id => accounts.get(id))
-    .filter(Boolean)
-    .map(accountPublic);
+    if (sessionId) {
 
-  res.json({
-    contas,
-    conta_ativa: accountPublic(
-      accounts.get(session.activeAccountId)
-    )
-  });
-});
+      sessions.delete(
+        sessionId
+      );
 
-/*
- * Troca a conta ativa.
- */
-app.post('/api/contas/selecionar', (req, res) => {
-  const session = requireSession(req, res);
+    }
 
-  if (!session) return;
 
-  const accountId = String(
-    req.body?.account_id || ''
-  );
-
-  if (!accountId) {
-    return res.status(400).json({
-      erro: 'Informe account_id.'
-    });
-  }
-
-  if (!session.accountIds.includes(accountId)) {
-    return res.status(403).json({
-      erro: 'Conta não pertence à sessão.'
-    });
-  }
-
-  const account = accounts.get(accountId);
-
-  if (!account) {
-    return res.status(404).json({
-      erro: 'Conta não encontrada.'
-    });
-  }
-
-  session.activeAccountId = accountId;
-
-  res.json({
-    ok: true,
-    conta_ativa: accountPublic(account)
-  });
-});
-
-/*
- * Remove uma conta somente da sessão atual.
- */
-app.delete('/api/contas/:accountId', (req, res) => {
-  const session = requireSession(req, res);
-
-  if (!session) return;
-
-  const accountId = req.params.accountId;
-
-  const index =
-    session.accountIds.indexOf(accountId);
-
-  if (index === -1) {
-    return res.status(404).json({
-      erro: 'Conta não encontrada na sessão.'
-    });
-  }
-
-  session.accountIds.splice(index, 1);
-
-  if (session.activeAccountId === accountId) {
-    session.activeAccountId =
-      session.accountIds[0] || null;
-  }
-
-  res.json({
-    ok: true,
-    contas: session.accountIds
-      .map(id => accounts.get(id))
-      .filter(Boolean)
-      .map(accountPublic)
-  });
-});
-
-/*
- * Logout da sessão inteira.
- */
-app.post('/api/auth/logout', (req, res) => {
-  const sessionId = getSessionId(req);
-
-  if (sessionId) {
-    sessions.delete(sessionId);
-  }
-
-  res.json({
-    ok: true
-  });
-});
-
-/*
-|--------------------------------------------------------------------------
-| /api/me
-|--------------------------------------------------------------------------
-*/
-
-app.get('/api/me', async (req, res) => {
-  try {
-    const result = getAccountForRequest(req, res);
-
-    if (!result) return;
-
-    const { account } = result;
-
-    const me = await mlRequest(
-      account,
-      '/users/me'
+    res.setHeader(
+      "Set-Cookie",
+      "ml_session=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0"
     );
 
-    res.json({
-      ok: true,
-      conta: accountPublic(account),
-      mercado_livre: me
-    });
-  } catch (error) {
-    console.error('/api/me:', error);
 
-    res.status(
-      error.status || 500
-    ).json({
-      erro: safeError(error),
-      detalhe: error.data || null
+    return res.json({
+      ok: true
     });
+
   }
-});
+);
 
-/*
-|--------------------------------------------------------------------------
-| ANÚNCIOS
-|--------------------------------------------------------------------------
-*/
 
-async function getAllActiveItemIds(account) {
+// ============================================================
+// LISTAR IDs DOS ANÚNCIOS
+// ============================================================
+
+async function buscarTodosIds(
+  token
+) {
+
   const ids = [];
 
-  const limit = 100;
+  let offset =
+    0;
 
-  let offset = 0;
+  const limit =
+    50;
+
 
   while (true) {
-    const data = await mlRequest(
-      account,
-      `/users/${account.seller_id}/items/search?status=active&limit=${limit}&offset=${offset}`
-    );
+
+    const data =
+      await mlFetch(
+        `/users/me/items/search?status=active&offset=${offset}&limit=${limit}`,
+        token
+      );
+
 
     const results =
-      Array.isArray(data?.results)
+      Array.isArray(
+        data?.results
+      )
         ? data.results
         : [];
 
-    ids.push(...results);
+
+    ids.push(
+      ...results
+    );
+
+
+    const total =
+      Number(
+        data?.paging?.total || 0
+      );
+
+
+    offset +=
+      results.length;
+
 
     if (
-      results.length < limit ||
-      !data?.paging ||
-      offset + limit >= data.paging.total
+      results.length === 0 ||
+      offset >= total
     ) {
+
       break;
+
     }
 
-    offset += limit;
 
-    if (offset >= 1000) {
+    // segurança contra loop
+    if (
+      results.length <
+      limit
+    ) {
+
       break;
+
     }
+
   }
 
-  return [...new Set(ids)];
+
+  return ids;
+
 }
 
-async function getItemDetails(account, ids) {
-  if (!ids.length) return [];
 
-  const all = [];
+// ============================================================
+// BUSCAR DETALHES DOS ANÚNCIOS
+// ============================================================
 
-  const batchSize = 20;
+async function buscarDetalhesAnuncios(
+  ids,
+  token
+) {
+
+  if (!ids.length) {
+    return [];
+  }
+
+
+  const resultado = [];
+
+
+  // Mercado Livre permite buscar vários IDs
+  // em uma única consulta.
+  // Limitamos o tamanho do lote.
+
+  const tamanhoLote =
+    20;
+
 
   for (
     let i = 0;
     i < ids.length;
-    i += batchSize
+    i += tamanhoLote
   ) {
-    const batch =
-      ids.slice(i, i + batchSize);
 
-    const query = batch.join(',');
-
-    try {
-      const data = await mlRequest(
-        account,
-        `/items?ids=${encodeURIComponent(query)}`
+    const lote =
+      ids.slice(
+        i,
+        i + tamanhoLote
       );
 
-      if (Array.isArray(data)) {
-        for (const entry of data) {
-          if (entry?.body) {
-            all.push(entry.body);
-          }
+
+    const endpoint =
+      `/items?ids=${encodeURIComponent(
+        lote.join(",")
+      )}`;
+
+
+    const data =
+      await mlFetch(
+        endpoint,
+        token
+      );
+
+
+    if (
+      Array.isArray(data)
+    ) {
+
+      for (
+        const entry of data
+      ) {
+
+        if (
+          entry?.code >= 200 &&
+          entry?.code < 300 &&
+          entry?.body
+        ) {
+
+          resultado.push(
+            entry.body
+          );
+
         }
+
       }
-    } catch (error) {
-      console.error(
-        'Erro ao consultar lote de anúncios:',
-        error
-      );
+
     }
+
+
   }
 
-  return all;
+
+  return resultado;
+
 }
 
-function normalizeItem(item) {
-  const shipping =
-    item.shipping || {};
+
+// ============================================================
+// CALCULAR TAXA / FRETE / RECEBIMENTO
+// ============================================================
+
+function calcularDadosFinanceiros(
+  item
+) {
 
   const price =
-    Number(item.price) || 0;
+    Number(
+      item?.price || 0
+    );
 
-  const available =
-    Number(item.available_quantity) || 0;
-
-  let shippingCost = 0;
-
-  if (
-    shipping.cost !== undefined &&
-    shipping.cost !== null
-  ) {
-    shippingCost =
-      Number(shipping.cost) || 0;
-  }
-
-  const freeShipping =
-    shipping.free_shipping === true;
 
   const saleFee =
     Number(
-      item.sale_fee ||
-      item.sale_fees ||
+      item?.sale_fee_amount ||
+      item?.sale_fee ||
       0
-    ) || 0;
+    );
+
+
+  const shippingCost =
+    Number(
+      item?.shipping_cost ||
+      0
+    );
+
 
   const netReceived =
     price -
     saleFee -
     shippingCost;
 
+
   return {
-    id: item.id,
-    title: item.title || '',
-    sku:
-      item.seller_custom_field ||
-      item.seller_sku ||
-      '',
+
     price,
-    sale_fee: saleFee,
-    shipping_cost: shippingCost,
-    net_received: netReceived,
-    available_quantity: available,
-    status: item.status || '',
-    listing_type_id:
-      item.listing_type_id || '',
-    thumbnail:
-      item.thumbnail || '',
-    permalink:
-      item.permalink || '',
-    free_shipping: freeShipping,
-    category_id:
-      item.category_id || '',
-    condition:
-      item.condition || '',
-    sold_quantity:
-      Number(item.sold_quantity) || 0
+
+    sale_fee:
+      saleFee,
+
+    shipping_cost:
+      shippingCost,
+
+    net_received:
+      netReceived
+
   };
+
 }
 
-app.get('/api/anuncios', async (req, res) => {
-  try {
-    const result = getAccountForRequest(req, res);
 
-    if (!result) return;
+// ============================================================
+// TRANSFORMAR ITEM
+// ============================================================
 
-    const { account } = result;
+function transformarAnuncio(
+  item
+) {
 
-    const ids =
-      await getAllActiveItemIds(account);
+  const financeiro =
+    calcularDadosFinanceiros(
+      item
+    );
 
-    const items =
-      await getItemDetails(account, ids);
 
-    res.json({
-      ok: true,
-      conta: accountPublic(account),
-      total: items.length,
-      itens: items.map(normalizeItem)
-    });
-  } catch (error) {
-    console.error('/api/anuncios:', error);
+  const shipping =
+    item?.shipping || {};
 
-    res.status(
-      error.status || 500
-    ).json({
-      erro: safeError(error),
-      detalhe: error.data || null
-    });
+
+  const freeShipping =
+    Boolean(
+      shipping?.free_shipping ||
+      shipping?.free_shipping_mode === "mandatory"
+    );
+
+
+  return {
+
+    id:
+      item?.id || "",
+
+    title:
+      item?.title || "",
+
+    sku:
+      obterSKU(item),
+
+    price:
+      financeiro.price,
+
+    sale_fee:
+      financeiro.sale_fee,
+
+    shipping_cost:
+      financeiro.shipping_cost,
+
+    net_received:
+      financeiro.net_received,
+
+    available_quantity:
+      Number(
+        item?.available_quantity || 0
+      ),
+
+    status:
+      item?.status || "",
+
+    listing_type_id:
+      item?.listing_type_id || "",
+
+    thumbnail:
+      item?.thumbnail || "",
+
+    permalink:
+      item?.permalink || "",
+
+    free_shipping:
+      freeShipping
+
+  };
+
+}
+
+
+function obterSKU(
+  item
+) {
+
+  if (
+    item?.seller_custom_field
+  ) {
+
+    return String(
+      item.seller_custom_field
+    );
+
   }
-});
 
-/*
-|--------------------------------------------------------------------------
-| SINCRONIZAR PREÇOS
-|--------------------------------------------------------------------------
-*/
 
-app.post(
-  '/api/sincronizar-precos',
+  if (
+    Array.isArray(
+      item?.attributes
+    )
+  ) {
+
+    const skuAttribute =
+      item.attributes.find(
+        attr =>
+          String(
+            attr?.id || ""
+          ).toUpperCase() ===
+          "SELLER_SKU"
+      );
+
+
+    if (
+      skuAttribute?.value_name
+    ) {
+
+      return String(
+        skuAttribute.value_name
+      );
+
+    }
+
+  }
+
+
+  return "";
+
+}
+
+
+// ============================================================
+// /API/ANUNCIOS
+// ============================================================
+
+app.get(
+  "/api/anuncios",
+  requireToken,
   async (req, res) => {
+
     try {
-      const result =
-        getAccountForRequest(req, res);
-
-      if (!result) return;
-
-      const { account } = result;
-
-      const precos = req.body?.precos || {};
 
       const ids =
-        Object.keys(precos);
+        await buscarTodosIds(
+          req.mlToken
+        );
 
-      const atualizados = {};
 
-      for (const id of ids) {
-        try {
-          const item =
-            await mlRequest(
-              account,
-              `/items/${encodeURIComponent(id)}`
-            );
+      const detalhes =
+        await buscarDetalhesAnuncios(
+          ids,
+          req.mlToken
+        );
 
-          atualizados[id] =
-            Number(item.price) || 0;
-        } catch (error) {
-          atualizados[id] = null;
-        }
-      }
 
-      res.json({
-        ok: true,
-        precos: atualizados
+      const itens =
+        detalhes.map(
+          transformarAnuncio
+        );
+
+
+      return res.json({
+
+        itens,
+
+        total:
+          itens.length
+
       });
+
+
     } catch (error) {
+
       console.error(
-        '/api/sincronizar-precos:',
+        "Erro /api/anuncios:",
         error
       );
 
-      res.status(
-        error.status || 500
-      ).json({
-        erro: safeError(error)
-      });
+
+      const status =
+        error.status === 401
+          ? 401
+          : 502;
+
+
+      return jsonError(
+        res,
+        status,
+        error.message ||
+          "Erro ao buscar anúncios no Mercado Livre.",
+        {
+          mercado_livre:
+            error.data || null
+        }
+      );
+
     }
+
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| SINCRONIZAR FRETES
-|--------------------------------------------------------------------------
-*/
+
+// ============================================================
+// ATUALIZAR PREÇOS
+// ============================================================
 
 app.post(
-  '/api/sincronizar-fretes',
+  "/api/atualizar-precos",
+  requireToken,
   async (req, res) => {
+
     try {
-      const result =
-        getAccountForRequest(req, res);
 
-      if (!result) return;
+      const itens =
+        Array.isArray(
+          req.body?.itens
+        )
+          ? req.body.itens
+          : [];
 
-      const { account } = result;
+
+      if (!itens.length) {
+
+        return jsonError(
+          res,
+          400,
+          "Nenhum item recebido."
+        );
+
+      }
+
+
+      const resultados = [];
+
+
+      for (
+        const item of itens
+      ) {
+
+        const id =
+          String(
+            item?.id || ""
+          ).trim();
+
+
+        const price =
+          Number(
+            item?.price
+          );
+
+
+        if (!id) {
+
+          resultados.push({
+
+            id: null,
+
+            ok: false,
+
+            erro:
+              "ID do anúncio não informado."
+
+          });
+
+          continue;
+
+        }
+
+
+        if (
+          !Number.isFinite(price) ||
+          price <= 0
+        ) {
+
+          resultados.push({
+
+            id,
+
+            ok: false,
+
+            erro:
+              "Preço inválido."
+
+          });
+
+          continue;
+
+        }
+
+
+        try {
+
+          const updated =
+            await mlFetch(
+              `/items/${encodeURIComponent(id)}`,
+              req.mlToken,
+              {
+
+                method:
+                  "PUT",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body:
+                  JSON.stringify({
+                    price
+                  })
+
+              }
+            );
+
+
+          resultados.push({
+
+            id,
+
+            ok: true,
+
+            price:
+              updated?.price ??
+              price
+
+          });
+
+
+        } catch (error) {
+
+          console.error(
+            `Erro atualizando ${id}:`,
+            error
+          );
+
+
+          resultados.push({
+
+            id,
+
+            ok: false,
+
+            erro:
+              error.message ||
+              "Erro ao atualizar anúncio.",
+
+            mercado_livre:
+              error.data || null
+
+          });
+
+        }
+
+      }
+
+
+      const erros =
+        resultados.filter(
+          item =>
+            !item.ok
+        );
+
+
+      if (erros.length) {
+
+        return res.status(207).json({
+
+          ok:
+            false,
+
+          total:
+            resultados.length,
+
+          atualizados:
+            resultados.length -
+            erros.length,
+
+          erros:
+
+            erros,
+
+          resultados
+
+        });
+
+      }
+
+
+      return res.json({
+
+        ok:
+          true,
+
+        total:
+          resultados.length,
+
+        atualizados:
+          resultados.length,
+
+        resultados
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Erro /api/atualizar-precos:",
+        error
+      );
+
+
+      return jsonError(
+        res,
+        500,
+        error.message ||
+          "Erro ao atualizar preços."
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// SINCRONIZAR PREÇOS
+// ============================================================
+
+app.post(
+  "/api/sincronizar-precos",
+  requireToken,
+  async (req, res) => {
+
+    try {
+
+      const precos =
+        req.body?.precos || {};
+
+
+      const ids =
+        Object.keys(
+          precos
+        );
+
+
+      if (!ids.length) {
+
+        return jsonError(
+          res,
+          400,
+          "Nenhum preço recebido."
+        );
+
+      }
+
+
+      const resultados = [];
+
+
+      for (
+        const id of ids
+      ) {
+
+        const price =
+          Number(
+            precos[id]
+          );
+
+
+        if (
+          !Number.isFinite(price) ||
+          price <= 0
+        ) {
+
+          resultados.push({
+
+            id,
+
+            ok: false,
+
+            erro:
+              "Preço inválido."
+
+          });
+
+          continue;
+
+        }
+
+
+        try {
+
+          const updated =
+            await mlFetch(
+              `/items/${encodeURIComponent(id)}`,
+              req.mlToken,
+              {
+
+                method:
+                  "PUT",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body:
+                  JSON.stringify({
+                    price
+                  })
+
+              }
+            );
+
+
+          resultados.push({
+
+            id,
+
+            ok: true,
+
+            price:
+              updated?.price ??
+              price
+
+          });
+
+
+        } catch (error) {
+
+          resultados.push({
+
+            id,
+
+            ok: false,
+
+            erro:
+              error.message
+
+          });
+
+        }
+
+      }
+
+
+      const erros =
+        resultados.filter(
+          item =>
+            !item.ok
+        );
+
+
+      return res.json({
+
+        ok:
+          erros.length === 0,
+
+        total:
+          resultados.length,
+
+        atualizados:
+          resultados.length -
+          erros.length,
+
+        erros,
+
+        resultados
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Erro /api/sincronizar-precos:",
+        error
+      );
+
+
+      return jsonError(
+        res,
+        500,
+        error.message ||
+          "Erro ao sincronizar preços."
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// SINCRONIZAR FRETES
+// ============================================================
+//
+// Importante:
+// O endpoint mantém o formato esperado pelo frontend.
+// O Mercado Livre controla regras de frete de acordo com
+// anúncio, logística e configurações da conta.
+//
+// Aqui buscamos os anúncios e retornamos os dados atuais.
+// ============================================================
+
+app.post(
+  "/api/sincronizar-fretes",
+  requireToken,
+  async (req, res) => {
+
+    try {
 
       const fretes =
         req.body?.fretes || {};
 
+
       const ids =
-        Object.keys(fretes);
-
-      const resposta = {};
-
-      for (const id of ids) {
-        try {
-          const item =
-            await mlRequest(
-              account,
-              `/items/${encodeURIComponent(id)}`
-            );
-
-          const shipping =
-            item.shipping || {};
-
-          resposta[id] = {
-            custo:
-              Number(shipping.cost) || 0,
-
-            gratis:
-              shipping.free_shipping === true
-          };
-        } catch {
-          resposta[id] = {
-            custo: 0,
-            gratis: false
-          };
-        }
-      }
-
-      res.json({
-        ok: true,
-        fretes: resposta
-      });
-    } catch (error) {
-      console.error(
-        '/api/sincronizar-fretes:',
-        error
-      );
-
-      res.status(
-        error.status || 500
-      ).json({
-        erro: safeError(error)
-      });
-    }
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| ATUALIZAR PREÇOS
-|--------------------------------------------------------------------------
-*/
-
-app.post(
-  '/api/atualizar-precos',
-  async (req, res) => {
-    try {
-      const result =
-        getAccountForRequest(req, res);
-
-      if (!result) return;
-
-      const { account } = result;
-
-      const itens =
-        Array.isArray(req.body?.itens)
-          ? req.body.itens
-          : [];
-
-      if (!itens.length) {
-        return res.status(400).json({
-          erro: 'Nenhum item enviado.'
-        });
-      }
-
-      const resultados = [];
-
-      for (const item of itens) {
-        const id =
-          String(item.id || '');
-
-        const price =
-          Number(item.price);
-
-        if (!id || !Number.isFinite(price)) {
-          resultados.push({
-            id,
-            sucesso: false,
-            erro: 'ID ou preço inválido.'
-          });
-
-          continue;
-        }
-
-        try {
-          const atualizado =
-            await mlRequest(
-              account,
-              `/items/${encodeURIComponent(id)}`,
-              {
-                method: 'PUT',
-                headers: {
-                  'Content-Type':
-                    'application/json'
-                },
-                body: JSON.stringify({
-                  price
-                })
-              }
-            );
-
-          resultados.push({
-            id,
-            sucesso: true,
-            price:
-              Number(atualizado?.price) ||
-              price
-          });
-        } catch (error) {
-          resultados.push({
-            id,
-            sucesso: false,
-            erro: safeError(error),
-            detalhe: error.data || null
-          });
-        }
-      }
-
-      const falhas =
-        resultados.filter(
-          x => !x.sucesso
+        Object.keys(
+          fretes
         );
 
-      res.json({
-        ok: falhas.length === 0,
-        total: resultados.length,
-        sucesso:
-          resultados.length - falhas.length,
-        falhas: falhas.length,
-        resultados
+
+      if (!ids.length) {
+
+        return jsonError(
+          res,
+          400,
+          "Nenhum frete recebido."
+        );
+
+      }
+
+
+      const detalhes =
+        await buscarDetalhesAnuncios(
+          ids,
+          req.mlToken
+        );
+
+
+      const itens =
+        detalhes.map(
+          transformarAnuncio
+        );
+
+
+      return res.json({
+
+        ok:
+          true,
+
+        total:
+          itens.length,
+
+        itens
+
       });
+
+
     } catch (error) {
+
       console.error(
-        '/api/atualizar-precos:',
+        "Erro /api/sincronizar-fretes:",
         error
       );
 
-      res.status(
-        error.status || 500
-      ).json({
-        erro: safeError(error)
-      });
+
+      return jsonError(
+        res,
+        error.status === 401
+          ? 401
+          : 502,
+        error.message ||
+          "Erro ao sincronizar fretes.",
+        {
+          mercado_livre:
+            error.data || null
+        }
+      );
+
     }
+
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| DASHBOARD
-|--------------------------------------------------------------------------
-*/
 
-function startOfDay(date) {
-  const d = new Date(date);
+// ============================================================
+// DASHBOARD
+// ============================================================
 
-  d.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+app.get(
+  "/api/dashboard",
+  requireToken,
+  async (req, res) => {
 
-  return d;
-}
+    try {
 
-function formatDateML(date) {
-  return new Date(date)
-    .toISOString();
-}
+      // ------------------------------------------------------
+      // Período de 60 dias
+      // ------------------------------------------------------
 
-async function fetchOrdersWindow(
-  account,
-  from,
-  to
-) {
-  const orders = [];
+      const now =
+        new Date();
 
-  const limit = 50;
-
-  let offset = 0;
-
-  while (true) {
-    const url =
-      `/orders/search?seller=${encodeURIComponent(
-        account.seller_id
-      )}` +
-      `&order.status=paid` +
-      `&order.date_created.from=${encodeURIComponent(
-        formatDateML(from)
-      )}` +
-      `&order.date_created.to=${encodeURIComponent(
-        formatDateML(to)
-      )}` +
-      `&sort=date_desc` +
-      `&limit=${limit}` +
-      `&offset=${offset}`;
-
-    const data =
-      await mlRequest(
-        account,
-        url
-      );
-
-    const results =
-      Array.isArray(data?.results)
-        ? data.results
-        : [];
-
-    orders.push(...results);
-
-    const total =
-      Number(data?.paging?.total) ||
-      results.length;
-
-    offset += limit;
-
-    if (
-      results.length < limit ||
-      offset >= total
-    ) {
-      break;
-    }
-
-    /*
-     * Segurança para evitar loops.
-     */
-    if (offset > 10000) {
-      break;
-    }
-  }
-
-  return orders;
-}
-
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const result =
-      getAccountForRequest(req, res);
-
-    if (!result) return;
-
-    const { account } = result;
-
-    const dias = 60;
-
-    const end =
-      new Date();
-
-    const start =
-      new Date(
-        end.getTime() -
-        dias *
+      const from =
+        new Date(
+          now.getTime() -
+          60 *
           24 *
           60 *
           60 *
           1000
-      );
-
-    /*
-     * Divide em janelas de 15 dias.
-     */
-    const windows = [];
-
-    let cursor =
-      new Date(start);
-
-    while (cursor < end) {
-      const windowEnd =
-        new Date(
-          Math.min(
-            cursor.getTime() +
-              15 *
-                24 *
-                60 *
-                60 *
-                1000,
-            end.getTime()
-          )
         );
 
-      windows.push([
-        new Date(cursor),
-        windowEnd
-      ]);
 
-      cursor = windowEnd;
-    }
+      const fromDate =
+        formatDateML(
+          from
+        );
 
-    const allOrders = [];
 
-    for (const [from, to] of windows) {
+      const toDate =
+        formatDateML(
+          now
+        );
+
+
+      // ------------------------------------------------------
+      // Buscar anúncios para montar informações auxiliares
+      // ------------------------------------------------------
+
+      let anuncios = [];
+
+
       try {
-        const orders =
-          await fetchOrdersWindow(
-            account,
-            from,
-            to
+
+        const ids =
+          await buscarTodosIds(
+            req.mlToken
           );
 
-        allOrders.push(...orders);
+
+        const detalhes =
+          await buscarDetalhesAnuncios(
+            ids,
+            req.mlToken
+          );
+
+
+        anuncios =
+          detalhes.map(
+            transformarAnuncio
+          );
+
       } catch (error) {
-        console.error(
-          'Erro ao buscar janela de pedidos:',
-          error
+
+        console.warn(
+          "Não foi possível carregar anúncios para dashboard:",
+          error.message
         );
+
       }
-    }
 
-    /*
-     * Remove duplicados.
-     */
-    const orderMap = new Map();
 
-    for (const order of allOrders) {
-      if (order?.id) {
-        orderMap.set(
-          String(order.id),
-          order
+      // ------------------------------------------------------
+      // Buscar pedidos/vendas
+      // ------------------------------------------------------
+
+      let orders = [];
+
+
+      try {
+
+        const ordersData =
+          await buscarOrders(
+            req.mlToken,
+            fromDate,
+            toDate
+          );
+
+
+        orders =
+          ordersData.orders || [];
+
+      } catch (error) {
+
+        console.warn(
+          "Não foi possível carregar orders:",
+          error.message
         );
+
       }
-    }
 
-    const orders =
-      [...orderMap.values()]
-      .filter(
-        order =>
-          order.status === 'paid' ||
-          !order.status
-      );
 
-    let faturamento = 0;
-    let unidades = 0;
+      // ------------------------------------------------------
+      // Processar vendas
+      // ------------------------------------------------------
 
-    const products = new Map();
+      let totalVendas =
+        0;
 
-    for (const order of orders) {
-      const total =
-        Number(
-          order.total_amount
-        ) || 0;
+      let faturamento =
+        0;
 
-      faturamento += total;
+      const vendasPorDia =
+        new Map();
 
-      const orderItems =
-        Array.isArray(
-          order.order_items
-        )
-          ? order.order_items
-          : [];
+      const produtos =
+        new Map();
 
-      for (const orderItem of orderItems) {
-        const item =
-          orderItem.item || {};
 
-        const quantity =
-          Number(
-            orderItem.quantity
-          ) || 0;
+      // Inicializa 60 dias
+      for (
+        let i = 59;
+        i >= 0;
+        i--
+      ) {
 
-        const unitPrice =
-          Number(
-            orderItem.unit_price
-          ) || 0;
+        const date =
+          new Date(
+            now.getTime() -
+            i *
+            24 *
+            60 *
+            60 *
+            1000
+          );
 
-        unidades += quantity;
 
-        const id =
-          item.id ||
-          item.title ||
-          'sem-id';
+        const key =
+          formatDateML(
+            date
+          );
 
-        if (!products.has(id)) {
-          products.set(id, {
-            id,
-            title:
-              item.title ||
-              'Produto sem nome',
-            quantity: 0,
-            revenue: 0
-          });
+
+        vendasPorDia.set(
+          key,
+          0
+        );
+
+      }
+
+
+      for (
+        const order of orders
+      ) {
+
+        const status =
+          String(
+            order?.status || ""
+          );
+
+
+        if (
+          status !==
+          "paid"
+        ) {
+
+          continue;
+
         }
 
-        const product =
-          products.get(id);
 
-        product.quantity +=
+        const orderTotal =
+          Number(
+            order?.total_amount || 0
+          );
+
+
+        const quantity =
+          Array.isArray(
+            order?.order_items
+          )
+            ? order.order_items.reduce(
+                (
+                  sum,
+                  item
+                ) =>
+                  sum +
+                  Number(
+                    item?.quantity || 0
+                  ),
+                0
+              )
+            : 0;
+
+
+        totalVendas +=
           quantity;
 
-        product.revenue +=
-          quantity *
-          unitPrice;
-      }
-    }
 
-    const top10 =
-      [...products.values()]
+        faturamento +=
+          orderTotal;
+
+
+        const date =
+          getOrderDate(
+            order
+          );
+
+
+        if (
+          date &&
+          vendasPorDia.has(
+            date
+          )
+        ) {
+
+          vendasPorDia.set(
+            date,
+            vendasPorDia.get(
+              date
+            ) +
+            quantity
+          );
+
+        }
+
+
+        if (
+          Array.isArray(
+            order?.order_items
+          )
+        ) {
+
+          for (
+            const orderItem
+            of order.order_items
+          ) {
+
+            const item =
+              orderItem?.item ||
+              {};
+
+
+            const itemId =
+              String(
+                item?.id || ""
+              );
+
+
+            const title =
+              item?.title ||
+              itemId ||
+              "Produto";
+
+
+            const itemQuantity =
+              Number(
+                orderItem?.quantity || 0
+              );
+
+
+            const unitPrice =
+              Number(
+                orderItem?.unit_price || 0
+              );
+
+
+            const itemRevenue =
+              itemQuantity *
+              unitPrice;
+
+
+            const key =
+              itemId ||
+              title;
+
+
+            if (
+              !produtos.has(
+                key
+              )
+            ) {
+
+              produtos.set(
+                key,
+                {
+                  id:
+                    itemId,
+
+                  title:
+                    title,
+
+                  quantity:
+                    0,
+
+                  revenue:
+                    0
+                }
+              );
+
+            }
+
+
+            const product =
+              produtos.get(
+                key
+              );
+
+
+            product.quantity +=
+              itemQuantity;
+
+            product.revenue +=
+              itemRevenue;
+
+          }
+
+        }
+
+      }
+
+
+      const ticketMedio =
+        totalVendas > 0
+          ? faturamento /
+            totalVendas
+          : 0;
+
+
+      const top10 =
+        Array.from(
+          produtos.values()
+        )
         .sort(
           (a, b) =>
             b.quantity -
             a.quantity
         )
-        .slice(0, 10);
-
-    /*
-     * Série dos últimos 60 dias.
-     */
-    const seriesMap =
-      new Map();
-
-    for (let i = 0; i < dias; i++) {
-      const date =
-        new Date(
-          start.getTime() +
-            i *
-              24 *
-              60 *
-              60 *
-              1000
+        .slice(
+          0,
+          10
         );
 
-      const key =
-        date
-          .toISOString()
-          .slice(0, 10);
 
-      seriesMap.set(
-        key,
-        {
-          data: key,
-          vendas: 0,
-          faturamento: 0
-        }
-      );
-    }
+      const series60Dias =
+        Array.from(
+          vendasPorDia.entries()
+        )
+        .map(
+          ([date, value]) => ({
 
-    for (const order of orders) {
-      const created =
-        order.date_created ||
-        order.date_closed;
+            date,
 
-      if (!created) continue;
+            vendas:
+              value,
 
-      const key =
-        new Date(created)
-          .toISOString()
-          .slice(0, 10);
+            value
 
-      if (!seriesMap.has(key)) {
-        continue;
-      }
-
-      const entry =
-        seriesMap.get(key);
-
-      entry.vendas += 1;
-
-      entry.faturamento +=
-        Number(
-          order.total_amount
-        ) || 0;
-    }
-
-    const series60 =
-      [...seriesMap.values()];
-
-    const ticketMedio =
-      orders.length > 0
-        ? faturamento /
-          orders.length
-        : 0;
-
-    /*
-     * Dados de anúncios.
-     */
-    let anuncios = [];
-
-    try {
-      const ids =
-        await getAllActiveItemIds(
-          account
+          })
         );
 
-      const details =
-        await getItemDetails(
-          account,
-          ids
-        );
 
-      anuncios =
-        details.map(
-          normalizeItem
-        );
+      return res.json({
+
+        vendas_60_dias:
+          totalVendas,
+
+        total_vendas_60_dias:
+          totalVendas,
+
+        faturamento_60_dias:
+          faturamento,
+
+        ticket_medio:
+          ticketMedio,
+
+        top_10:
+          top10,
+
+        series_60_dias:
+          series60Dias,
+
+        anuncios:
+          anuncios.length
+
+      });
+
+
     } catch (error) {
+
       console.error(
-        'Erro ao carregar anúncios do dashboard:',
+        "Erro /api/dashboard:",
         error
       );
+
+
+      return jsonError(
+        res,
+        error.status === 401
+          ? 401
+          : 502,
+        error.message ||
+          "Erro ao carregar dashboard.",
+        {
+          mercado_livre:
+            error.data || null
+        }
+      );
+
     }
 
-    const estoque =
-      anuncios.reduce(
-        (sum, item) =>
-          sum +
-          Number(
-            item.available_quantity
-          ),
-        0
+  }
+);
+
+
+// ============================================================
+// BUSCAR ORDERS
+// ============================================================
+
+async function buscarOrders(
+  token,
+  fromDate,
+  toDate
+) {
+
+  const orders = [];
+
+  let offset =
+    0;
+
+  const limit =
+    50;
+
+
+  while (true) {
+
+    const endpoint =
+      `/orders/search?seller=${encodeURIComponent(
+        "me"
+      )}` +
+      `&order.date_created.from=${encodeURIComponent(
+        fromDate + "T00:00:00.000-03:00"
+      )}` +
+      `&order.date_created.to=${encodeURIComponent(
+        toDate + "T23:59:59.999-03:00"
+      )}` +
+      `&offset=${offset}` +
+      `&limit=${limit}`;
+
+
+    const data =
+      await mlFetch(
+        endpoint,
+        token
       );
 
-    const valorEstoque =
-      anuncios.reduce(
-        (sum, item) =>
-          sum +
-          Number(item.price) *
-            Number(
-              item.available_quantity
-            ),
-        0
-      );
 
-    const precoMedio =
-      anuncios.length > 0
-        ? anuncios.reduce(
-            (sum, item) =>
-              sum +
-              Number(item.price),
-            0
-          ) /
-          anuncios.length
-        : 0;
+    const results =
+      Array.isArray(
+        data?.results
+      )
+        ? data.results
+        : [];
 
-    const premium =
-      anuncios.filter(
-        item =>
-          item.listing_type_id ===
-          'gold_pro'
-      ).length;
 
-    const classic =
-      anuncios.filter(
-        item =>
-          item.listing_type_id ===
-          'gold_special'
-      ).length;
-
-    res.json({
-      ok: true,
-
-      periodo_dias: dias,
-
-      conta: accountPublic(
-        account
-      ),
-
-      total_pedidos:
-        orders.length,
-
-      vendas_60_dias:
-        orders.length,
-
-      total_vendas_60_dias:
-        orders.length,
-
-      total_unidades:
-        unidades,
-
-      faturamento_60_dias:
-        faturamento,
-
-      ticket_medio:
-        ticketMedio,
-
-      estoque_total:
-        estoque,
-
-      valor_estoque:
-        valorEstoque,
-
-      anuncios_ativos:
-        anuncios.length,
-
-      preco_medio:
-        precoMedio,
-
-      premium,
-
-      classic,
-
-      top_10:
-        top10,
-
-      series_60_dias:
-        series60,
-
-      ultima_atualizacao:
-        new Date().toISOString()
-    });
-  } catch (error) {
-    console.error(
-      '/api/dashboard:',
-      error
+    orders.push(
+      ...results
     );
 
-    res.status(
-      error.status || 500
-    ).json({
-      erro: safeError(error),
-      detalhe: error.data || null
-    });
+
+    const total =
+      Number(
+        data?.paging?.total || 0
+      );
+
+
+    offset +=
+      results.length;
+
+
+    if (
+      results.length === 0 ||
+      offset >= total
+    ) {
+
+      break;
+
+    }
+
+
+    if (
+      results.length <
+      limit
+    ) {
+
+      break;
+
+    }
+
   }
-});
 
-/*
-|--------------------------------------------------------------------------
-| ERROS
-|--------------------------------------------------------------------------
-*/
 
-app.use((req, res) => {
-  res.status(404).json({
-    erro: 'Rota não encontrada.',
-    rota: req.originalUrl
-  });
-});
+  return {
+    orders
+  };
 
-app.use((error, req, res, next) => {
-  console.error(
-    'Erro global:',
-    error
+}
+
+
+// ============================================================
+// DATA HELPERS
+// ============================================================
+
+function formatDateML(
+  date
+) {
+
+  const year =
+    date.getFullYear();
+
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
+
+
+  return `${year}-${month}-${day}`;
+
+}
+
+
+function getOrderDate(
+  order
+) {
+
+  const value =
+    order?.date_closed ||
+    order?.date_created ||
+    null;
+
+
+  if (!value) {
+    return null;
+  }
+
+
+  const date =
+    new Date(value);
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return null;
+
+  }
+
+
+  return formatDateML(
+    date
   );
 
-  if (res.headersSent) {
-    return next(error);
-  }
+}
 
-  res.status(500).json({
-    erro:
-      error.message ||
-      'Erro interno do servidor.'
-  });
-});
 
-/*
-|--------------------------------------------------------------------------
-| LIMPEZA
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// LIMPEZA OAUTH
+// ============================================================
 
-setInterval(() => {
-  const expiration =
-    now() -
-    10 * 60 * 1000;
+function limparOAuthStates() {
 
-  for (const [
-    state,
-    data
-  ] of oauthStates.entries()) {
-    if (data.createdAt < expiration) {
-      oauthStates.delete(state);
-    }
-  }
+  const now =
+    Date.now();
 
-  /*
-   * Sessões inativas há mais de 30 dias.
-   */
-  const sessionExpiration =
-    now() -
-    30 *
-      24 *
-      60 *
-      60 *
-      1000;
+  const maxAge =
+    10 *
+    60 *
+    1000;
 
-  for (const [
-    id,
-    session
-  ] of sessions.entries()) {
+
+  for (
+    const [
+      key,
+      value
+    ]
+    of oauthStates.entries()
+  ) {
+
     if (
-      session.lastAccess <
-      sessionExpiration
+      !value ||
+      now -
+      value.createdAt >
+      maxAge
     ) {
-      sessions.delete(id);
+
+      oauthStates.delete(
+        key
+      );
+
     }
+
   }
-}, 5 * 60 * 1000);
 
-/*
-|--------------------------------------------------------------------------
-| HTML ESCAPE
-|--------------------------------------------------------------------------
-*/
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
 
-function escapeJs(value) {
-  return String(value ?? '')
-    .replaceAll('\\', '\\\\')
-    .replaceAll("'", "\\'")
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r');
+
+// ============================================================
+// ESCAPE SERVER
+// ============================================================
+
+function escapeHtmlServer(
+  value
+) {
+
+  return String(
+    value || ""
+  )
+    .replaceAll(
+      "&",
+      "&amp;"
+    )
+    .replaceAll(
+      "<",
+      "&lt;"
+    )
+    .replaceAll(
+      ">",
+      "&gt;"
+    )
+    .replaceAll(
+      '"',
+      "&quot;"
+    )
+    .replaceAll(
+      "'",
+      "&#039;"
+    );
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| START
-|--------------------------------------------------------------------------
-*/
+
+// ============================================================
+// TRATAMENTO GLOBAL DE ERROS
+// ============================================================
+
+app.use(
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
+
+    console.error(
+      "Erro global:",
+      err
+    );
+
+
+    if (
+      res.headersSent
+    ) {
+
+      return next(err);
+
+    }
+
+
+    return res
+      .status(500)
+      .json({
+
+        erro:
+          err.message ||
+          "Erro interno do servidor."
+
+      });
+
+  }
+);
+
+
+// ============================================================
+// START
+// ============================================================
 
 app.listen(
   PORT,
-  '0.0.0.0',
+  "0.0.0.0",
   () => {
+
     console.log(
-      `ML Hub Pro rodando na porta ${PORT}`
+      "======================================"
+    );
+
+    console.log(
+      "ML Hub Pro API iniciada"
+    );
+
+    console.log(
+      `Porta: ${PORT}`
     );
 
     console.log(
@@ -2150,19 +2685,22 @@ app.listen(
     );
 
     console.log(
-      `Redirect URI: ${ML_REDIRECT_URI}`
+      "Access Token manual: ATIVO"
     );
 
     console.log(
-      `Client ID configurado: ${
-        ML_CLIENT_ID ? 'SIM' : 'NÃO'
+      `OAuth configurado: ${
+        ML_CLIENT_ID &&
+        ML_CLIENT_SECRET &&
+        ML_REDIRECT_URI
+          ? "SIM"
+          : "NÃO"
       }`
     );
 
     console.log(
-      `Client Secret configurado: ${
-        ML_CLIENT_SECRET ? 'SIM' : 'NÃO'
-      }`
+      "======================================"
     );
+
   }
 );
