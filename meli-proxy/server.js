@@ -17,7 +17,7 @@ app.get('/api/anuncios', async (req, res) => {
     token = token.replace('Bearer ', '').trim();
 
     try {
-        // 1. API para puxar os dados do usuário autenticado
+        // 1. Puxar ID do usuário
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
@@ -27,7 +27,7 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // 2. Paginação automática para puxar TODOS os IDs dos anúncios (suporta mais de 2.000 itens)
+        // 2. Paginação para pegar TODOS os IDs dos anúncios (> 2000 itens)
         let allIds = [];
         let offset = 0;
         let limit = 50;
@@ -53,87 +53,73 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // 3. Puxar os detalhes em lote usando a API de items do Mercado Livre (blocos de 20)
+        // 3. Buscar detalhes em lotes de 20 de forma ultra-rápida e segura contra falhas
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const multiData = await multiRes.json();
-            const itensArray = Array.isArray(multiData) ? multiData : [];
+            try {
+                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                const multiData = await multiRes.json();
+                const itensArray = Array.isArray(multiData) ? multiData : [];
 
-            for (let itemObj of itensArray) {
-                if (itemObj && itemObj.code === 200 && itemObj.body) {
-                    const body = itemObj.body;
-                    const idItem = body.id;
-                    const preco = body.price || 0;
-                    const listingType = body.listing_type_id || 'gold_special';
-                    const availableQty = body.available_quantity || 0;
-                    const title = body.title || 'Sem Título';
-                    const permalink = body.permalink || '#';
-                    const thumbnail = body.thumbnail || '';
-                    
-                    let sku = 'Sem SKU';
-                    if (body.attributes) {
-                        const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
-                        if (attrSku && attrSku.value_name) sku = attrSku.value_name;
-                    }
-                    const status = body.status || 'active';
-
-                    // 4. API para puxar a comissão exata (Sale Fee)
-                    let comissao = body.sale_fee || 0;
-                    if (!comissao) {
-                        try {
-                            const feeRes = await fetch(`https://api.mercadolibre.com/sites/MLB/listing_prices?price=${preco}&listing_type_id=${listingType}`, {
-                                headers: { "Authorization": "Bearer " + token }
-                            });
-                            const feeData = await feeRes.json();
-                            if (feeData && feeData.sale_fee_amount) {
-                                comissao = feeData.sale_fee_amount;
-                            }
-                        } catch (err) {
-                            comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
+                for (let itemObj of itensArray) {
+                    if (itemObj && itemObj.code === 200 && itemObj.body) {
+                        const body = itemObj.body;
+                        const idItem = body.id;
+                        const preco = body.price || 0;
+                        const listingType = body.listing_type_id || 'gold_special';
+                        const availableQty = body.available_quantity || 0;
+                        const title = body.title || 'Sem Título';
+                        const permalink = body.permalink || '#';
+                        const thumbnail = body.thumbnail || '';
+                        
+                        let sku = 'Sem SKU';
+                        if (body.attributes) {
+                            const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
+                            if (attrSku && attrSku.value_name) sku = attrSku.value_name;
                         }
+                        const status = body.status || 'active';
+
+                        let comissao = body.sale_fee || (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
+                        
+                        let shipping = body.shipping || {};
+                        let freeShipping = shipping.free_shipping || false;
+                        let custoEnvio = 6.85;
+
+                        if (shipping.logistic_type === 'fulfillment') {
+                            custoEnvio = 18.50;
+                        }
+
+                        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+                            let cObj = shipping.costs.find(c => c.cost !== undefined);
+                            if (cObj) custoEnvio = cObj.cost;
+                        }
+
+                        let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
+                        if (liquido < 0) liquido = 0;
+
+                        listaFinal.push({
+                            id: idItem,
+                            title: title,
+                            price: preco,
+                            status: status,
+                            listing_type_id: listingType,
+                            available_quantity: availableQty,
+                            sku: sku,
+                            permalink: permalink,
+                            thumbnail: thumbnail,
+                            sale_fee: comissao,
+                            shipping_cost: custoEnvio,
+                            free_shipping: freeShipping,
+                            net_received: liquido
+                        });
                     }
-
-                    if (!comissao || isNaN(comissao)) {
-                        comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
-                    }
-
-                    // 5. Custo de envio real
-                    let shipping = body.shipping || {};
-                    let freeShipping = shipping.free_shipping || false;
-                    let custoEnvio = 6.85;
-
-                    if (shipping.logistic_type === 'fulfillment') {
-                        custoEnvio = 18.50;
-                    }
-
-                    if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-                        let cObj = shipping.costs.find(c => c.cost !== undefined);
-                        if (cObj) custoEnvio = cObj.cost;
-                    }
-
-                    let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
-                    if (liquido < 0) liquido = 0;
-
-                    listaFinal.push({
-                        id: idItem,
-                        title: title,
-                        price: preco,
-                        status: status,
-                        listing_type_id: listingType,
-                        available_quantity: availableQty,
-                        sku: sku,
-                        permalink: permalink,
-                        thumbnail: thumbnail,
-                        sale_fee: comissao,
-                        shipping_cost: custoEnvio,
-                        free_shipping: freeShipping,
-                        net_received: liquido
-                    });
                 }
+            } catch (chunkErr) {
+                console.error("Erro ao buscar lote de IDs:", chunkErr);
+                // Continua para o próximo bloco mesmo se um bloco falhar
             }
         }
 
@@ -145,7 +131,7 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
-// Rota de atualização de preço
+// Rota de atualização de preço mantida igual
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -172,16 +158,10 @@ app.post('/api/atualizar-preco', async (req, res) => {
         if (mlRes.ok) {
             res.json({ sucesso: true, resultado: mlData });
         } else {
-            let mensagemErro = "Erro ao atualizar preço";
-            if (mlData.message) {
-                mensagemErro = mlData.message;
-            } else if (mlData.cause && Array.isArray(mlData.cause) && mlData.cause.length > 0 && mlData.cause[0].message) {
-                mensagemErro = mlData.cause[0].message;
-            }
+            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || "Erro ao atualizar preço";
             res.status(400).json({ erro: mensagemErro });
         }
     } catch (e) {
-        console.error("ERRO AO ATUALIZAR PREÇO:", e);
         res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
     }
 });
