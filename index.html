@@ -56,10 +56,10 @@
             </div>
         </div>
 
-        <!-- Barra de Pesquisa Global Corrigida (Evita travamento ao apertar Enter) -->
-        <form onsubmit="event.preventDefault(); filtrarAnuncios();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+        <!-- Barra de Pesquisa Otimizada (Com anti-trava e debounce) -->
+        <form onsubmit="event.preventDefault(); dispararFiltroInstantaneo();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
             <span class="pl-2 pr-3 text-slate-500 text-lg">🔍</span>
-            <input type="text" id="input-busca" onkeyup="filtrarAnuncios()" placeholder="Buscar por MLB, SKU ou Título..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
+            <input type="text" id="input-busca" oninput="dispararFiltroInstantaneo()" placeholder="Buscar por MLB, SKU ou Título..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
         </form>
 
         <!-- Loading State -->
@@ -192,6 +192,7 @@
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
         let cacheItens = [];
         let novosPrecosCalculados = {};
+        let timeoutFiltro = null;
 
         function solicitarToken() {
             document.getElementById('aviso-token').classList.remove('hidden');
@@ -208,28 +209,35 @@
             carregarDados();
         }
 
-        // Função de Filtro Integrada
-        function filtrarAnuncios() {
-            const termo = document.getElementById('input-busca').value.toLowerCase();
-            
-            const filtrarTabela = (idTabela) => {
-                const tbody = document.getElementById(idTabela);
-                if (!tbody) return;
+        // Filtro com Debounce (Evita travamento ao buscar em 2360 itens)
+        function dispararFiltroInstantaneo() {
+            clearTimeout(timeoutFiltro);
+            timeoutFiltro = setTimeout(() => {
+                const termo = document.getElementById('input-busca').value.toLowerCase().trim();
                 
-                const linhas = tbody.getElementsByTagName('tr');
-                for (let i = 0; i < linhas.length; i++) {
-                    const textoLinha = linhas[i].innerText.toLowerCase();
-                    if (textoLinha.includes(termo)) {
-                        linhas[i].style.display = '';
-                    } else {
-                        linhas[i].style.display = 'none';
+                const filtrarTabela = (idTabela) => {
+                    const tbody = document.getElementById(idTabela);
+                    if (!tbody) return;
+                    
+                    const linhas = tbody.getElementsByTagName('tr');
+                    for (let i = 0; i < linhas.length; i++) {
+                        if (!termo) {
+                            linhas[i].style.display = '';
+                        } else {
+                            const textoLinha = linhas[i].innerText.toLowerCase();
+                            if (textoLinha.includes(termo)) {
+                                linhas[i].style.display = '';
+                            } else {
+                                linhas[i].style.display = 'none';
+                            }
+                        }
                     }
-                }
-            };
+                };
 
-            filtrarTabela('tabela-gestao');
-            filtrarTabela('tabela-simulacao');
-            filtrarTabela('tabela-atualizacao');
+                filtrarTabela('tabela-gestao');
+                filtrarTabela('tabela-simulacao');
+                filtrarTabela('tabela-atualizacao');
+            }, 150); // Aguarda 150ms após o usuário parar de digitar/colar o MLB
         }
 
         async function carregarDados() {
