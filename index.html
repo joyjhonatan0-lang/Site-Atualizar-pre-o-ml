@@ -537,54 +537,50 @@
                                 if(statusEl) {
                                     if(resItem.sucesso) {
                                         statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
-                                        
                                         cacheItens[originalObj.index].price = originalObj.price;
 
                                         if (novosPrecosCalculados[originalObj.index]) {
                                             novosPrecosCalculados[originalObj.index].foraDaMargem = false;
                                         }
 
+                                        // Remove a linha após sucesso e atualiza o contador na interface
                                         setTimeout(() => {
                                             const linha = document.getElementById(`linha_atualizacao_${originalObj.index}`);
                                             if (linha) {
                                                 linha.remove();
-                                                let contadorEl = document.getElementById('contador-atualizacao');
-                                                let atual = parseInt(contadorEl.innerText) || 1;
-                                                contadorEl.innerText = Math.max(0, atual - 1);
+                                                
+                                                // Atualiza dinamicamente o número no painel
+                                                const contadorAtual = document.getElementById('contador-atualizacao');
+                                                const totalAtual = parseInt(contadorAtual.innerText);
+                                                if (totalAtual > 0) {
+                                                    contadorAtual.innerText = totalAtual - 1;
+                                                }
                                             }
-                                        }, 1000);
-
+                                        }, 1500); 
                                     } else {
-                                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold cursor-help" title="${resItem.erro}">❌ ${resItem.erro}</span>`;
+                                        statusEl.innerHTML = `<span class="text-red-400 font-bold">Erro</span> <span class="text-xs text-slate-400">(${resItem.motivo || 'Falha'})</span>`;
                                     }
                                 }
                             }
                         });
                     } else {
+                        // Trata erros de status da requisição onde o backend não envia a array 'resultados'
                         lote.forEach(item => {
                             const statusEl = document.getElementById(`status_api_${item.index}`);
-                            if(statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro no Lote</span>`;
+                            if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Erro no Lote</span>`;
                         });
                     }
                 } catch (e) {
+                    // Trata problemas de rede
                     lote.forEach(item => {
                         const statusEl = document.getElementById(`status_api_${item.index}`);
-                        if(statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão</span>`;
+                        if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Falha de Rede</span>`;
                     });
                 }
-            }
+            } // Fim do loop for (lotes)
 
-            alert("Processo de atualização em lotes simultâneos finalizado!");
+            alert("Processo de atualização em massa finalizado!");
         }
-
-        window.onload = () => {
-            const token = localStorage.getItem('ml_access_token');
-            if(token) {
-                carregarDados();
-            } else {
-                solicitarToken();
-            }
-        };
     </script>
 </body>
 </html>
