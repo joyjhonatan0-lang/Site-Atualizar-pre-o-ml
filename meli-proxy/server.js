@@ -27,25 +27,34 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // 2. Paginação para pegar TODOS os IDs dos anúncios (> 2000 itens)
+        // 2. Usar o search_type=scan para ultrapassar o limite de 1000 itens do Mercado Livre
         let allIds = [];
-        let offset = 0;
-        let limit = 50;
-        let total = 0;
+        let scrollId = null;
+        let hasMore = true;
 
-        do {
-            const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
+        while (hasMore) {
+            let url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=50`;
+            if (scrollId) {
+                url += `&scroll_id=${scrollId}`;
+            }
+
+            const searchRes = await fetch(url, {
                 headers: { "Authorization": "Bearer " + token }
             });
-            const itemsData = await itemsRes.json();
-            const results = itemsData.results || [];
-            
-            allIds = allIds.concat(results);
-            total = itemsData.paging && itemsData.paging.total ? itemsData.paging.total : 0;
-            offset += limit;
+            const searchData = await searchRes.json();
 
-            if (results.length === 0 || offset >= total) break;
-        } while (offset < total);
+            const results = searchData.results || [];
+            if (results.length > 0) {
+                allIds = allIds.concat(results);
+            }
+
+            scrollId = searchData.scroll_id;
+
+            // Se não retornar novos itens ou acabar o scroll_id, encerra o loop
+            if (results.length === 0 || !scrollId) {
+                hasMore = false;
+            }
+        }
 
         if (allIds.length === 0) {
             return res.json({ itens: [] });
@@ -53,7 +62,7 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // 3. Buscar detalhes em lotes de 20 de forma ultra-rápida e segura contra falhas
+        // 3. Buscar detalhes em lotes de 20
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
@@ -119,7 +128,6 @@ app.get('/api/anuncios', async (req, res) => {
                 }
             } catch (chunkErr) {
                 console.error("Erro ao buscar lote de IDs:", chunkErr);
-                // Continua para o próximo bloco mesmo se um bloco falhar
             }
         }
 
@@ -131,7 +139,7 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
-// Rota de atualização de preço mantida igual
+// Rota de atualização de preço mantida
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
