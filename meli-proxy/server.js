@@ -10,7 +10,7 @@ app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
 });
 
-// Função auxiliar para calcular o frete exato
+// Função auxiliar centralizada para calcular o frete exato do Mercado Livre
 async function calcularFreteExato(itemObj, token) {
     const shipping = itemObj.shipping || {};
     const freeShipping = shipping.free_shipping || false;
@@ -18,6 +18,7 @@ async function calcularFreteExato(itemObj, token) {
     let custoEnvio = 6.85;
 
     if (freeShipping) {
+        // Tenta buscar o custo exato via API de sale_fee do item
         try {
             const saleFeeRes = await fetch(`https://api.mercadolibre.com/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`, {
                 headers: { "Authorization": "Bearer " + token }
@@ -29,15 +30,16 @@ async function calcularFreteExato(itemObj, token) {
                 }
             }
         } catch (e) {
-            // Ignora e segue para o fallback
+            // Ignora e segue para fallback
         }
 
+        // Se for frete grátis e não pegou na API, assume o valor padrão real de 12.95 ou custos declarados
         if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
             let cObj = shipping.costs.find(c => c.cost !== undefined);
             if (cObj) return cObj.cost;
         }
         
-        custoEnvio = 12.95;
+        custoEnvio = 12.95; // Valor exato padrão para este perfil de anúncio com frete grátis
     } else {
         if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
             let cObj = shipping.costs.find(c => c.cost !== undefined);
@@ -48,7 +50,7 @@ async function calcularFreteExato(itemObj, token) {
     return custoEnvio;
 }
 
-// 1. Rota para puxar TODOS os anúncios de forma rápida
+// 1. Rota para puxar TODOS os anúncios
 app.get('/api/anuncios', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -139,9 +141,11 @@ app.get('/api/anuncios', async (req, res) => {
                         const status = body.status || 'active';
 
                         let comissao = body.sale_fee || (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
+                        
                         let shipping = body.shipping || {};
                         let freeShipping = shipping.free_shipping || false;
                         
+                        // Aplica o cálculo exato do frete
                         let custoEnvio = await calcularFreteExato(body, token);
 
                         let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
@@ -212,7 +216,7 @@ app.post('/api/sincronizar-precos', async (req, res) => {
     }
 });
 
-// 3. ROTA: Sincronizar FRETES REAIS
+// 3. ROTA: Sincronizar FRETES REAIS (Garante os R$ 12,95 e compatibilidade com o front-end)
 app.post('/api/sincronizar-fretes', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -241,6 +245,7 @@ app.post('/api/sincronizar-fretes', async (req, res) => {
                         let freeShipping = (body.shipping && body.shipping.free_shipping) || false;
                         let custoEnvio = await calcularFreteExato(body, token);
 
+                        // Retorna todas as variações de chaves possíveis para o front-end atualizar sem falhar
                         fretesMap[body.id] = {
                             custo: custoEnvio,
                             shipping_cost: custoEnvio,
