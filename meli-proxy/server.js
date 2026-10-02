@@ -27,7 +27,7 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // 2. Usar o search_type=scan para ultrapassar o limite de 1000 itens do Mercado Livre
+        // 2. Usar o search_type=scan para ultrapassar o limite de 1000 itens (suporta mais de 2.000 anúncios)
         let allIds = [];
         let scrollId = null;
         let hasMore = true;
@@ -50,7 +50,6 @@ app.get('/api/anuncios', async (req, res) => {
 
             scrollId = searchData.scroll_id;
 
-            // Se não retornar novos itens ou acabar o scroll_id, encerra o loop
             if (results.length === 0 || !scrollId) {
                 hasMore = false;
             }
@@ -139,7 +138,7 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
-// Rota de atualização de preço mantida
+// Rota de atualização de preço individual (mantida)
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -171,6 +170,51 @@ app.post('/api/atualizar-preco', async (req, res) => {
         }
     } catch (e) {
         res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
+    }
+});
+
+// NOVA ROTA: Atualização em lote simultâneo (20 em 20 em paralelo)
+app.post('/api/atualizar-precos-lote', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { itens } = req.body;
+
+    if (!itens || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ erro: "Nenhum item informado para atualização em lote." });
+    }
+
+    try {
+        const promises = itens.map(async (item) => {
+            try {
+                const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ price: Number(item.price) })
+                });
+
+                const mlData = await mlRes.json();
+
+                if (mlRes.ok) {
+                    return { id: item.id, sucesso: true };
+                } else {
+                    let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || "Erro ao atualizar";
+                    return { id: item.id, sucesso: false, erro: mensagemErro };
+                }
+            } catch (err) {
+                return { id: item.id, sucesso: false, erro: "Erro de conexão" };
+            }
+        });
+
+        const resultados = await Promise.all(promises);
+        res.json({ resultados });
+
+    } catch (e) {
+        res.status(500).json({ erro: "Erro no servidor ao processar lote: " + e.message });
     }
 });
 
