@@ -394,6 +394,7 @@
                 contadorForaDaMargem++;
                 const novoPreco = dadosSim.preco;
                 const tr = document.createElement('tr');
+                tr.id = `linha_atualizacao_${index}`;
                 tr.className = "hover:bg-slate-800/50 transition-colors";
                 tr.innerHTML = `
                     <td class="p-3.5"><input type="checkbox" value="${index}" checked class="check-item accent-yellow-400" /></td>
@@ -485,6 +486,27 @@
                                 if(statusEl) {
                                     if(resItem.sucesso) {
                                         statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
+                                        
+                                        // 1. Atualiza o preço atual do item na memória do sistema para o novo preço
+                                        cacheItens[originalObj.index].price = originalObj.price;
+
+                                        // 2. Remove o item da lista recalculando o status 'foraDaMargem' para falso
+                                        if (novosPrecosCalculados[originalObj.index]) {
+                                            novosPrecosCalculados[originalObj.index].foraDaMargem = false;
+                                        }
+
+                                        // 3. Remove a linha visualmente da tabela com animação suave e atualiza o contador
+                                        setTimeout(() => {
+                                            const linha = document.getElementById(`linha_atualizacao_${originalObj.index}`);
+                                            if (linha) {
+                                                linha.remove();
+                                                // Decrementa o contador na interface
+                                                let contadorEl = document.getElementById('contador-atualizacao');
+                                                let atual = parseInt(contadorEl.innerText) || 1;
+                                                contadorEl.innerText = Math.max(0, atual - 1);
+                                            }
+                                        }, 1000); // Aguarda 1 segundo para o usuário ver o "OK" verde
+
                                     } else {
                                         statusEl.innerHTML = `<span class="text-rose-400 font-semibold cursor-help" title="${resItem.erro}">❌ ${resItem.erro}</span>`;
                                     }
