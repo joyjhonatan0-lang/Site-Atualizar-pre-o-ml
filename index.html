@@ -1,2993 +1,5228 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>ML Hub Pro | Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
 
-<style>
-*{box-sizing:border-box}
-body{margin:0}
-.futuristic-table th{
-    background:#18181b;
-    color:#f4f4f5;
-    font-size:11px;
-    letter-spacing:.05em;
-    text-transform:uppercase
-}
-.input-simulacao{
-    background:#fafafa;
-    border:1px solid #e4e4e7;
-    text-align:center;
-    border-radius:6px;
-    padding:5px;
-    font-size:13px;
-    font-weight:500
-}
-.input-simulacao:focus{
-    outline:none;
-    border-color:#3b82f6;
-    box-shadow:0 0 0 2px rgba(59,130,246,.15)
-}
-::-webkit-scrollbar{width:7px;height:7px}
-::-webkit-scrollbar-track{background:#020617}
-::-webkit-scrollbar-thumb{background:#334155;border-radius:10px}
-.chart-bar{
-    flex:1;
-    min-width:3px;
-    background:#facc15;
-    opacity:.75;
-    border-radius:4px 4px 0 0;
-    transition:.2s
-}
-.chart-bar:hover{opacity:1}
-</style>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#ffe600"
+  >
+
+  <title>ML Hub Pro</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --yellow: #ffe600;
+      --yellow-dark: #e6cf00;
+      --blue: #3483fa;
+      --blue-dark: #2968c8;
+      --green: #00a650;
+      --red: #d32f2f;
+      --orange: #f57c00;
+      --dark: #222;
+      --gray: #666;
+      --gray-light: #f5f5f5;
+      --border: #e5e5e5;
+      --white: #fff;
+      --shadow: 0 5px 25px rgba(0, 0, 0, .07);
+    }
+
+    body {
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      background:
+        #f5f5f5;
+
+      color:
+        var(--dark);
+
+      min-height:
+        100vh;
+    }
+
+    button,
+    input,
+    select {
+      font-family:
+        inherit;
+    }
+
+    button {
+      cursor:
+        pointer;
+    }
+
+    .hidden {
+      display:
+        none !important;
+    }
+
+    /*
+    ========================================
+    HEADER
+    ========================================
+    */
+
+    .topbar {
+      width:
+        100%;
+
+      background:
+        var(--yellow);
+
+      min-height:
+        70px;
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        space-between;
+
+      gap:
+        20px;
+
+      padding:
+        12px 25px;
+
+      position:
+        sticky;
+
+      top:
+        0;
+
+      z-index:
+        1000;
+
+      box-shadow:
+        0 2px 10px rgba(0,0,0,.12);
+    }
+
+    .brand {
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      gap:
+        12px;
+    }
+
+    .brand-icon {
+      width:
+        45px;
+
+      height:
+        45px;
+
+      border-radius:
+        50%;
+
+      background:
+        #fff;
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+
+      font-size:
+        23px;
+
+      font-weight:
+        900;
+    }
+
+    .brand-text h1 {
+      font-size:
+        21px;
+    }
+
+    .brand-text span {
+      font-size:
+        12px;
+
+      color:
+        #555;
+    }
+
+    .header-actions {
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      gap:
+        10px;
+    }
+
+    .header-account {
+      background:
+        rgba(255,255,255,.65);
+
+      border:
+        1px solid rgba(0,0,0,.08);
+
+      padding:
+        9px 13px;
+
+      border-radius:
+        10px;
+
+      font-size:
+        13px;
+
+      max-width:
+        250px;
+
+      overflow:
+        hidden;
+
+      text-overflow:
+        ellipsis;
+
+      white-space:
+        nowrap;
+    }
+
+    /*
+    ========================================
+    LAYOUT
+    ========================================
+    */
+
+    .container {
+      width:
+        min(1450px, 100%);
+
+      margin:
+        0 auto;
+
+      padding:
+        25px;
+    }
+
+    .page-title {
+      margin-bottom:
+        20px;
+    }
+
+    .page-title h2 {
+      font-size:
+        25px;
+
+      margin-bottom:
+        5px;
+    }
+
+    .page-title p {
+      color:
+        var(--gray);
+
+      font-size:
+        14px;
+    }
+
+    /*
+    ========================================
+    BUTTONS
+    ========================================
+    */
+
+    .btn {
+      border:
+        0;
+
+      border-radius:
+        9px;
+
+      padding:
+        11px 16px;
+
+      font-size:
+        14px;
+
+      font-weight:
+        700;
+
+      transition:
+        .15s;
+
+      display:
+        inline-flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+
+      gap:
+        7px;
+    }
+
+    .btn:hover {
+      transform:
+        translateY(-1px);
+    }
+
+    .btn-yellow {
+      background:
+        var(--yellow);
+
+      color:
+        #222;
+    }
+
+    .btn-yellow:hover {
+      background:
+        var(--yellow-dark);
+    }
+
+    .btn-blue {
+      background:
+        var(--blue);
+
+      color:
+        #fff;
+    }
+
+    .btn-blue:hover {
+      background:
+        var(--blue-dark);
+    }
+
+    .btn-green {
+      background:
+        var(--green);
+
+      color:
+        #fff;
+    }
+
+    .btn-red {
+      background:
+        var(--red);
+
+      color:
+        #fff;
+    }
+
+    .btn-gray {
+      background:
+        #eee;
+
+      color:
+        #333;
+    }
+
+    .btn:disabled {
+      opacity:
+        .55;
+
+      cursor:
+        not-allowed;
+
+      transform:
+        none;
+    }
+
+    /*
+    ========================================
+    CARDS
+    ========================================
+    */
+
+    .card {
+      background:
+        var(--white);
+
+      border:
+        1px solid var(--border);
+
+      border-radius:
+        15px;
+
+      box-shadow:
+        var(--shadow);
+
+      padding:
+        20px;
+
+      margin-bottom:
+        20px;
+    }
+
+    .card-header {
+      display:
+        flex;
+
+      justify-content:
+        space-between;
+
+      align-items:
+        center;
+
+      gap:
+        15px;
+
+      margin-bottom:
+        18px;
+
+      flex-wrap:
+        wrap;
+    }
+
+    .card-title {
+      font-size:
+        18px;
+
+      font-weight:
+        800;
+    }
+
+    .card-subtitle {
+      color:
+        var(--gray);
+
+      font-size:
+        13px;
+
+      margin-top:
+        4px;
+    }
+
+    /*
+    ========================================
+    LOGIN / CONEXÃO
+    ========================================
+    */
+
+    .connection-card {
+      border:
+        2px solid var(--yellow);
+
+      background:
+        linear-gradient(
+          135deg,
+          #fffef0,
+          #fff
+        );
+    }
+
+    .connection-header {
+      display:
+        flex;
+
+      justify-content:
+        space-between;
+
+      align-items:
+        center;
+
+      gap:
+        20px;
+
+      flex-wrap:
+        wrap;
+    }
+
+    .connection-status {
+      display:
+        inline-flex;
+
+      align-items:
+        center;
+
+      gap:
+        7px;
+
+      color:
+        var(--gray);
+
+      font-size:
+        14px;
+    }
+
+    .status-dot {
+      width:
+        10px;
+
+      height:
+        10px;
+
+      border-radius:
+        50%;
+
+      background:
+        #999;
+    }
+
+    .status-dot.online {
+      background:
+        var(--green);
+    }
+
+    .status-dot.error {
+      background:
+        var(--red);
+    }
+
+    .accounts-list {
+      margin-top:
+        18px;
+
+      display:
+        grid;
+
+      gap:
+        10px;
+    }
+
+    .account-item {
+      border:
+        1px solid var(--border);
+
+      border-radius:
+        12px;
+
+      padding:
+        15px;
+
+      display:
+        flex;
+
+      justify-content:
+        space-between;
+
+      align-items:
+        center;
+
+      gap:
+        15px;
+
+      flex-wrap:
+        wrap;
+
+      background:
+        #fff;
+
+      transition:
+        .15s;
+    }
+
+    .account-item.active {
+      border:
+        2px solid var(--blue);
+
+      background:
+        #f4f8ff;
+    }
+
+    .account-info {
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      gap:
+        12px;
+
+      min-width:
+        0;
+    }
+
+    .account-avatar {
+      width:
+        42px;
+
+      height:
+        42px;
+
+      min-width:
+        42px;
+
+      border-radius:
+        50%;
+
+      background:
+        var(--yellow);
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+
+      font-weight:
+        900;
+    }
+
+    .account-name {
+      font-weight:
+        800;
+
+      font-size:
+        15px;
+
+      margin-bottom:
+        3px;
+    }
+
+    .account-meta {
+      color:
+        var(--gray);
+
+      font-size:
+        12px;
+
+      word-break:
+        break-word;
+    }
+
+    .account-actions {
+      display:
+        flex;
+
+      gap:
+        7px;
+
+      flex-wrap:
+        wrap;
+    }
+
+    .empty-accounts {
+      text-align:
+        center;
+
+      padding:
+        25px;
+
+      border:
+        1px dashed #ccc;
+
+      border-radius:
+        12px;
+
+      color:
+        var(--gray);
+
+      background:
+        #fafafa;
+    }
+
+    /*
+    ========================================
+    STATS
+    ========================================
+    */
+
+    .stats-grid {
+      display:
+        grid;
+
+      grid-template-columns:
+        repeat(6, 1fr);
+
+      gap:
+        15px;
+
+      margin-bottom:
+        20px;
+    }
+
+    .stat-card {
+      background:
+        #fff;
+
+      border:
+        1px solid var(--border);
+
+      border-radius:
+        14px;
+
+      padding:
+        18px;
+
+      box-shadow:
+        var(--shadow);
+
+      min-width:
+        0;
+    }
+
+    .stat-label {
+      color:
+        var(--gray);
+
+      font-size:
+        12px;
+
+      margin-bottom:
+        8px;
+    }
+
+    .stat-value {
+      font-size:
+        23px;
+
+      font-weight:
+        900;
+
+      overflow:
+        hidden;
+
+      text-overflow:
+        ellipsis;
+
+      white-space:
+        nowrap;
+    }
+
+    .stat-description {
+      margin-top:
+        7px;
+
+      font-size:
+        11px;
+
+      color:
+        #888;
+    }
+
+    /*
+    ========================================
+    DASHBOARD GRID
+    ========================================
+    */
+
+    .dashboard-grid {
+      display:
+        grid;
+
+      grid-template-columns:
+        2fr 1fr;
+
+      gap:
+        20px;
+
+      margin-bottom:
+        20px;
+    }
+
+    /*
+    ========================================
+    CHART
+    ========================================
+    */
+
+    .chart-wrapper {
+      width:
+        100%;
+
+      height:
+        320px;
+
+      position:
+        relative;
+
+      overflow:
+        hidden;
+    }
+
+    .chart {
+      width:
+        100%;
+
+      height:
+        100%;
+    }
+
+    .chart-empty {
+      height:
+        100%;
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+
+      color:
+        #999;
+    }
+
+    /*
+    ========================================
+    TOP PRODUCTS
+    ========================================
+    */
+
+    .top-list {
+      display:
+        grid;
+
+      gap:
+        8px;
+    }
+
+    .top-item {
+      display:
+        grid;
+
+      grid-template-columns:
+        32px 1fr auto;
+
+      gap:
+        10px;
+
+      align-items:
+        center;
+
+      padding:
+        9px;
+
+      border-radius:
+        9px;
+
+      background:
+        #f7f7f7;
+    }
+
+    .top-position {
+      width:
+        28px;
+
+      height:
+        28px;
+
+      border-radius:
+        50%;
+
+      background:
+        var(--yellow);
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+
+      font-weight:
+        900;
+
+      font-size:
+        12px;
+    }
+
+    .top-name {
+      font-size:
+        13px;
+
+      font-weight:
+        700;
+
+      overflow:
+        hidden;
+
+      text-overflow:
+        ellipsis;
+
+      white-space:
+        nowrap;
+    }
+
+    .top-qty {
+      font-size:
+        12px;
+
+      font-weight:
+        800;
+
+      color:
+        var(--green);
+    }
+
+    /*
+    ========================================
+    FILTERS
+    ========================================
+    */
+
+    .filters {
+      display:
+        flex;
+
+      gap:
+        10px;
+
+      flex-wrap:
+        wrap;
+
+      margin-bottom:
+        15px;
+    }
+
+    .search-input {
+      flex:
+        1;
+
+      min-width:
+        220px;
+
+      border:
+        1px solid #ccc;
+
+      border-radius:
+        9px;
+
+      padding:
+        11px 13px;
+
+      outline:
+        none;
+
+      font-size:
+        14px;
+    }
+
+    .search-input:focus {
+      border-color:
+        var(--blue);
+    }
+
+    /*
+    ========================================
+    TABLE
+    ========================================
+    */
+
+    .table-container {
+      width:
+        100%;
+
+      overflow-x:
+        auto;
+    }
+
+    table {
+      width:
+        100%;
+
+      border-collapse:
+        collapse;
+
+      min-width:
+        1050px;
+    }
+
+    th {
+      background:
+        #f7f7f7;
+
+      padding:
+        12px 10px;
+
+      text-align:
+        left;
+
+      font-size:
+        12px;
+
+      color:
+        #666;
+
+      border-bottom:
+        1px solid var(--border);
+
+      white-space:
+        nowrap;
+    }
+
+    td {
+      padding:
+        12px 10px;
+
+      border-bottom:
+        1px solid #eee;
+
+      font-size:
+        13px;
+
+      vertical-align:
+        middle;
+    }
+
+    tr:hover td {
+      background:
+        #fcfcfc;
+    }
+
+    .product-cell {
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      gap:
+        10px;
+
+      max-width:
+        350px;
+    }
+
+    .product-image {
+      width:
+        48px;
+
+      height:
+        48px;
+
+      min-width:
+        48px;
+
+      border-radius:
+        8px;
+
+      object-fit:
+        cover;
+
+      background:
+        #eee;
+    }
+
+    .product-name {
+      font-weight:
+        700;
+
+      overflow:
+        hidden;
+
+      text-overflow:
+        ellipsis;
+
+      display:
+        -webkit-box;
+
+      -webkit-line-clamp:
+        2;
+
+      -webkit-box-orient:
+        vertical;
+    }
+
+    .price-input {
+      width:
+        100px;
+
+      padding:
+        7px;
+
+      border:
+        1px solid #ccc;
+
+      border-radius:
+        7px;
+
+      outline:
+        none;
+    }
+
+    .price-input:focus {
+      border-color:
+        var(--blue);
+    }
+
+    .badge {
+      display:
+        inline-flex;
+
+      align-items:
+        center;
+
+      padding:
+        5px 8px;
+
+      border-radius:
+        20px;
+
+      font-size:
+        11px;
+
+      font-weight:
+        700;
+
+      white-space:
+        nowrap;
+    }
+
+    .badge-green {
+      background:
+        #e8f7ee;
+
+      color:
+        #087f3e;
+    }
+
+    .badge-blue {
+      background:
+        #eaf2ff;
+
+      color:
+        #2565c7;
+    }
+
+    .badge-orange {
+      background:
+        #fff1df;
+
+      color:
+        #a85a00;
+    }
+
+    .badge-gray {
+      background:
+        #eee;
+
+      color:
+        #666;
+    }
+
+    /*
+    ========================================
+    LOADING
+    ========================================
+    */
+
+    .loading {
+      position:
+        fixed;
+
+      inset:
+        0;
+
+      background:
+        rgba(255,255,255,.82);
+
+      z-index:
+        9999;
+
+      display:
+        flex;
+
+      align-items:
+        center;
+
+      justify-content:
+        center;
+    }
+
+    .loading-box {
+      background:
+        #fff;
+
+      border-radius:
+        15px;
+
+      padding:
+        25px 30px;
+
+      box-shadow:
+        0 10px 40px rgba(0,0,0,.15);
+
+      text-align:
+        center;
+    }
+
+    .spinner {
+      width:
+        38px;
+
+      height:
+        38px;
+
+      border:
+        4px solid #eee;
+
+      border-top-color:
+        var(--blue);
+
+      border-radius:
+        50%;
+
+      animation:
+        spin .8s linear infinite;
+
+      margin:
+        0 auto 15px;
+    }
+
+    @keyframes spin {
+      to {
+        transform:
+          rotate(360deg);
+      }
+    }
+
+    /*
+    ========================================
+    TOAST
+    ========================================
+    */
+
+    .toast-container {
+      position:
+        fixed;
+
+      right:
+        20px;
+
+      bottom:
+        20px;
+
+      z-index:
+        10000;
+
+      display:
+        grid;
+
+      gap:
+        10px;
+
+      width:
+        min(400px, calc(100vw - 40px));
+    }
+
+    .toast {
+      background:
+        #222;
+
+      color:
+        #fff;
+
+      padding:
+        14px 16px;
+
+      border-radius:
+        10px;
+
+      box-shadow:
+        0 5px 20px rgba(0,0,0,.2);
+
+      font-size:
+        13px;
+
+      animation:
+        toastIn .2s ease;
+    }
+
+    .toast.success {
+      border-left:
+        4px solid var(--green);
+    }
+
+    .toast.error {
+      border-left:
+        4px solid var(--red);
+    }
+
+    .toast.info {
+      border-left:
+        4px solid var(--blue);
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity:
+          0;
+
+        transform:
+          translateY(10px);
+      }
+
+      to {
+        opacity:
+          1;
+
+        transform:
+          translateY(0);
+      }
+    }
+
+    /*
+    ========================================
+    FOOTER
+    ========================================
+    */
+
+    footer {
+      text-align:
+        center;
+
+      padding:
+        25px;
+
+      color:
+        #888;
+
+      font-size:
+        12px;
+    }
+
+    /*
+    ========================================
+    RESPONSIVE
+    ========================================
+    */
+
+    @media (max-width: 1200px) {
+
+      .stats-grid {
+        grid-template-columns:
+          repeat(3, 1fr);
+      }
+
+    }
+
+    @media (max-width: 900px) {
+
+      .dashboard-grid {
+        grid-template-columns:
+          1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns:
+          repeat(2, 1fr);
+      }
+
+      .topbar {
+        padding:
+          10px 15px;
+      }
+
+      .container {
+        padding:
+          15px;
+      }
+
+      .header-account {
+        display:
+          none;
+      }
+
+    }
+
+    @media (max-width: 550px) {
+
+      .stats-grid {
+        grid-template-columns:
+          1fr;
+      }
+
+      .connection-header {
+        align-items:
+          stretch;
+      }
+
+      .connection-header .btn {
+        width:
+          100%;
+      }
+
+      .account-actions {
+        width:
+          100%;
+      }
+
+      .account-actions .btn {
+        flex:
+          1;
+      }
+
+      .brand-text h1 {
+        font-size:
+          17px;
+      }
+
+      .brand-icon {
+        width:
+          38px;
+
+        height:
+          38px;
+
+        font-size:
+          19px;
+      }
+
+    }
+  </style>
 </head>
 
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+<body>
 
-<!-- =========================================================
-     HEADER
-========================================================= -->
-<header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
-<div class="px-5 py-3 flex flex-wrap gap-4 justify-between items-center">
+  <!-- ================================================= -->
+  <!-- LOADING -->
+  <!-- ================================================= -->
 
-    <div class="flex items-center gap-5">
+  <div
+    id="loading"
+    class="loading hidden"
+  >
+    <div class="loading-box">
 
-        <div onclick="mudarTela('inicio')" class="flex items-center gap-2 cursor-pointer">
-            <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
-            <span class="font-black text-white">
-                ML Hub <span class="text-yellow-400">Pro</span>
-            </span>
-        </div>
+      <div class="spinner"></div>
 
-        <nav class="flex gap-1 bg-slate-950 border border-slate-800 p-1 rounded-lg">
-
-            <button id="nav-inicio"
-                onclick="mudarTela('inicio')"
-                class="nav-btn-active">
-                Início
-            </button>
-
-            <button id="nav-dashboard"
-                onclick="mudarTela('dashboard')"
-                class="nav-btn">
-                Dashboard
-            </button>
-
-            <button id="nav-gestao"
-                onclick="mudarTela('gestao')"
-                class="nav-btn">
-                Anúncios
-            </button>
-
-            <button id="nav-simulacao"
-                onclick="mudarTela('simulacao')"
-                class="nav-btn">
-                Simulação
-            </button>
-
-            <button id="nav-atualizacao"
-                onclick="mudarTela('atualizacao')"
-                class="nav-btn">
-                Preços
-            </button>
-
-        </nav>
-    </div>
-
-    <div class="flex gap-2">
-
-        <button onclick="carregarDados();mudarTela('dashboard')"
-            class="bg-slate-800 hover:bg-slate-700 border border-yellow-400/30 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold">
-            📦 Sincronizar
-        </button>
-
-        <button onclick="sincronizarPrecosApi()"
-            class="bg-slate-800 hover:bg-slate-700 border border-emerald-400/30 text-emerald-400 px-3 py-2 rounded-lg text-xs font-bold">
-            💰 Preços
-        </button>
-
-        <button onclick="sincronizarFretesApi()"
-            class="bg-slate-800 hover:bg-slate-700 border border-blue-400/30 text-blue-400 px-3 py-2 rounded-lg text-xs font-bold">
-            🚚 Fretes
-        </button>
-
-        <button onclick="mostrarToken()"
-            class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold">
-            🔑 Token
-        </button>
+      <strong id="loadingText">
+        Carregando...
+      </strong>
 
     </div>
-</div>
-</header>
+  </div>
 
 
-<main class="max-w-[98%] mx-auto p-5">
+  <!-- ================================================= -->
+  <!-- HEADER -->
+  <!-- ================================================= -->
 
+  <header class="topbar">
 
-<!-- =========================================================
-     TOKEN
-========================================================= -->
-<div id="token-box"
-     class="hidden bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5 mb-5">
+    <div class="brand">
 
-    <div class="max-w-xl mx-auto">
+      <div class="brand-icon">
+        ML
+      </div>
 
-        <h3 class="text-yellow-400 font-bold mb-2">
-            Token do Mercado Livre
-        </h3>
+      <div class="brand-text">
 
-        <p class="text-slate-400 text-xs mb-3">
-            Cole aqui seu Bearer Token.
-        </p>
+        <h1>
+          ML Hub Pro
+        </h1>
 
-        <div class="flex gap-2">
-
-            <input id="token-input"
-                type="password"
-                placeholder="APP_USR-..."
-                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
-
-            <button onclick="salvarToken()"
-                class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold px-5 rounded-lg">
-                Salvar
-            </button>
-
-        </div>
-    </div>
-</div>
-
-
-<!-- =========================================================
-     TELA INICIAL
-========================================================= -->
-<section id="tela-inicio"
-class="min-h-[calc(100vh-100px)] flex items-center">
-
-<div class="w-full max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
-
-    <div>
-
-        <span class="inline-flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 rounded-full px-4 py-2 text-xs font-bold mb-6">
-            <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
-            CENTRAL DE OPERAÇÕES
+        <span>
+          Gestão Mercado Livre
         </span>
 
-        <h1 class="text-5xl md:text-7xl font-black leading-tight">
-            Sua operação do
-            <span class="text-yellow-400">
-                Mercado Livre
-            </span>
-            em um só lugar.
-        </h1>
-
-        <p class="text-slate-400 text-lg mt-6 max-w-xl leading-relaxed">
-            Controle anúncios, vendas, estoque, preços, fretes,
-            margem e desempenho dos seus produtos através de
-            um painel profissional.
-        </p>
-
-        <div class="flex flex-wrap gap-3 mt-8">
-
-            <button onclick="mudarTela('dashboard')"
-                class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black px-7 py-4 rounded-xl">
-                Abrir Dashboard →
-            </button>
-
-            <button onclick="mostrarToken()"
-                class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold px-7 py-4 rounded-xl">
-                Conectar Mercado Livre
-            </button>
-
-        </div>
-
-        <div class="grid grid-cols-3 gap-3 mt-10 max-w-xl">
-
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div class="text-yellow-400 text-2xl font-black">60</div>
-                <div class="text-xs text-slate-500 mt-1">
-                    DIAS DE VENDAS
-                </div>
-            </div>
-
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div class="text-emerald-400 text-2xl font-black">TOP 10</div>
-                <div class="text-xs text-slate-500 mt-1">
-                    MAIS VENDIDOS
-                </div>
-            </div>
-
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <div class="text-blue-400 text-2xl font-black">LIVE</div>
-                <div class="text-xs text-slate-500 mt-1">
-                    INDICADORES
-                </div>
-            </div>
-
-        </div>
+      </div>
 
     </div>
 
 
-    <div>
+    <div class="header-actions">
 
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+      <div
+        id="headerAccount"
+        class="header-account"
+      >
+        Nenhuma conta conectada
+      </div>
 
-            <div class="flex justify-between items-center mb-6">
-
-                <div>
-                    <div class="text-[10px] uppercase tracking-widest text-slate-500">
-                        VISÃO EXECUTIVA
-                    </div>
-
-                    <h2 class="text-xl font-bold mt-1">
-                        Resumo da operação
-                    </h2>
-                </div>
-
-                <span class="bg-emerald-400/10 text-emerald-400 px-3 py-1 rounded-lg text-[10px] font-bold">
-                    ONLINE
-                </span>
-
-            </div>
-
-
-            <div class="grid grid-cols-2 gap-4">
-
-                <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5">
-                    <div class="text-xs text-slate-500">
-                        Vendas · 60 dias
-                    </div>
-
-                    <div id="home-vendas"
-                        class="text-3xl font-black mt-2">
-                        —
-                    </div>
-                </div>
-
-                <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5">
-
-                    <div class="text-xs text-slate-500">
-                        Faturamento
-                    </div>
-
-                    <div id="home-faturamento"
-                        class="text-2xl font-black text-emerald-400 mt-2">
-                        —
-                    </div>
-
-                </div>
-
-                <div class="col-span-2 bg-slate-950 border border-slate-800 rounded-2xl p-5">
-
-                    <div class="flex justify-between mb-4">
-
-                        <span class="text-xs text-slate-500">
-                            Performance de vendas
-                        </span>
-
-                        <span class="text-[10px] text-slate-600">
-                            ÚLTIMOS 60 DIAS
-                        </span>
-
-                    </div>
-
-                    <div id="home-chart"
-                         class="h-28 flex items-end gap-1">
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
+      <button
+        id="btnAtualizar"
+        class="btn btn-blue"
+        onclick="atualizarTudo()"
+      >
+        ↻ Atualizar
+      </button>
 
     </div>
 
-</div>
-</section>
+  </header>
 
 
-<!-- =========================================================
-     DASHBOARD
-========================================================= -->
-<section id="tela-dashboard"
-class="hidden space-y-6">
+  <!-- ================================================= -->
+  <!-- MAIN -->
+  <!-- ================================================= -->
 
-<div class="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+  <main class="container">
 
-    <div>
+    <div class="page-title">
 
-        <div class="text-yellow-400 text-xs font-bold tracking-[.2em]">
-            PAINEL EXECUTIVO
-        </div>
+      <h2>
+        Painel de controle
+      </h2>
 
-        <h1 class="text-4xl font-black mt-1">
-            Dashboard da Operação
-        </h1>
-
-        <p class="text-slate-400 text-sm mt-2">
-            Visão geral das vendas, produtos, estoque e anúncios.
-        </p>
-
-    </div>
-
-    <div class="flex gap-2">
-
-        <button onclick="carregarDashboard()"
-            class="bg-slate-900 border border-slate-700 hover:border-yellow-400 px-4 py-3 rounded-xl text-xs font-bold">
-            ↻ Atualizar
-        </button>
-
-        <button onclick="mudarTela('gestao')"
-            class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-4 py-3 rounded-xl text-xs font-black">
-            Gerenciar anúncios
-        </button>
-
-    </div>
-
-</div>
-
-
-<!-- CARDS -->
-<div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <div class="text-[10px] text-slate-500 uppercase">
-            Vendas · 60 dias
-        </div>
-
-        <div id="dash-vendas"
-            class="text-3xl font-black mt-2">
-            —
-        </div>
-
-        <div class="text-xs text-slate-500">
-            pedidos
-        </div>
-    </div>
-
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="text-[10px] text-slate-500 uppercase">
-            Faturamento
-        </div>
-
-        <div id="dash-faturamento"
-            class="text-2xl font-black text-emerald-400 mt-2">
-            —
-        </div>
-
-        <div class="text-xs text-slate-500">
-            últimos 60 dias
-        </div>
+      <p>
+        Gerencie suas contas, anúncios,
+        preços, fretes e vendas.
+      </p>
 
     </div>
 
 
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+    <!-- ================================================= -->
+    <!-- CONTAS -->
+    <!-- ================================================= -->
 
-        <div class="text-[10px] text-slate-500 uppercase">
-            Ticket médio
-        </div>
+    <section class="card connection-card">
 
-        <div id="dash-ticket"
-            class="text-2xl font-black text-blue-400 mt-2">
-            —
-        </div>
-
-        <div class="text-xs text-slate-500">
-            por venda
-        </div>
-
-    </div>
-
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="text-[10px] text-slate-500 uppercase">
-            Anúncios ativos
-        </div>
-
-        <div id="dash-ativos"
-            class="text-3xl font-black text-yellow-400 mt-2">
-            0
-        </div>
-
-        <div class="text-xs text-slate-500">
-            catálogo
-        </div>
-
-    </div>
-
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="text-[10px] text-slate-500 uppercase">
-            Estoque
-        </div>
-
-        <div id="dash-estoque"
-            class="text-3xl font-black text-purple-400 mt-2">
-            0
-        </div>
-
-        <div class="text-xs text-slate-500">
-            unidades
-        </div>
-
-    </div>
-
-</div>
-
-
-<!-- GRÁFICO + SAÚDE -->
-<div class="grid xl:grid-cols-3 gap-5">
-
-    <div class="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="flex justify-between mb-5">
-
-            <div>
-
-                <h2 class="font-bold">
-                    Vendas dos últimos 60 dias
-                </h2>
-
-                <p class="text-xs text-slate-500 mt-1">
-                    Evolução das vendas retornada pela API.
-                </p>
-
-            </div>
-
-            <span class="text-[10px] text-slate-500 bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg">
-                60 DIAS
-            </span>
-
-        </div>
-
-        <div id="sales-chart"
-             class="h-64 flex items-end gap-1 border-b border-slate-800">
-        </div>
-
-        <div id="sales-empty"
-             class="hidden h-64 items-center justify-center text-sm text-slate-600">
-            Nenhum histórico de vendas disponível.
-        </div>
-
-    </div>
-
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="flex justify-between mb-5">
-
-            <div>
-                <h2 class="font-bold">
-                    Saúde da operação
-                </h2>
-
-                <p class="text-xs text-slate-500 mt-1">
-                    Situação do catálogo.
-                </p>
-            </div>
-
-            <span class="text-emerald-400 text-xs font-bold">
-                ● ONLINE
-            </span>
-
-        </div>
-
-
-        <div class="space-y-5">
-
-            <div>
-
-                <div class="flex justify-between text-xs mb-2">
-                    <span class="text-slate-400">
-                        Anúncios ativos
-                    </span>
-
-                    <span id="health-active-text">
-                        0%
-                    </span>
-                </div>
-
-                <div class="h-2 bg-slate-950 rounded-full overflow-hidden">
-                    <div id="health-active"
-                         class="h-full bg-emerald-400"
-                         style="width:0%">
-                    </div>
-                </div>
-
-            </div>
-
-
-            <div>
-
-                <div class="flex justify-between text-xs mb-2">
-
-                    <span class="text-slate-400">
-                        Estoque
-                    </span>
-
-                    <span id="health-stock-text">
-                        —
-                    </span>
-
-                </div>
-
-                <div class="h-2 bg-slate-950 rounded-full overflow-hidden">
-
-                    <div id="health-stock"
-                         class="h-full bg-blue-400"
-                         style="width:0%">
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="border-t border-slate-800 pt-4 space-y-3">
-
-                <div class="flex justify-between">
-                    <span class="text-xs text-slate-500">
-                        Total anúncios
-                    </span>
-                    <b id="health-total">0</b>
-                </div>
-
-                <div class="flex justify-between">
-                    <span class="text-xs text-slate-500">
-                        Fora do ar
-                    </span>
-                    <b id="health-inactive"
-                       class="text-amber-400">
-                        0
-                    </b>
-                </div>
-
-                <div class="flex justify-between">
-                    <span class="text-xs text-slate-500">
-                        Sincronização
-                    </span>
-                    <b id="health-sync"
-                       class="text-slate-300">
-                        —
-                    </b>
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-<!-- TOP 10 -->
-<div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-
-    <div class="p-5 border-b border-slate-800 flex justify-between">
+      <div class="connection-header">
 
         <div>
 
-            <h2 class="font-bold">
-                🏆 Top 10 anúncios mais vendidos
-            </h2>
+          <div class="card-title">
+            Contas Mercado Livre
+          </div>
 
-            <p class="text-xs text-slate-500 mt-1">
-                Ranking dos produtos nos últimos 60 dias.
-            </p>
+          <div
+            id="connectionStatus"
+            class="connection-status"
+          >
+
+            <span
+              id="statusDot"
+              class="status-dot"
+            ></span>
+
+            <span id="statusText">
+              Verificando conexão...
+            </span>
+
+          </div>
 
         </div>
 
-        <span class="text-yellow-400 text-xs font-black">
-            TOP 10
-        </span>
 
-    </div>
+        <div
+          style="
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <button
+            class="btn btn-yellow"
+            onclick="conectarOutraConta()"
+          >
+            + Conectar outra conta
+          </button>
+
+          <button
+            class="btn btn-gray"
+            onclick="desconectarSessao()"
+          >
+            Desconectar
+          </button>
+
+        </div>
+
+      </div>
 
 
-    <div class="overflow-x-auto">
+      <div
+        id="accountsList"
+        class="accounts-list"
+      >
+      </div>
 
-        <table class="w-full text-left text-xs">
+    </section>
 
-            <thead class="bg-slate-950 text-slate-500 uppercase">
 
-                <tr>
-                    <th class="p-4">#</th>
-                    <th class="p-4">Produto</th>
-                    <th class="p-4">SKU / MLB</th>
-                    <th class="p-4 text-right">Vendas</th>
-                    <th class="p-4 text-right">Faturamento</th>
-                    <th class="p-4 text-right">Participação</th>
-                </tr>
+    <!-- ================================================= -->
+    <!-- STATS -->
+    <!-- ================================================= -->
+
+    <section
+      id="dashboardArea"
+      class="hidden"
+    >
+
+      <div class="stats-grid">
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Faturamento — 60 dias
+          </div>
+
+          <div
+            id="statFaturamento"
+            class="stat-value"
+          >
+            R$ 0,00
+          </div>
+
+          <div class="stat-description">
+            Vendas pagas
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Pedidos — 60 dias
+          </div>
+
+          <div
+            id="statPedidos"
+            class="stat-value"
+          >
+            0
+          </div>
+
+          <div class="stat-description">
+            Pedidos pagos
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Unidades vendidas
+          </div>
+
+          <div
+            id="statUnidades"
+            class="stat-value"
+          >
+            0
+          </div>
+
+          <div class="stat-description">
+            Produtos vendidos
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Ticket médio
+          </div>
+
+          <div
+            id="statTicket"
+            class="stat-value"
+          >
+            R$ 0,00
+          </div>
+
+          <div class="stat-description">
+            Por pedido
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Anúncios ativos
+          </div>
+
+          <div
+            id="statAnuncios"
+            class="stat-value"
+          >
+            0
+          </div>
+
+          <div class="stat-description">
+            Anúncios publicados
+          </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+          <div class="stat-label">
+            Estoque
+          </div>
+
+          <div
+            id="statEstoque"
+            class="stat-value"
+          >
+            0
+          </div>
+
+          <div class="stat-description">
+            Unidades disponíveis
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================= -->
+      <!-- GRÁFICO + TOP -->
+      <!-- ================================================= -->
+
+      <div class="dashboard-grid">
+
+        <section class="card">
+
+          <div class="card-header">
+
+            <div>
+
+              <div class="card-title">
+                Vendas dos últimos 60 dias
+              </div>
+
+              <div class="card-subtitle">
+                Faturamento por dia
+              </div>
+
+            </div>
+
+          </div>
+
+          <div class="chart-wrapper">
+
+            <canvas
+              id="salesChart"
+              class="chart"
+            ></canvas>
+
+            <div
+              id="chartEmpty"
+              class="chart-empty hidden"
+            >
+              Sem dados de vendas.
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <section class="card">
+
+          <div class="card-header">
+
+            <div>
+
+              <div class="card-title">
+                Top 10 produtos
+              </div>
+
+              <div class="card-subtitle">
+                Produtos com mais unidades vendidas
+              </div>
+
+            </div>
+
+          </div>
+
+          <div
+            id="topProducts"
+            class="top-list"
+          >
+          </div>
+
+        </section>
+
+      </div>
+
+
+      <!-- ================================================= -->
+      <!-- ESTOQUE -->
+      <!-- ================================================= -->
+
+      <section class="card">
+
+        <div class="card-header">
+
+          <div>
+
+            <div class="card-title">
+              Resumo do estoque
+            </div>
+
+            <div class="card-subtitle">
+              Informações da conta selecionada
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div
+          style="
+            display:grid;
+            grid-template-columns:
+              repeat(3,1fr);
+            gap:15px;
+          "
+        >
+
+          <div
+            style="
+              background:#f7f7f7;
+              padding:16px;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                font-size:12px;
+                color:#777;
+              "
+            >
+              Valor do estoque
+            </div>
+
+            <strong
+              id="stockValue"
+              style="
+                font-size:20px;
+                display:block;
+                margin-top:5px;
+              "
+            >
+              R$ 0,00
+            </strong>
+
+          </div>
+
+
+          <div
+            style="
+              background:#f7f7f7;
+              padding:16px;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                font-size:12px;
+                color:#777;
+              "
+            >
+              Preço médio
+            </div>
+
+            <strong
+              id="averagePrice"
+              style="
+                font-size:20px;
+                display:block;
+                margin-top:5px;
+              "
+            >
+              R$ 0,00
+            </strong>
+
+          </div>
+
+
+          <div
+            style="
+              background:#f7f7f7;
+              padding:16px;
+              border-radius:10px;
+            "
+          >
+
+            <div
+              style="
+                font-size:12px;
+                color:#777;
+              "
+            >
+              Anúncios Premium / Clássico
+            </div>
+
+            <strong
+              id="listingTypes"
+              style="
+                font-size:20px;
+                display:block;
+                margin-top:5px;
+              "
+            >
+              0 / 0
+            </strong>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ================================================= -->
+      <!-- ANÚNCIOS -->
+      <!-- ================================================= -->
+
+      <section class="card">
+
+        <div class="card-header">
+
+          <div>
+
+            <div class="card-title">
+              Anúncios
+            </div>
+
+            <div class="card-subtitle">
+              Edite os preços e envie para o Mercado Livre.
+            </div>
+
+          </div>
+
+
+          <div
+            style="
+              display:flex;
+              gap:8px;
+              flex-wrap:wrap;
+            "
+          >
+
+            <button
+              class="btn btn-gray"
+              onclick="sincronizarPrecos()"
+            >
+              ↻ Sincronizar preços
+            </button>
+
+            <button
+              class="btn btn-gray"
+              onclick="sincronizarFretes()"
+            >
+              🚚 Sincronizar fretes
+            </button>
+
+            <button
+              class="btn btn-green"
+              onclick="salvarPrecos()"
+            >
+              ✓ Salvar preços
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div class="filters">
+
+          <input
+            id="searchInput"
+            class="search-input"
+            type="search"
+            placeholder="Pesquisar anúncio, SKU ou ID..."
+            oninput="filtrarAnuncios()"
+          >
+
+          <button
+            class="btn btn-gray"
+            onclick="limparPesquisa()"
+          >
+            Limpar
+          </button>
+
+        </div>
+
+
+        <div class="table-container">
+
+          <table>
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Produto
+                </th>
+
+                <th>
+                  SKU
+                </th>
+
+                <th>
+                  Preço
+                </th>
+
+                <th>
+                  Taxa
+                </th>
+
+                <th>
+                  Frete
+                </th>
+
+                <th>
+                  Líquido
+                </th>
+
+                <th>
+                  Estoque
+                </th>
+
+                <th>
+                  Tipo
+                </th>
+
+                <th>
+                  Status
+                </th>
+
+                <th>
+                  Link
+                </th>
+
+              </tr>
 
             </thead>
 
-            <tbody id="top10"
-                   class="divide-y divide-slate-800">
+            <tbody
+              id="productsTable"
+            >
             </tbody>
 
-        </table>
+          </table>
 
-    </div>
-
-</div>
-
-
-<!-- INFORMAÇÕES EXTRAS -->
-<div class="grid md:grid-cols-4 gap-4">
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <div class="text-xs text-slate-500">
-            Preço médio
         </div>
 
-        <div id="extra-preco"
-             class="text-xl font-black mt-2">
-            R$ 0,00
-        </div>
-    </div>
 
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="text-xs text-slate-500">
-            Valor em estoque
+        <div
+          id="emptyProducts"
+          class="empty-accounts hidden"
+          style="margin-top:15px;"
+        >
+          Nenhum anúncio encontrado.
         </div>
 
-        <div id="extra-estoque"
-             class="text-xl font-black mt-2">
-            R$ 0,00
-        </div>
+      </section>
 
-    </div>
+    </section>
 
-
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-
-        <div class="text-xs text-slate-500">
-            Premium
-        </div>
-
-        <div id="extra-premium"
-             class="text-xl font-black text-yellow-400 mt-2">
-            0
-        </div>
-
-    </div>
+  </main>
 
 
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+  <!-- ================================================= -->
+  <!-- FOOTER -->
+  <!-- ================================================= -->
 
-        <div class="text-xs text-slate-500">
-            Clássico
-        </div>
+  <footer>
 
-        <div id="extra-classico"
-             class="text-xl font-black text-blue-400 mt-2">
-            0
-        </div>
+    ML Hub Pro —
+    Gerenciamento Mercado Livre
 
-    </div>
+    <br>
 
-</div>
-
-</section>
-
-
-<!-- =========================================================
-     BUSCA
-========================================================= -->
-<div id="ferramentas"
-     class="hidden mt-6">
-
-<form onsubmit="event.preventDefault();executarBusca()"
-      class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3">
-
-    <span class="text-slate-400 text-lg px-2">
-        🔍
+    <span id="lastUpdate">
+      Última atualização: —
     </span>
 
-    <input id="busca"
-        placeholder="Digite MLB, SKU ou título..."
-        class="bg-transparent outline-none flex-1 text-sm">
+  </footer>
 
-    <button type="button"
-        onclick="limparBusca()"
-        class="bg-slate-800 text-slate-400 px-3 py-1 rounded-lg text-xs">
-        Limpar
-    </button>
 
-</form>
+  <!-- ================================================= -->
+  <!-- TOASTS -->
+  <!-- ================================================= -->
 
-</div>
+  <div
+    id="toastContainer"
+    class="toast-container"
+  ></div>
 
 
-<!-- =========================================================
-     LOADING
-========================================================= -->
-<div id="loading"
-class="hidden fixed inset-0 bg-black/70 z-[100] items-center justify-center">
+  <!-- ================================================= -->
+  <!-- JAVASCRIPT -->
+  <!-- ================================================= -->
 
-<div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 text-center">
+  <script>
 
-    <div class="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+    /*
+    =====================================================
+    CONFIGURAÇÃO
+    =====================================================
+    */
 
-    <p id="loading-text"
-       class="text-sm text-slate-400 mt-4">
-        Carregando...
-    </p>
+    const RENDER_URL =
+      "https://site-atualizar-pre-o-ml.onrender.com";
 
-</div>
 
-</div>
+    /*
+    =====================================================
+    ESTADO
+    =====================================================
+    */
 
+    let ML_SESSION =
+      localStorage.getItem(
+        "ml_hub_session"
+      );
 
-<!-- =========================================================
-     GESTÃO
-========================================================= -->
-<section id="secao-gestao"
-class="hidden mt-6 space-y-5">
+    let contaAtiva =
+      null;
 
-<div class="grid grid-cols-3 gap-4">
+    let contas =
+      [];
 
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div class="text-[11px] text-slate-500 uppercase">
-            Total listado
-        </div>
-        <div id="total-listado"
-             class="text-2xl font-black mt-1">
-            0
-        </div>
-    </div>
+    let anuncios =
+      [];
 
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div class="text-[11px] text-slate-500 uppercase">
-            Anúncios ativos
-        </div>
-        <div id="total-ativos"
-             class="text-2xl font-black text-emerald-400 mt-1">
-            0
-        </div>
-    </div>
+    let anunciosFiltrados =
+      [];
 
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div class="text-[11px] text-slate-500 uppercase">
-            Outros status
-        </div>
-        <div id="total-outros"
-             class="text-2xl font-black mt-1">
-            0
-        </div>
-    </div>
+    let dashboard =
+      null;
 
-</div>
+    let salesChart =
+      null;
 
 
-<div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+    /*
+    =====================================================
+    UTILITÁRIOS
+    =====================================================
+    */
 
-<div class="overflow-x-auto">
+    function moeda(valor) {
 
-<table class="w-full futuristic-table">
+      const numero =
+        Number(valor) || 0;
 
-<thead>
-<tr>
-<th class="p-4">Anúncio</th>
-<th class="p-4">Preço</th>
-<th class="p-4">Comissão / Frete</th>
-<th class="p-4">Você recebe</th>
-<th class="p-4">Estoque</th>
-<th class="p-4">Status</th>
-<th class="p-4">Ação</th>
-</tr>
-</thead>
-
-<tbody id="tabela-gestao"
-class="divide-y divide-slate-800 text-xs">
-</tbody>
-
-</table>
-
-</div>
-</div>
-
-</section>
-
-
-<!-- =========================================================
-     SIMULAÇÃO
-========================================================= -->
-<section id="secao-simulacao"
-class="hidden mt-6 space-y-5">
-
-<div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-
-<h2 class="font-bold">
-Planilha de Simulação
-</h2>
-
-<p class="text-xs text-slate-500 mt-1">
-(Custo + Frete) / [1 - ((Taxa + Imposto + Lucro) / 100)]
-</p>
-
-<div class="flex flex-wrap gap-2 mt-4">
-
-<input id="massa-custo"
-placeholder="Custo R$"
-type="number"
-class="input-simulacao w-24">
-
-<input id="massa-taxa"
-placeholder="Taxa %"
-type="number"
-class="input-simulacao w-20">
-
-<input id="massa-imposto"
-placeholder="Imposto %"
-type="number"
-class="input-simulacao w-20">
-
-<input id="massa-lucro"
-placeholder="Lucro %"
-type="number"
-class="input-simulacao w-20">
-
-<button onclick="aplicarMassa()"
-class="bg-yellow-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold">
-Aplicar
-</button>
-
-</div>
-
-</div>
-
-
-<div class="bg-white text-slate-900 rounded-2xl overflow-auto">
-
-<table class="w-full text-xs">
-
-<thead class="bg-slate-100">
-
-<tr>
-<th class="p-3">MLB</th>
-<th class="p-3">SKU</th>
-<th class="p-3">Produto</th>
-<th class="p-3">Preço</th>
-<th class="p-3">Frete</th>
-<th class="p-3">Tipo</th>
-<th class="p-3">Taxa</th>
-<th class="p-3">Custo</th>
-<th class="p-3">Imposto</th>
-<th class="p-3">Lucro</th>
-<th class="p-3">Novo preço</th>
-<th class="p-3">Lucro</th>
-<th class="p-3">Margem</th>
-</tr>
-
-</thead>
-
-<tbody id="tabela-simulacao"></tbody>
-
-</table>
-
-</div>
-
-</section>
-
-
-<!-- =========================================================
-     ATUALIZAÇÃO
-========================================================= -->
-<section id="secao-atualizacao"
-class="hidden mt-6 space-y-5">
-
-<div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex justify-between items-center">
-
-<div>
-
-<h2 class="font-bold">
-Atualização de preços
-</h2>
-
-<p class="text-xs text-slate-500 mt-1">
-Atualização em lotes de 20 anúncios.
-</p>
-
-</div>
-
-<div class="flex items-center gap-3">
-
-<span class="text-xs text-slate-400">
-Selecionados:
-<b id="contador-atualizacao"
-class="text-yellow-400">
-0
-</b>
-</span>
-
-<button onclick="atualizarPrecosMassa()"
-class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-5 py-3 rounded-lg text-xs">
-🚀 Atualizar preços
-</button>
-
-</div>
-
-</div>
-
-
-<div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-auto">
-
-<table class="w-full futuristic-table">
-
-<thead>
-
-<tr>
-<th class="p-4">
-<input type="checkbox"
-onclick="selecionarTodos(this)">
-</th>
-
-<th class="p-4">Produto</th>
-<th class="p-4">Preço atual</th>
-<th class="p-4">Novo preço</th>
-<th class="p-4">Situação</th>
-<th class="p-4">API</th>
-
-</tr>
-
-</thead>
-
-<tbody id="tabela-atualizacao"
-class="divide-y divide-slate-800 text-xs">
-</tbody>
-
-</table>
-
-</div>
-
-</section>
-
-
-</main>
-
-
-<script>
-
-/* =========================================================
-   CONFIGURAÇÃO
-========================================================= */
-
-const RENDER_URL =
-"https://site-atualizar-pre-o-ml.onrender.com";
-
-let cacheItens = [];
-let novosPrecos = {};
-let telaAtual = "inicio";
-
-
-/* =========================================================
-   UTILIDADES
-========================================================= */
-
-function moeda(valor){
-
-    if(valor === null ||
-       valor === undefined ||
-       isNaN(Number(valor))){
-
-        return "—";
-    }
-
-    return Number(valor).toLocaleString(
+      return numero.toLocaleString(
         "pt-BR",
         {
-            style:"currency",
-            currency:"BRL"
+          style: "currency",
+          currency: "BRL"
         }
-    );
-}
-
-
-function token(){
-
-    return localStorage.getItem(
-        "ml_access_token"
-    );
-
-}
-
-
-function mostrarToken(){
-
-    document
-    .getElementById("token-box")
-    .classList.remove("hidden");
-
-}
-
-
-function salvarToken(){
-
-    const valor =
-    document
-    .getElementById("token-input")
-    .value
-    .trim();
-
-    if(!valor){
-
-        alert("Digite um token.");
-        return;
-
+      );
     }
 
-    localStorage.setItem(
-        "ml_access_token",
-        valor
-    );
 
-    document
-    .getElementById("token-box")
-    .classList.add("hidden");
+    function numero(valor) {
 
-    carregarDados();
-
-}
+      return (
+        Number(valor) || 0
+      ).toLocaleString(
+        "pt-BR"
+      );
+    }
 
 
-/* =========================================================
-   NAVEGAÇÃO
-========================================================= */
+    function escapeHTML(
+      value
+    ) {
 
-const navNormal =
-"px-4 py-2 rounded-md text-xs font-medium text-slate-400 hover:text-white";
+      return String(
+        value ?? ""
+      )
+      .replaceAll(
+        "&",
+        "&amp;"
+      )
+      .replaceAll(
+        "<",
+        "&lt;"
+      )
+      .replaceAll(
+        ">",
+        "&gt;"
+      )
+      .replaceAll(
+        '"',
+        "&quot;"
+      )
+      .replaceAll(
+        "'",
+        "&#039;"
+      );
+    }
 
-const navAtivo =
-"px-4 py-2 rounded-md text-xs font-bold bg-yellow-400 text-slate-950";
+
+    function escapeJS(
+      value
+    ) {
+
+      return String(
+        value ?? ""
+      )
+      .replaceAll(
+        "\\",
+        "\\\\"
+      )
+      .replaceAll(
+        "'",
+        "\\'"
+      )
+      .replaceAll(
+        '"',
+        '\\"'
+      );
+    }
 
 
-function atualizarNav(id){
+    function mostrarLoading(
+      texto = "Carregando..."
+    ) {
 
-    [
-        "inicio",
-        "dashboard",
-        "gestao",
-        "simulacao",
-        "atualizacao"
-    ].forEach(x=>{
+      document
+        .getElementById(
+          "loadingText"
+        )
+        .textContent =
+        texto;
 
-        const el =
+      document
+        .getElementById(
+          "loading"
+        )
+        .classList
+        .remove(
+          "hidden"
+        );
+    }
+
+
+    function esconderLoading() {
+
+      document
+        .getElementById(
+          "loading"
+        )
+        .classList
+        .add(
+          "hidden"
+        );
+    }
+
+
+    function toast(
+      mensagem,
+      tipo = "info"
+    ) {
+
+      const container =
         document.getElementById(
-            "nav-"+x
+          "toastContainer"
         );
 
-        if(el){
+      const item =
+        document.createElement(
+          "div"
+        );
 
-            el.className =
-            x === id
-            ? navAtivo
-            : navNormal;
+      item.className =
+        `toast ${tipo}`;
 
+      item.textContent =
+        mensagem;
+
+      container.appendChild(
+        item
+      );
+
+      setTimeout(
+        () => {
+
+          item.remove();
+
+        },
+        4000
+      );
+    }
+
+
+    /*
+    =====================================================
+    SESSÃO
+    =====================================================
+    */
+
+    async function criarSessao() {
+
+      const response =
+        await fetch(
+          `${RENDER_URL}/api/session`,
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Accept":
+                "application/json"
+            }
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.erro ||
+          "Não foi possível criar a sessão."
+        );
+      }
+
+      ML_SESSION =
+        data.session_id;
+
+      localStorage.setItem(
+        "ml_hub_session",
+        ML_SESSION
+      );
+
+      return ML_SESSION;
+    }
+
+
+    async function garantirSessao() {
+
+      if (
+        ML_SESSION
+      ) {
+
+        return ML_SESSION;
+      }
+
+      return await criarSessao();
+    }
+
+
+    /*
+    =====================================================
+    HEADERS
+    =====================================================
+    */
+
+    function getHeaders(
+      extra = {}
+    ) {
+
+      const headers = {
+        "Accept":
+          "application/json",
+
+        ...extra
+      };
+
+      if (
+        ML_SESSION
+      ) {
+
+        headers[
+          "X-ML-Session"
+        ] =
+          ML_SESSION;
+      }
+
+      if (
+        contaAtiva?.id
+      ) {
+
+        headers[
+          "X-ML-Account"
+        ] =
+          contaAtiva.id;
+      }
+
+      return headers;
+    }
+
+
+    /*
+    =====================================================
+    API
+    =====================================================
+    */
+
+    async function api(
+      endpoint,
+      options = {}
+    ) {
+
+      await garantirSessao();
+
+      const config = {
+        ...options,
+
+        credentials:
+          "include",
+
+        headers:
+          getHeaders(
+            options.headers ||
+            {}
+          )
+      };
+
+      const response =
+        await fetch(
+          RENDER_URL +
+          endpoint,
+          config
+        );
+
+      let data =
+        null;
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        data =
+          null;
+      }
+
+      if (
+        !response.ok
+      ) {
+
+        if (
+          response.status ===
+          401
+        ) {
+
+          localStorage.removeItem(
+            "ml_hub_session"
+          );
+
+          ML_SESSION =
+            null;
         }
 
-    });
-
-}
-
-
-function esconderTudo(){
-
-    [
-        "tela-inicio",
-        "tela-dashboard",
-        "secao-gestao",
-        "secao-simulacao",
-        "secao-atualizacao"
-    ].forEach(id=>{
-
-        const el =
-        document.getElementById(id);
-
-        if(el)
-            el.classList.add("hidden");
-
-    });
-
-}
-
-
-function mudarTela(tela){
-
-    telaAtual = tela;
-
-    esconderTudo();
-
-    atualizarNav(tela);
-
-    const alvo =
-    document.getElementById(
-        tela === "inicio"
-        ? "tela-inicio"
-        : tela === "dashboard"
-        ? "tela-dashboard"
-        : "secao-"+tela
-    );
-
-    if(alvo)
-        alvo.classList.remove("hidden");
-
-
-    if(
-        tela === "gestao" ||
-        tela === "simulacao" ||
-        tela === "atualizacao"
-    ){
-
-        document
-        .getElementById("ferramentas")
-        .classList.remove("hidden");
-
-        executarBusca();
-
-    }else{
-
-        document
-        .getElementById("ferramentas")
-        .classList.add("hidden");
-
-    }
-
-
-    if(tela === "dashboard"){
-
-        atualizarDashboardLocal();
-
-        carregarDashboard();
-
-    }
-
-}
-
-
-/* =========================================================
-   LOADING
-========================================================= */
-
-function loading(ativo,texto){
-
-    const box =
-    document.getElementById("loading");
-
-    if(ativo){
-
-        document
-        .getElementById("loading-text")
-        .innerText =
-        texto || "Carregando...";
-
-        box.classList.remove("hidden");
-        box.classList.add("flex");
-
-    }else{
-
-        box.classList.add("hidden");
-        box.classList.remove("flex");
-
-    }
-
-}
-
-
-/* =========================================================
-   CARREGAR ANÚNCIOS
-========================================================= */
-
-async function carregarDados(){
-
-    const t = token();
-
-    if(!t){
-
-        mostrarToken();
-        return;
-
-    }
-
-    loading(
-        true,
-        "Buscando seus anúncios..."
-    );
-
-    try{
-
-        const response =
-        await fetch(
-            RENDER_URL+"/api/anuncios",
-            {
-                headers:{
-                    Authorization:t
-                }
-            }
+        throw new Error(
+          data?.erro ||
+          data?.message ||
+          data?.error ||
+          `Erro HTTP ${response.status}`
         );
+      }
+
+      return data;
+    }
+
+
+    /*
+    =====================================================
+    CONECTAR OUTRA CONTA
+    =====================================================
+    */
+
+    async function conectarOutraConta() {
+
+      try {
+
+        await garantirSessao();
+
+        /*
+         * Não existe Access Token aqui.
+         *
+         * O backend inicia o OAuth.
+         */
+        window.location.href =
+          `${RENDER_URL}/oauth/authorize`;
+
+      } catch (
+        error
+      ) {
+
+        toast(
+          error.message,
+          "error"
+        );
+      }
+    }
+
+
+    /*
+    =====================================================
+    CARREGAR CONTAS
+    =====================================================
+    */
+
+    async function carregarContas() {
+
+      try {
 
         const data =
-        await response.json();
+          await api(
+            "/api/contas"
+          );
 
-        if(data.itens){
+        contas =
+          data.contas ||
+          [];
 
-            cacheItens =
-            data.itens;
+        contaAtiva =
+          data.conta_ativa ||
+          null;
 
-            atualizarCards(
-                cacheItens
-            );
+        renderizarContas();
 
-            atualizarDashboardLocal();
+        atualizarStatus();
 
-            executarBusca();
+      } catch (
+        error
+      ) {
 
-            alert(
-                "Sucesso! "+
-                cacheItens.length+
-                " anúncios carregados."
-            );
-
-        }else{
-
-            alert(
-                data.erro ||
-                "Erro ao carregar anúncios."
-            );
-
-        }
-
-    }catch(e){
-
-        alert(
-            "Erro de comunicação com o servidor."
+        console.error(
+          error
         );
 
-    }finally{
+        contas =
+          [];
 
-        loading(false);
+        contaAtiva =
+          null;
 
-    }
+        renderizarContas();
 
-}
-
-
-/* =========================================================
-   ATUALIZAR CARDS
-========================================================= */
-
-function atualizarCards(itens){
-
-    const ativos =
-    itens.filter(
-        x=>x.status==="active"
-    ).length;
-
-    document
-    .getElementById("total-listado")
-    .innerText =
-    itens.length;
-
-    document
-    .getElementById("total-ativos")
-    .innerText =
-    ativos;
-
-    document
-    .getElementById("total-outros")
-    .innerText =
-    itens.length-ativos;
-
-}
-
-
-/* =========================================================
-   BUSCA
-========================================================= */
-
-function executarBusca(){
-
-    const input =
-    document.getElementById("busca");
-
-    if(!input)
-        return;
-
-    const termo =
-    input.value
-    .toLowerCase()
-    .trim();
-
-    let itens =
-    cacheItens;
-
-    if(termo){
-
-        itens =
-        cacheItens.filter(item=>{
-
-            return String(item.id)
-                .toLowerCase()
-                .includes(termo)
-
-                ||
-
-                String(item.sku)
-                .toLowerCase()
-                .includes(termo)
-
-                ||
-
-                String(item.title)
-                .toLowerCase()
-                .includes(termo);
-
-        });
-
+        atualizarStatus(
+          error.message
+        );
+      }
     }
 
 
-    if(telaAtual==="gestao")
-        montarGestao(itens);
+    /*
+    =====================================================
+    RENDER CONTAS
+    =====================================================
+    */
 
-    if(telaAtual==="simulacao")
-        montarSimulacao(itens);
+    function renderizarContas() {
 
-    if(telaAtual==="atualizacao")
-        montarAtualizacao(itens);
-
-}
-
-
-function limparBusca(){
-
-    document
-    .getElementById("busca")
-    .value="";
-
-    executarBusca();
-
-}
-
-
-/* =========================================================
-   TABELA DE GESTÃO
-========================================================= */
-
-function montarGestao(itens){
-
-    const tbody =
-    document.getElementById(
-        "tabela-gestao"
-    );
-
-    tbody.innerHTML="";
-
-    itens.forEach(item=>{
-
-        const tr =
-        document.createElement("tr");
-
-        tr.className =
-        "hover:bg-slate-800/50";
-
-        tr.innerHTML=`
-
-<td class="p-4">
-
-<div class="flex items-center gap-3">
-
-<img src="${item.thumbnail || ""}"
-class="w-10 h-10 object-cover rounded-lg border border-slate-700">
-
-<div>
-
-<div class="font-bold text-white">
-${item.title || "Sem título"}
-</div>
-
-<div class="text-[10px] text-slate-500">
-${item.id || ""} |
-SKU: ${item.sku || "-"}
-</div>
-
-</div>
-
-</div>
-
-</td>
-
-
-<td class="p-4 font-bold">
-${moeda(item.price)}
-</td>
-
-
-<td class="p-4 text-slate-400">
-Comissão: ${moeda(item.sale_fee)}
-<br>
-Frete: ${moeda(item.shipping_cost)}
-</td>
-
-
-<td class="p-4 text-emerald-400 font-bold">
-${moeda(item.net_received)}
-</td>
-
-
-<td class="p-4">
-${item.available_quantity || 0}
-</td>
-
-
-<td class="p-4">
-
-<input type="checkbox"
-disabled
-${item.status==="active"?"checked":""}>
-
-</td>
-
-
-<td class="p-4">
-
-<a href="${item.permalink || "#"}"
-target="_blank"
-class="text-blue-400 hover:underline">
-Ver
-</a>
-
-</td>
-
-`;
-
-        tbody.appendChild(tr);
-
-    });
-
-}
-
-
-/* =========================================================
-   SINCRONIZAR PREÇOS
-========================================================= */
-
-async function sincronizarPrecosApi(){
-
-    const t=token();
-
-    if(!t){
-
-        mostrarToken();
-        return;
-
-    }
-
-    if(!cacheItens.length){
-
-        alert(
-            "Carregue os anúncios primeiro."
+      const container =
+        document.getElementById(
+          "accountsList"
         );
 
-        return;
+      if (
+        !contas.length
+      ) {
 
+        container.innerHTML = `
+
+          <div class="empty-accounts">
+
+            <div
+              style="
+                font-size:35px;
+                margin-bottom:10px;
+              "
+            >
+              🛒
+            </div>
+
+            <strong>
+              Nenhuma conta conectada
+            </strong>
+
+            <p
+              style="
+                margin-top:7px;
+              "
+            >
+              Clique em
+              <strong>
+                "+ Conectar outra conta"
+              </strong>
+              para conectar seu primeiro seller.
+            </p>
+
+          </div>
+
+        `;
+
+        return;
+      }
+
+
+      container.innerHTML =
+        contas
+          .map(
+            conta => {
+
+              const ativa =
+                contaAtiva?.id ===
+                conta.id;
+
+              const nome =
+                conta.nickname ||
+                `Conta ${conta.seller_id}`;
+
+              const iniciais =
+                nome
+                  .substring(
+                    0,
+                    2
+                  )
+                  .toUpperCase();
+
+
+              return `
+
+                <div
+                  class="
+                    account-item
+                    ${ativa ? "active" : ""}
+                  "
+                >
+
+                  <div
+                    class="account-info"
+                  >
+
+                    <div
+                      class="account-avatar"
+                    >
+                      ${escapeHTML(
+                        iniciais
+                      )}
+                    </div>
+
+
+                    <div>
+
+                      <div
+                        class="account-name"
+                      >
+
+                        ${
+                          ativa
+                            ? "🟢 "
+                            : ""
+                        }
+
+                        ${escapeHTML(
+                          nome
+                        )}
+
+                      </div>
+
+
+                      <div
+                        class="account-meta"
+                      >
+                        Seller ID:
+                        ${escapeHTML(
+                          String(
+                            conta.seller_id
+                          )
+                        )}
+                      </div>
+
+
+                      ${
+                        conta.email
+                          ? `
+                            <div
+                              class="account-meta"
+                            >
+                              ${escapeHTML(
+                                conta.email
+                              )}
+                            </div>
+                          `
+                          : ""
+                      }
+
+                    </div>
+
+                  </div>
+
+
+                  <div
+                    class="account-actions"
+                  >
+
+                    ${
+                      ativa
+
+                        ? `
+
+                          <button
+                            class="
+                              btn
+                              btn-gray
+                            "
+                            disabled
+                          >
+                            ✓ Conta ativa
+                          </button>
+
+                        `
+
+                        : `
+
+                          <button
+                            class="
+                              btn
+                              btn-blue
+                            "
+                            onclick="
+                              selecionarConta(
+                                '${escapeJS(
+                                  conta.id
+                                )}'
+                              )
+                            "
+                          >
+                            Usar esta conta
+                          </button>
+
+                        `
+                    }
+
+
+                    <button
+                      class="
+                        btn
+                        btn-gray
+                      "
+                      onclick="
+                        removerConta(
+                          '${escapeJS(
+                            conta.id
+                          )}'
+                        )
+                      "
+                    >
+                      Remover
+                    </button>
+
+                  </div>
+
+                </div>
+
+              `;
+
+            }
+          )
+          .join("");
     }
 
-    loading(
-        true,
-        "Sincronizando preços..."
-    );
 
-    try{
+    /*
+    =====================================================
+    STATUS
+    =====================================================
+    */
 
-        const response =
-        await fetch(
-            RENDER_URL+
-            "/api/sincronizar-precos",
+    function atualizarStatus(
+      erro = null
+    ) {
+
+      const dot =
+        document.getElementById(
+          "statusDot"
+        );
+
+      const text =
+        document.getElementById(
+          "statusText"
+        );
+
+      const header =
+        document.getElementById(
+          "headerAccount"
+        );
+
+
+      dot.className =
+        "status-dot";
+
+
+      if (
+        erro
+      ) {
+
+        dot.classList.add(
+          "error"
+        );
+
+        text.textContent =
+          erro;
+
+        header.textContent =
+          "Erro de conexão";
+
+        return;
+      }
+
+
+      if (
+        contaAtiva
+      ) {
+
+        dot.classList.add(
+          "online"
+        );
+
+        text.innerHTML =
+          `
+            Conectado:
+            <strong>
+              ${escapeHTML(
+                contaAtiva.nickname ||
+                contaAtiva.seller_id
+              )}
+            </strong>
+          `;
+
+        header.textContent =
+          contaAtiva.nickname ||
+          `Seller ${contaAtiva.seller_id}`;
+
+      } else {
+
+        text.textContent =
+          contas.length
+            ? "Selecione uma conta"
+            : "Nenhuma conta conectada";
+
+        header.textContent =
+          "Nenhuma conta conectada";
+      }
+    }
+
+
+    /*
+    =====================================================
+    SELECIONAR CONTA
+    =====================================================
+    */
+
+    async function selecionarConta(
+      accountId
+    ) {
+
+      try {
+
+        mostrarLoading(
+          "Trocando conta..."
+        );
+
+
+        const data =
+          await api(
+            "/api/contas/selecionar",
             {
-                method:"POST",
-                headers:{
-                    "Content-Type":
-                    "application/json",
-                    Authorization:t
-                },
-                body:JSON.stringify({
-                    ids:
-                    cacheItens.map(x=>x.id)
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify({
+                  account_id:
+                    accountId
                 })
             }
+          );
+
+
+        contaAtiva =
+          data.conta_ativa;
+
+
+        await carregarContas();
+
+
+        await carregarTudo(
+          false
         );
 
-        const data =
-        await response.json();
 
-        if(data.precos){
+        toast(
+          "Conta selecionada com sucesso.",
+          "success"
+        );
 
-            cacheItens.forEach(item=>{
+      } catch (
+        error
+      ) {
 
-                if(
-                    data.precos[item.id] !==
-                    undefined
-                ){
+        toast(
+          "Erro ao trocar conta: " +
+          error.message,
+          "error"
+        );
 
-                    item.price =
-                    data.precos[item.id];
+      } finally {
 
-                    item.net_received =
-                    item.price -
-                    item.sale_fee -
-                    (
-                        item.free_shipping
-                        ? item.shipping_cost
-                        : 0
-                    );
+        esconderLoading();
+      }
+    }
 
-                }
 
-            });
+    /*
+    =====================================================
+    REMOVER CONTA
+    =====================================================
+    */
 
-            atualizarDashboardLocal();
-            executarBusca();
+    async function removerConta(
+      accountId
+    ) {
 
-            alert(
-                "Preços sincronizados."
-            );
+      const confirmar =
+        confirm(
+          "Remover esta conta da sessão?"
+        );
 
-        }else{
+      if (
+        !confirmar
+      ) {
 
-            alert(
-                data.erro ||
-                "Erro ao sincronizar."
-            );
+        return;
+      }
 
+
+      try {
+
+        mostrarLoading(
+          "Removendo conta..."
+        );
+
+
+        await api(
+          `/api/contas/${encodeURIComponent(
+            accountId
+          )}`,
+          {
+            method:
+              "DELETE"
+          }
+        );
+
+
+        await carregarContas();
+
+
+        if (
+          contaAtiva
+        ) {
+
+          await carregarTudo(
+            false
+          );
+
+        } else {
+
+          esconderDashboard();
         }
 
-    }catch(e){
 
-        alert(
-            "Erro de comunicação."
+        toast(
+          "Conta removida.",
+          "success"
         );
 
-    }finally{
+      } catch (
+        error
+      ) {
 
-        loading(false);
-
-    }
-
-}
-
-
-/* =========================================================
-   SINCRONIZAR FRETES
-========================================================= */
-
-async function sincronizarFretesApi(){
-
-    const t=token();
-
-    if(!t){
-
-        mostrarToken();
-        return;
-
-    }
-
-    if(!cacheItens.length){
-
-        alert(
-            "Carregue os anúncios primeiro."
+        toast(
+          error.message,
+          "error"
         );
+
+      } finally {
+
+        esconderLoading();
+      }
+    }
+
+
+    /*
+    =====================================================
+    DESCONECTAR SESSÃO
+    =====================================================
+    */
+
+    async function desconectarSessao() {
+
+      if (
+        !ML_SESSION
+      ) {
 
         return;
+      }
 
-    }
 
-    loading(
-        true,
-        "Sincronizando fretes..."
-    );
-
-    try{
-
-        const response =
-        await fetch(
-            RENDER_URL+
-            "/api/sincronizar-fretes",
-            {
-                method:"POST",
-                headers:{
-                    "Content-Type":
-                    "application/json",
-                    Authorization:t
-                },
-                body:JSON.stringify({
-                    ids:
-                    cacheItens.map(x=>x.id)
-                })
-            }
+      const confirmar =
+        confirm(
+          "Desconectar todas as contas desta sessão?"
         );
 
-        const data =
-        await response.json();
-
-        if(data.fretes){
-
-            cacheItens.forEach(item=>{
-
-                if(data.fretes[item.id]){
-
-                    item.shipping_cost =
-                    data.fretes[item.id].custo;
-
-                    item.free_shipping =
-                    data.fretes[item.id].gratis;
-
-                    item.net_received =
-                    item.price -
-                    item.sale_fee -
-                    (
-                        item.free_shipping
-                        ? item.shipping_cost
-                        : 0
-                    );
-
-                }
-
-            });
-
-            executarBusca();
-
-            alert(
-                "Fretes sincronizados."
-            );
-
-        }else{
-
-            alert(
-                data.erro ||
-                "Erro ao sincronizar fretes."
-            );
-
-        }
-
-    }catch(e){
-
-        alert(
-            "Erro de comunicação."
-        );
-
-    }finally{
-
-        loading(false);
-
-    }
-
-}
-
-
-/* =========================================================
-   DASHBOARD LOCAL
-========================================================= */
-
-function atualizarDashboardLocal(){
-
-    const itens =
-    cacheItens || [];
-
-    const ativos =
-    itens.filter(
-        x=>x.status==="active"
-    );
-
-    const estoque =
-    itens.reduce(
-        (s,x)=>
-        s+
-        Number(
-            x.available_quantity || 0
-        ),
-        0
-    );
-
-    const precoMedio =
-    itens.length
-    ?
-    itens.reduce(
-        (s,x)=>
-        s+
-        Number(x.price||0),
-        0
-    )/itens.length
-    :
-    0;
-
-    const valorEstoque =
-    itens.reduce(
-        (s,x)=>
-        s+
-        Number(x.price||0)*
-        Number(
-            x.available_quantity||0
-        ),
-        0
-    );
-
-    const premium =
-    itens.filter(
-        x=>x.listing_type_id==="gold_pro"
-    ).length;
-
-    const classico =
-    itens.length-premium;
-
-    const porcentagem =
-    itens.length
-    ?
-    ativos.length/itens.length*100
-    :
-    0;
-
-
-    setText(
-        "dash-ativos",
-        ativos.length
-    );
-
-    setText(
-        "dash-estoque",
-        estoque
-    );
-
-    setText(
-        "health-total",
-        itens.length
-    );
-
-    setText(
-        "health-inactive",
-        itens.length-ativos.length
-    );
-
-    setText(
-        "health-active-text",
-        porcentagem.toFixed(0)+"%"
-    );
-
-    document
-    .getElementById("health-active")
-    .style.width =
-    porcentagem+"%";
-
-    setText(
-        "health-stock-text",
-        estoque+
-        " un."
-    );
-
-    setText(
-        "extra-preco",
-        moeda(precoMedio)
-    );
-
-    setText(
-        "extra-estoque",
-        moeda(valorEstoque)
-    );
-
-    setText(
-        "extra-premium",
-        premium
-    );
-
-    setText(
-        "extra-classico",
-        classico
-    );
-
-    setText(
-        "health-sync",
-        new Date()
-        .toLocaleTimeString(
-            "pt-BR",
-            {
-                hour:"2-digit",
-                minute:"2-digit"
-            }
-        )
-    );
-
-}
-
-
-/* =========================================================
-   DASHBOARD API
-========================================================= */
-
-async function carregarDashboard(){
-
-    atualizarDashboardLocal();
-
-    const t=token();
-
-    if(!t){
-
-        renderTop10([]);
-
-        renderGrafico([]);
+      if (
+        !confirmar
+      ) {
 
         return;
+      }
 
-    }
 
-    try{
+      try {
 
-        const response =
-        await fetch(
-            RENDER_URL+
-            "/api/dashboard",
-            {
-                headers:{
-                    Authorization:t
-                }
-            }
+        await api(
+          "/api/auth/logout",
+          {
+            method:
+              "POST"
+          }
         );
 
-        if(!response.ok)
-            throw new Error();
+      } catch (
+        error
+      ) {
 
-        const data =
-        await response.json();
-
-
-        const vendas =
-        Number(
-            data.vendas_60_dias ??
-            data.total_vendas_60_dias ??
-            data.sales_60_days ??
-            0
+        console.error(
+          error
         );
 
+      } finally {
 
-        const faturamento =
-        Number(
-            data.faturamento_60_dias ??
-            data.revenue_60_days ??
-            0
+        localStorage.removeItem(
+          "ml_hub_session"
         );
 
+        ML_SESSION =
+          null;
 
-        const ticket =
-        Number(
-            data.ticket_medio ??
-            data.average_ticket ??
-            (
-                vendas
-                ? faturamento/vendas
-                : 0
-            )
+        contaAtiva =
+          null;
+
+        contas =
+          [];
+
+        anuncios =
+          [];
+
+        dashboard =
+          null;
+
+        esconderDashboard();
+
+        renderizarContas();
+
+        atualizarStatus();
+
+        toast(
+          "Sessão desconectada.",
+          "success"
         );
-
-
-        setText(
-            "dash-vendas",
-            vendas.toLocaleString("pt-BR")
-        );
-
-        setText(
-            "home-vendas",
-            vendas.toLocaleString("pt-BR")
-        );
-
-
-        setText(
-            "dash-faturamento",
-            moeda(faturamento)
-        );
-
-        setText(
-            "home-faturamento",
-            moeda(faturamento)
-        );
-
-
-        setText(
-            "dash-ticket",
-            moeda(ticket)
-        );
-
-
-        renderTop10(
-            data.top_10 ??
-            data.top10 ??
-            data.produtos_mais_vendidos ??
-            []
-        );
-
-
-        renderGrafico(
-            data.series_60_dias ??
-            data.vendas_diarias ??
-            data.sales_series ??
-            []
-        );
-
-
-    }catch(e){
-
-        renderTop10([]);
-
-        renderGrafico([]);
-
-    }
-
-}
-
-
-/* =========================================================
-   TOP 10
-========================================================= */
-
-function renderTop10(rows){
-
-    const tbody =
-    document.getElementById(
-        "top10"
-    );
-
-    tbody.innerHTML="";
-
-
-    if(!Array.isArray(rows) ||
-       !rows.length){
-
-        tbody.innerHTML=`
-
-<tr>
-
-<td colspan="6"
-class="p-10 text-center text-slate-600">
-
-Nenhum histórico de vendas retornado pela API.
-
-</td>
-
-</tr>
-
-`;
-
-        return;
-
+      }
     }
 
 
-    const total =
-    rows.reduce(
-        (s,r)=>
-        s+
-        Number(
-            r.sales ??
-            r.quantity ??
-            r.vendas ??
-            0
-        ),
-        0
-    ) || 1;
+    /*
+    =====================================================
+    CARREGAR DASHBOARD
+    =====================================================
+    */
+
+    async function carregarDashboard() {
+
+      if (
+        !contaAtiva
+      ) {
+
+        return null;
+      }
 
 
-    rows
-    .slice(0,10)
-    .forEach((r,i)=>{
-
-        const vendas =
-        Number(
-            r.sales ??
-            r.quantity ??
-            r.vendas ??
-            0
-        );
-
-
-        const faturamento =
-        Number(
-            r.revenue ??
-            r.faturamento ??
-            r.total ??
-            0
-        );
-
-
-        const tr =
-        document.createElement("tr");
-
-        tr.className =
-        "hover:bg-slate-800/40";
-
-
-        tr.innerHTML=`
-
-<td class="p-4 font-black ${
-    i<3
-    ?"text-yellow-400"
-    :"text-slate-500"
-}">
-${i+1}
-</td>
-
-
-<td class="p-4">
-
-<div class="flex items-center gap-3">
-
-${
-r.thumbnail
-?
-`<img src="${r.thumbnail}"
-class="w-10 h-10 rounded-lg object-cover">`
-:
-`<div class="w-10 h-10 rounded-lg bg-slate-800"></div>`
-}
-
-<div>
-
-<div class="font-bold text-white">
-${r.title || "Produto"}
-</div>
-
-<div class="text-[10px] text-slate-500">
-${r.status || ""}
-</div>
-
-</div>
-
-</div>
-
-</td>
-
-
-<td class="p-4 text-slate-400">
-
-${r.sku || "-"}
-
-<br>
-
-<span class="text-[10px]">
-${r.id || r.mlb || ""}
-</span>
-
-</td>
-
-
-<td class="p-4 text-right font-black">
-${vendas.toLocaleString("pt-BR")}
-</td>
-
-
-<td class="p-4 text-right text-emerald-400 font-bold">
-${moeda(faturamento)}
-</td>
-
-
-<td class="p-4 text-right text-slate-400">
-${((vendas/total)*100).toFixed(1)}%
-</td>
-
-`;
-
-        tbody.appendChild(tr);
-
-    });
-
-}
-
-
-/* =========================================================
-   GRÁFICO
-========================================================= */
-
-function renderGrafico(series){
-
-    const chart =
-    document.getElementById(
-        "sales-chart"
-    );
-
-    const empty =
-    document.getElementById(
-        "sales-empty"
-    );
-
-    const home =
-    document.getElementById(
-        "home-chart"
-    );
-
-    chart.innerHTML="";
-    home.innerHTML="";
-
-
-    if(!Array.isArray(series) ||
-       !series.length){
-
-        chart.classList.add("hidden");
-        empty.classList.remove("hidden");
-
-        for(let i=0;i<30;i++){
-
-            const bar =
-            document.createElement("div");
-
-            bar.className =
-            "chart-bar";
-
-            bar.style.height =
-            (15+(i*13)%50)+"%";
-
-            home.appendChild(bar);
-
-        }
-
-        return;
-
+      return await api(
+        "/api/dashboard"
+      );
     }
 
 
-    chart.classList.remove("hidden");
-    empty.classList.add("hidden");
-
-
-    const valores =
-    series.map(x=>
-        Number(
-            x.value ??
-            x.sales ??
-            x.quantity ??
-            0
-        )
-    );
-
-
-    const max =
-    Math.max(...valores,1);
-
-
-    series.forEach((item,i)=>{
-
-        const bar =
-        document.createElement("div");
-
-        bar.className =
-        "chart-bar";
-
-        bar.style.height =
-        Math.max(
-            3,
-            valores[i]/max*100
-        )+"%";
-
-        bar.title =
-        `${
-            item.date ||
-            item.label ||
-            ""
-        }: ${valores[i]}`;
-
-        chart.appendChild(bar);
-
-    });
-
-
-    series
-    .slice(-30)
-    .forEach(item=>{
-
-        const valor =
-        Number(
-            item.value ??
-            item.sales ??
-            item.quantity ??
-            0
-        );
-
-        const bar =
-        document.createElement("div");
-
-        bar.className =
-        "chart-bar";
-
-        bar.style.height =
-        Math.max(
-            5,
-            valor/max*100
-        )+"%";
-
-        home.appendChild(bar);
-
-    });
-
-}
-
-
-/* =========================================================
-   SIMULAÇÃO
-========================================================= */
-
-function montarSimulacao(itens){
-
-    const tbody =
-    document.getElementById(
-        "tabela-simulacao"
-    );
-
-    tbody.innerHTML="";
-
-
-    itens.forEach(item=>{
-
-        const index =
-        cacheItens.findIndex(
-            x=>x.id===item.id
-        );
-
-
-        const premium =
-        item.listing_type_id==="gold_pro";
-
-
-        const taxa =
-        premium ? 17 : 12;
-
-
-        const tr =
-        document.createElement("tr");
-
-        tr.className =
-        "border-b border-slate-200";
-
-
-        tr.innerHTML=`
-
-<td class="p-3">
-${item.id}
-</td>
-
-<td class="p-3">
-${item.sku || "-"}
-</td>
-
-<td class="p-3">
-${item.title || ""}
-</td>
-
-<td class="p-3 font-bold">
-${moeda(item.price)}
-</td>
-
-<td class="p-3">
-${moeda(item.shipping_cost)}
-</td>
-
-<td class="p-3">
-${premium?"Premium":"Clássico"}
-</td>
-
-
-<td class="p-3">
-
-<input
-id="taxa_${index}"
-type="number"
-value="${taxa}"
-step=".1"
-class="input-simulacao w-16"
-oninput="recalcular(${index})">
-
-</td>
-
-
-<td class="p-3">
-
-<input
-id="custo_${index}"
-type="number"
-value="10"
-step=".01"
-class="input-simulacao w-20"
-oninput="recalcular(${index})">
-
-</td>
-
-
-<td class="p-3">
-
-<input
-id="imposto_${index}"
-type="number"
-value="0"
-step=".1"
-class="input-simulacao w-16"
-oninput="recalcular(${index})">
-
-</td>
-
-
-<td class="p-3">
-
-<input
-id="lucro_${index}"
-type="number"
-value="12"
-step=".1"
-class="input-simulacao w-16"
-oninput="recalcular(${index})">
-
-</td>
-
-
-<td id="novo_${index}"
-class="p-3 font-black text-emerald-700">
-R$ 0,00
-</td>
-
-
-<td id="lucro_${index}"
-class="p-3 font-bold text-emerald-700">
-R$ 0,00
-</td>
-
-
-<td id="margem_${index}"
-class="p-3 font-bold">
-0%
-</td>
-
-`;
-
-        tbody.appendChild(tr);
-
-        recalcular(index);
-
-    });
-
-}
-
-
-function recalcular(index){
-
-    const item =
-    cacheItens[index];
-
-    if(!item)
-        return;
-
-
-    const taxa =
-    Number(
-        document.getElementById(
-            `taxa_${index}`
-        ).value
-    ) || 0;
-
-
-    const custo =
-    Number(
-        document.getElementById(
-            `custo_${index}`
-        ).value
-    ) || 0;
-
-
-    const imposto =
-    Number(
-        document.getElementById(
-            `imposto_${index}`
-        ).value
-    ) || 0;
-
-
-    const lucroDesejado =
-    Number(
-        document.getElementById(
-            `lucro_${index}`
-        ).value
-    ) || 0;
-
-
-    const frete =
-    item.free_shipping
-    ?
-    Number(item.shipping_cost||0)
-    :
-    6.85;
-
-
-    const divisor =
-    1-
-    (
-        taxa+
-        imposto+
-        lucroDesejado
-    )/100;
-
-
-    const novoPreco =
-    divisor>0
-    ?
-    (custo+frete)/divisor
-    :
-    custo*1.5;
-
-
-    const valorTaxa =
-    novoPreco*taxa/100;
-
-
-    const valorImposto =
-    novoPreco*imposto/100;
-
-
-    const lucroReal =
-    novoPreco-
-    custo-
-    frete-
-    valorTaxa-
-    valorImposto;
-
-
-    const margem =
-    novoPreco
-    ?
-    lucroReal/novoPreco*100
-    :
-    0;
-
-
-    document.getElementById(
-        `novo_${index}`
-    ).innerText =
-    moeda(novoPreco);
-
-
-    document.getElementById(
-        `lucro_${index}`
-    ).innerText =
-    moeda(lucroReal);
-
-
-    document.getElementById(
-        `margem_${index}`
-    ).innerText =
-    margem.toFixed(2)+"%";
-
-
-    novosPrecos[index]={
-        preco:novoPreco,
-        fora:
-        Math.abs(
-            novoPreco-
-            Number(item.price||0)
-        )>.05
-    };
-
-}
-
-
-function aplicarMassa(){
-
-    const custo =
-    document.getElementById(
-        "massa-custo"
-    ).value;
-
-    const taxa =
-    document.getElementById(
-        "massa-taxa"
-    ).value;
-
-    const imposto =
-    document.getElementById(
-        "massa-imposto"
-    ).value;
-
-    const lucro =
-    document.getElementById(
-        "massa-lucro"
-    ).value;
-
-
-    cacheItens.forEach((item,index)=>{
-
-        const c =
-        document.getElementById(
-            `custo_${index}`
-        );
-
-        const t =
-        document.getElementById(
-            `taxa_${index}`
-        );
-
-        const i =
-        document.getElementById(
-            `imposto_${index}`
-        );
-
-        const l =
-        document.getElementById(
-            `lucro_${index}`
-        );
-
-
-        if(c && custo!=="")
-            c.value=custo;
-
-        if(t && taxa!=="")
-            t.value=taxa;
-
-        if(i && imposto!=="")
-            i.value=imposto;
-
-        if(l && lucro!=="")
-            l.value=lucro;
-
-
-        if(c)
-            recalcular(index);
-
-    });
-
-}
-
-
-/* =========================================================
-   ATUALIZAÇÃO DE PREÇOS
-========================================================= */
-
-function montarAtualizacao(itens){
-
-    const tbody =
-    document.getElementById(
-        "tabela-atualizacao"
-    );
-
-    tbody.innerHTML="";
-
-    let contador=0;
-
-
-    itens.forEach(item=>{
-
-        const index =
-        cacheItens.findIndex(
-            x=>x.id===item.id
-        );
-
-
-        const sim =
-        novosPrecos[index] ||
-        {
-            preco:item.price,
-            fora:true
-        };
-
-
-        if(!sim.fora)
-            return;
-
-
-        contador++;
-
-
-        const tr =
-        document.createElement("tr");
-
-
-        tr.innerHTML=`
-
-<td class="p-4">
-
-<input
-type="checkbox"
-class="check-item"
-value="${index}"
-checked
-onchange="atualizarContador()">
-
-</td>
-
-
-<td class="p-4">
-
-<div class="flex items-center gap-3">
-
-<img src="${item.thumbnail || ""}"
-class="w-10 h-10 object-cover rounded-lg">
-
-<div>
-
-<div class="font-bold">
-${item.title || ""}
-</div>
-
-<div class="text-[10px] text-slate-500">
-${item.id} | ${item.sku || ""}
-</div>
-
-</div>
-
-</div>
-
-</td>
-
-
-<td class="p-4 font-bold">
-${moeda(item.price)}
-</td>
-
-
-<td class="p-4 text-emerald-400 font-black">
-${moeda(sim.preco)}
-</td>
-
-
-<td class="p-4 text-yellow-400">
-Fora da margem
-</td>
-
-
-<td id="api-status-${index}"
-class="p-4 text-slate-500">
-Pendente
-</td>
-
-`;
-
-        tbody.appendChild(tr);
-
-    });
-
-
-    document
-    .getElementById(
-        "contador-atualizacao"
-    )
-    .innerText=contador;
-
-}
-
-
-function atualizarContador(){
-
-    const n =
-    document.querySelectorAll(
-        ".check-item:checked"
-    ).length;
-
-    document
-    .getElementById(
-        "contador-atualizacao"
-    )
-    .innerText=n;
-
-}
-
-
-function selecionarTodos(master){
-
-    document
-    .querySelectorAll(
-        ".check-item"
-    )
-    .forEach(x=>{
-        x.checked=
-        master.checked;
-    });
-
-    atualizarContador();
-
-}
-
-
-async function atualizarPrecosMassa(){
-
-    const t=token();
-
-    if(!t){
-
-        mostrarToken();
-        return;
-
-    }
-
-
-    const checks =
-    document.querySelectorAll(
-        ".check-item:checked"
-    );
-
-
-    if(!checks.length){
-
-        alert(
-            "Nenhum anúncio selecionado."
-        );
-
-        return;
-
-    }
-
-
-    if(!confirm(
-        "Atualizar "+
-        checks.length+
-        " anúncios?"
-    ))
-        return;
-
-
-    const itens =
-    Array.from(checks)
-    .map(cb=>{
-
-        const index =
-        Number(cb.value);
-
-        const item =
-        cacheItens[index];
-
-        const sim =
-        novosPrecos[index];
+    /*
+    =====================================================
+    CARREGAR ANÚNCIOS
+    =====================================================
+    */
+
+    async function carregarAnuncios() {
+
+      if (
+        !contaAtiva
+      ) {
 
         return {
-
-            index:index,
-
-            id:item.id,
-
-            price:Number(
-                (
-                    sim
-                    ? sim.preco
-                    : item.price
-                ).toFixed(2)
-            )
-
+          itens: []
         };
-
-    });
-
-
-    const tamanho=20;
+      }
 
 
-    for(
-        let i=0;
-        i<itens.length;
-        i+=tamanho
-    ){
+      return await api(
+        "/api/anuncios"
+      );
+    }
 
-        const lote =
-        itens.slice(
-            i,
-            i+tamanho
+
+    /*
+    =====================================================
+    CARREGAR TUDO
+    =====================================================
+    */
+
+    async function carregarTudo(
+      mostrar = true
+    ) {
+
+      if (
+        !contaAtiva
+      ) {
+
+        esconderDashboard();
+
+        return;
+      }
+
+
+      if (
+        mostrar
+      ) {
+
+        mostrarLoading(
+          "Carregando dados do Mercado Livre..."
+        );
+      }
+
+
+      try {
+
+        const [
+          dashboardData,
+          anunciosData
+        ] = await Promise.all([
+          carregarDashboard(),
+          carregarAnuncios()
+        ]);
+
+
+        dashboard =
+          dashboardData;
+
+        anuncios =
+          anunciosData?.itens ||
+          [];
+
+        anunciosFiltrados =
+          [...anuncios];
+
+
+        mostrarDashboard();
+
+        atualizarDashboard(
+          dashboard
+        );
+
+        renderizarAnuncios();
+
+        atualizarUltimaAtualizacao(
+          dashboard
         );
 
 
-        lote.forEach(item=>{
+      } catch (
+        error
+      ) {
 
-            const el =
-            document.getElementById(
-                "api-status-"+item.index
+        console.error(
+          error
+        );
+
+        toast(
+          "Erro ao carregar dados: " +
+          error.message,
+          "error"
+        );
+
+      } finally {
+
+        if (
+          mostrar
+        ) {
+
+          esconderLoading();
+        }
+      }
+    }
+
+
+    /*
+    =====================================================
+    ATUALIZAR TUDO
+    =====================================================
+    */
+
+    async function atualizarTudo() {
+
+      if (
+        !contaAtiva
+      ) {
+
+        toast(
+          "Conecte ou selecione uma conta primeiro.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      await carregarTudo(
+        true
+      );
+    }
+
+
+    /*
+    =====================================================
+    MOSTRAR / ESCONDER DASHBOARD
+    =====================================================
+    */
+
+    function mostrarDashboard() {
+
+      document
+        .getElementById(
+          "dashboardArea"
+        )
+        .classList
+        .remove(
+          "hidden"
+        );
+    }
+
+
+    function esconderDashboard() {
+
+      document
+        .getElementById(
+          "dashboardArea"
+        )
+        .classList
+        .add(
+          "hidden"
+        );
+    }
+
+
+    /*
+    =====================================================
+    DASHBOARD
+    =====================================================
+    */
+
+    function atualizarDashboard(
+      data
+    ) {
+
+      if (
+        !data
+      ) {
+
+        return;
+      }
+
+
+      document
+        .getElementById(
+          "statFaturamento"
+        )
+        .textContent =
+        moeda(
+          data.faturamento_60_dias
+        );
+
+
+      document
+        .getElementById(
+          "statPedidos"
+        )
+        .textContent =
+        numero(
+          data.total_pedidos ??
+          data.vendas_60_dias
+        );
+
+
+      document
+        .getElementById(
+          "statUnidades"
+        )
+        .textContent =
+        numero(
+          data.total_unidades
+        );
+
+
+      document
+        .getElementById(
+          "statTicket"
+        )
+        .textContent =
+        moeda(
+          data.ticket_medio
+        );
+
+
+      document
+        .getElementById(
+          "statAnuncios"
+        )
+        .textContent =
+        numero(
+          data.anuncios_ativos
+        );
+
+
+      document
+        .getElementById(
+          "statEstoque"
+        )
+        .textContent =
+        numero(
+          data.estoque_total
+        );
+
+
+      document
+        .getElementById(
+          "stockValue"
+        )
+        .textContent =
+        moeda(
+          data.valor_estoque
+        );
+
+
+      document
+        .getElementById(
+          "averagePrice"
+        )
+        .textContent =
+        moeda(
+          data.preco_medio
+        );
+
+
+      document
+        .getElementById(
+          "listingTypes"
+        )
+        .textContent =
+        `${numero(
+          data.premium
+        )} / ${numero(
+          data.classic
+        )}`;
+
+
+      renderizarTop10(
+        data.top_10 ||
+        []
+      );
+
+
+      renderizarGrafico(
+        data.series_60_dias ||
+        []
+      );
+    }
+
+
+    /*
+    =====================================================
+    TOP 10
+    =====================================================
+    */
+
+    function renderizarTop10(
+      lista
+    ) {
+
+      const container =
+        document.getElementById(
+          "topProducts"
+        );
+
+
+      if (
+        !lista.length
+      ) {
+
+        container.innerHTML = `
+
+          <div
+            style="
+              text-align:center;
+              padding:25px;
+              color:#999;
+            "
+          >
+            Nenhuma venda encontrada
+            no período.
+          </div>
+
+        `;
+
+        return;
+      }
+
+
+      container.innerHTML =
+        lista
+          .map(
+            (item, index) => {
+
+              return `
+
+                <div
+                  class="top-item"
+                  title="${escapeHTML(
+                    item.title
+                  )}"
+                >
+
+                  <div
+                    class="top-position"
+                  >
+                    ${index + 1}
+                  </div>
+
+                  <div
+                    class="top-name"
+                  >
+                    ${escapeHTML(
+                      item.title
+                    )}
+                  </div>
+
+                  <div
+                    class="top-qty"
+                  >
+                    ${numero(
+                      item.quantity
+                    )}
+                  </div>
+
+                </div>
+
+              `;
+            }
+          )
+          .join("");
+    }
+
+
+    /*
+    =====================================================
+    GRÁFICO
+    =====================================================
+    */
+
+    function renderizarGrafico(
+      series
+    ) {
+
+      const canvas =
+        document.getElementById(
+          "salesChart"
+        );
+
+      const empty =
+        document.getElementById(
+          "chartEmpty"
+        );
+
+
+      if (
+        !series.length
+      ) {
+
+        canvas.classList.add(
+          "hidden"
+        );
+
+        empty.classList.remove(
+          "hidden"
+        );
+
+        return;
+      }
+
+
+      canvas.classList.remove(
+        "hidden"
+      );
+
+      empty.classList.add(
+        "hidden"
+      );
+
+
+      if (
+        salesChart
+      ) {
+
+        salesChart.destroy();
+
+        salesChart =
+          null;
+      }
+
+
+      const ctx =
+        canvas.getContext(
+          "2d"
+        );
+
+
+      const width =
+        canvas.clientWidth ||
+        700;
+
+      const height =
+        canvas.clientHeight ||
+        320;
+
+
+      canvas.width =
+        width *
+        window.devicePixelRatio;
+
+      canvas.height =
+        height *
+        window.devicePixelRatio;
+
+
+      ctx.scale(
+        window.devicePixelRatio,
+        window.devicePixelRatio
+      );
+
+
+      const w =
+        width;
+
+      const h =
+        height;
+
+
+      const padding = {
+        top: 20,
+        right: 20,
+        bottom: 45,
+        left: 65
+      };
+
+
+      const chartWidth =
+        w -
+        padding.left -
+        padding.right;
+
+      const chartHeight =
+        h -
+        padding.top -
+        padding.bottom;
+
+
+      const values =
+        series.map(
+          item =>
+            Number(
+              item.faturamento
+            ) || 0
+        );
+
+
+      const max =
+        Math.max(
+          ...values,
+          1
+        );
+
+
+      /*
+       * Grade
+       */
+
+      ctx.strokeStyle =
+        "#eeeeee";
+
+      ctx.lineWidth =
+        1;
+
+
+      for (
+        let i = 0;
+        i <= 4;
+        i++
+      ) {
+
+        const y =
+          padding.top +
+          chartHeight -
+          (
+            chartHeight *
+            i /
+            4
+          );
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          padding.left,
+          y
+        );
+
+        ctx.lineTo(
+          w -
+          padding.right,
+          y
+        );
+
+        ctx.stroke();
+
+
+        const value =
+          max *
+          i /
+          4;
+
+
+        ctx.fillStyle =
+          "#888";
+
+        ctx.font =
+          "11px Arial";
+
+        ctx.textAlign =
+          "right";
+
+        ctx.fillText(
+          moedaCurta(
+            value
+          ),
+          padding.left - 8,
+          y + 4
+        );
+      }
+
+
+      /*
+       * Linha
+       */
+
+      ctx.beginPath();
+
+
+      series.forEach(
+        (item, index) => {
+
+          const x =
+            padding.left +
+            (
+              index /
+              Math.max(
+                series.length - 1,
+                1
+              )
+            ) *
+            chartWidth;
+
+
+          const value =
+            Number(
+              item.faturamento
+            ) || 0;
+
+
+          const y =
+            padding.top +
+            chartHeight -
+            (
+              value /
+              max
+            ) *
+            chartHeight;
+
+
+          if (
+            index === 0
+          ) {
+
+            ctx.moveTo(
+              x,
+              y
             );
 
-            if(el)
-                el.innerHTML=
-                `<span class="text-blue-400">
-                Atualizando...
-                </span>`;
+          } else {
 
-        });
-
-
-        try{
-
-            const response =
-            await fetch(
-                RENDER_URL+
-                "/api/atualizar-precos",
-                {
-                    method:"POST",
-                    headers:{
-                        "Content-Type":
-                        "application/json",
-                        Authorization:t
-                    },
-                    body:JSON.stringify({
-
-                        itens:
-                        lote.map(x=>({
-                            id:x.id,
-                            price:x.price
-                        }))
-
-                    })
-                }
+            ctx.lineTo(
+              x,
+              y
             );
-
-
-            const data =
-            await response.json();
-
-
-            lote.forEach(item=>{
-
-                const el =
-                document.getElementById(
-                    "api-status-"+item.index
-                );
-
-
-                if(response.ok){
-
-                    if(el)
-                        el.innerHTML=
-                        `<span class="text-emerald-400 font-bold">
-                        ✓ Atualizado
-                        </span>`;
-
-
-                    cacheItens[
-                        item.index
-                    ].price=
-                    item.price;
-
-
-                }else{
-
-                    if(el)
-                        el.innerHTML=
-                        `<span class="text-red-400 font-bold">
-                        ✗ ${
-                            data.erro ||
-                            "Erro"
-                        }
-                        </span>`;
-
-                }
-
-            });
-
-
-        }catch(e){
-
-            lote.forEach(item=>{
-
-                const el =
-                document.getElementById(
-                    "api-status-"+item.index
-                );
-
-                if(el)
-                    el.innerHTML=
-                    `<span class="text-red-400">
-                    Erro de rede
-                    </span>`;
-
-            });
+          }
 
         }
+      );
 
 
-        if(
-            i+tamanho<
-            itens.length
-        ){
+      ctx.strokeStyle =
+        "#3483fa";
 
-            await new Promise(
-                resolve=>
-                setTimeout(
-                    resolve,
-                    1000
-                )
-            );
+      ctx.lineWidth =
+        3;
+
+      ctx.stroke();
+
+
+      /*
+       * Pontos
+       */
+
+      series.forEach(
+        (item, index) => {
+
+          const x =
+            padding.left +
+            (
+              index /
+              Math.max(
+                series.length - 1,
+                1
+              )
+            ) *
+            chartWidth;
+
+
+          const value =
+            Number(
+              item.faturamento
+            ) || 0;
+
+
+          const y =
+            padding.top +
+            chartHeight -
+            (
+              value /
+              max
+            ) *
+            chartHeight;
+
+
+          ctx.beginPath();
+
+          ctx.arc(
+            x,
+            y,
+            3,
+            0,
+            Math.PI * 2
+          );
+
+          ctx.fillStyle =
+            "#3483fa";
+
+          ctx.fill();
 
         }
+      );
+
+
+      /*
+       * Datas no eixo X
+       */
+
+      ctx.fillStyle =
+        "#888";
+
+      ctx.font =
+        "10px Arial";
+
+      ctx.textAlign =
+        "center";
+
+
+      const labels =
+        Math.min(
+          7,
+          series.length
+        );
+
+
+      for (
+        let i = 0;
+        i < labels;
+        i++
+      ) {
+
+        const index =
+          Math.floor(
+            i *
+            (
+              series.length - 1
+            ) /
+            Math.max(
+              labels - 1,
+              1
+            )
+          );
+
+
+        const item =
+          series[index];
+
+
+        const x =
+          padding.left +
+          (
+            index /
+            Math.max(
+              series.length - 1,
+              1
+            )
+          ) *
+          chartWidth;
+
+
+        const data =
+          formatarDataCurta(
+            item.data
+          );
+
+
+        ctx.fillText(
+          data,
+          x,
+          h - 15
+        );
+      }
 
     }
 
 
-    alert(
-        "Atualização finalizada."
+    function moedaCurta(
+      valor
+    ) {
+
+      const n =
+        Number(valor) || 0;
+
+
+      if (
+        Math.abs(n) >=
+        1000000
+      ) {
+
+        return (
+          "R$ " +
+          (
+            n / 1000000
+          ).toFixed(1) +
+          "M"
+        );
+
+      }
+
+
+      if (
+        Math.abs(n) >=
+        1000
+      ) {
+
+        return (
+          "R$ " +
+          (
+            n / 1000
+          ).toFixed(1) +
+          "K"
+        );
+      }
+
+
+      return (
+        "R$ " +
+        n.toFixed(0)
+      );
+    }
+
+
+    function formatarDataCurta(
+      value
+    ) {
+
+      if (
+        !value
+      ) {
+
+        return "";
+      }
+
+
+      const date =
+        new Date(
+          value +
+          (
+            value.length === 10
+              ? "T00:00:00"
+              : ""
+          )
+        );
+
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return value;
+      }
+
+
+      return (
+        String(
+          date.getDate()
+        ).padStart(
+          2,
+          "0"
+        ) +
+        "/" +
+        String(
+          date.getMonth() + 1
+        ).padStart(
+          2,
+          "0"
+        )
+      );
+    }
+
+
+    /*
+    =====================================================
+    ANÚNCIOS
+    =====================================================
+    */
+
+    function renderizarAnuncios() {
+
+      const tbody =
+        document.getElementById(
+          "productsTable"
+        );
+
+      const empty =
+        document.getElementById(
+          "emptyProducts"
+        );
+
+
+      if (
+        !anunciosFiltrados.length
+      ) {
+
+        tbody.innerHTML =
+          "";
+
+        empty.classList.remove(
+          "hidden"
+        );
+
+        return;
+      }
+
+
+      empty.classList.add(
+        "hidden"
+      );
+
+
+      tbody.innerHTML =
+        anunciosFiltrados
+          .map(
+            item => {
+
+              const tipo =
+                item.listing_type_id ===
+                "gold_pro"
+
+                  ? `
+                    <span
+                      class="
+                        badge
+                        badge-orange
+                      "
+                    >
+                      Premium
+                    </span>
+                  `
+
+                  : item.listing_type_id ===
+                    "gold_special"
+
+                    ? `
+                      <span
+                        class="
+                          badge
+                          badge-blue
+                        "
+                      >
+                        Clássico
+                      </span>
+                    `
+
+                    : `
+                      <span
+                        class="
+                          badge
+                          badge-gray
+                        "
+                      >
+                        ${escapeHTML(
+                          item.listing_type_id ||
+                          "—"
+                        )}
+                      </span>
+                    `;
+
+
+              const status =
+                item.status ===
+                "active"
+
+                  ? `
+                    <span
+                      class="
+                        badge
+                        badge-green
+                      "
+                    >
+                      Ativo
+                    </span>
+                  `
+
+                  : `
+                    <span
+                      class="
+                        badge
+                        badge-gray
+                      "
+                    >
+                      ${escapeHTML(
+                        item.status ||
+                        "—"
+                      )}
+                    </span>
+                  `;
+
+
+              const frete =
+                item.free_shipping
+
+                  ? `
+                    <span
+                      class="
+                        badge
+                        badge-green
+                      "
+                    >
+                      Grátis
+                    </span>
+                  `
+
+                  : moeda(
+                      item.shipping_cost
+                    );
+
+
+              return `
+
+                <tr
+                  data-id="${escapeHTML(
+                    item.id
+                  )}"
+                >
+
+                  <td>
+
+                    <div
+                      class="product-cell"
+                    >
+
+                      ${
+                        item.thumbnail
+
+                          ? `
+                            <img
+                              class="
+                                product-image
+                              "
+                              src="${escapeHTML(
+                                item.thumbnail
+                              )}"
+                              alt=""
+                              loading="lazy"
+                            >
+                          `
+
+                          : `
+                            <div
+                              class="
+                                product-image
+                              "
+                              style="
+                                display:flex;
+                                align-items:center;
+                                justify-content:center;
+                              "
+                            >
+                              📦
+                            </div>
+                          `
+                      }
+
+
+                      <div>
+
+                        <div
+                          class="product-name"
+                          title="${escapeHTML(
+                            item.title
+                          )}"
+                        >
+                          ${escapeHTML(
+                            item.title
+                          )}
+                        </div>
+
+                        <div
+                          style="
+                            color:#888;
+                            font-size:11px;
+                            margin-top:3px;
+                          "
+                        >
+                          ${escapeHTML(
+                            item.id
+                          )}
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </td>
+
+
+                  <td>
+
+                    ${
+                      escapeHTML(
+                        item.sku ||
+                        "—"
+                      )
+                    }
+
+                  </td>
+
+
+                  <td>
+
+                    <input
+                      class="price-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value="${Number(
+                        item.price
+                      ).toFixed(2)}"
+                      data-price-id="${escapeHTML(
+                        item.id
+                      )}"
+                    >
+
+                  </td>
+
+
+                  <td>
+
+                    ${moeda(
+                      item.sale_fee
+                    )}
+
+                  </td>
+
+
+                  <td>
+
+                    ${frete}
+
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${moeda(
+                        item.net_received
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+
+                    <strong>
+                      ${numero(
+                        item.available_quantity
+                      )}
+                    </strong>
+
+                  </td>
+
+
+                  <td>
+
+                    ${tipo}
+
+                  </td>
+
+
+                  <td>
+
+                    ${status}
+
+                  </td>
+
+
+                  <td>
+
+                    ${
+                      item.permalink
+
+                        ? `
+                          <a
+                            href="${escapeHTML(
+                              item.permalink
+                            )}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="
+                              btn
+                              btn-gray
+                            "
+                            style="
+                              padding:
+                                7px 10px;
+                              text-decoration:
+                                none;
+                            "
+                          >
+                            Abrir
+                          </a>
+                        `
+
+                        : "—"
+                    }
+
+                  </td>
+
+                </tr>
+
+              `;
+
+            }
+          )
+          .join("");
+    }
+
+
+    /*
+    =====================================================
+    FILTRO
+    =====================================================
+    */
+
+    function filtrarAnuncios() {
+
+      const input =
+        document.getElementById(
+          "searchInput"
+        );
+
+
+      const termo =
+        (
+          input.value ||
+          ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+      if (
+        !termo
+      ) {
+
+        anunciosFiltrados =
+          [...anuncios];
+
+      } else {
+
+        anunciosFiltrados =
+          anuncios.filter(
+            item => {
+
+              return (
+
+                String(
+                  item.id ||
+                  ""
+                )
+                .toLowerCase()
+                .includes(
+                  termo
+                )
+
+                ||
+
+                String(
+                  item.title ||
+                  ""
+                )
+                .toLowerCase()
+                .includes(
+                  termo
+                )
+
+                ||
+
+                String(
+                  item.sku ||
+                  ""
+                )
+                .toLowerCase()
+                .includes(
+                  termo
+                )
+
+              );
+            }
+          );
+      }
+
+
+      renderizarAnuncios();
+    }
+
+
+    function limparPesquisa() {
+
+      document
+        .getElementById(
+          "searchInput"
+        )
+        .value =
+        "";
+
+      filtrarAnuncios();
+    }
+
+
+    /*
+    =====================================================
+    SINCRONIZAR PREÇOS
+    =====================================================
+    */
+
+    async function sincronizarPrecos() {
+
+      if (
+        !contaAtiva
+      ) {
+
+        toast(
+          "Selecione uma conta primeiro.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      if (
+        !anuncios.length
+      ) {
+
+        toast(
+          "Nenhum anúncio carregado.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      try {
+
+        mostrarLoading(
+          "Sincronizando preços..."
+        );
+
+
+        const precos = {};
+
+
+        anuncios.forEach(
+          item => {
+
+            precos[
+              item.id
+            ] =
+              item.price;
+
+          }
+        );
+
+
+        const data =
+          await api(
+            "/api/sincronizar-precos",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify({
+                  precos
+                })
+            }
+          );
+
+
+        const novosPrecos =
+          data.precos ||
+          {};
+
+
+        anuncios =
+          anuncios.map(
+            item => {
+
+              if (
+                novosPrecos[
+                  item.id
+                ] !==
+                undefined &&
+                novosPrecos[
+                  item.id
+                ] !== null
+              ) {
+
+                return {
+                  ...item,
+
+                  price:
+                    Number(
+                      novosPrecos[
+                        item.id
+                      ]
+                    )
+                };
+              }
+
+              return item;
+            }
+          );
+
+
+        anunciosFiltrados =
+          anunciosFiltrados.map(
+            item => {
+
+              const atualizado =
+                anuncios.find(
+                  x =>
+                    x.id ===
+                    item.id
+                );
+
+              return atualizado ||
+                item;
+            }
+          );
+
+
+        renderizarAnuncios();
+
+
+        toast(
+          "Preços sincronizados.",
+          "success"
+        );
+
+      } catch (
+        error
+      ) {
+
+        toast(
+          "Erro ao sincronizar preços: " +
+          error.message,
+          "error"
+        );
+
+      } finally {
+
+        esconderLoading();
+      }
+    }
+
+
+    /*
+    =====================================================
+    SINCRONIZAR FRETES
+    =====================================================
+    */
+
+    async function sincronizarFretes() {
+
+      if (
+        !contaAtiva
+      ) {
+
+        toast(
+          "Selecione uma conta primeiro.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      try {
+
+        mostrarLoading(
+          "Sincronizando fretes..."
+        );
+
+
+        const fretes = {};
+
+
+        anuncios.forEach(
+          item => {
+
+            fretes[
+              item.id
+            ] = {
+              custo:
+                item.shipping_cost,
+
+              gratis:
+                item.free_shipping
+            };
+
+          }
+        );
+
+
+        const data =
+          await api(
+            "/api/sincronizar-fretes",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify({
+                  fretes
+                })
+            }
+          );
+
+
+        const novosFretes =
+          data.fretes ||
+          {};
+
+
+        anuncios =
+          anuncios.map(
+            item => {
+
+              const frete =
+                novosFretes[
+                  item.id
+                ];
+
+
+              if (
+                frete
+              ) {
+
+                const custo =
+                  Number(
+                    frete.custo
+                  ) || 0;
+
+
+                return {
+                  ...item,
+
+                  shipping_cost:
+                    custo,
+
+                  free_shipping:
+                    frete.gratis ===
+                    true,
+
+                  net_received:
+                    Number(
+                      item.price
+                    ) -
+                    Number(
+                      item.sale_fee
+                    ) -
+                    custo
+                };
+              }
+
+
+              return item;
+            }
+          );
+
+
+        filtrarAnuncios();
+
+
+        toast(
+          "Fretes sincronizados.",
+          "success"
+        );
+
+      } catch (
+        error
+      ) {
+
+        toast(
+          "Erro ao sincronizar fretes: " +
+          error.message,
+          "error"
+        );
+
+      } finally {
+
+        esconderLoading();
+      }
+    }
+
+
+    /*
+    =====================================================
+    SALVAR PREÇOS
+    =====================================================
+    */
+
+    async function salvarPrecos() {
+
+      if (
+        !contaAtiva
+      ) {
+
+        toast(
+          "Selecione uma conta primeiro.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      const inputs =
+        document.querySelectorAll(
+          "[data-price-id]"
+        );
+
+
+      if (
+        !inputs.length
+      ) {
+
+        toast(
+          "Nenhum preço para atualizar.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      const alteracoes = [];
+
+
+      inputs.forEach(
+        input => {
+
+          const id =
+            input.dataset.priceId;
+
+
+          const novoPreco =
+            Number(
+              input.value
+            );
+
+
+          const original =
+            anuncios.find(
+              item =>
+                item.id ===
+                id
+            );
+
+
+          if (
+            !original
+          ) {
+
+            return;
+          }
+
+
+          if (
+            !Number.isFinite(
+              novoPreco
+            ) ||
+            novoPreco < 0
+          ) {
+
+            return;
+          }
+
+
+          if (
+            Math.abs(
+              novoPreco -
+              Number(
+                original.price
+              )
+            ) >
+            0.001
+          ) {
+
+            alteracoes.push({
+              id,
+              price:
+                novoPreco
+            });
+          }
+
+        }
+      );
+
+
+      if (
+        !alteracoes.length
+      ) {
+
+        toast(
+          "Nenhum preço foi alterado.",
+          "info"
+        );
+
+        return;
+      }
+
+
+      const confirmar =
+        confirm(
+          `Atualizar ${alteracoes.length} preço(s) no Mercado Livre?`
+        );
+
+
+      if (
+        !confirmar
+      ) {
+
+        return;
+      }
+
+
+      try {
+
+        mostrarLoading(
+          "Atualizando preços no Mercado Livre..."
+        );
+
+
+        /*
+         * O backend suporta vários itens.
+         * Enviamos em lotes de 20.
+         */
+
+        const loteTamanho =
+          20;
+
+
+        let totalSucesso =
+          0;
+
+        let totalFalhas =
+          0;
+
+
+        for (
+          let i = 0;
+          i < alteracoes.length;
+          i += loteTamanho
+        ) {
+
+          const lote =
+            alteracoes.slice(
+              i,
+              i +
+              loteTamanho
+            );
+
+
+          const data =
+            await api(
+              "/api/atualizar-precos",
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body:
+                  JSON.stringify({
+                    itens:
+                      lote
+                  })
+              }
+            );
+
+
+          totalSucesso +=
+            Number(
+              data.sucesso
+            ) || 0;
+
+
+          totalFalhas +=
+            Number(
+              data.falhas
+            ) || 0;
+
+
+          /*
+           * Atualiza os valores locais
+           * dos que deram certo.
+           */
+
+          const resultados =
+            data.resultados ||
+            [];
+
+
+          resultados.forEach(
+            resultado => {
+
+              if (
+                !resultado.sucesso
+              ) {
+
+                return;
+              }
+
+
+              const item =
+                anuncios.find(
+                  x =>
+                    x.id ===
+                    resultado.id
+                );
+
+
+              if (
+                item
+              ) {
+
+                item.price =
+                  Number(
+                    resultado.price
+                  ) ||
+                  item.price;
+
+
+                item.net_received =
+                  Number(
+                    item.price
+                  ) -
+                  Number(
+                    item.sale_fee
+                  ) -
+                  Number(
+                    item.shipping_cost
+                  );
+              }
+
+            }
+          );
+
+        }
+
+
+        filtrarAnuncios();
+
+
+        if (
+          totalFalhas
+        ) {
+
+          toast(
+            `${totalSucesso} atualizado(s), ${totalFalhas} com erro.`,
+            "error"
+          );
+
+        } else {
+
+          toast(
+            `${totalSucesso} preço(s) atualizado(s) com sucesso.`,
+            "success"
+          );
+        }
+
+
+        /*
+         * Atualiza dashboard.
+         */
+        try {
+
+          dashboard =
+            await carregarDashboard();
+
+          atualizarDashboard(
+            dashboard
+          );
+
+        } catch (
+          error
+        ) {
+
+          console.error(
+            error
+          );
+        }
+
+
+      } catch (
+        error
+      ) {
+
+        toast(
+          "Erro ao atualizar preços: " +
+          error.message,
+          "error"
+        );
+
+      } finally {
+
+        esconderLoading();
+      }
+    }
+
+
+    /*
+    =====================================================
+    ÚLTIMA ATUALIZAÇÃO
+    =====================================================
+    */
+
+    function atualizarUltimaAtualizacao(
+      data
+    ) {
+
+      const elemento =
+        document.getElementById(
+          "lastUpdate"
+        );
+
+
+      if (
+        !data?.ultima_atualizacao
+      ) {
+
+        elemento.textContent =
+          "Última atualização: —";
+
+        return;
+      }
+
+
+      const date =
+        new Date(
+          data.ultima_atualizacao
+        );
+
+
+      elemento.textContent =
+        "Última atualização: " +
+        date.toLocaleString(
+          "pt-BR"
+        );
+    }
+
+
+    /*
+    =====================================================
+    OAUTH CALLBACK
+    =====================================================
+    */
+
+    function processarOAuth() {
+
+      const url =
+        new URL(
+          window.location.href
+        );
+
+
+      const session =
+        url.searchParams.get(
+          "ml_session"
+        );
+
+
+      const connected =
+        url.searchParams.get(
+          "connected"
+        );
+
+
+      if (
+        session
+      ) {
+
+        ML_SESSION =
+          session;
+
+        localStorage.setItem(
+          "ml_hub_session",
+          ML_SESSION
+        );
+
+
+        /*
+         * Remove os parâmetros da URL.
+         */
+
+        url.searchParams.delete(
+          "ml_session"
+        );
+
+        url.searchParams.delete(
+          "connected"
+        );
+
+        url.searchParams.delete(
+          "account"
+        );
+
+
+        window.history.replaceState(
+          {},
+          document.title,
+          url.pathname +
+          (
+            url.search
+              ? url.search
+              : ""
+          )
+        );
+
+
+        if (
+          connected ===
+          "1"
+        ) {
+
+          toast(
+            "Conta Mercado Livre conectada!",
+            "success"
+          );
+        }
+
+      }
+    }
+
+
+    /*
+    =====================================================
+    INICIALIZAÇÃO
+    =====================================================
+    */
+
+    async function inicializar() {
+
+      try {
+
+        processarOAuth();
+
+
+        await garantirSessao();
+
+
+        await carregarContas();
+
+
+        if (
+          contaAtiva
+        ) {
+
+          await carregarTudo(
+            true
+          );
+
+        } else {
+
+          esconderDashboard();
+        }
+
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "Erro inicial:",
+          error
+        );
+
+
+        atualizarStatus(
+          error.message
+        );
+
+
+        toast(
+          error.message,
+          "error"
+        );
+
+      }
+    }
+
+
+    /*
+    =====================================================
+    REDIMENSIONAMENTO DO GRÁFICO
+    =====================================================
+    */
+
+    window.addEventListener(
+      "resize",
+      () => {
+
+        if (
+          dashboard?.series_60_dias
+        ) {
+
+          renderizarGrafico(
+            dashboard.series_60_dias
+          );
+        }
+
+      }
     );
 
 
-    atualizarCards(
-        cacheItens
+    /*
+    =====================================================
+    START
+    =====================================================
+    */
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      inicializar
     );
 
-}
-
-
-/* =========================================================
-   INICIALIZAÇÃO
-========================================================= */
-
-document.addEventListener(
-"DOMContentLoaded",
-()=>{
-
-    const css =
-    document.createElement("style");
-
-    css.innerHTML=`
-
-.nav-btn,
-.nav-btn-active{
-    padding:6px 14px;
-    border-radius:6px;
-    font-size:12px;
-    transition:.2s;
-}
-
-.nav-btn{
-    color:#94a3b8;
-}
-
-.nav-btn:hover{
-    color:white;
-}
-
-.nav-btn-active{
-    background:#facc15;
-    color:#020617;
-    font-weight:700;
-}
-
-`;
-
-    document.head.appendChild(css);
-
-
-    mudarTela("inicio");
-
-    atualizarDashboardLocal();
-
-    renderGrafico([]);
-
-});
-
-</script>
+  </script>
 
 </body>
 </html>
