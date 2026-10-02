@@ -56,7 +56,7 @@
             </div>
         </div>
 
-        <!-- Barra de Pesquisa: Só filtra ao apertar ENTER ou CLICAR na lupa -->
+        <!-- Barra de Pesquisa Ultra Rápida -->
         <form onsubmit="event.preventDefault(); executarBusca();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
             <button type="submit" class="pl-2 pr-3 text-slate-400 text-lg hover:text-yellow-400 transition cursor-pointer" title="Clique para Buscar">🔍</button>
             <input type="text" id="input-busca" placeholder="Digite ou cole o MLB, SKU ou Título e aperte ENTER..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
@@ -193,6 +193,7 @@
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
         let cacheItens = [];
         let novosPrecosCalculados = {};
+        let abaAtualAtiva = 'gestao';
 
         function solicitarToken() {
             document.getElementById('aviso-token').classList.remove('hidden');
@@ -209,32 +210,27 @@
             carregarDados();
         }
 
-        // Executa a busca apenas ao apertar Enter ou clicar na lupa
+        // Busca otimizada filtrando direto nos dados em memória (Instantâneo e sem travamentos)
         function executarBusca() {
             const termo = document.getElementById('input-busca').value.toLowerCase().trim();
             
-            const filtrarTabela = (idTabela) => {
-                const tbody = document.getElementById(idTabela);
-                if (!tbody) return;
-                
-                const linhas = tbody.getElementsByTagName('tr');
-                for (let i = 0; i < linhas.length; i++) {
-                    if (!termo) {
-                        linhas[i].style.display = '';
-                    } else {
-                        const textoLinha = linhas[i].innerText.toLowerCase();
-                        if (textoLinha.includes(termo)) {
-                            linhas[i].style.display = '';
-                        } else {
-                            linhas[i].style.display = 'none';
-                        }
-                    }
-                }
-            };
+            let itensFiltrados = cacheItens;
+            if (termo !== '') {
+                itensFiltrados = cacheItens.filter(item => 
+                    String(item.id).toLowerCase().includes(termo) ||
+                    String(item.sku).toLowerCase().includes(termo) ||
+                    String(item.title).toLowerCase().includes(termo)
+                );
+            }
 
-            filtrarTabela('tabela-gestao');
-            filtrarTabela('tabela-simulacao');
-            filtrarTabela('tabela-atualizacao');
+            // Atualiza apenas a tabela da aba ativa para máxima performance
+            if (abaAtualAtiva === 'gestao') {
+                montarTabelaGestao(itensFiltrados);
+            } else if (abaAtualAtiva === 'simulacao') {
+                montarTabelaSimulacao(itensFiltrados);
+            } else if (abaAtualAtiva === 'atualizacao') {
+                montarTabelaAtualizacao(itensFiltrados);
+            }
         }
 
         function limparBusca() {
@@ -262,9 +258,7 @@
                 if (data.itens) {
                     cacheItens = data.itens;
                     atualizarCards(cacheItens);
-                    montarTabelaGestao(cacheItens);
-                    montarTabelaSimulacao(cacheItens);
-                    montarTabelaAtualizacao(cacheItens);
+                    executarBusca(); // Renderiza com base no filtro atual
                     alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
                 } else {
                     alert(data.erro || "Erro ao carregar anúncios.");
@@ -316,10 +310,7 @@
                     });
 
                     atualizarCards(cacheItens);
-                    montarTabelaGestao(cacheItens);
-                    montarTabelaSimulacao(cacheItens);
-                    montarTabelaAtualizacao(cacheItens);
-
+                    executarBusca();
                     alert("Preços reais sincronizados com sucesso para as MLBs existentes!");
                 } else {
                     alert(data.erro || "Erro ao sincronizar preços.");
@@ -370,10 +361,7 @@
                     });
 
                     atualizarCards(cacheItens);
-                    montarTabelaGestao(cacheItens);
-                    montarTabelaSimulacao(cacheItens);
-                    montarTabelaAtualizacao(cacheItens);
-
+                    executarBusca();
                     alert("Fretes reais sincronizados com sucesso para as MLBs existentes!");
                 } else {
                     alert(data.erro || "Erro ao sincronizar fretes.");
@@ -386,6 +374,7 @@
         }
 
         function mudarAba(aba) {
+            abaAtualAtiva = aba;
             document.getElementById('secao-gestao').classList.add('hidden');
             document.getElementById('secao-simulacao').classList.add('hidden');
             document.getElementById('secao-atualizacao').classList.add('hidden');
@@ -403,8 +392,8 @@
             } else if (aba === 'atualizacao') {
                 document.getElementById('secao-atualizacao').classList.remove('hidden');
                 document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-                montarTabelaAtualizacao(cacheItens);
             }
+            executarBusca();
         }
 
         function atualizarCards(itens) {
@@ -447,7 +436,9 @@
         function montarTabelaSimulacao(itens) {
             const tbody = document.getElementById('tabela-simulacao');
             tbody.innerHTML = '';
-            itens.forEach((item, index) => {
+            itens.forEach((item) => {
+                // Encontra o índice real no cache global para manter a consistência dos inputs
+                const index = cacheItens.findIndex(i => i.id === item.id);
                 const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
                 const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12;
 
@@ -490,9 +481,13 @@
             const lucroLiquidoReal = novoPreco - custo - valorTaxa - valorImposto - freteAplicado;
             const margemRealPercent = novoPreco > 0 ? (lucroLiquidoReal / novoPreco) * 100 : 0;
 
-            document.getElementById(`novo_preco_${index}`).innerText = `R$ ${novoPreco.toFixed(2)}`;
-            document.getElementById(`lucro_sim_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
-            document.getElementById(`margem_real_${index}`).innerText = `${margemRealPercent.toFixed(2)}%`;
+            const elNovoPreco = document.getElementById(`novo_preco_${index}`);
+            const elLucroSim = document.getElementById(`lucro_sim_${index}`);
+            const elMargemReal = document.getElementById(`margem_real_${index}`);
+
+            if (elNovoPreco) elNovoPreco.innerText = `R$ ${novoPreco.toFixed(2)}`;
+            if (elLucroSim) elLucroSim.innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
+            if (elMargemReal) elMargemReal.innerText = `${margemRealPercent.toFixed(2)}%`;
 
             novosPrecosCalculados[index] = {
                 preco: novoPreco,
@@ -507,10 +502,22 @@
             const lucroMassa = document.getElementById('massa-lucro').value;
 
             cacheItens.forEach((item, index) => {
-                if (custoMassa !== '') document.getElementById(`custo_${index}`).value = custoMassa;
-                if (taxaMassa !== '') document.getElementById(`taxa_${index}`).value = taxaMassa;
-                if (impostoMassa !== '') document.getElementById(`imposto_${index}`).value = impostoMassa;
-                if (lucroMassa !== '') document.getElementById(`lucro_${index}`).value = lucroMassa;
+                if (custoMassa !== '') {
+                    const elCusto = document.getElementById(`custo_${index}`);
+                    if (elCusto) elCusto.value = custoMassa;
+                }
+                if (taxaMassa !== '') {
+                    const elTaxa = document.getElementById(`taxa_${index}`);
+                    if (elTaxa) elTaxa.value = taxaMassa;
+                }
+                if (impostoMassa !== '') {
+                    const elImposto = document.getElementById(`imposto_${index}`);
+                    if (elImposto) elImposto.value = impostoMassa;
+                }
+                if (lucroMassa !== '') {
+                    const elLucro = document.getElementById(`lucro_${index}`);
+                    if (elLucro) elLucro.value = lucroMassa;
+                }
 
                 recalcular(index, item.shipping_cost, item.free_shipping);
             });
@@ -522,7 +529,8 @@
             
             let contadorForaDaMargem = 0;
 
-            itens.forEach((item, index) => {
+            itens.forEach((item) => {
+                const index = cacheItens.findIndex(i => i.id === item.id);
                 const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
                 
                 if (!dadosSim.foraDaMargem) return;
@@ -596,7 +604,8 @@
                 const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
 
                 lote.forEach(item => {
-                    document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
+                    const elStatus = document.getElementById(`status_api_${item.index}`);
+                    if (elStatus) elStatus.innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
                 });
 
                 try {
@@ -612,17 +621,19 @@
                     const data = await response.json();
                     
                     lote.forEach(item => {
+                        const elStatus = document.getElementById(`status_api_${item.index}`);
                         if (response.ok) {
-                            document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
+                            if (elStatus) elStatus.innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
                             cacheItens[item.index].price = item.price;
                         } else {
                             const erroMsg = data.erro || "Falha na API";
-                            document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
+                            if (elStatus) elStatus.innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
                         }
                     });
                 } catch (e) {
                     lote.forEach(item => {
-                        document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-red-500 font-bold">Erro de Rede</span>`;
+                        const elStatus = document.getElementById(`status_api_${item.index}`);
+                        if (elStatus) elStatus.innerHTML = `<span class="text-red-500 font-bold">Erro de Rede</span>`;
                     });
                 }
                 
@@ -633,9 +644,7 @@
             
             alert("Processo de envio em massa finalizado!");
             atualizarCards(cacheItens);
-            montarTabelaGestao(cacheItens);
-            montarTabelaSimulacao(cacheItens);
-            montarTabelaAtualizacao(cacheItens);
+            executarBusca();
         }
     </script>
 </body>
