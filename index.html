@@ -56,10 +56,11 @@
             </div>
         </div>
 
-        <!-- Barra de Pesquisa Otimizada (Com anti-trava e debounce) -->
-        <form onsubmit="event.preventDefault(); dispararFiltroInstantaneo();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
-            <span class="pl-2 pr-3 text-slate-500 text-lg">🔍</span>
-            <input type="text" id="input-busca" oninput="dispararFiltroInstantaneo()" placeholder="Buscar por MLB, SKU ou Título..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
+        <!-- Barra de Pesquisa: Só filtra ao apertar ENTER ou CLICAR na lupa -->
+        <form onsubmit="event.preventDefault(); executarBusca();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+            <button type="submit" class="pl-2 pr-3 text-slate-400 text-lg hover:text-yellow-400 transition cursor-pointer" title="Clique para Buscar">🔍</button>
+            <input type="text" id="input-busca" placeholder="Digite ou cole o MLB, SKU ou Título e aperte ENTER..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
+            <button type="button" onclick="limparBusca()" class="text-xs text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg transition">Limpar</button>
         </form>
 
         <!-- Loading State -->
@@ -192,7 +193,6 @@
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
         let cacheItens = [];
         let novosPrecosCalculados = {};
-        let timeoutFiltro = null;
 
         function solicitarToken() {
             document.getElementById('aviso-token').classList.remove('hidden');
@@ -209,35 +209,37 @@
             carregarDados();
         }
 
-        // Filtro com Debounce (Evita travamento ao buscar em 2360 itens)
-        function dispararFiltroInstantaneo() {
-            clearTimeout(timeoutFiltro);
-            timeoutFiltro = setTimeout(() => {
-                const termo = document.getElementById('input-busca').value.toLowerCase().trim();
+        // Executa a busca apenas ao apertar Enter ou clicar na lupa
+        function executarBusca() {
+            const termo = document.getElementById('input-busca').value.toLowerCase().trim();
+            
+            const filtrarTabela = (idTabela) => {
+                const tbody = document.getElementById(idTabela);
+                if (!tbody) return;
                 
-                const filtrarTabela = (idTabela) => {
-                    const tbody = document.getElementById(idTabela);
-                    if (!tbody) return;
-                    
-                    const linhas = tbody.getElementsByTagName('tr');
-                    for (let i = 0; i < linhas.length; i++) {
-                        if (!termo) {
+                const linhas = tbody.getElementsByTagName('tr');
+                for (let i = 0; i < linhas.length; i++) {
+                    if (!termo) {
+                        linhas[i].style.display = '';
+                    } else {
+                        const textoLinha = linhas[i].innerText.toLowerCase();
+                        if (textoLinha.includes(termo)) {
                             linhas[i].style.display = '';
                         } else {
-                            const textoLinha = linhas[i].innerText.toLowerCase();
-                            if (textoLinha.includes(termo)) {
-                                linhas[i].style.display = '';
-                            } else {
-                                linhas[i].style.display = 'none';
-                            }
+                            linhas[i].style.display = 'none';
                         }
                     }
-                };
+                }
+            };
 
-                filtrarTabela('tabela-gestao');
-                filtrarTabela('tabela-simulacao');
-                filtrarTabela('tabela-atualizacao');
-            }, 150); // Aguarda 150ms após o usuário parar de digitar/colar o MLB
+            filtrarTabela('tabela-gestao');
+            filtrarTabela('tabela-simulacao');
+            filtrarTabela('tabela-atualizacao');
+        }
+
+        function limparBusca() {
+            document.getElementById('input-busca').value = '';
+            executarBusca();
         }
 
         async function carregarDados() {
