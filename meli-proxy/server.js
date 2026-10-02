@@ -105,13 +105,15 @@ app.get('/api/anuncios', async (req, res) => {
                         let shipping = body.shipping || {};
                         let freeShipping = shipping.free_shipping || false;
                         
+                        // Extração precisa do custo de envio oficial da resposta do item
                         let custoEnvio = 6.85;
-                        if (shipping.logistic_type === 'fulfillment') {
-                            custoEnvio = 18.50;
-                        }
                         if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
                             let cObj = shipping.costs.find(c => c.cost !== undefined);
                             if (cObj) custoEnvio = cObj.cost;
+                        } else if (body.sale_fee_details && body.sale_fee_details.shipping_fee) {
+                            custoEnvio = body.sale_fee_details.shipping_fee;
+                        } else if (shipping.logistic_type === 'fulfillment') {
+                            custoEnvio = 18.50;
                         }
 
                         let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
@@ -182,7 +184,7 @@ app.post('/api/sincronizar-precos', async (req, res) => {
     }
 });
 
-// 3. ROTA: Sincronizar FRETES REAIS em Lotes Simultâneos (Rápido e sem Timeout)
+// 3. ROTA: Sincronizar FRETES REAIS em Lotes Simultâneos extraindo dados precisos do item
 app.post('/api/sincronizar-fretes', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -197,59 +199,39 @@ app.post('/api/sincronizar-fretes', async (req, res) => {
     let fretesMap = {};
 
     try {
-        // Divide os IDs em blocos de 10 para processar em paralelo de forma segura
-        for (let i = 0; i < ids.length; i += 10) {
-            const bloco = ids.slice(i, i + 10);
-
-            const promises = bloco.map(async (idItem) => {
-                let custoEnvio = 6.85;
-                let freeShipping = false;
-
-                try {
-                    // Busca paralela de dados e opções de envio
-                    const [itemRes, shipRes] = await Promise.all([
-                        fetch(`https://api.mercadolibre.com/items/${idItem}`, { headers: { "Authorization": "Bearer " + token } }),
-                        fetch(`https://api.mercadolibre.com/items/${idItem}/shipping_options`, { headers: { "Authorization": "Bearer " + token } })
-                    ]);
-
-                    if (itemRes.ok) {
-                        const itemData = await itemRes.json();
-                        if (itemData.shipping) {
-                            freeShipping = itemData.shipping.free_shipping || false;
-                        }
-                    }
-
-                    if (shipRes.ok) {
-                        const shipData = await shipRes.json();
-                        if (shipData && shipData.options && Array.isArray(shipData.options)) {
-                            const opcaoGratis = shipData.options.find(opt => opt.free_shipping && opt.list_cost > 0);
-                            if (opcaoGratis) {
-                                custoEnvio = opcaoGratis.list_cost;
-                            } else if (shipData.options.length > 0 && shipData.options[0].cost !== undefined) {
-                                custoEnvio = shipData.options[0].cost;
-                            }
-                        }
-                    }
-                } catch (err) {
-                    // Mantém valor padrão em caso de falha isolada
-                }
-
-                return {
-                    id: idItem,
-                    custo: custoEnvio,
-                    gratis: freeShipping
-                };
+        for (let i = 0; i < ids.length; i += 20) {
+            const blocoIds = ids.slice(i, i + 20).join(',');
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+                headers: { "Authorization": "Bearer " + token }
             });
+            const multiData = await multiRes.json();
+            
+            if (Array.isArray(multiData)) {
+                multiData.forEach(itemObj => {
+                    if (itemObj.code === 200 && itemObj.body) {
+                        const body = itemObj.body;
+                        let shipping = body.shipping || {};
+                        let freeShipping = shipping.free_shipping || false;
+                        let custoEnvio = 6.85;
 
-            const resultadosLote = await Promise.all(promises);
-            resultadosLote.forEach(resItem => {
-                fretesMap[resItem.id] = {
-                    custo: resItem.custo,
-                    gratis: resItem.gratis
-                };
-            });
+                        // Puxa o custo exato do objeto de custos do item ou detalhes de comissão/frete
+                        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+                            let cObj = shipping.costs.find(c => c.cost !== undefined);
+                            if (cObj) custoEnvio = cObj.cost;
+                        } else if (body.sale_fee_details && body.sale_fee_details.shipping_fee) {
+                            custoEnvio = body.sale_fee_details.shipping_fee;
+                        } else if (shipping.logistic_type === 'fulfillment') {
+                            custoEnvio = 18.50;
+                        }
+
+                        fretesMap[body.id] = {
+                            custo: custoEnvio,
+                            gratis: freeShipping
+                        };
+                    }
+                });
+            }
         }
-
         res.json({ fretes: fretesMap });
     } catch (e) {
         res.status(500).json({ erro: "Erro ao buscar fretes: " + e.message });
