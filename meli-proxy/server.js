@@ -1,348 +1,301 @@
-const express = require('express');
-const cors = require('cors');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+app.get('/api/dashboard', async (req, res) => {
+    const token = requireToken(req, res);
+    if (!token) return;
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+    try {
+        const userResult =
+            await mlFetch('/users/me', token);
 
-app.get('/', (req, res) => {
-    res.send('Servidor proxy do Mercado Livre online!');
-});
-
-// Função auxiliar centralizada para calcular o frete exato do Mercado Livre
-async function calcularFreteExato(itemObj, token) {
-    const shipping = itemObj.shipping || {};
-    const freeShipping = shipping.free_shipping || false;
-    
-    let custoEnvio = 6.85;
-
-    if (freeShipping) {
-        // Tenta buscar o custo exato via API de sale_fee do item
-        try {
-            const saleFeeRes = await fetch(`https://api.mercadolibre.com/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`, {
-                headers: { "Authorization": "Bearer " + token }
+        if (
+            !userResult.response.ok ||
+            !userResult.data?.id
+        ) {
+            return res.status(401).json({
+                erro: 'Token inválido ou expirado.'
             });
-            if (saleFeeRes.ok) {
-                const saleFeeData = await saleFeeRes.json();
-                if (saleFeeData.sale_fee_details && saleFeeData.sale_fee_details.shipping_fee) {
-                    return saleFeeData.sale_fee_details.shipping_fee;
-                }
-            }
-        } catch (e) {
-            // Ignora e segue para fallback
         }
 
-        // Se for frete grátis e não pegou na API, assume o valor padrão real de 12.95 ou custos declarados
-        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-            let cObj = shipping.costs.find(c => c.cost !== undefined);
-            if (cObj) return cObj.cost;
-        }
-        
-        custoEnvio = 12.95; // Valor exato padrão para este perfil de anúncio com frete grátis
-    } else {
-        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-            let cObj = shipping.costs.find(c => c.cost !== undefined);
-            if (cObj) custoEnvio = cObj.cost;
-        }
-    }
+        const sellerId = userResult.data.id;
 
-    return custoEnvio;
-}
+        const agora = new Date();
 
-// 1. Rota para puxar TODOS os anúncios
-app.get('/api/anuncios', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+        const inicio = new Date(
+            agora.getTime() -
+            60 * 24 * 60 * 60 * 1000
+        );
 
-    token = token.replace('Bearer ', '').trim();
+        const ordersMap = new Map();
 
-    const existingIdsParam = req.query.existingIds;
-    const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
-    const isAppendMode = existingIdsSet.size > 0;
+        let cursor = new Date(inicio);
 
-    try {
-        const userRes = await fetch("https://api.mercadolibre.com/users/me", {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const userData = await userRes.json();
-        
-        if (!userData.id) {
-            return res.status(401).json({ erro: "Token inválido ou expirado." });
-        }
+        while (cursor < agora) {
 
-        let allIds = [];
-        let scrollId = null;
-        let hasMore = true;
+            const fim = new Date(
+                Math.min(
+                    cursor.getTime() +
+                    15 * 24 * 60 * 60 * 1000,
+                    agora.getTime()
+                )
+            );
 
-        while (hasMore) {
-            let url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=50`;
-            if (scrollId) {
-                url += `&scroll_id=${scrollId}`;
-            }
+            let offset = 0;
 
-            const searchRes = await fetch(url, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const searchData = await searchRes.json();
+            while (true) {
 
-            const results = searchData.results || [];
-            if (results.length > 0) {
-                allIds = allIds.concat(results);
-            }
-
-            scrollId = searchData.scroll_id;
-
-            if (results.length === 0 || !scrollId) {
-                hasMore = false;
-            }
-        }
-
-        if (allIds.length === 0) {
-            return res.json({ itens: [] });
-        }
-
-        let targetIds = allIds;
-        if (isAppendMode) {
-            targetIds = allIds.filter(id => !existingIdsSet.has(id));
-            if (targetIds.length === 0) {
-                return res.json({ itens: [], mensagem: "Nenhum anúncio novo encontrado." });
-            }
-        }
-
-        let listaFinal = [];
-
-        for (let i = 0; i < targetIds.length; i += 20) {
-            const chunk = targetIds.slice(i, i + 20);
-            
-            try {
-                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
-                    headers: { "Authorization": "Bearer " + token }
-                });
-                const multiData = await multiRes.json();
-                const itensArray = Array.isArray(multiData) ? multiData : [];
-
-                for (let itemObj of itensArray) {
-                    if (itemObj && itemObj.code === 200 && itemObj.body) {
-                        const body = itemObj.body;
-                        const idItem = body.id;
-                        const preco = body.price || 0;
-                        const listingType = body.listing_type_id || 'gold_special';
-                        const availableQty = body.available_quantity || 0;
-                        const title = body.title || 'Sem Título';
-                        const permalink = body.permalink || '#';
-                        const thumbnail = body.thumbnail || '';
-                        
-                        let sku = 'Sem SKU';
-                        if (body.attributes) {
-                            const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
-                            if (attrSku && attrSku.value_name) sku = attrSku.value_name;
-                        }
-                        const status = body.status || 'active';
-
-                        let comissao = body.sale_fee || (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
-                        
-                        let shipping = body.shipping || {};
-                        let freeShipping = shipping.free_shipping || false;
-                        
-                        // Aplica o cálculo exato do frete
-                        let custoEnvio = await calcularFreteExato(body, token);
-
-                        let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
-                        if (liquido < 0) liquido = 0;
-
-                        listaFinal.push({
-                            id: idItem,
-                            title: title,
-                            price: preco,
-                            status: status,
-                            listing_type_id: listingType,
-                            available_quantity: availableQty,
-                            sku: sku,
-                            permalink: permalink,
-                            thumbnail: thumbnail,
-                            sale_fee: comissao,
-                            shipping_cost: custoEnvio,
-                            free_shipping: freeShipping,
-                            net_received: liquido
-                        });
-                    }
-                }
-            } catch (chunkErr) {
-                console.error("Erro ao buscar lote de IDs:", chunkErr);
-            }
-        }
-
-        res.json({ itens: listaFinal });
-
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao processar dados da API: " + e.message });
-    }
-});
-
-// 2. ROTA: Sincronizar PREÇOS
-app.post('/api/sincronizar-precos', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-
-    token = token.replace('Bearer ', '').trim();
-    const { ids } = req.body;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ erro: "Lista de IDs inválida." });
-    }
-
-    let precosMap = {};
-
-    try {
-        for (let i = 0; i < ids.length; i += 20) {
-            const blocoIds = ids.slice(i, i + 20).join(',');
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const multiData = await multiRes.json();
-            
-            if (Array.isArray(multiData)) {
-                multiData.forEach(itemObj => {
-                    if (itemObj.code === 200 && itemObj.body) {
-                        precosMap[itemObj.body.id] = itemObj.body.price;
-                    }
-                });
-            }
-        }
-        res.json({ precos: precosMap });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar preços: " + e.message });
-    }
-});
-
-// 3. ROTA: Sincronizar FRETES REAIS (Garante os R$ 12,95 e compatibilidade com o front-end)
-app.post('/api/sincronizar-fretes', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-
-    token = token.replace('Bearer ', '').trim();
-    const { ids } = req.body;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ erro: "Lista de IDs inválida." });
-    }
-
-    let fretesMap = {};
-
-    try {
-        for (let i = 0; i < ids.length; i += 20) {
-            const blocoIds = ids.slice(i, i + 20).join(',');
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const multiData = await multiRes.json();
-            
-            if (Array.isArray(multiData)) {
-                for (let itemObj of multiData) {
-                    if (itemObj.code === 200 && itemObj.body) {
-                        const body = itemObj.body;
-                        let freeShipping = (body.shipping && body.shipping.free_shipping) || false;
-                        let custoEnvio = await calcularFreteExato(body, token);
-
-                        // Retorna todas as variações de chaves possíveis para o front-end atualizar sem falhar
-                        fretesMap[body.id] = {
-                            custo: custoEnvio,
-                            shipping_cost: custoEnvio,
-                            gratis: freeShipping,
-                            free_shipping: freeShipping
-                        };
-                    }
-                }
-            }
-        }
-        res.json({ fretes: fretesMap });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar fretes: " + e.message });
-    }
-});
-
-// 4. Rota de atualização de preço individual
-app.post('/api/atualizar-preco', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-
-    token = token.replace('Bearer ', '').trim();
-    const { id, price } = req.body;
-
-    if (!id || price === undefined) {
-        return res.status(400).json({ erro: "ID ou preço não informados." });
-    }
-
-    try {
-        const mlRes = await fetch(`https://api.mercadolibre.com/items/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ price: Number(price) })
-        });
-
-        const mlData = await mlRes.json();
-
-        if (mlRes.ok) {
-            res.json({ sucesso: true, resultado: mlData });
-        } else {
-            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || JSON.stringify(mlData);
-            res.status(400).json({ erro: mensagemErro });
-        }
-    } catch (e) {
-        res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
-    }
-});
-
-// 5. Rota de atualização em lote simultâneo
-app.post('/api/atualizar-precos', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-
-    token = token.replace('Bearer ', '').trim();
-    const { itens } = req.body;
-
-    if (!itens || !Array.isArray(itens) || itens.length === 0) {
-        return res.status(400).json({ erro: "Nenhum item informado para atualização em lote." });
-    }
-
-    try {
-        const promises = itens.map(async (item) => {
-            try {
-                const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ price: Number(item.price) })
+                const params = new URLSearchParams({
+                    seller: String(sellerId),
+                    'order.status': 'paid',
+                    'order.date_created.from':
+                        cursor.toISOString(),
+                    'order.date_created.to':
+                        fim.toISOString(),
+                    sort: 'date_desc',
+                    limit: '50',
+                    offset: String(offset)
                 });
 
-                const mlData = await mlRes.json();
+                const result = await mlFetch(
+                    `/orders/search?${params.toString()}`,
+                    token
+                );
 
-                if (mlRes.ok) {
-                    return { id: item.id, sucesso: true };
-                } else {
-                    let mensagemErro = mlData.message || 
-                                       (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
-                                       JSON.stringify(mlData);
-                    return { id: item.id, sucesso: false, erro: mensagemErro };
+                if (!result.response.ok) {
+                    return res.status(
+                        result.response.status
+                    ).json({
+                        erro:
+                            result.data?.message ||
+                            'Erro ao consultar vendas.'
+                    });
                 }
-            } catch (err) {
-                return { id: item.id, sucesso: false, erro: "Erro de conexão: " + err.message };
+
+                const orders =
+                    Array.isArray(
+                        result.data?.results
+                    )
+                    ? result.data.results
+                    : [];
+
+                if (!orders.length) break;
+
+                for (const order of orders) {
+
+                    if (order?.id) {
+
+                        ordersMap.set(
+                            String(order.id),
+                            order
+                        );
+
+                    }
+
+                }
+
+                offset += orders.length;
+
+                if (
+                    orders.length < 50 ||
+                    offset >=
+                    Number(
+                        result.data?.paging?.total || 0
+                    ) ||
+                    offset >= 10000
+                ) {
+                    break;
+                }
             }
+
+            cursor = fim;
+        }
+
+        const orders =
+            Array.from(
+                ordersMap.values()
+            );
+
+        let faturamento = 0;
+        let unidades = 0;
+
+        const produtos = new Map();
+        const dias = new Map();
+
+        for (const order of orders) {
+
+            faturamento += Number(
+                order.total_amount ??
+                order.paid_amount ??
+                0
+            );
+
+            const data =
+                order.date_created
+                ? new Date(order.date_created)
+                : null;
+
+            if (
+                data &&
+                !isNaN(data.getTime())
+            ) {
+
+                const dia =
+                    data.toISOString()
+                        .slice(0, 10);
+
+                dias.set(
+                    dia,
+                    (dias.get(dia) || 0) + 1
+                );
+            }
+
+            const orderItems =
+                Array.isArray(order.order_items)
+                ? order.order_items
+                : [];
+
+            for (const orderItem of orderItems) {
+
+                const item =
+                    orderItem.item || {};
+
+                const id =
+                    String(
+                        item.id ||
+                        'SEM_ID'
+                    );
+
+                const quantidade =
+                    Number(
+                        orderItem.quantity || 1
+                    );
+
+                const preco =
+                    Number(
+                        orderItem.unit_price || 0
+                    );
+
+                if (!produtos.has(id)) {
+
+                    produtos.set(id, {
+                        id,
+                        title:
+                            item.title ||
+                            'Produto sem título',
+                        sku:
+                            item.seller_custom_field ||
+                            null,
+                        sales: 0,
+                        revenue: 0,
+                        orders: 0
+                    });
+
+                }
+
+                const produto =
+                    produtos.get(id);
+
+                produto.sales +=
+                    quantidade;
+
+                produto.revenue +=
+                    preco * quantidade;
+
+                produto.orders += 1;
+
+                unidades +=
+                    quantidade;
+            }
+        }
+
+        const top10 =
+            Array.from(
+                produtos.values()
+            )
+            .sort(
+                (a, b) =>
+                    b.sales - a.sales ||
+                    b.revenue - a.revenue
+            )
+            .slice(0, 10);
+
+        const series = [];
+
+        for (let i = 59; i >= 0; i--) {
+
+            const data =
+                new Date(
+                    agora.getTime() -
+                    i * 24 * 60 * 60 * 1000
+                );
+
+            const dia =
+                data.toISOString()
+                    .slice(0, 10);
+
+            series.push({
+                date: dia,
+                value:
+                    dias.get(dia) || 0
+            });
+        }
+
+        const pedidos =
+            orders.length;
+
+        const ticket =
+            pedidos
+            ? faturamento / pedidos
+            : 0;
+
+        res.json({
+
+            periodo_dias: 60,
+
+            total_pedidos:
+                pedidos,
+
+            vendas_60_dias:
+                pedidos,
+
+            total_unidades:
+                unidades,
+
+            faturamento_60_dias:
+                Number(
+                    faturamento.toFixed(2)
+                ),
+
+            ticket_medio:
+                Number(
+                    ticket.toFixed(2)
+                ),
+
+            top_10:
+                top10.map(item => ({
+                    ...item,
+                    revenue:
+                        Number(
+                            item.revenue.toFixed(2)
+                        )
+                })),
+
+            series_60_dias:
+                series,
+
+            ultima_atualizacao:
+                new Date().toISOString()
         });
 
-        const resultados = await Promise.all(promises);
-        res.json({ resultados });
-
     } catch (e) {
-        res.status(500).json({ erro: "Erro no servidor ao processar lote: " + e.message });
+
+        console.error(
+            'Erro dashboard:',
+            e
+        );
+
+        res.status(500).json({
+            erro:
+                'Erro ao montar dashboard: ' +
+                e.message
+        });
     }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
