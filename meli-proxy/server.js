@@ -10,6 +10,7 @@ app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
 });
 
+// 1. Rota para puxar TODOS os anúncios
 app.get('/api/anuncios', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -22,7 +23,7 @@ app.get('/api/anuncios', async (req, res) => {
     const isAppendMode = existingIdsSet.size > 0;
 
     try {
-        // 1. Puxar ID do usuário
+        // Puxar ID do usuário
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
             headers: { "Authorization": "Bearer " + token }
         });
@@ -32,7 +33,7 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // 2. Usar o search_type=scan para ultrapassar o limite de 1000 itens (suporta mais de 2.000 anúncios)
+        // Usar o search_type=scan para ultrapassar o limite de 1000 itens
         let allIds = [];
         let scrollId = null;
         let hasMore = true;
@@ -75,7 +76,7 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // 3. Buscar detalhes em lotes de 20
+        // Buscar detalhes em lotes de 20
         for (let i = 0; i < targetIds.length; i += 20) {
             const chunk = targetIds.slice(i, i + 20);
             
@@ -152,7 +153,51 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
-// Rota de atualização de preço individual (mantida)
+// 2. NOVA ROTA: Sincronizar APENAS OS PREÇOS das MLBs informadas
+app.post('/api/sincronizar-precos', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { ids } = req.body; // Array com as MLBs recebidas do front
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ erro: "Lista de IDs inválida." });
+    }
+
+    let precosMap = {};
+
+    try {
+        // Dividimos em blocos de 20 para respeitar limites da API do Mercado Livre
+        for (let i = 0; i < ids.length; i += 20) {
+            const blocoIds = ids.slice(i, i + 20).join(',');
+            
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            
+            const multiData = await multiRes.json();
+            
+            if (Array.isArray(multiData)) {
+                multiData.forEach(itemObj => {
+                    if (itemObj.code === 200 && itemObj.body) {
+                        // Salva apenas o preço com a chave sendo a MLB
+                        precosMap[itemObj.body.id] = itemObj.body.price;
+                    }
+                });
+            }
+        }
+
+        // Retorna o mapa de preços para o frontend atualizar instantaneamente
+        res.json({ precos: precosMap });
+
+    } catch (e) {
+        console.error("Erro ao sincronizar preços:", e);
+        res.status(500).json({ erro: "Erro ao buscar preços na API do Mercado Livre: " + e.message });
+    }
+});
+
+// 3. Rota de atualização de preço individual
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -187,7 +232,7 @@ app.post('/api/atualizar-preco', async (req, res) => {
     }
 });
 
-// Rota de atualização em lote simultâneo (20 em 20 em paralelo) com captura do motivo real do erro
+// 4. Rota de atualização em lote simultâneo (20 em 20)
 app.post('/api/atualizar-precos-lote', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
@@ -216,7 +261,6 @@ app.post('/api/atualizar-precos-lote', async (req, res) => {
                 if (mlRes.ok) {
                     return { id: item.id, sucesso: true };
                 } else {
-                    // Captura o motivo real e detalhado enviado pela API do Mercado Livre
                     let mensagemErro = mlData.message || 
                                        (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
                                        JSON.stringify(mlData);
