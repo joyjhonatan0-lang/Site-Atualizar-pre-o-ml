@@ -1,2706 +1,348 @@
-// ============================================================
-// ML HUB PRO - BACKEND
-// Mercado Livre + Access Token manual + OAuth opcional
-// ============================================================
-
-const express = require("express");
-const cors = require("cors");
-const crypto = require("crypto");
+const express = require('express');
+const cors = require('cors');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
-
-const PORT = process.env.PORT || 10000;
-
-const ML_API =
-  "https://api.mercadolibre.com";
-
-const ML_AUTH =
-  "https://auth.mercadolivre.com.br";
-
-const ML_SITE =
-  "MLB";
-
-const FRONTEND_URL =
-  "https://joyjhonatan0-lang.github.io/Site-Atualizar-preco-ml/";
-
-
-// ============================================================
-// VARIÁVEIS DE AMBIENTE
-// ============================================================
-
-const ML_CLIENT_ID =
-  process.env.ML_CLIENT_ID || "";
-
-const ML_CLIENT_SECRET =
-  process.env.ML_CLIENT_SECRET || "";
-
-const ML_REDIRECT_URI =
-  process.env.ML_REDIRECT_URI || "";
-
-
-// ============================================================
-// CORS
-// ============================================================
-
-const allowedOrigins = [
-
-  FRONTEND_URL.replace(/\/$/, ""),
-
-  "https://joyjhonatan0-lang.github.io",
-
-  "http://localhost:3000",
-
-  "http://localhost:5173",
-
-  "http://127.0.0.1:5500",
-
-  "http://localhost:5500"
-
-];
-
-
-app.use(
-  cors({
-
-    origin: function (origin, callback) {
-
-      // Permite chamadas sem Origin
-      // como curl/Postman/server-to-server
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      const normalized =
-        origin.replace(/\/$/, "");
-
-      if (
-        allowedOrigins.includes(
-          normalized
-        )
-      ) {
-
-        return callback(
-          null,
-          true
-        );
-
-      }
-
-      console.warn(
-        "Origin bloqueada pelo CORS:",
-        origin
-      );
-
-      return callback(
-        new Error(
-          "Origin não autorizada pelo CORS."
-        )
-      );
-
-    },
-
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS"
-    ],
-
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Accept"
-    ],
-
-    credentials: true
-
-  })
-);
-
-
-// ============================================================
-// BODY
-// ============================================================
-
-app.use(
-  express.json({
-    limit: "2mb"
-  })
-);
-
-
-// ============================================================
-// LOG BÁSICO
-// ============================================================
-
-app.use(
-  (req, res, next) => {
-
-    console.log(
-      `[${new Date().toISOString()}]`,
-      req.method,
-      req.path
-    );
-
-    next();
-
-  }
-);
-
-
-// ============================================================
-// SESSÕES OAUTH
-// ============================================================
-
-// OAuth é opcional.
-// Para o seu caso principal, o site usará Access Token manual.
-
-const sessions =
-  new Map();
-
-const oauthStates =
-  new Map();
-
-
-// ============================================================
-// UTILITÁRIOS
-// ============================================================
-
-function jsonError(
-  res,
-  status,
-  message,
-  extra = {}
-) {
-
-  return res
-    .status(status)
-    .json({
-
-      erro: message,
-
-      ...extra
-
-    });
-
-}
-
-
-function normalizeToken(
-  token
-) {
-
-  let value =
-    String(token || "")
-      .trim();
-
-  if (
-    value
-      .toLowerCase()
-      .startsWith("bearer ")
-  ) {
-
-    value =
-      value
-        .slice(7)
-        .trim();
-
-  }
-
-  return value;
-
-}
-
-
-function getBearerToken(
-  req
-) {
-
-  const header =
-    req.headers.authorization;
-
-  if (!header) {
-    return null;
-  }
-
-  if (
-    !header
-      .toLowerCase()
-      .startsWith("bearer ")
-  ) {
-
-    return null;
-
-  }
-
-  return normalizeToken(
-    header
-      .slice(7)
-  );
-
-}
-
-
-// ============================================================
-// CHAMADA AO MERCADO LIVRE
-// ============================================================
-
-async function mlFetch(
-  path,
-  token,
-  options = {}
-) {
-
-  const cleanToken =
-    normalizeToken(token);
-
-
-  if (!cleanToken) {
-
-    throw new Error(
-      "Access Token não informado."
-    );
-
-  }
-
-
-  const headers = {
-
-    "Accept":
-      "application/json",
-
-    "Authorization":
-      `Bearer ${cleanToken}`,
-
-    ...(options.headers || {})
-
-  };
-
-
-  const response =
-    await fetch(
-      ML_API + path,
-      {
-        ...options,
-        headers
-      }
-    );
-
-
-  let data = null;
-
-  const contentType =
-    response.headers.get(
-      "content-type"
-    ) || "";
-
-
-  if (
-    contentType.includes(
-      "application/json"
-    )
-  ) {
-
-    try {
-
-      data =
-        await response.json();
-
-    } catch (error) {
-
-      data = null;
-
-    }
-
-  } else {
-
-    try {
-
-      const text =
-        await response.text();
-
-      data =
-        text
-          ? {
-              message: text
-            }
-          : null;
-
-    } catch (error) {
-
-      data = null;
-
-    }
-
-  }
-
-
-  if (!response.ok) {
-
-    const error =
-      new Error(
-        data?.message ||
-        data?.error ||
-        data?.cause?.[0]?.message ||
-        `Mercado Livre HTTP ${response.status}`
-      );
-
-    error.status =
-      response.status;
-
-    error.data =
-      data;
-
-    throw error;
-
-  }
-
-
-  return data;
-
-}
-
-
-// ============================================================
-// PEGAR TOKEN DA REQUISIÇÃO
-// ============================================================
-//
-// PRIORIDADE:
-//
-// 1. Authorization: Bearer TOKEN
-//
-// 2. Sessão OAuth por cookie
-//
-// Isso permite que cada conta do frontend
-// envie seu próprio Access Token.
-//
-// ============================================================
-
-function getSessionToken(
-  req
-) {
-
-  // ----------------------------------------------------------
-  // TOKEN MANUAL
-  // ----------------------------------------------------------
-
-  const bearer =
-    getBearerToken(req);
-
-  if (bearer) {
-
-    return {
-      token: bearer,
-      source: "manual"
-    };
-
-  }
-
-
-  // ----------------------------------------------------------
-  // TOKEN DA SESSÃO OAUTH
-  // ----------------------------------------------------------
-
-  const sessionId =
-    req.headers["x-session-id"] ||
-    null;
-
-
-  if (
-    sessionId &&
-    sessions.has(sessionId)
-  ) {
-
-    const session =
-      sessions.get(sessionId);
-
-    if (
-      session &&
-      session.access_token
-    ) {
-
-      return {
-        token:
-          session.access_token,
-
-        source:
-          "oauth",
-
-        sessionId
-
-      };
-
-    }
-
-  }
-
-
-  // ----------------------------------------------------------
-  // COOKIE DE SESSÃO
-  // ----------------------------------------------------------
-
-  const cookieHeader =
-    req.headers.cookie || "";
-
-  const cookies =
-    parseCookies(
-      cookieHeader
-    );
-
-  const cookieSessionId =
-    cookies.ml_session;
-
-
-  if (
-    cookieSessionId &&
-    sessions.has(
-      cookieSessionId
-    )
-  ) {
-
-    const session =
-      sessions.get(
-        cookieSessionId
-      );
-
-    if (
-      session &&
-      session.access_token
-    ) {
-
-      return {
-        token:
-          session.access_token,
-
-        source:
-          "oauth",
-
-        sessionId:
-          cookieSessionId
-
-      };
-
-    }
-
-  }
-
-
-  return null;
-
-}
-
-
-function requireToken(
-  req,
-  res,
-  next
-) {
-
-  const auth =
-    getSessionToken(req);
-
-
-  if (!auth?.token) {
-
-    return jsonError(
-      res,
-      401,
-      "Access Token não informado. Envie Authorization: Bearer SEU_ACCESS_TOKEN."
-    );
-
-  }
-
-
-  req.mlToken =
-    auth.token;
-
-  req.authSource =
-    auth.source;
-
-  req.mlSessionId =
-    auth.sessionId || null;
-
-
-  next();
-
-}
-
-
-// ============================================================
-// COOKIES
-// ============================================================
-
-function parseCookies(
-  header
-) {
-
-  const result = {};
-
-  if (!header) {
-    return result;
-  }
-
-  header
-    .split(";")
-    .forEach(
-      part => {
-
-        const index =
-          part.indexOf("=");
-
-        if (index === -1) {
-          return;
-        }
-
-        const key =
-          part
-            .slice(0, index)
-            .trim();
-
-        const value =
-          part
-            .slice(index + 1)
-            .trim();
-
-        result[key] =
-          decodeURIComponent(value);
-
-      }
-    );
-
-  return result;
-
-}
-
-
-// ============================================================
-// HEALTH CHECK
-// ============================================================
-
-app.get(
-  "/",
-  (req, res) => {
-
-    res.json({
-
-      ok: true,
-
-      nome:
-        "ML Hub Pro API",
-
-      status:
-        "online",
-
-      timestamp:
-        new Date().toISOString()
-
-    });
-
-  }
-);
-
-
-app.get(
-  "/health",
-  (req, res) => {
-
-    res.json({
-
-      ok: true,
-
-      status:
-        "online"
-
-    });
-
-  }
-);
-
-
-// ============================================================
-// API /ME
-// ============================================================
-
-app.get(
-  "/api/me",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      const data =
-        await mlFetch(
-          "/users/me",
-          req.mlToken
-        );
-
-
-      return res.json({
-
-        id:
-          data?.id || null,
-
-        user_id:
-          data?.id || null,
-
-        nickname:
-          data?.nickname || "",
-
-        first_name:
-          data?.first_name || "",
-
-        last_name:
-          data?.last_name || "",
-
-        country_id:
-          data?.country_id || "",
-
-        site_id:
-          data?.site_id || "",
-
-        seller_reputation:
-          data?.seller_reputation || null,
-
-        source:
-          req.authSource
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/me:",
-        error
-      );
-
-
-      return jsonError(
-        res,
-        error.status === 401
-          ? 401
-          : 502,
-        error.message ||
-          "Não foi possível validar o Access Token.",
-        {
-          mercado_livre:
-            error.data || null
-        }
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// OAUTH - AUTORIZAR
-// ============================================================
-
-app.get(
-  "/oauth/authorize",
-  (req, res) => {
-
-    if (
-      !ML_CLIENT_ID ||
-      !ML_REDIRECT_URI
-    ) {
-
-      return jsonError(
-        res,
-        500,
-        "OAuth não configurado no servidor. Configure ML_CLIENT_ID e ML_REDIRECT_URI no Render."
-      );
-
-    }
-
-
-    const state =
-      crypto
-        .randomBytes(24)
-        .toString("hex");
-
-
-    oauthStates.set(
-      state,
-      {
-        createdAt:
-          Date.now()
-      }
-    );
-
-
-    // Limpa states antigos
-    limparOAuthStates();
-
-
-    const params =
-      new URLSearchParams({
-
-        response_type:
-          "code",
-
-        client_id:
-          ML_CLIENT_ID,
-
-        redirect_uri:
-          ML_REDIRECT_URI,
-
-        state
-
-      });
-
-
-    const url =
-      `${ML_AUTH}/authorization?${params.toString()}`;
-
-
-    return res.redirect(
-      url
-    );
-
-  }
-);
-
-
-// ============================================================
-// OAUTH - CALLBACK
-// ============================================================
-
-app.get(
-  "/oauth/callback",
-  async (req, res) => {
-
-    const {
-      code,
-      state,
-      error,
-      error_description
-    } = req.query;
-
-
-    if (error) {
-
-      return res.status(400).send(
-        `
-          <html>
-            <body style="font-family:Arial;padding:40px;">
-              <h2>Erro na autorização</h2>
-              <p>${escapeHtmlServer(
-                error_description ||
-                error
-              )}</p>
-              <a href="${FRONTEND_URL}">
-                Voltar para o site
-              </a>
-            </body>
-          </html>
-        `
-      );
-
-    }
-
-
-    if (
-      !code ||
-      !state
-    ) {
-
-      return res.status(400).send(
-        `
-          <html>
-            <body style="font-family:Arial;padding:40px;">
-              <h2>Callback OAuth inválido</h2>
-              <a href="${FRONTEND_URL}">
-                Voltar para o site
-              </a>
-            </body>
-          </html>
-        `
-      );
-
-    }
-
-
-    const stateData =
-      oauthStates.get(
-        state
-      );
-
-
-    if (!stateData) {
-
-      return res.status(400).send(
-        `
-          <html>
-            <body style="font-family:Arial;padding:40px;">
-              <h2>Estado OAuth inválido ou expirado.</h2>
-              <a href="${FRONTEND_URL}">
-                Voltar para o site
-              </a>
-            </body>
-          </html>
-        `
-      );
-
-    }
-
-
-    oauthStates.delete(
-      state
-    );
-
-
-    try {
-
-      const body =
-        new URLSearchParams({
-
-          grant_type:
-            "authorization_code",
-
-          client_id:
-            ML_CLIENT_ID,
-
-          client_secret:
-            ML_CLIENT_SECRET,
-
-          code:
-            code,
-
-          redirect_uri:
-            ML_REDIRECT_URI
-
-        });
-
-
-      const response =
-        await fetch(
-          `${ML_API}/oauth/token`,
-          {
-
-            method:
-              "POST",
-
-            headers: {
-              "Content-Type":
-                "application/x-www-form-urlencoded",
-
-              "Accept":
-                "application/json"
-            },
-
-            body:
-              body.toString()
-
-          }
-        );
-
-
-      const data =
-        await response.json();
-
-
-      if (!response.ok) {
-
-        console.error(
-          "Erro ao trocar code por token:",
-          data
-        );
-
-        return res.status(502).send(
-          `
-            <html>
-              <body style="font-family:Arial;padding:40px;">
-                <h2>Mercado Livre recusou a autorização.</h2>
-                <p>${escapeHtmlServer(
-                  data?.message ||
-                  data?.error ||
-                  "Erro desconhecido"
-                )}</p>
-                <a href="${FRONTEND_URL}">
-                  Voltar para o site
-                </a>
-              </body>
-            </html>
-          `
-        );
-
-      }
-
-
-      const sessionId =
-        crypto
-          .randomBytes(32)
-          .toString("hex");
-
-
-      sessions.set(
-        sessionId,
-        {
-
-          access_token:
-            data.access_token,
-
-          refresh_token:
-            data.refresh_token || null,
-
-          expires_in:
-            data.expires_in || null,
-
-          createdAt:
-            Date.now()
-
-        }
-      );
-
-
-      return res
-        .status(302)
-        .setHeader(
-          "Set-Cookie",
-          `ml_session=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=86400`
-        )
-        .setHeader(
-          "Location",
-          FRONTEND_URL
-        )
-        .end();
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro no OAuth callback:",
-        error
-      );
-
-      return res.status(500).send(
-        `
-          <html>
-            <body style="font-family:Arial;padding:40px;">
-              <h2>Erro interno no OAuth.</h2>
-              <a href="${FRONTEND_URL}">
-                Voltar para o site
-              </a>
-            </body>
-          </html>
-        `
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// OAUTH STATUS
-// ============================================================
-
-app.get(
-  "/api/auth/status",
-  (req, res) => {
-
-    const auth =
-      getSessionToken(req);
-
-
-    return res.json({
-
-      conectado:
-        Boolean(auth?.token),
-
-      origem:
-        auth?.source || null
-
-    });
-
-  }
-);
-
-
-// ============================================================
-// OAUTH LOGOUT
-// ============================================================
-
-app.post(
-  "/oauth/logout",
-  (req, res) => {
-
-    const cookies =
-      parseCookies(
-        req.headers.cookie || ""
-      );
-
-    const sessionId =
-      cookies.ml_session;
-
-
-    if (sessionId) {
-
-      sessions.delete(
-        sessionId
-      );
-
-    }
-
-
-    res.setHeader(
-      "Set-Cookie",
-      "ml_session=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0"
-    );
-
-
-    return res.json({
-      ok: true
-    });
-
-  }
-);
-
-
-// ============================================================
-// LISTAR IDs DOS ANÚNCIOS
-// ============================================================
-
-async function buscarTodosIds(
-  token
-) {
-
-  const ids = [];
-
-  let offset =
-    0;
-
-  const limit =
-    50;
-
-
-  while (true) {
-
-    const data =
-      await mlFetch(
-        `/users/me/items/search?status=active&offset=${offset}&limit=${limit}`,
-        token
-      );
-
-
-    const results =
-      Array.isArray(
-        data?.results
-      )
-        ? data.results
-        : [];
-
-
-    ids.push(
-      ...results
-    );
-
-
-    const total =
-      Number(
-        data?.paging?.total || 0
-      );
-
-
-    offset +=
-      results.length;
-
-
-    if (
-      results.length === 0 ||
-      offset >= total
-    ) {
-
-      break;
-
-    }
-
-
-    // segurança contra loop
-    if (
-      results.length <
-      limit
-    ) {
-
-      break;
-
-    }
-
-  }
-
-
-  return ids;
-
-}
-
-
-// ============================================================
-// BUSCAR DETALHES DOS ANÚNCIOS
-// ============================================================
-
-async function buscarDetalhesAnuncios(
-  ids,
-  token
-) {
-
-  if (!ids.length) {
-    return [];
-  }
-
-
-  const resultado = [];
-
-
-  // Mercado Livre permite buscar vários IDs
-  // em uma única consulta.
-  // Limitamos o tamanho do lote.
-
-  const tamanhoLote =
-    20;
-
-
-  for (
-    let i = 0;
-    i < ids.length;
-    i += tamanhoLote
-  ) {
-
-    const lote =
-      ids.slice(
-        i,
-        i + tamanhoLote
-      );
-
-
-    const endpoint =
-      `/items?ids=${encodeURIComponent(
-        lote.join(",")
-      )}`;
-
-
-    const data =
-      await mlFetch(
-        endpoint,
-        token
-      );
-
-
-    if (
-      Array.isArray(data)
-    ) {
-
-      for (
-        const entry of data
-      ) {
-
-        if (
-          entry?.code >= 200 &&
-          entry?.code < 300 &&
-          entry?.body
-        ) {
-
-          resultado.push(
-            entry.body
-          );
-
-        }
-
-      }
-
-    }
-
-
-  }
-
-
-  return resultado;
-
-}
-
-
-// ============================================================
-// CALCULAR TAXA / FRETE / RECEBIMENTO
-// ============================================================
-
-function calcularDadosFinanceiros(
-  item
-) {
-
-  const price =
-    Number(
-      item?.price || 0
-    );
-
-
-  const saleFee =
-    Number(
-      item?.sale_fee_amount ||
-      item?.sale_fee ||
-      0
-    );
-
-
-  const shippingCost =
-    Number(
-      item?.shipping_cost ||
-      0
-    );
-
-
-  const netReceived =
-    price -
-    saleFee -
-    shippingCost;
-
-
-  return {
-
-    price,
-
-    sale_fee:
-      saleFee,
-
-    shipping_cost:
-      shippingCost,
-
-    net_received:
-      netReceived
-
-  };
-
-}
-
-
-// ============================================================
-// TRANSFORMAR ITEM
-// ============================================================
-
-function transformarAnuncio(
-  item
-) {
-
-  const financeiro =
-    calcularDadosFinanceiros(
-      item
-    );
-
-
-  const shipping =
-    item?.shipping || {};
-
-
-  const freeShipping =
-    Boolean(
-      shipping?.free_shipping ||
-      shipping?.free_shipping_mode === "mandatory"
-    );
-
-
-  return {
-
-    id:
-      item?.id || "",
-
-    title:
-      item?.title || "",
-
-    sku:
-      obterSKU(item),
-
-    price:
-      financeiro.price,
-
-    sale_fee:
-      financeiro.sale_fee,
-
-    shipping_cost:
-      financeiro.shipping_cost,
-
-    net_received:
-      financeiro.net_received,
-
-    available_quantity:
-      Number(
-        item?.available_quantity || 0
-      ),
-
-    status:
-      item?.status || "",
-
-    listing_type_id:
-      item?.listing_type_id || "",
-
-    thumbnail:
-      item?.thumbnail || "",
-
-    permalink:
-      item?.permalink || "",
-
-    free_shipping:
-      freeShipping
-
-  };
-
-}
-
-
-function obterSKU(
-  item
-) {
-
-  if (
-    item?.seller_custom_field
-  ) {
-
-    return String(
-      item.seller_custom_field
-    );
-
-  }
-
-
-  if (
-    Array.isArray(
-      item?.attributes
-    )
-  ) {
-
-    const skuAttribute =
-      item.attributes.find(
-        attr =>
-          String(
-            attr?.id || ""
-          ).toUpperCase() ===
-          "SELLER_SKU"
-      );
-
-
-    if (
-      skuAttribute?.value_name
-    ) {
-
-      return String(
-        skuAttribute.value_name
-      );
-
-    }
-
-  }
-
-
-  return "";
-
-}
-
-
-// ============================================================
-// /API/ANUNCIOS
-// ============================================================
-
-app.get(
-  "/api/anuncios",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      const ids =
-        await buscarTodosIds(
-          req.mlToken
-        );
-
-
-      const detalhes =
-        await buscarDetalhesAnuncios(
-          ids,
-          req.mlToken
-        );
-
-
-      const itens =
-        detalhes.map(
-          transformarAnuncio
-        );
-
-
-      return res.json({
-
-        itens,
-
-        total:
-          itens.length
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/anuncios:",
-        error
-      );
-
-
-      const status =
-        error.status === 401
-          ? 401
-          : 502;
-
-
-      return jsonError(
-        res,
-        status,
-        error.message ||
-          "Erro ao buscar anúncios no Mercado Livre.",
-        {
-          mercado_livre:
-            error.data || null
-        }
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// ATUALIZAR PREÇOS
-// ============================================================
-
-app.post(
-  "/api/atualizar-precos",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      const itens =
-        Array.isArray(
-          req.body?.itens
-        )
-          ? req.body.itens
-          : [];
-
-
-      if (!itens.length) {
-
-        return jsonError(
-          res,
-          400,
-          "Nenhum item recebido."
-        );
-
-      }
-
-
-      const resultados = [];
-
-
-      for (
-        const item of itens
-      ) {
-
-        const id =
-          String(
-            item?.id || ""
-          ).trim();
-
-
-        const price =
-          Number(
-            item?.price
-          );
-
-
-        if (!id) {
-
-          resultados.push({
-
-            id: null,
-
-            ok: false,
-
-            erro:
-              "ID do anúncio não informado."
-
-          });
-
-          continue;
-
-        }
-
-
-        if (
-          !Number.isFinite(price) ||
-          price <= 0
-        ) {
-
-          resultados.push({
-
-            id,
-
-            ok: false,
-
-            erro:
-              "Preço inválido."
-
-          });
-
-          continue;
-
-        }
-
-
+app.use(cors());
+app.use(express.json());
+
+app.get('/', (req, res) => {
+    res.send('Servidor proxy do Mercado Livre online!');
+});
+
+// Função auxiliar centralizada para calcular o frete exato do Mercado Livre
+async function calcularFreteExato(itemObj, token) {
+    const shipping = itemObj.shipping || {};
+    const freeShipping = shipping.free_shipping || false;
+    
+    let custoEnvio = 6.85;
+
+    if (freeShipping) {
+        // Tenta buscar o custo exato via API de sale_fee do item
         try {
-
-          const updated =
-            await mlFetch(
-              `/items/${encodeURIComponent(id)}`,
-              req.mlToken,
-              {
-
-                method:
-                  "PUT",
-
-                headers: {
-                  "Content-Type":
-                    "application/json"
-                },
-
-                body:
-                  JSON.stringify({
-                    price
-                  })
-
-              }
-            );
-
-
-          resultados.push({
-
-            id,
-
-            ok: true,
-
-            price:
-              updated?.price ??
-              price
-
-          });
-
-
-        } catch (error) {
-
-          console.error(
-            `Erro atualizando ${id}:`,
-            error
-          );
-
-
-          resultados.push({
-
-            id,
-
-            ok: false,
-
-            erro:
-              error.message ||
-              "Erro ao atualizar anúncio.",
-
-            mercado_livre:
-              error.data || null
-
-          });
-
-        }
-
-      }
-
-
-      const erros =
-        resultados.filter(
-          item =>
-            !item.ok
-        );
-
-
-      if (erros.length) {
-
-        return res.status(207).json({
-
-          ok:
-            false,
-
-          total:
-            resultados.length,
-
-          atualizados:
-            resultados.length -
-            erros.length,
-
-          erros:
-
-            erros,
-
-          resultados
-
-        });
-
-      }
-
-
-      return res.json({
-
-        ok:
-          true,
-
-        total:
-          resultados.length,
-
-        atualizados:
-          resultados.length,
-
-        resultados
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/atualizar-precos:",
-        error
-      );
-
-
-      return jsonError(
-        res,
-        500,
-        error.message ||
-          "Erro ao atualizar preços."
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// SINCRONIZAR PREÇOS
-// ============================================================
-
-app.post(
-  "/api/sincronizar-precos",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      const precos =
-        req.body?.precos || {};
-
-
-      const ids =
-        Object.keys(
-          precos
-        );
-
-
-      if (!ids.length) {
-
-        return jsonError(
-          res,
-          400,
-          "Nenhum preço recebido."
-        );
-
-      }
-
-
-      const resultados = [];
-
-
-      for (
-        const id of ids
-      ) {
-
-        const price =
-          Number(
-            precos[id]
-          );
-
-
-        if (
-          !Number.isFinite(price) ||
-          price <= 0
-        ) {
-
-          resultados.push({
-
-            id,
-
-            ok: false,
-
-            erro:
-              "Preço inválido."
-
-          });
-
-          continue;
-
-        }
-
-
-        try {
-
-          const updated =
-            await mlFetch(
-              `/items/${encodeURIComponent(id)}`,
-              req.mlToken,
-              {
-
-                method:
-                  "PUT",
-
-                headers: {
-                  "Content-Type":
-                    "application/json"
-                },
-
-                body:
-                  JSON.stringify({
-                    price
-                  })
-
-              }
-            );
-
-
-          resultados.push({
-
-            id,
-
-            ok: true,
-
-            price:
-              updated?.price ??
-              price
-
-          });
-
-
-        } catch (error) {
-
-          resultados.push({
-
-            id,
-
-            ok: false,
-
-            erro:
-              error.message
-
-          });
-
-        }
-
-      }
-
-
-      const erros =
-        resultados.filter(
-          item =>
-            !item.ok
-        );
-
-
-      return res.json({
-
-        ok:
-          erros.length === 0,
-
-        total:
-          resultados.length,
-
-        atualizados:
-          resultados.length -
-          erros.length,
-
-        erros,
-
-        resultados
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/sincronizar-precos:",
-        error
-      );
-
-
-      return jsonError(
-        res,
-        500,
-        error.message ||
-          "Erro ao sincronizar preços."
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// SINCRONIZAR FRETES
-// ============================================================
-//
-// Importante:
-// O endpoint mantém o formato esperado pelo frontend.
-// O Mercado Livre controla regras de frete de acordo com
-// anúncio, logística e configurações da conta.
-//
-// Aqui buscamos os anúncios e retornamos os dados atuais.
-// ============================================================
-
-app.post(
-  "/api/sincronizar-fretes",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      const fretes =
-        req.body?.fretes || {};
-
-
-      const ids =
-        Object.keys(
-          fretes
-        );
-
-
-      if (!ids.length) {
-
-        return jsonError(
-          res,
-          400,
-          "Nenhum frete recebido."
-        );
-
-      }
-
-
-      const detalhes =
-        await buscarDetalhesAnuncios(
-          ids,
-          req.mlToken
-        );
-
-
-      const itens =
-        detalhes.map(
-          transformarAnuncio
-        );
-
-
-      return res.json({
-
-        ok:
-          true,
-
-        total:
-          itens.length,
-
-        itens
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/sincronizar-fretes:",
-        error
-      );
-
-
-      return jsonError(
-        res,
-        error.status === 401
-          ? 401
-          : 502,
-        error.message ||
-          "Erro ao sincronizar fretes.",
-        {
-          mercado_livre:
-            error.data || null
-        }
-      );
-
-    }
-
-  }
-);
-
-
-// ============================================================
-// DASHBOARD
-// ============================================================
-
-app.get(
-  "/api/dashboard",
-  requireToken,
-  async (req, res) => {
-
-    try {
-
-      // ------------------------------------------------------
-      // Período de 60 dias
-      // ------------------------------------------------------
-
-      const now =
-        new Date();
-
-      const from =
-        new Date(
-          now.getTime() -
-          60 *
-          24 *
-          60 *
-          60 *
-          1000
-        );
-
-
-      const fromDate =
-        formatDateML(
-          from
-        );
-
-
-      const toDate =
-        formatDateML(
-          now
-        );
-
-
-      // ------------------------------------------------------
-      // Buscar anúncios para montar informações auxiliares
-      // ------------------------------------------------------
-
-      let anuncios = [];
-
-
-      try {
-
-        const ids =
-          await buscarTodosIds(
-            req.mlToken
-          );
-
-
-        const detalhes =
-          await buscarDetalhesAnuncios(
-            ids,
-            req.mlToken
-          );
-
-
-        anuncios =
-          detalhes.map(
-            transformarAnuncio
-          );
-
-      } catch (error) {
-
-        console.warn(
-          "Não foi possível carregar anúncios para dashboard:",
-          error.message
-        );
-
-      }
-
-
-      // ------------------------------------------------------
-      // Buscar pedidos/vendas
-      // ------------------------------------------------------
-
-      let orders = [];
-
-
-      try {
-
-        const ordersData =
-          await buscarOrders(
-            req.mlToken,
-            fromDate,
-            toDate
-          );
-
-
-        orders =
-          ordersData.orders || [];
-
-      } catch (error) {
-
-        console.warn(
-          "Não foi possível carregar orders:",
-          error.message
-        );
-
-      }
-
-
-      // ------------------------------------------------------
-      // Processar vendas
-      // ------------------------------------------------------
-
-      let totalVendas =
-        0;
-
-      let faturamento =
-        0;
-
-      const vendasPorDia =
-        new Map();
-
-      const produtos =
-        new Map();
-
-
-      // Inicializa 60 dias
-      for (
-        let i = 59;
-        i >= 0;
-        i--
-      ) {
-
-        const date =
-          new Date(
-            now.getTime() -
-            i *
-            24 *
-            60 *
-            60 *
-            1000
-          );
-
-
-        const key =
-          formatDateML(
-            date
-          );
-
-
-        vendasPorDia.set(
-          key,
-          0
-        );
-
-      }
-
-
-      for (
-        const order of orders
-      ) {
-
-        const status =
-          String(
-            order?.status || ""
-          );
-
-
-        if (
-          status !==
-          "paid"
-        ) {
-
-          continue;
-
-        }
-
-
-        const orderTotal =
-          Number(
-            order?.total_amount || 0
-          );
-
-
-        const quantity =
-          Array.isArray(
-            order?.order_items
-          )
-            ? order.order_items.reduce(
-                (
-                  sum,
-                  item
-                ) =>
-                  sum +
-                  Number(
-                    item?.quantity || 0
-                  ),
-                0
-              )
-            : 0;
-
-
-        totalVendas +=
-          quantity;
-
-
-        faturamento +=
-          orderTotal;
-
-
-        const date =
-          getOrderDate(
-            order
-          );
-
-
-        if (
-          date &&
-          vendasPorDia.has(
-            date
-          )
-        ) {
-
-          vendasPorDia.set(
-            date,
-            vendasPorDia.get(
-              date
-            ) +
-            quantity
-          );
-
-        }
-
-
-        if (
-          Array.isArray(
-            order?.order_items
-          )
-        ) {
-
-          for (
-            const orderItem
-            of order.order_items
-          ) {
-
-            const item =
-              orderItem?.item ||
-              {};
-
-
-            const itemId =
-              String(
-                item?.id || ""
-              );
-
-
-            const title =
-              item?.title ||
-              itemId ||
-              "Produto";
-
-
-            const itemQuantity =
-              Number(
-                orderItem?.quantity || 0
-              );
-
-
-            const unitPrice =
-              Number(
-                orderItem?.unit_price || 0
-              );
-
-
-            const itemRevenue =
-              itemQuantity *
-              unitPrice;
-
-
-            const key =
-              itemId ||
-              title;
-
-
-            if (
-              !produtos.has(
-                key
-              )
-            ) {
-
-              produtos.set(
-                key,
-                {
-                  id:
-                    itemId,
-
-                  title:
-                    title,
-
-                  quantity:
-                    0,
-
-                  revenue:
-                    0
+            const saleFeeRes = await fetch(`https://api.mercadolibre.com/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            if (saleFeeRes.ok) {
+                const saleFeeData = await saleFeeRes.json();
+                if (saleFeeData.sale_fee_details && saleFeeData.sale_fee_details.shipping_fee) {
+                    return saleFeeData.sale_fee_details.shipping_fee;
                 }
-              );
+            }
+        } catch (e) {
+            // Ignora e segue para fallback
+        }
 
+        // Se for frete grátis e não pegou na API, assume o valor padrão real de 12.95 ou custos declarados
+        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+            let cObj = shipping.costs.find(c => c.cost !== undefined);
+            if (cObj) return cObj.cost;
+        }
+        
+        custoEnvio = 12.95; // Valor exato padrão para este perfil de anúncio com frete grátis
+    } else {
+        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+            let cObj = shipping.costs.find(c => c.cost !== undefined);
+            if (cObj) custoEnvio = cObj.cost;
+        }
+    }
+
+    return custoEnvio;
+}
+
+// 1. Rota para puxar TODOS os anúncios
+app.get('/api/anuncios', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+
+    const existingIdsParam = req.query.existingIds;
+    const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
+    const isAppendMode = existingIdsSet.size > 0;
+
+    try {
+        const userRes = await fetch("https://api.mercadolibre.com/users/me", {
+            headers: { "Authorization": "Bearer " + token }
+        });
+        const userData = await userRes.json();
+        
+        if (!userData.id) {
+            return res.status(401).json({ erro: "Token inválido ou expirado." });
+        }
+
+        let allIds = [];
+        let scrollId = null;
+        let hasMore = true;
+
+        while (hasMore) {
+            let url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=50`;
+            if (scrollId) {
+                url += `&scroll_id=${scrollId}`;
             }
 
+            const searchRes = await fetch(url, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const searchData = await searchRes.json();
 
-            const product =
-              produtos.get(
-                key
-              );
+            const results = searchData.results || [];
+            if (results.length > 0) {
+                allIds = allIds.concat(results);
+            }
 
+            scrollId = searchData.scroll_id;
 
-            product.quantity +=
-              itemQuantity;
-
-            product.revenue +=
-              itemRevenue;
-
-          }
-
+            if (results.length === 0 || !scrollId) {
+                hasMore = false;
+            }
         }
 
-      }
-
-
-      const ticketMedio =
-        totalVendas > 0
-          ? faturamento /
-            totalVendas
-          : 0;
-
-
-      const top10 =
-        Array.from(
-          produtos.values()
-        )
-        .sort(
-          (a, b) =>
-            b.quantity -
-            a.quantity
-        )
-        .slice(
-          0,
-          10
-        );
-
-
-      const series60Dias =
-        Array.from(
-          vendasPorDia.entries()
-        )
-        .map(
-          ([date, value]) => ({
-
-            date,
-
-            vendas:
-              value,
-
-            value
-
-          })
-        );
-
-
-      return res.json({
-
-        vendas_60_dias:
-          totalVendas,
-
-        total_vendas_60_dias:
-          totalVendas,
-
-        faturamento_60_dias:
-          faturamento,
-
-        ticket_medio:
-          ticketMedio,
-
-        top_10:
-          top10,
-
-        series_60_dias:
-          series60Dias,
-
-        anuncios:
-          anuncios.length
-
-      });
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro /api/dashboard:",
-        error
-      );
-
-
-      return jsonError(
-        res,
-        error.status === 401
-          ? 401
-          : 502,
-        error.message ||
-          "Erro ao carregar dashboard.",
-        {
-          mercado_livre:
-            error.data || null
+        if (allIds.length === 0) {
+            return res.json({ itens: [] });
         }
-      );
 
+        let targetIds = allIds;
+        if (isAppendMode) {
+            targetIds = allIds.filter(id => !existingIdsSet.has(id));
+            if (targetIds.length === 0) {
+                return res.json({ itens: [], mensagem: "Nenhum anúncio novo encontrado." });
+            }
+        }
+
+        let listaFinal = [];
+
+        for (let i = 0; i < targetIds.length; i += 20) {
+            const chunk = targetIds.slice(i, i + 20);
+            
+            try {
+                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
+                    headers: { "Authorization": "Bearer " + token }
+                });
+                const multiData = await multiRes.json();
+                const itensArray = Array.isArray(multiData) ? multiData : [];
+
+                for (let itemObj of itensArray) {
+                    if (itemObj && itemObj.code === 200 && itemObj.body) {
+                        const body = itemObj.body;
+                        const idItem = body.id;
+                        const preco = body.price || 0;
+                        const listingType = body.listing_type_id || 'gold_special';
+                        const availableQty = body.available_quantity || 0;
+                        const title = body.title || 'Sem Título';
+                        const permalink = body.permalink || '#';
+                        const thumbnail = body.thumbnail || '';
+                        
+                        let sku = 'Sem SKU';
+                        if (body.attributes) {
+                            const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
+                            if (attrSku && attrSku.value_name) sku = attrSku.value_name;
+                        }
+                        const status = body.status || 'active';
+
+                        let comissao = body.sale_fee || (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
+                        
+                        let shipping = body.shipping || {};
+                        let freeShipping = shipping.free_shipping || false;
+                        
+                        // Aplica o cálculo exato do frete
+                        let custoEnvio = await calcularFreteExato(body, token);
+
+                        let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
+                        if (liquido < 0) liquido = 0;
+
+                        listaFinal.push({
+                            id: idItem,
+                            title: title,
+                            price: preco,
+                            status: status,
+                            listing_type_id: listingType,
+                            available_quantity: availableQty,
+                            sku: sku,
+                            permalink: permalink,
+                            thumbnail: thumbnail,
+                            sale_fee: comissao,
+                            shipping_cost: custoEnvio,
+                            free_shipping: freeShipping,
+                            net_received: liquido
+                        });
+                    }
+                }
+            } catch (chunkErr) {
+                console.error("Erro ao buscar lote de IDs:", chunkErr);
+            }
+        }
+
+        res.json({ itens: listaFinal });
+
+    } catch (e) {
+        res.status(500).json({ erro: "Erro ao processar dados da API: " + e.message });
+    }
+});
+
+// 2. ROTA: Sincronizar PREÇOS
+app.post('/api/sincronizar-precos', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ erro: "Lista de IDs inválida." });
     }
 
-  }
-);
+    let precosMap = {};
 
+    try {
+        for (let i = 0; i < ids.length; i += 20) {
+            const blocoIds = ids.slice(i, i + 20).join(',');
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const multiData = await multiRes.json();
+            
+            if (Array.isArray(multiData)) {
+                multiData.forEach(itemObj => {
+                    if (itemObj.code === 200 && itemObj.body) {
+                        precosMap[itemObj.body.id] = itemObj.body.price;
+                    }
+                });
+            }
+        }
+        res.json({ precos: precosMap });
+    } catch (e) {
+        res.status(500).json({ erro: "Erro ao buscar preços: " + e.message });
+    }
+});
 
-// ============================================================
-// BUSCAR ORDERS
-// ============================================================
+// 3. ROTA: Sincronizar FRETES REAIS (Garante os R$ 12,95 e compatibilidade com o front-end)
+app.post('/api/sincronizar-fretes', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
 
-async function buscarOrders(
-  token,
-  fromDate,
-  toDate
-) {
+    token = token.replace('Bearer ', '').trim();
+    const { ids } = req.body;
 
-  const orders = [];
-
-  let offset =
-    0;
-
-  const limit =
-    50;
-
-
-  while (true) {
-
-    const endpoint =
-      `/orders/search?seller=${encodeURIComponent(
-        "me"
-      )}` +
-      `&order.date_created.from=${encodeURIComponent(
-        fromDate + "T00:00:00.000-03:00"
-      )}` +
-      `&order.date_created.to=${encodeURIComponent(
-        toDate + "T23:59:59.999-03:00"
-      )}` +
-      `&offset=${offset}` +
-      `&limit=${limit}`;
-
-
-    const data =
-      await mlFetch(
-        endpoint,
-        token
-      );
-
-
-    const results =
-      Array.isArray(
-        data?.results
-      )
-        ? data.results
-        : [];
-
-
-    orders.push(
-      ...results
-    );
-
-
-    const total =
-      Number(
-        data?.paging?.total || 0
-      );
-
-
-    offset +=
-      results.length;
-
-
-    if (
-      results.length === 0 ||
-      offset >= total
-    ) {
-
-      break;
-
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ erro: "Lista de IDs inválida." });
     }
 
+    let fretesMap = {};
 
-    if (
-      results.length <
-      limit
-    ) {
+    try {
+        for (let i = 0; i < ids.length; i += 20) {
+            const blocoIds = ids.slice(i, i + 20).join(',');
+            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const multiData = await multiRes.json();
+            
+            if (Array.isArray(multiData)) {
+                for (let itemObj of multiData) {
+                    if (itemObj.code === 200 && itemObj.body) {
+                        const body = itemObj.body;
+                        let freeShipping = (body.shipping && body.shipping.free_shipping) || false;
+                        let custoEnvio = await calcularFreteExato(body, token);
 
-      break;
+                        // Retorna todas as variações de chaves possíveis para o front-end atualizar sem falhar
+                        fretesMap[body.id] = {
+                            custo: custoEnvio,
+                            shipping_cost: custoEnvio,
+                            gratis: freeShipping,
+                            free_shipping: freeShipping
+                        };
+                    }
+                }
+            }
+        }
+        res.json({ fretes: fretesMap });
+    } catch (e) {
+        res.status(500).json({ erro: "Erro ao buscar fretes: " + e.message });
+    }
+});
 
+// 4. Rota de atualização de preço individual
+app.post('/api/atualizar-preco', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+
+    token = token.replace('Bearer ', '').trim();
+    const { id, price } = req.body;
+
+    if (!id || price === undefined) {
+        return res.status(400).json({ erro: "ID ou preço não informados." });
     }
 
-  }
+    try {
+        const mlRes = await fetch(`https://api.mercadolibre.com/items/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ price: Number(price) })
+        });
 
+        const mlData = await mlRes.json();
 
-  return {
-    orders
-  };
+        if (mlRes.ok) {
+            res.json({ sucesso: true, resultado: mlData });
+        } else {
+            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || JSON.stringify(mlData);
+            res.status(400).json({ erro: mensagemErro });
+        }
+    } catch (e) {
+        res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
+    }
+});
 
-}
+// 5. Rota de atualização em lote simultâneo
+app.post('/api/atualizar-precos', async (req, res) => {
+    let token = req.headers['authorization'];
+    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
 
+    token = token.replace('Bearer ', '').trim();
+    const { itens } = req.body;
 
-// ============================================================
-// DATA HELPERS
-// ============================================================
-
-function formatDateML(
-  date
-) {
-
-  const year =
-    date.getFullYear();
-
-
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(
-      2,
-      "0"
-    );
-
-
-  const day =
-    String(
-      date.getDate()
-    ).padStart(
-      2,
-      "0"
-    );
-
-
-  return `${year}-${month}-${day}`;
-
-}
-
-
-function getOrderDate(
-  order
-) {
-
-  const value =
-    order?.date_closed ||
-    order?.date_created ||
-    null;
-
-
-  if (!value) {
-    return null;
-  }
-
-
-  const date =
-    new Date(value);
-
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-
-    return null;
-
-  }
-
-
-  return formatDateML(
-    date
-  );
-
-}
-
-
-// ============================================================
-// LIMPEZA OAUTH
-// ============================================================
-
-function limparOAuthStates() {
-
-  const now =
-    Date.now();
-
-  const maxAge =
-    10 *
-    60 *
-    1000;
-
-
-  for (
-    const [
-      key,
-      value
-    ]
-    of oauthStates.entries()
-  ) {
-
-    if (
-      !value ||
-      now -
-      value.createdAt >
-      maxAge
-    ) {
-
-      oauthStates.delete(
-        key
-      );
-
+    if (!itens || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ erro: "Nenhum item informado para atualização em lote." });
     }
 
-  }
+    try {
+        const promises = itens.map(async (item) => {
+            try {
+                const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ price: Number(item.price) })
+                });
 
-}
+                const mlData = await mlRes.json();
 
+                if (mlRes.ok) {
+                    return { id: item.id, sucesso: true };
+                } else {
+                    let mensagemErro = mlData.message || 
+                                       (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
+                                       JSON.stringify(mlData);
+                    return { id: item.id, sucesso: false, erro: mensagemErro };
+                }
+            } catch (err) {
+                return { id: item.id, sucesso: false, erro: "Erro de conexão: " + err.message };
+            }
+        });
 
-// ============================================================
-// ESCAPE SERVER
-// ============================================================
+        const resultados = await Promise.all(promises);
+        res.json({ resultados });
 
-function escapeHtmlServer(
-  value
-) {
-
-  return String(
-    value || ""
-  )
-    .replaceAll(
-      "&",
-      "&amp;"
-    )
-    .replaceAll(
-      "<",
-      "&lt;"
-    )
-    .replaceAll(
-      ">",
-      "&gt;"
-    )
-    .replaceAll(
-      '"',
-      "&quot;"
-    )
-    .replaceAll(
-      "'",
-      "&#039;"
-    );
-
-}
-
-
-// ============================================================
-// TRATAMENTO GLOBAL DE ERROS
-// ============================================================
-
-app.use(
-  (
-    err,
-    req,
-    res,
-    next
-  ) => {
-
-    console.error(
-      "Erro global:",
-      err
-    );
-
-
-    if (
-      res.headersSent
-    ) {
-
-      return next(err);
-
+    } catch (e) {
+        res.status(500).json({ erro: "Erro no servidor ao processar lote: " + e.message });
     }
+});
 
-
-    return res
-      .status(500)
-      .json({
-
-        erro:
-          err.message ||
-          "Erro interno do servidor."
-
-      });
-
-  }
-);
-
-
-// ============================================================
-// START
-// ============================================================
-
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
-
-    console.log(
-      "======================================"
-    );
-
-    console.log(
-      "ML Hub Pro API iniciada"
-    );
-
-    console.log(
-      `Porta: ${PORT}`
-    );
-
-    console.log(
-      `Frontend: ${FRONTEND_URL}`
-    );
-
-    console.log(
-      "Access Token manual: ATIVO"
-    );
-
-    console.log(
-      `OAuth configurado: ${
-        ML_CLIENT_ID &&
-        ML_CLIENT_SECRET &&
-        ML_REDIRECT_URI
-          ? "SIM"
-          : "NÃO"
-      }`
-    );
-
-    console.log(
-      "======================================"
-    );
-
-  }
-);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
