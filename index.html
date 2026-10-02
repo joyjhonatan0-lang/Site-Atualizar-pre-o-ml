@@ -165,7 +165,7 @@
                                 <th class="p-3.5">Preço Atual</th>
                                 <th class="p-3.5 text-emerald-400">Novo Preço</th>
                                 <th class="p-3.5">Situação / Margem</th>
-                                <th class="p-3.5">Status API</th>
+                                <th class="p-3.5">Status API (Motivo do Erro)</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-atualizacao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
@@ -473,7 +473,8 @@
                                     if(resItem.sucesso) {
                                         statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
                                     } else {
-                                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold" title="${resItem.erro}">${resItem.erro}</span>`;
+                                        // Exibe o motivo exato do erro truncado, e armazena o texto completo no title para leitura com o mouse
+                                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold cursor-help" title="${resItem.erro}">❌ ${resItem.erro}</span>`;
                                     }
                                 }
                             }
