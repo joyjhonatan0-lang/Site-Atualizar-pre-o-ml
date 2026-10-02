@@ -26,12 +26,20 @@
                 <button onclick="mudarAba('atualizacao')" id="btn-atualizacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Atualização de Preço</button>
             </nav>
         </div>
-        <div class="flex items-center space-x-3">
-            <button onclick="solicitarToken()" class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition">
-                🔑 Inserir Token
+        
+        <!-- PAINEL DE BOTÕES DE API NA HEADER -->
+        <div class="flex items-center space-x-2">
+            <button onclick="carregarDados()" class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition flex items-center gap-1" title="Puxar Anúncios da API">
+                📦 Puxar Anúncios
             </button>
-            <button onclick="carregarDados()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold transition shadow-lg shadow-yellow-400/10 flex items-center gap-2">
-                ⚡ Sincronizar API
+            <button onclick="sincronizarPrecosApi()" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-2 rounded-lg text-xs font-bold border border-emerald-400/30 transition flex items-center gap-1" title="Puxar Preços Reais">
+                💰 Puxar Preços
+            </button>
+            <button onclick="sincronizarFretesApi()" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-lg text-xs font-bold border border-blue-400/30 transition flex items-center gap-1" title="Puxar Fretes Reais">
+                🚚 Puxar Fretes
+            </button>
+            <button onclick="solicitarToken()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 transition">
+                🔑 Token
             </button>
         </div>
     </header>
@@ -51,7 +59,7 @@
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
-            <p class="mt-4 text-sm text-slate-400 font-medium">Extraindo dados e custos de envio reais da API do Mercado Livre...</p>
+            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Sincronizando dados com a API do Mercado Livre...</p>
         </div>
 
         <!-- ABA 1: GESTÃO -->
@@ -196,6 +204,7 @@
             }
 
             document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loading-text').innerText = "Puxando anúncios e dados da API do Mercado Livre...";
             document.getElementById('aviso-token').classList.add('hidden');
 
             try {
@@ -210,6 +219,7 @@
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
                     montarTabelaAtualizacao(cacheItens);
+                    alert("Anúncios puxados com sucesso!");
                 } else {
                     alert(data.erro || "Erro ao carregar anúncios.");
                     if(data.erro && data.erro.includes("Token")) {
@@ -221,6 +231,16 @@
             } finally {
                 document.getElementById('loading').classList.add('hidden');
             }
+        }
+
+        async function sincronizarPrecosApi() {
+            await carregarDados();
+            alert("Preços reais puxados e atualizados da API!");
+        }
+
+        async function sincronizarFretesApi() {
+            await carregarDados();
+            alert("Custos de frete reais puxados e atualizados da API!");
         }
 
         function mudarAba(aba) {
@@ -361,7 +381,6 @@
             itens.forEach((item, index) => {
                 const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
                 
-                // Pula e oculta se estiver na margem (exibe apenas os fora da margem)
                 if (!dadosSim.foraDaMargem) return;
 
                 const novoPreco = dadosSim.preco;
@@ -416,7 +435,7 @@
                 const novoPreco = dadosSim ? dadosSim.preco : item.price;
                 const statusEl = document.getElementById(`status_api_${index}`);
 
-                if(statusEl && statusEl.innerHTML.includes("OK")) continue; // Pula os que já deram OK
+                if(statusEl && statusEl.innerHTML.includes("OK")) continue;
 
                 statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando...</span>`;
 
