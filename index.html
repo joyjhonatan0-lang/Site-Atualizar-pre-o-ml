@@ -151,7 +151,6 @@
                     <p class="text-xs text-slate-400 mt-0.5">Envio simultâneo em lotes de 20 para máxima velocidade.</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <!-- Painel com a quantidade de anúncios fora da margem para atualizar -->
                     <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm flex items-center space-x-2">
                         <span class="text-slate-400 text-xs">Para atualizar:</span>
                         <span id="contador-atualizacao" class="font-bold text-amber-400 text-base">0</span>
@@ -240,7 +239,6 @@
             }
         }
 
-        // AGORA PUXA APENAS O PREÇO DOS ANÚNCIOS JÁ CARREGADOS NA TELA
         async function sincronizarPrecosApi() {
             const token = localStorage.getItem('ml_access_token');
             if (!token) {
@@ -270,16 +268,13 @@
                 const data = await response.json();
 
                 if (response.ok && data.precos) {
-                    // Atualiza apenas os preços no cache local
                     cacheItens.forEach(item => {
                         if (data.precos[item.id] !== undefined) {
                             item.price = data.precos[item.id];
-                            // Recalcula o 'net_received' básico se necessário
                             item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
                         }
                     });
 
-                    // Atualiza as tabelas e simulações sem perder a listagem
                     atualizarCards(cacheItens);
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
@@ -297,8 +292,62 @@
         }
 
         async function sincronizarFretesApi() {
-            await carregarDados();
-            alert("Custos de frete reais puxados e atualizados da API!");
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                solicitarToken();
+                return;
+            }
+
+            if (!cacheItens || cacheItens.length === 0) {
+                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+                return;
+            }
+
+            document.getElementById('loading-text').innerText = "Puxando custos de frete atualizados das MLBs ativas...";
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                // Pega apenas as MLBs que já estão carregadas na tela
+                const mlbs = cacheItens.map(i => i.id);
+                
+                // Envia para a nossa rota do Render que puxa SÓ os fretes
+                const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ ids: mlbs })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.fretes) {
+                    // Atualiza os fretes no cache local instantaneamente
+                    cacheItens.forEach(item => {
+                        if (data.fretes[item.id]) {
+                            item.shipping_cost = data.fretes[item.id].custo;
+                            item.free_shipping = data.fretes[item.id].gratis;
+                            // Recalcula o valor líquido (net_received) com o novo frete
+                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
+                        }
+                    });
+
+                    // Atualiza as tabelas na tela sem recarregar tudo
+                    atualizarCards(cacheItens);
+                    montarTabelaGestao(cacheItens);
+                    montarTabelaSimulacao(cacheItens);
+                    montarTabelaAtualizacao(cacheItens);
+
+                    alert("Fretes reais sincronizados com sucesso para as MLBs existentes!");
+                } else {
+                    alert(data.erro || "Erro ao sincronizar fretes.");
+                }
+            } catch (e) {
+                alert("Erro de comunicação com o servidor ao puxar fretes.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
         }
 
         function mudarAba(aba) {
@@ -543,13 +592,10 @@
                                             novosPrecosCalculados[originalObj.index].foraDaMargem = false;
                                         }
 
-                                        // Remove a linha após sucesso e atualiza o contador na interface
                                         setTimeout(() => {
                                             const linha = document.getElementById(`linha_atualizacao_${originalObj.index}`);
                                             if (linha) {
                                                 linha.remove();
-                                                
-                                                // Atualiza dinamicamente o número no painel
                                                 const contadorAtual = document.getElementById('contador-atualizacao');
                                                 const totalAtual = parseInt(contadorAtual.innerText);
                                                 if (totalAtual > 0) {
@@ -564,20 +610,18 @@
                             }
                         });
                     } else {
-                        // Trata erros de status da requisição onde o backend não envia a array 'resultados'
                         lote.forEach(item => {
                             const statusEl = document.getElementById(`status_api_${item.index}`);
                             if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Erro no Lote</span>`;
                         });
                     }
                 } catch (e) {
-                    // Trata problemas de rede
                     lote.forEach(item => {
                         const statusEl = document.getElementById(`status_api_${item.index}`);
                         if(statusEl) statusEl.innerHTML = `<span class="text-red-400 font-bold">Falha de Rede</span>`;
                     });
                 }
-            } // Fim do loop for (lotes)
+            }
 
             alert("Processo de atualização em massa finalizado!");
         }
