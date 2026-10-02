@@ -27,12 +27,25 @@ app.get('/api/anuncios', async (req, res) => {
             return res.status(401).json({ erro: "Token inválido ou expirado." });
         }
 
-        // 2. API para puxar a lista de IDs dos anúncios do vendedor
-        const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=50`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const itemsData = await itemsRes.json();
-        const allIds = itemsData.results || [];
+        // 2. Paginação automática para puxar TODOS os IDs dos anúncios (suporta mais de 2.000 itens)
+        let allIds = [];
+        let offset = 0;
+        let limit = 50;
+        let total = 0;
+
+        do {
+            const itemsRes = await fetch(`https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}&offset=${offset}`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const itemsData = await itemsRes.json();
+            const results = itemsData.results || [];
+            
+            allIds = allIds.concat(results);
+            total = itemsData.paging && itemsData.paging.total ? itemsData.paging.total : 0;
+            offset += limit;
+
+            if (results.length === 0 || offset >= total) break;
+        } while (offset < total);
 
         if (allIds.length === 0) {
             return res.json({ itens: [] });
@@ -40,7 +53,7 @@ app.get('/api/anuncios', async (req, res) => {
 
         let listaFinal = [];
 
-        // 3. Puxar os detalhes em lote usando a API de items do Mercado Livre
+        // 3. Puxar os detalhes em lote usando a API de items do Mercado Livre (blocos de 20)
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             
@@ -60,10 +73,15 @@ app.get('/api/anuncios', async (req, res) => {
                     const title = body.title || 'Sem Título';
                     const permalink = body.permalink || '#';
                     const thumbnail = body.thumbnail || '';
-                    const sku = body.seller_custom_field || 'Sem SKU';
+                    
+                    let sku = 'Sem SKU';
+                    if (body.attributes) {
+                        const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
+                        if (attrSku && attrSku.value_name) sku = attrSku.value_name;
+                    }
                     const status = body.status || 'active';
 
-                    // 4. API para puxar a comissão exata (Sale Fee) baseada no preço e tipo de anúncio
+                    // 4. API para puxar a comissão exata (Sale Fee)
                     let comissao = body.sale_fee || 0;
                     if (!comissao) {
                         try {
@@ -75,23 +93,21 @@ app.get('/api/anuncios', async (req, res) => {
                                 comissao = feeData.sale_fee_amount;
                             }
                         } catch (err) {
-                            // Fallback caso a API de taxa falhe
                             comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
                         }
                     }
 
-                    // Se ainda vier 0, aplica o padrão percentual
                     if (!comissao || isNaN(comissao)) {
                         comissao = listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11;
                     }
 
-                    // 5. API para puxar o custo de envio real e frete grátis
+                    // 5. Custo de envio real
                     let shipping = body.shipping || {};
                     let freeShipping = shipping.free_shipping || false;
-                    let custoEnvio = 6.85; // Valor base padrão caso não retorne
+                    let custoEnvio = 6.85;
 
                     if (shipping.logistic_type === 'fulfillment') {
-                        custoEnvio = 18.50; // Exemplo para Full, ajustável
+                        custoEnvio = 18.50;
                     }
 
                     if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
@@ -99,7 +115,6 @@ app.get('/api/anuncios', async (req, res) => {
                         if (cObj) custoEnvio = cObj.cost;
                     }
 
-                    // Cálculo do valor líquido recebido pelo vendedor
                     let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
                     if (liquido < 0) liquido = 0;
 
@@ -130,7 +145,7 @@ app.get('/api/anuncios', async (req, res) => {
     }
 });
 
-// NOVA ROTA ADICIONADA: Atualização individual/lote de preço direto na API do ML com captura de erro detalhada
+// Rota de atualização de preço
 app.post('/api/atualizar-preco', async (req, res) => {
     let token = req.headers['authorization'];
     if (!token) return res.status(401).json({ erro: "Token não fornecido" });
