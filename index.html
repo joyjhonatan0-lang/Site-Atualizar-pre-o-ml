@@ -23,6 +23,7 @@
             <nav class="flex space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
                 <button onclick="mudarAba('gestao')" id="btn-gestao" class="px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950">Gestão de Anúncios</button>
                 <button onclick="mudarAba('simulacao')" id="btn-simulacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Simulação & Custos</button>
+                <button onclick="mudarAba('atualizacao')" id="btn-atualizacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Atualização de Preço</button>
             </nav>
         </div>
         <div class="flex items-center space-x-3">
@@ -98,7 +99,6 @@
                     <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]</p>
                 </div>
                 
-                <!-- PAINEL DE PREENCHIMENTO EM MASSA -->
                 <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
                     <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">Preencher em Massa:</span>
                     <input type="number" step="0.01" id="massa-custo" placeholder="Custo R$" class="input-simulacao w-20" />
@@ -135,11 +135,43 @@
             </div>
         </section>
 
+        <!-- ABA 3: ATUALIZAÇÃO DE PREÇO EM MASSA -->
+        <section id="secao-atualizacao" class="hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Atualização de Preço em Massa (Fora da Margem)</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Identifica automaticamente os anúncios fora da margem e gerencia erros individualmente.</p>
+                </div>
+                <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
+                    🚀 Iniciar Atualização em Massa
+                </button>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse futuristic-table">
+                        <thead>
+                            <tr>
+                                <th class="p-3.5 w-10"><input type="checkbox" id="selecionar-todos" onclick="alternarTodos(this)" class="accent-yellow-400" /></th>
+                                <th class="p-3.5">Anúncio</th>
+                                <th class="p-3.5">Preço Atual</th>
+                                <th class="p-3.5 text-emerald-400">Novo Preço</th>
+                                <th class="p-3.5">Situação / Margem</th>
+                                <th class="p-3.5">Coluna de Erro / Status API</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-atualizacao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <script>
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
         let cacheItens = [];
+        let novosPrecosCalculados = {};
 
         function solicitarToken() {
             document.getElementById('aviso-token').classList.remove('hidden');
@@ -177,6 +209,7 @@
                     atualizarCards(cacheItens);
                     montarTabelaGestao(cacheItens);
                     montarTabelaSimulacao(cacheItens);
+                    montarTabelaAtualizacao(cacheItens);
                 } else {
                     alert(data.erro || "Erro ao carregar anúncios.");
                     if(data.erro && data.erro.includes("Token")) {
@@ -191,21 +224,24 @@
         }
 
         function mudarAba(aba) {
-            const secGestao = document.getElementById('secao-gestao');
-            const secSimulacao = document.getElementById('secao-simulacao');
-            const btnGestao = document.getElementById('btn-gestao');
-            const btnSimulacao = document.getElementById('btn-simulacao');
+            document.getElementById('secao-gestao').classList.add('hidden');
+            document.getElementById('secao-simulacao').classList.add('hidden');
+            document.getElementById('secao-atualizacao').classList.add('hidden');
+            
+            document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+            document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+            document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
 
             if (aba === 'gestao') {
-                secGestao.classList.remove('hidden');
-                secSimulacao.classList.add('hidden');
-                btnGestao.className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-                btnSimulacao.className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
-            } else {
-                secSimulacao.classList.remove('hidden');
-                secGestao.classList.add('hidden');
-                btnSimulacao.className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
-                btnGestao.className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+                document.getElementById('secao-gestao').classList.remove('hidden');
+                document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+            } else if (aba === 'simulacao') {
+                document.getElementById('secao-simulacao').classList.remove('hidden');
+                document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+            } else if (aba === 'atualizacao') {
+                document.getElementById('secao-atualizacao').classList.remove('hidden');
+                document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+                montarTabelaAtualizacao(cacheItens);
             }
         }
 
@@ -251,7 +287,7 @@
             tbody.innerHTML = '';
             itens.forEach((item, index) => {
                 const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
-                const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12; // Valor igual à sua planilha (17% ou 12%)
+                const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12;
 
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition-colors";
@@ -281,9 +317,7 @@
             const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
             const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
-            const freteAplicado = freteGratis ? custoFrete : 6.85; // Garante o valor de frete para o cálculo idêntico ao Sheets
-            
-            // Fórmula exata do Sheets: (Custo + Frete) / (1 - (Taxa + Imposto + Lucro) / 100)
+            const freteAplicado = freteGratis ? custoFrete : 6.85;
             const somaPercentual = taxaPercent + impostoPercent + lucroDesejadoPercent;
             const divisor = 1 - (somaPercentual / 100);
             
@@ -297,6 +331,11 @@
             document.getElementById(`novo_preco_${index}`).innerText = `R$ ${novoPreco.toFixed(2)}`;
             document.getElementById(`lucro_sim_${index}`).innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
             document.getElementById(`margem_real_${index}`).innerText = `${margemRealPercent.toFixed(2)}%`;
+
+            novosPrecosCalculados[index] = {
+                preco: novoPreco,
+                foraDaMargem: Math.abs(novoPreco - cacheItens[index].price) > 0.05
+            };
         }
 
         function aplicarEmMassa() {
@@ -313,6 +352,101 @@
 
                 recalcular(index, item.shipping_cost, item.free_shipping);
             });
+        }
+
+        function montarTabelaAtualizacao(itens) {
+            const tbody = document.getElementById('tabela-atualizacao');
+            tbody.innerHTML = '';
+            itens.forEach((item, index) => {
+                const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
+                const novoPreco = dadosSim.preco;
+                
+                // Marca automaticamente se estiver fora da margem para facilitar a seleção
+                const premarcado = dadosSim.foraDaMargem ? 'checked' : '';
+                const statusMargemText = dadosSim.foraDaMargem ? '<span class="text-amber-400 font-bold">Fora da Margem</span>' : '<span class="text-emerald-400">Na Margem</span>';
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5"><input type="checkbox" value="${index}" ${premarcado} class="check-item accent-yellow-400" /></td>
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
+                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
+                            <div>
+                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
+                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 font-black text-emerald-400">R$ ${novoPreco.toFixed(2)}</td>
+                    <td class="p-3.5">${statusMargemText}</td>
+                    <td class="p-3.5" id="status_api_${index}"><span class="text-slate-500">Pendente</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function alternarTodos(master) {
+            const checkboxes = document.querySelectorAll('.check-item');
+            checkboxes.forEach(cb => cb.checked = master.checked);
+        }
+
+        async function atualizarPrecosMassaApi() {
+            const token = localStorage.getItem('ml_access_token');
+            if(!token) {
+                solicitarToken();
+                return;
+            }
+
+            const checkboxes = document.querySelectorAll('.check-item:checked');
+            if(checkboxes.length === 0) {
+                alert("Nenhum anúncio selecionado para atualização.");
+                return;
+            }
+
+            if(!confirm(`Deseja atualizar ${checkboxes.length} anúncio(s) selecionado(s) no Mercado Livre?`)) {
+                return;
+            }
+
+            for(let cb of checkboxes) {
+                const index = cb.value;
+                const item = cacheItens[index];
+                const dadosSim = novosPrecosCalculados[index];
+                const novoPreco = dadosSim ? dadosSim.preco : item.price;
+                const statusEl = document.getElementById(`status_api_${index}`);
+
+                statusEl.innerHTML = `<span class="text-yellow-400 animate-pulse">Enviando...</span>`;
+
+                try {
+                    const response = await fetch(`${RENDER_URL}/api/atualizar-preco`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+                        body: JSON.stringify({
+                            id: item.id,
+                            price: parseFloat(novoPreco.toFixed(2))
+                        })
+                    });
+                    const resJson = await response.json();
+
+                    if(response.ok) {
+                        statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK (Atualizado)</span>`;
+                    } else {
+                        // Registra detalhadamente o erro na coluna específica para visualização do motivo
+                        const msgErro = resJson.erro || resJson.message || "Erro desconhecido";
+                        statusEl.innerHTML = `<span class="text-rose-400 font-semibold" title="${msgErro}">${msgErro}</span>`;
+                    }
+                } catch (e) {
+                    statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Erro de Conexão/Rede</span>`;
+                }
+
+                // Pequena pausa para evitar gargalos na API
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            alert("Processo de atualização em lote finalizado!");
         }
 
         window.onload = () => {
