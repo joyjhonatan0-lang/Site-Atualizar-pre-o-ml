@@ -56,11 +56,11 @@
             </div>
         </div>
 
-        <!-- Barra de Pesquisa Global -->
-        <div class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+        <!-- Barra de Pesquisa Global Corrigida (Evita travamento ao apertar Enter) -->
+        <form onsubmit="event.preventDefault(); filtrarAnuncios();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
             <span class="pl-2 pr-3 text-slate-500 text-lg">🔍</span>
             <input type="text" id="input-busca" onkeyup="filtrarAnuncios()" placeholder="Buscar por MLB, SKU ou Título..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
-        </div>
+        </form>
 
         <!-- Loading State -->
         <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
@@ -549,7 +549,6 @@
             checkboxes.forEach(cb => cb.checked = master.checked);
         }
 
-        // LÓGICA FINALIZADA DA ATUALIZAÇÃO EM MASSA
         async function atualizarPrecosMassaApi() {
             const token = localStorage.getItem('ml_access_token');
             if(!token) {
@@ -586,13 +585,11 @@
             for (let i = 0; i < itensParaAtualizar.length; i += tamanhoLote) {
                 const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
 
-                // Marca como enviando na tabela
                 lote.forEach(item => {
                     document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
                 });
 
                 try {
-                    // Chamada para sua rota no backend Node.js (Proxy no Render) que aceita o lote
                     const response = await fetch(`${RENDER_URL}/api/atualizar-precos`, {
                         method: 'POST',
                         headers: {
@@ -605,10 +602,9 @@
                     const data = await response.json();
                     
                     lote.forEach(item => {
-                        // Trata a resposta assumindo que seu backend retorne listas de sucessos/erros
                         if (response.ok) {
                             document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
-                            cacheItens[item.index].price = item.price; // Atualiza o preço base localmente no cache
+                            cacheItens[item.index].price = item.price;
                         } else {
                             const erroMsg = data.erro || "Falha na API";
                             document.getElementById(`status_api_${item.index}`).innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
@@ -620,18 +616,15 @@
                     });
                 }
                 
-                // Timeout para evitar limite de chamadas do Mercado Livre (rate limit)
                 if (i + tamanhoLote < itensParaAtualizar.length) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
             
-            // Recalcula todas as tabelas após finalizar as atualizações
             alert("Processo de envio em massa finalizado!");
             atualizarCards(cacheItens);
             montarTabelaGestao(cacheItens);
             montarTabelaSimulacao(cacheItens);
-            // Recarrega a aba de atualização para remover os itens que já estão na margem
             montarTabelaAtualizacao(cacheItens);
         }
     </script>
