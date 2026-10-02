@@ -1,4498 +1,651 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#ffe600">
-  <title>ML Hub Pro</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      min-height: 100vh;
-    }
-
-    button,
-    input,
-    select {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .app {
-      min-height: 100vh;
-    }
-
-    /* =========================
-       HEADER
-    ========================= */
-
-    .topbar {
-      background: #ffe600;
-      min-height: 72px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      padding: 12px 24px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.12);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 220px;
-    }
-
-    .brand-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: #111;
-      color: #ffe600;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 17px;
-    }
-
-    .brand-text strong {
-      display: block;
-      font-size: 19px;
-      color: #111;
-    }
-
-    .brand-text span {
-      display: block;
-      font-size: 12px;
-      color: #555;
-      margin-top: 2px;
-    }
-
-    .account-area {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .account-select {
-      min-width: 220px;
-      border: 1px solid #d8c000;
-      border-radius: 8px;
-      padding: 10px 12px;
-      background: #fff;
-      color: #222;
-      outline: none;
-    }
-
-    .btn {
-      border: none;
-      border-radius: 8px;
-      padding: 10px 15px;
-      font-weight: 700;
-      transition: .15s;
-    }
-
-    .btn:hover {
-      transform: translateY(-1px);
-    }
-
-    .btn-primary {
-      background: #3483fa;
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: #2968c8;
-    }
-
-    .btn-dark {
-      background: #222;
-      color: #fff;
-    }
-
-    .btn-dark:hover {
-      background: #000;
-    }
-
-    .btn-success {
-      background: #39b54a;
-      color: #fff;
-    }
-
-    .btn-danger {
-      background: #e53935;
-      color: #fff;
-    }
-
-    .btn-warning {
-      background: #fff;
-      color: #333;
-      border: 1px solid #ccc;
-    }
-
-    .btn-small {
-      padding: 7px 10px;
-      font-size: 12px;
-    }
-
-    /* =========================
-       LAYOUT
-    ========================= */
-
-    .page {
-      max-width: 1500px;
-      margin: 0 auto;
-      padding: 22px;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .toolbar-left,
-    .toolbar-right {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .connection-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-size: 13px;
-    }
-
-    .status-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: #aaa;
-    }
-
-    .status-dot.online {
-      background: #39b54a;
-    }
-
-    .status-dot.offline {
-      background: #e53935;
-    }
-
-    /* =========================
-       CARDS
-    ========================= */
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 15px;
-      margin-bottom: 22px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 2px 9px rgba(0,0,0,.07);
-      border: 1px solid #eee;
-    }
-
-    .card-label {
-      color: #777;
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .card-value {
-      font-size: 25px;
-      font-weight: 800;
-      color: #222;
-    }
-
-    .card-sub {
-      margin-top: 7px;
-      color: #999;
-      font-size: 12px;
-    }
-
-    /* =========================
-       SECTIONS
-    ========================= */
-
-    .section {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 9px rgba(0,0,0,.07);
-      border: 1px solid #eee;
-      margin-bottom: 22px;
-      overflow: hidden;
-    }
-
-    .section-header {
-      padding: 17px 18px;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .section-title {
-      font-size: 18px;
-      font-weight: 800;
-    }
-
-    .section-content {
-      padding: 18px;
-    }
-
-    /* =========================
-       FILTROS
-    ========================= */
-
-    .filters {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr auto;
-      gap: 10px;
-      align-items: end;
-    }
-
-    .field label {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 5px;
-    }
-
-    .field input,
-    .field select {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      outline: none;
-      background: #fff;
-    }
-
-    .field input:focus,
-    .field select:focus {
-      border-color: #3483fa;
-    }
-
-    /* =========================
-       TABLE
-    ========================= */
-
-    .table-wrap {
-      width: 100%;
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 1050px;
-    }
-
-    th,
-    td {
-      padding: 11px 10px;
-      border-bottom: 1px solid #eee;
-      text-align: left;
-      vertical-align: middle;
-      font-size: 13px;
-    }
-
-    th {
-      background: #fafafa;
-      color: #555;
-      font-size: 12px;
-      position: sticky;
-      top: 0;
-      z-index: 2;
-    }
-
-    tr:hover td {
-      background: #fcfcfc;
-    }
-
-    .product {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 280px;
-    }
-
-    .product img {
-      width: 54px;
-      height: 54px;
-      object-fit: contain;
-      border: 1px solid #eee;
-      border-radius: 8px;
-      background: #fff;
-    }
-
-    .product-info strong {
-      display: block;
-      max-width: 300px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .product-info span {
-      color: #888;
-      font-size: 11px;
-      display: block;
-      margin-top: 4px;
-    }
-
-    .price-input {
-      width: 110px;
-      padding: 7px 8px;
-      border: 1px solid #ccc;
-      border-radius: 7px;
-    }
-
-    .price-input.changed {
-      border-color: #3483fa;
-      background: #eef6ff;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 7px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 700;
-      background: #eee;
-      color: #555;
-    }
-
-    .badge.green {
-      background: #e7f7ea;
-      color: #238636;
-    }
-
-    .badge.red {
-      background: #fdeaea;
-      color: #c62828;
-    }
-
-    .badge.blue {
-      background: #e8f1ff;
-      color: #2165c5;
-    }
-
-    .badge.yellow {
-      background: #fff8d8;
-      color: #806c00;
-    }
-
-    .empty {
-      padding: 40px 20px;
-      text-align: center;
-      color: #888;
-    }
-
-    /* =========================
-       CHART
-    ========================= */
-
-    .chart-wrap {
-      position: relative;
-      width: 100%;
-      height: 310px;
-    }
-
-    #salesChart {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* =========================
-       ACCOUNT MODAL
-    ========================= */
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.55);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      z-index: 100;
-    }
-
-    .modal-backdrop.open {
-      display: flex;
-    }
-
-    .modal {
-      background: #fff;
-      width: min(680px, 100%);
-      max-height: 90vh;
-      overflow-y: auto;
-      border-radius: 14px;
-      box-shadow: 0 15px 50px rgba(0,0,0,.3);
-    }
-
-    .modal-header {
-      padding: 18px;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .modal-header h2 {
-      font-size: 19px;
-    }
-
-    .modal-close {
-      width: 34px;
-      height: 34px;
-      border: none;
-      background: #eee;
-      border-radius: 50%;
-      font-size: 18px;
-    }
-
-    .modal-body {
-      padding: 18px;
-    }
-
-    .modal-footer {
-      padding: 15px 18px;
-      border-top: 1px solid #eee;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .token-input {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-family: monospace;
-      outline: none;
-    }
-
-    .token-input:focus {
-      border-color: #3483fa;
-    }
-
-    .help-box {
-      margin-top: 10px;
-      background: #f7f7f7;
-      border-radius: 8px;
-      padding: 12px;
-      color: #666;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .accounts-list {
-      margin-top: 20px;
-      display: grid;
-      gap: 9px;
-    }
-
-    .account-item {
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      padding: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .account-main {
-      min-width: 0;
-    }
-
-    .account-name {
-      font-weight: 800;
-    }
-
-    .account-meta {
-      color: #888;
-      font-size: 12px;
-      margin-top: 3px;
-    }
-
-    .account-actions {
-      display: flex;
-      gap: 5px;
-      flex-wrap: wrap;
-    }
-
-    /* =========================
-       LOADING / TOAST
-    ========================= */
-
-    .loading-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(255,255,255,.72);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 200;
-      backdrop-filter: blur(2px);
-    }
-
-    .loading-overlay.show {
-      display: flex;
-    }
-
-    .loading-box {
-      background: #fff;
-      padding: 22px 28px;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.18);
-      text-align: center;
-    }
-
-    .spinner {
-      width: 34px;
-      height: 34px;
-      border: 4px solid #eee;
-      border-top-color: #3483fa;
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-      margin: 0 auto 12px;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .toast-container {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 300;
-      display: grid;
-      gap: 8px;
-      width: min(390px, calc(100vw - 36px));
-    }
-
-    .toast {
-      background: #222;
-      color: #fff;
-      border-radius: 10px;
-      padding: 13px 15px;
-      box-shadow: 0 8px 25px rgba(0,0,0,.2);
-      font-size: 13px;
-      line-height: 1.4;
-      animation: toastIn .2s ease;
-    }
-
-    .toast.success {
-      background: #238636;
-    }
-
-    .toast.error {
-      background: #c62828;
-    }
-
-    .toast.warning {
-      background: #806c00;
-    }
-
-    @keyframes toastIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* =========================
-       RESPONSIVE
-    ========================= */
-
-    @media (max-width: 1150px) {
-      .cards {
-        grid-template-columns: repeat(3, 1fr);
-      }
-
-      .filters {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 760px) {
-      .topbar {
-        position: static;
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .account-area {
-        width: 100%;
-        justify-content: flex-start;
-      }
-
-      .account-select {
-        min-width: 0;
-        flex: 1;
-      }
-
-      .page {
-        padding: 12px;
-      }
-
-      .cards {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .filters {
-        grid-template-columns: 1fr;
-      }
-
-      .card-value {
-        font-size: 20px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .cards {
-        grid-template-columns: 1fr;
-      }
-
-      .brand {
-        min-width: 0;
-      }
-
-      .account-area {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .account-area > * {
-        width: 100%;
-      }
-
-      .toolbar-left,
-      .toolbar-right {
-        width: 100%;
-      }
-
-      .toolbar-left .btn,
-      .toolbar-right .btn {
-        flex: 1;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mercado Livre | Painel & Simulador Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .futuristic-table th { background: #18181b; color: #f4f4f5; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+        .input-simulacao { background: #fafafa; border: 1px solid #e4e4e7; text-align: center; border-radius: 4px; padding: 4px; font-size: 13px; font-weight: 500; }
+        .input-simulacao:focus { outline: none; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
+    </style>
 </head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
-<body>
-
-<div class="app">
-
-  <!-- =========================
-       HEADER
-  ========================== -->
-  <header class="topbar">
-
-    <div class="brand">
-      <div class="brand-icon">ML</div>
-
-      <div class="brand-text">
-        <strong>ML Hub Pro</strong>
-        <span>Gestão de anúncios do Mercado Livre</span>
-      </div>
-    </div>
-
-    <div class="account-area">
-
-      <div class="connection-status">
-        <span id="statusDot" class="status-dot"></span>
-        <span id="statusText">Nenhuma conta conectada</span>
-      </div>
-
-      <select
-        id="accountSelect"
-        class="account-select"
-        onchange="trocarConta(this.value)"
-      >
-        <option value="">Nenhuma conta</option>
-      </select>
-
-      <button
-        class="btn btn-dark"
-        type="button"
-        onclick="abrirModalContas()"
-      >
-        ⚙ Contas
-      </button>
-
-      <button
-        class="btn btn-primary"
-        type="button"
-        onclick="abrirModalAdicionarConta()"
-      >
-        + Conectar conta
-      </button>
-
-    </div>
-
-  </header>
-
-  <!-- =========================
-       MAIN
-  ========================== -->
-
-  <main class="page">
-
-    <div class="toolbar">
-
-      <div class="toolbar-left">
-
-        <button
-          class="btn btn-primary"
-          type="button"
-          onclick="carregarTudo()"
-        >
-          ↻ Atualizar
-        </button>
-
-        <button
-          class="btn btn-success"
-          type="button"
-          onclick="salvarPrecos()"
-        >
-          💾 Salvar preços
-        </button>
-
-        <button
-          class="btn btn-warning"
-          type="button"
-          onclick="sincronizarPrecos()"
-        >
-          🔄 Sincronizar preços
-        </button>
-
-        <button
-          class="btn btn-warning"
-          type="button"
-          onclick="sincronizarFretes()"
-        >
-          🚚 Sincronizar fretes
-        </button>
-
-      </div>
-
-      <div class="toolbar-right">
-
-        <button
-          class="btn btn-dark"
-          type="button"
-          onclick="selecionarTodosVisiveis()"
-        >
-          ☑ Selecionar visíveis
-        </button>
-
-        <button
-          class="btn btn-warning"
-          type="button"
-          onclick="limparSelecao()"
-        >
-          Limpar seleção
-        </button>
-
-      </div>
-
-    </div>
-
-
-    <!-- =========================
-         CARDS
-    ========================== -->
-
-    <section class="cards">
-
-      <div class="card">
-        <div class="card-label">Anúncios ativos</div>
-        <div class="card-value" id="cardActive">0</div>
-        <div class="card-sub">Anúncios ativos</div>
-      </div>
-
-      <div class="card">
-        <div class="card-label">Estoque total</div>
-        <div class="card-value" id="cardStock">0</div>
-        <div class="card-sub">Quantidade disponível</div>
-      </div>
-
-      <div class="card">
-        <div class="card-label">Valor do estoque</div>
-        <div class="card-value" id="cardStockValue">R$ 0,00</div>
-        <div class="card-sub">Preço × quantidade</div>
-      </div>
-
-      <div class="card">
-        <div class="card-label">Preço médio</div>
-        <div class="card-value" id="cardAvgPrice">R$ 0,00</div>
-        <div class="card-sub">Média dos anúncios</div>
-      </div>
-
-      <div class="card">
-        <div class="card-label">Vendas 60 dias</div>
-        <div class="card-value" id="cardSales">0</div>
-        <div class="card-sub" id="cardRevenue">R$ 0,00</div>
-      </div>
-
-    </section>
-
-
-    <!-- =========================
-         FILTROS
-    ========================== -->
-
-    <section class="section">
-
-      <div class="section-header">
-        <div class="section-title">Filtros</div>
-
-        <div>
-          <span class="badge blue" id="resultCount">
-            0 anúncios
-          </span>
+    <!-- Top Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span class="text-base font-bold tracking-wide text-white">ML Hub <span class="text-yellow-400">Pro</span></span>
+            </div>
+            <nav class="flex space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button onclick="mudarAba('gestao')" id="btn-gestao" class="px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950">Gestão de Anúncios</button>
+                <button onclick="mudarAba('simulacao')" id="btn-simulacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Simulação & Custos</button>
+                <button onclick="mudarAba('atualizacao')" id="btn-atualizacao" class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all">Atualização de Preço</button>
+            </nav>
         </div>
-      </div>
+        
+        <!-- PAINEL DE BOTÕES DE API NA HEADER -->
+        <div class="flex items-center space-x-2">
+            <button onclick="carregarDados()" class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition flex items-center gap-1" title="Puxar Anúncios da API">
+                📦 Puxar Anúncios
+            </button>
+            <button onclick="sincronizarPrecosApi()" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-2 rounded-lg text-xs font-bold border border-emerald-400/30 transition flex items-center gap-1" title="Puxar Preços Reais">
+                💰 Puxar Preços
+            </button>
+            <button onclick="sincronizarFretesApi()" class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-lg text-xs font-bold border border-blue-400/30 transition flex items-center gap-1" title="Puxar Fretes Reais">
+                🚚 Puxar Fretes
+            </button>
+            <button onclick="solicitarToken()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 transition">
+                🔑 Token
+            </button>
+        </div>
+    </header>
 
-      <div class="section-content">
+    <main class="max-w-[98%] mx-auto py-6">
 
-        <div class="filters">
-
-          <div class="field">
-            <label for="searchInput">
-              Buscar anúncio / SKU / ID
-            </label>
-
-            <input
-              id="searchInput"
-              type="text"
-              placeholder="Digite para buscar..."
-              oninput="aplicarFiltros()"
-            >
-          </div>
-
-          <div class="field">
-            <label for="statusFilter">
-              Status
-            </label>
-
-            <select
-              id="statusFilter"
-              onchange="aplicarFiltros()"
-            >
-              <option value="">Todos</option>
-              <option value="active">Ativo</option>
-              <option value="paused">Pausado</option>
-              <option value="closed">Finalizado</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="listingFilter">
-              Tipo
-            </label>
-
-            <select
-              id="listingFilter"
-              onchange="aplicarFiltros()"
-            >
-              <option value="">Todos</option>
-              <option value="gold_pro">Premium</option>
-              <option value="gold_special">Clássico</option>
-              <option value="gold">Clássico</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="stockFilter">
-              Estoque
-            </label>
-
-            <select
-              id="stockFilter"
-              onchange="aplicarFiltros()"
-            >
-              <option value="">Todos</option>
-              <option value="zero">Sem estoque</option>
-              <option value="low">Baixo</option>
-              <option value="available">Disponível</option>
-            </select>
-          </div>
-
-          <button
-            class="btn btn-dark"
-            type="button"
-            onclick="limparFiltros()"
-          >
-            Limpar
-          </button>
-
+        <!-- Modal / Aviso de Token -->
+        <div id="aviso-token" class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center">
+            <h3 class="text-yellow-400 font-bold text-base mb-2">Token de Acesso Necessário</h3>
+            <p class="text-slate-300 text-xs mb-4">Insira o seu Bearer Token atualizado do Mercado Livre:</p>
+            <div class="flex justify-center gap-2 max-w-md mx-auto">
+                <input type="text" id="input-token-manual" placeholder="Cole seu APP_USR-..." class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400" />
+                <button onclick="salvarTokenManual()" class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition">Salvar</button>
+            </div>
         </div>
 
-      </div>
+        <!-- Barra de Pesquisa Ultra Rápida -->
+        <form onsubmit="event.preventDefault(); executarBusca();" class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg">
+            <button type="submit" class="pl-2 pr-3 text-slate-400 text-lg hover:text-yellow-400 transition cursor-pointer" title="Clique para Buscar">🔍</button>
+            <input type="text" id="input-busca" placeholder="Digite ou cole o MLB, SKU ou Título e aperte ENTER..." class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500" />
+            <button type="button" onclick="limparBusca()" class="text-xs text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg transition">Limpar</button>
+        </form>
 
-    </section>
-
-
-    <!-- =========================
-         ANÚNCIOS
-    ========================== -->
-
-    <section class="section">
-
-      <div class="section-header">
-
-        <div class="section-title">
-          Anúncios
+        <!-- Loading State -->
+        <div id="loading" class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-yellow-400 border-t-transparent"></div>
+            <p id="loading-text" class="mt-4 text-sm text-slate-400 font-medium">Buscando dados na API do Mercado Livre...</p>
         </div>
 
-        <div class="toolbar-right">
-
-          <button
-            class="btn btn-small btn-success"
-            type="button"
-            onclick="salvarPrecos()"
-          >
-            Salvar alterações
-          </button>
-
-        </div>
-
-      </div>
-
-      <div class="table-wrap">
-
-        <table>
-
-          <thead>
-
-            <tr>
-
-              <th>
-                <input
-                  type="checkbox"
-                  id="checkAll"
-                  onchange="alternarTodos(this.checked)"
-                >
-              </th>
-
-              <th>Produto</th>
-              <th>Status</th>
-              <th>Preço</th>
-              <th>Taxa</th>
-              <th>Frete</th>
-              <th>Recebimento</th>
-              <th>Estoque</th>
-              <th>Tipo</th>
-              <th>Frete grátis</th>
-
-            </tr>
-
-          </thead>
-
-          <tbody id="productsBody">
-
-            <tr>
-              <td colspan="10">
-                <div class="empty">
-                  Conecte uma conta para carregar seus anúncios.
+        <!-- ABA 1: GESTÃO -->
+        <section id="secao-gestao" class="space-y-6">
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Total Listado</span>
+                    <h2 id="total-listado" class="text-2xl font-black text-white mt-1">0</h2>
                 </div>
-              </td>
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </section>
-
-
-    <!-- =========================
-         DASHBOARD / GRÁFICO
-    ========================== -->
-
-    <section class="section">
-
-      <div class="section-header">
-
-        <div class="section-title">
-          Vendas dos últimos 60 dias
-        </div>
-
-        <div>
-          <span
-            class="badge green"
-            id="dashboardSummary"
-          >
-            Sem dados
-          </span>
-        </div>
-
-      </div>
-
-      <div class="section-content">
-
-        <div class="chart-wrap">
-          <canvas id="salesChart"></canvas>
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- =========================
-         TOP 10
-    ========================== -->
-
-    <section class="section">
-
-      <div class="section-header">
-
-        <div class="section-title">
-          Top 10 produtos
-        </div>
-
-      </div>
-
-      <div class="table-wrap">
-
-        <table>
-
-          <thead>
-
-            <tr>
-              <th>#</th>
-              <th>Produto</th>
-              <th>Quantidade vendida</th>
-              <th>Faturamento</th>
-            </tr>
-
-          </thead>
-
-          <tbody id="topSalesBody">
-
-            <tr>
-              <td colspan="4">
-                <div class="empty">
-                  Nenhum dado disponível.
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Anúncios Ativos</span>
+                    <h2 id="total-ativos" class="text-2xl font-black text-emerald-400 mt-1">0</h2>
                 </div>
-              </td>
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </section>
-
-  </main>
-
-</div>
-
-
-<!-- =========================
-     MODAL CONTAS
-========================== -->
-
-<div
-  id="accountsModal"
-  class="modal-backdrop"
-  onclick="fecharModalAoClicarFora(event, 'accountsModal')"
->
-
-  <div class="modal">
-
-    <div class="modal-header">
-
-      <h2>Contas do Mercado Livre</h2>
-
-      <button
-        class="modal-close"
-        type="button"
-        onclick="fecharModalContas()"
-      >
-        ×
-      </button>
-
-    </div>
-
-    <div class="modal-body">
-
-      <button
-        class="btn btn-primary"
-        type="button"
-        onclick="abrirModalAdicionarConta()"
-      >
-        + Adicionar outra conta
-      </button>
-
-      <div
-        id="accountsList"
-        class="accounts-list"
-      ></div>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- =========================
-     MODAL ADICIONAR CONTA
-========================== -->
-
-<div
-  id="addAccountModal"
-  class="modal-backdrop"
-  onclick="fecharModalAoClicarFora(event, 'addAccountModal')"
->
-
-  <div class="modal">
-
-    <div class="modal-header">
-
-      <h2>Conectar conta</h2>
-
-      <button
-        class="modal-close"
-        type="button"
-        onclick="fecharModalAdicionarConta()"
-      >
-        ×
-      </button>
-
-    </div>
-
-    <div class="modal-body">
-
-      <div class="field">
-
-        <label for="accountName">
-          Nome da conta
-        </label>
-
-        <input
-          id="accountName"
-          type="text"
-          placeholder="Ex.: Loja principal"
-          style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;"
-        >
-
-      </div>
-
-      <br>
-
-      <div class="field">
-
-        <label for="accessToken">
-          Access Token do Mercado Livre
-        </label>
-
-        <input
-          id="accessToken"
-          class="token-input"
-          type="password"
-          autocomplete="off"
-          placeholder="Cole aqui o Access Token"
-        >
-
-      </div>
-
-      <div class="help-box">
-
-        <strong>Como funciona:</strong><br><br>
-
-        1. Cole o Access Token da conta do Mercado Livre.<br>
-        2. Clique em "Testar e conectar".<br>
-        3. O site consultará o seu backend para validar o token.<br>
-        4. Se estiver válido, a conta será salva neste navegador.<br>
-        5. Você poderá cadastrar outras contas e alternar entre elas.
-
-        <br><br>
-
-        O token não fica escrito no código do site e não é colocado na URL.
-
-      </div>
-
-      <div
-        id="tokenResult"
-        style="margin-top:12px;"
-      ></div>
-
-    </div>
-
-    <div class="modal-footer">
-
-      <button
-        class="btn btn-warning"
-        type="button"
-        onclick="fecharModalAdicionarConta()"
-      >
-        Cancelar
-      </button>
-
-      <button
-        class="btn btn-primary"
-        type="button"
-        onclick="testarEAdicionarConta()"
-      >
-        Testar e conectar
-      </button>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- =========================
-     LOADING
-========================== -->
-
-<div
-  id="loadingOverlay"
-  class="loading-overlay"
->
-
-  <div class="loading-box">
-
-    <div class="spinner"></div>
-
-    <strong id="loadingText">
-      Carregando...
-    </strong>
-
-  </div>
-
-</div>
-
-
-<!-- =========================
-     TOASTS
-========================== -->
-
-<div
-  id="toastContainer"
-  class="toast-container"
-></div>
-
-
-<script>
-
-  /* =========================================================
-     CONFIGURAÇÃO
-  ========================================================= */
-
-  const RENDER_URL =
-    "https://site-atualizar-pre-o-ml.onrender.com";
-
-  const ACCOUNTS_KEY =
-    "ml_accounts_v1";
-
-  const ACTIVE_ACCOUNT_KEY =
-    "ml_active_account_v1";
-
-  const LEGACY_TOKEN_KEY =
-    "ml_access_token";
-
-
-  /* =========================================================
-     ESTADO
-  ========================================================= */
-
-  let accounts = [];
-  let activeAccountId = null;
-
-  let anuncios = [];
-  let anunciosFiltrados = [];
-
-  let dashboardData = null;
-
-
-  /* =========================================================
-     UTILITÁRIOS
-  ========================================================= */
-
-  function $(id) {
-    return document.getElementById(id);
-  }
-
-
-  function escapeHtml(value) {
-
-    if (value === null || value === undefined) {
-      return "";
-    }
-
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-
-  function normalizarToken(token) {
-
-    let value = String(token || "").trim();
-
-    if (
-      value.toLowerCase().startsWith("bearer ")
-    ) {
-      value = value.slice(7).trim();
-    }
-
-    return value;
-  }
-
-
-  function moeda(value) {
-
-    const number = Number(value || 0);
-
-    return number.toLocaleString(
-      "pt-BR",
-      {
-        style: "currency",
-        currency: "BRL"
-      }
-    );
-  }
-
-
-  function numero(value) {
-
-    return Number(value || 0)
-      .toLocaleString("pt-BR");
-  }
-
-
-  function sleep(ms) {
-
-    return new Promise(resolve => {
-      setTimeout(resolve, ms);
-    });
-
-  }
-
-
-  /* =========================================================
-     TOAST
-  ========================================================= */
-
-  function showToast(
-    message,
-    type = ""
-  ) {
-
-    const container =
-      $("toastContainer");
-
-    const toast =
-      document.createElement("div");
-
-    toast.className =
-      "toast " + type;
-
-    toast.textContent =
-      message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-
-      toast.remove();
-
-    }, 5000);
-
-  }
-
-
-  /* =========================================================
-     LOADING
-  ========================================================= */
-
-  function setLoading(
-    show,
-    text = "Carregando..."
-  ) {
-
-    const overlay =
-      $("loadingOverlay");
-
-    $("loadingText").textContent =
-      text;
-
-    overlay.classList.toggle(
-      "show",
-      show
-    );
-
-  }
-
-
-  /* =========================================================
-     LOCAL STORAGE
-  ========================================================= */
-
-  function loadAccounts() {
-
-    try {
-
-      const raw =
-        localStorage.getItem(
-          ACCOUNTS_KEY
-        );
-
-      const data =
-        raw ? JSON.parse(raw) : [];
-
-      if (!Array.isArray(data)) {
-        accounts = [];
-      } else {
-        accounts = data;
-      }
-
-    } catch (error) {
-
-      console.error(
-        "Erro ao carregar contas:",
-        error
-      );
-
-      accounts = [];
-
-    }
-
-  }
-
-
-  function saveAccounts() {
-
-    localStorage.setItem(
-      ACCOUNTS_KEY,
-      JSON.stringify(accounts)
-    );
-
-  }
-
-
-  function migrateLegacyToken() {
-
-    const oldToken =
-      localStorage.getItem(
-        LEGACY_TOKEN_KEY
-      );
-
-    if (!oldToken) {
-      return;
-    }
-
-    const normalized =
-      normalizarToken(oldToken);
-
-    if (!normalized) {
-      localStorage.removeItem(
-        LEGACY_TOKEN_KEY
-      );
-
-      return;
-    }
-
-    const alreadyExists =
-      accounts.some(
-        account =>
-          account.token === normalized
-      );
-
-    if (!alreadyExists) {
-
-      const account = {
-
-        id:
-          gerarId(),
-
-        nome:
-          "Conta antiga",
-
-        nickname:
-          "",
-
-        user_id:
-          "",
-
-        token:
-          normalized,
-
-        valido:
-          true,
-
-        criadoEm:
-          Date.now()
-
-      };
-
-      accounts.push(account);
-
-      saveAccounts();
-
-    }
-
-    localStorage.removeItem(
-      LEGACY_TOKEN_KEY
-    );
-
-  }
-
-
-  function gerarId() {
-
-    if (
-      window.crypto &&
-      typeof window.crypto.randomUUID === "function"
-    ) {
-
-      return window.crypto.randomUUID();
-
-    }
-
-    return (
-      Date.now().toString(36) +
-      Math.random()
-        .toString(36)
-        .slice(2)
-    );
-
-  }
-
-
-  function getActiveAccount() {
-
-    if (!accounts.length) {
-      return null;
-    }
-
-    let account =
-      accounts.find(
-        item =>
-          item.id === activeAccountId
-      );
-
-    if (!account) {
-
-      account =
-        accounts[0];
-
-      activeAccountId =
-        account.id;
-
-      localStorage.setItem(
-        ACTIVE_ACCOUNT_KEY,
-        activeAccountId
-      );
-
-    }
-
-    return account;
-
-  }
-
-
-  function getActiveToken() {
-
-    const account =
-      getActiveAccount();
-
-    if (!account) {
-      return null;
-    }
-
-    return normalizarToken(
-      account.token
-    );
-
-  }
-
-
-  /* =========================================================
-     FETCH API
-  ========================================================= */
-
-  async function apiFetch(
-    endpoint,
-    options = {}
-  ) {
-
-    const token =
-      getActiveToken();
-
-    if (!token) {
-
-      throw new Error(
-        "Nenhuma conta do Mercado Livre está conectada."
-      );
-
-    }
-
-    const headers = {
-      "Accept":
-        "application/json",
-      ...(options.headers || {}),
-      "Authorization":
-        "Bearer " + token
-    };
-
-    let response;
-
-    try {
-
-      response =
-        await fetch(
-          RENDER_URL + endpoint,
-          {
-            ...options,
-            headers
-          }
-        );
-
-    } catch (error) {
-
-      console.error(
-        "Erro de rede:",
-        error
-      );
-
-      throw new Error(
-        "Não foi possível conectar ao servidor. Verifique se o backend do Render está online e se o CORS permite o site."
-      );
-
-    }
-
-
-    let data = null;
-
-    const contentType =
-      response.headers.get(
-        "content-type"
-      ) || "";
-
-    if (
-      contentType.includes(
-        "application/json"
-      )
-    ) {
-
-      try {
-
-        data =
-          await response.json();
-
-      } catch (error) {
-
-        data = null;
-
-      }
-
-    } else {
-
-      try {
-
-        const text =
-          await response.text();
-
-        data =
-          text
-            ? { message: text }
-            : null;
-
-      } catch (error) {
-
-        data = null;
-
-      }
-
-    }
-
-
-    if (
-      response.status === 401
-    ) {
-
-      marcarContaInvalida();
-
-      throw new Error(
-        data?.erro ||
-        data?.message ||
-        data?.error ||
-        "Access Token inválido ou expirado."
-      );
-
-    }
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data?.erro ||
-        data?.message ||
-        data?.error ||
-        `Erro HTTP ${response.status}`
-      );
-
-    }
-
-    return data;
-
-  }
-
-
-  function marcarContaInvalida() {
-
-    const account =
-      getActiveAccount();
-
-    if (!account) {
-      return;
-    }
-
-    account.valido =
-      false;
-
-    saveAccounts();
-
-    atualizarInterfaceContas();
-
-  }
-
-
-  /* =========================================================
-     /api/me
-  ========================================================= */
-
-  async function validarToken(
-    token
-  ) {
-
-    const normalized =
-      normalizarToken(token);
-
-    if (!normalized) {
-
-      throw new Error(
-        "Digite um Access Token."
-      );
-
-    }
-
-    let response;
-
-    try {
-
-      response =
-        await fetch(
-          RENDER_URL + "/api/me",
-          {
-            method: "GET",
-            headers: {
-              "Accept":
-                "application/json",
-              "Authorization":
-                "Bearer " + normalized
-            }
-          }
-        );
-
-    } catch (error) {
-
-      throw new Error(
-        "Não foi possível conectar ao backend. Verifique o Render e o CORS."
-      );
-
-    }
-
-
-    let data = null;
-
-    try {
-
-      data =
-        await response.json();
-
-    } catch (error) {
-
-      data = null;
-
-    }
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data?.erro ||
-        data?.message ||
-        data?.error ||
-        `Token recusado. HTTP ${response.status}`
-      );
-
-    }
-
-
-    return data;
-
-  }
-
-
-  /* =========================================================
-     CONTAS
-  ========================================================= */
-
-  function atualizarInterfaceContas() {
-
-    const select =
-      $("accountSelect");
-
-    select.innerHTML =
-      "";
-
-    if (!accounts.length) {
-
-      select.innerHTML =
-        '<option value="">Nenhuma conta</option>';
-
-      $("statusDot")
-        .classList.remove(
-          "online",
-          "offline"
-        );
-
-      $("statusText")
-        .textContent =
-        "Nenhuma conta conectada";
-
-      return;
-
-    }
-
-
-    accounts.forEach(
-      account => {
-
-        const option =
-          document.createElement(
-            "option"
-          );
-
-        option.value =
-          account.id;
-
-        option.textContent =
-          account.nickname
-            ? `${account.nome} — ${account.nickname}`
-            : account.nome;
-
-        if (
-          account.id ===
-          activeAccountId
-        ) {
-
-          option.selected =
-            true;
-
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                    <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Outros Status</span>
+                    <h2 id="total-outros" class="text-2xl font-black text-slate-300 mt-1">0</h2>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse futuristic-table">
+                        <thead>
+                            <tr>
+                                <th class="p-3.5">Anúncio</th>
+                                <th class="p-3.5">Preço</th>
+                                <th class="p-3.5">Comissão / Frete</th>
+                                <th class="p-3.5">Você Recebe</th>
+                                <th class="p-3.5">Estoque</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-gestao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 2: SIMULAÇÃO -->
+        <section id="secao-simulacao" class="hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]</p>
+                </div>
+                
+                <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">Preencher em Massa:</span>
+                    <input type="number" step="0.01" id="massa-custo" placeholder="Custo R$" class="input-simulacao w-20" />
+                    <input type="number" step="0.1" id="massa-taxa" placeholder="Taxa %" class="input-simulacao w-16" />
+                    <input type="number" step="0.1" id="massa-imposto" placeholder="Imposto %" class="input-simulacao w-16" />
+                    <input type="number" step="0.1" id="massa-lucro" placeholder="Lucro %" class="input-simulacao w-16" />
+                    <button onclick="aplicarEmMassa()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition">Aplicar</button>
+                </div>
+            </div>
+
+            <div class="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
+                                <th class="p-3">MLB</th>
+                                <th class="p-3">SKU</th>
+                                <th class="p-3">Título</th>
+                                <th class="p-3">Preço Atual</th>
+                                <th class="p-3">Frete</th>
+                                <th class="p-3">Tipo</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Taxa %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Custo (R$)</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Imposto %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Lucro %</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Novo Preço</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Lucro Simulado</th>
+                                <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Margem Real</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-simulacao" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 3: ATUALIZAÇÃO DE PREÇO EM MASSA -->
+        <section id="secao-atualizacao" class="hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Atualização de Preço (Apenas Anúncios Fora da Margem)</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Envio simultâneo em lotes de 20 para máxima velocidade.</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm flex items-center space-x-2">
+                        <span class="text-slate-400 text-xs">Para atualizar:</span>
+                        <span id="contador-atualizacao" class="font-bold text-amber-400 text-base">0</span>
+                    </div>
+                    <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
+                        🚀 Iniciar Atualização em Lotes (20 em 20)
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse futuristic-table">
+                        <thead>
+                            <tr>
+                                <th class="p-3.5 w-10"><input type="checkbox" id="selecionar-todos" onclick="alternarTodos(this)" class="accent-yellow-400" /></th>
+                                <th class="p-3.5">Anúncio</th>
+                                <th class="p-3.5">Preço Atual</th>
+                                <th class="p-3.5 text-emerald-400">Novo Preço</th>
+                                <th class="p-3.5">Situação / Margem</th>
+                                <th class="p-3.5">Status API (Motivo do Erro)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-atualizacao" class="divide-y divide-slate-800 text-xs text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
+        let cacheItens = [];
+        let novosPrecosCalculados = {};
+        let abaAtualAtiva = 'gestao';
+
+        function solicitarToken() {
+            document.getElementById('aviso-token').classList.remove('hidden');
         }
 
-        select.appendChild(
-          option
-        );
-
-      }
-    );
-
-
-    const active =
-      getActiveAccount();
-
-    if (active) {
-
-      $("statusDot")
-        .classList.remove(
-          "offline"
-        );
-
-      $("statusDot")
-        .classList.add(
-          "online"
-        );
-
-      $("statusText")
-        .textContent =
-        active.nickname
-          ? `Conectado: ${active.nickname}`
-          : `Conectado: ${active.nome}`;
-
-    }
-
-  }
-
-
-  function trocarConta(
-    accountId
-  ) {
-
-    if (!accountId) {
-      return;
-    }
-
-    const account =
-      accounts.find(
-        item =>
-          item.id === accountId
-      );
-
-    if (!account) {
-      return;
-    }
-
-    activeAccountId =
-      accountId;
-
-    localStorage.setItem(
-      ACTIVE_ACCOUNT_KEY,
-      accountId
-    );
-
-    atualizarInterfaceContas();
-
-    anuncios = [];
-    anunciosFiltrados = [];
-    dashboardData = null;
-
-    limparDashboardVisual();
-
-    carregarTudo();
-
-  }
-
-
-  /* =========================================================
-     MODAIS
-  ========================================================= */
-
-  function abrirModalContas() {
-
-    atualizarListaContas();
-
-    $("accountsModal")
-      .classList.add("open");
-
-  }
-
-
-  function fecharModalContas() {
-
-    $("accountsModal")
-      .classList.remove("open");
-
-  }
-
-
-  function abrirModalAdicionarConta() {
-
-    fecharModalContas();
-
-    $("accountName").value =
-      "";
-
-    $("accessToken").value =
-      "";
-
-    $("tokenResult").innerHTML =
-      "";
-
-    $("addAccountModal")
-      .classList.add("open");
-
-    setTimeout(() => {
-
-      $("accessToken").focus();
-
-    }, 100);
-
-  }
-
-
-  function fecharModalAdicionarConta() {
-
-    $("addAccountModal")
-      .classList.remove("open");
-
-  }
-
-
-  function fecharModalAoClicarFora(
-    event,
-    id
-  ) {
-
-    if (
-      event.target.id === id
-    ) {
-
-      $(id)
-        .classList.remove(
-          "open"
-        );
-
-    }
-
-  }
-
-
-  function atualizarListaContas() {
-
-    const container =
-      $("accountsList");
-
-    if (!accounts.length) {
-
-      container.innerHTML =
-        `
-          <div class="empty">
-            Nenhuma conta conectada.
-          </div>
-        `;
-
-      return;
-
-    }
-
-
-    container.innerHTML =
-      accounts.map(
-        account => {
-
-          const masked =
-            mascararToken(
-              account.token
-            );
-
-          const active =
-            account.id ===
-            activeAccountId;
-
-          return `
-            <div class="account-item">
-
-              <div class="account-main">
-
-                <div class="account-name">
-                  ${escapeHtml(account.nome)}
-                  ${active
-                    ? '<span class="badge green">Ativa</span>'
-                    : ''
-                  }
-                </div>
-
-                <div class="account-meta">
-                  ${
-                    account.nickname
-                      ? escapeHtml(account.nickname) + " • "
-                      : ""
-                  }
-
-                  ${
-                    account.user_id
-                      ? "ID " + escapeHtml(account.user_id) + " • "
-                      : ""
-                  }
-
-                  ${escapeHtml(masked)}
-                </div>
-
-                <div style="margin-top:5px;">
-                  ${
-                    account.valido
-                      ? '<span class="badge green">Token válido</span>'
-                      : '<span class="badge red">Token precisa ser validado</span>'
-                  }
-                </div>
-
-              </div>
-
-              <div class="account-actions">
-
-                ${
-                  !active
-                    ? `
-                      <button
-                        class="btn btn-small btn-primary"
-                        onclick="selecionarConta('${account.id}')"
-                      >
-                        Usar
-                      </button>
-                    `
-                    : ""
+        function salvarTokenManual() {
+            const tokenVal = document.getElementById('input-token-manual').value.trim();
+            if(!tokenVal) {
+                alert("Digite um token válido.");
+                return;
+            }
+            localStorage.setItem('ml_access_token', tokenVal);
+            document.getElementById('aviso-token').classList.add('hidden');
+            carregarDados();
+        }
+
+        // Busca otimizada filtrando direto nos dados em memória (Instantâneo e sem travamentos)
+        function executarBusca() {
+            const termo = document.getElementById('input-busca').value.toLowerCase().trim();
+            
+            let itensFiltrados = cacheItens;
+            if (termo !== '') {
+                itensFiltrados = cacheItens.filter(item => 
+                    String(item.id).toLowerCase().includes(termo) ||
+                    String(item.sku).toLowerCase().includes(termo) ||
+                    String(item.title).toLowerCase().includes(termo)
+                );
+            }
+
+            // Atualiza apenas a tabela da aba ativa para máxima performance
+            if (abaAtualAtiva === 'gestao') {
+                montarTabelaGestao(itensFiltrados);
+            } else if (abaAtualAtiva === 'simulacao') {
+                montarTabelaSimulacao(itensFiltrados);
+            } else if (abaAtualAtiva === 'atualizacao') {
+                montarTabelaAtualizacao(itensFiltrados);
+            }
+        }
+
+        function limparBusca() {
+            document.getElementById('input-busca').value = '';
+            executarBusca();
+        }
+
+        async function carregarDados() {
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                solicitarToken();
+                return;
+            }
+
+            document.getElementById('loading-text').innerText = "Buscando todos os seus anúncios na API do Mercado Livre...";
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('aviso-token').classList.add('hidden');
+
+            try {
+                const response = await fetch(`${RENDER_URL}/api/anuncios`, {
+                    headers: { 'Authorization': token }
+                });
+                const data = await response.json();
+
+                if (data.itens) {
+                    cacheItens = data.itens;
+                    atualizarCards(cacheItens);
+                    executarBusca(); // Renderiza com base no filtro atual
+                    alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
+                } else {
+                    alert(data.erro || "Erro ao carregar anúncios.");
+                    if(data.erro && data.erro.includes("Token")) {
+                        solicitarToken();
+                    }
+                }
+            } catch (e) {
+                alert("Erro de comunicação com o servidor no Render.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        async function sincronizarPrecosApi() {
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                solicitarToken();
+                return;
+            }
+
+            if (!cacheItens || cacheItens.length === 0) {
+                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+                return;
+            }
+
+            document.getElementById('loading-text').innerText = "Puxando preços atuais das MLBs ativas...";
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                const mlbs = cacheItens.map(i => i.id);
+                const response = await fetch(`${RENDER_URL}/api/sincronizar-precos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ ids: mlbs })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.precos) {
+                    cacheItens.forEach(item => {
+                        if (data.precos[item.id] !== undefined) {
+                            item.price = data.precos[item.id];
+                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
+                        }
+                    });
+
+                    atualizarCards(cacheItens);
+                    executarBusca();
+                    alert("Preços reais sincronizados com sucesso para as MLBs existentes!");
+                } else {
+                    alert(data.erro || "Erro ao sincronizar preços.");
+                }
+            } catch (e) {
+                alert("Erro de comunicação com o servidor ao puxar preços.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        async function sincronizarFretesApi() {
+            const token = localStorage.getItem('ml_access_token');
+            if (!token) {
+                solicitarToken();
+                return;
+            }
+
+            if (!cacheItens || cacheItens.length === 0) {
+                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+                return;
+            }
+
+            document.getElementById('loading-text').innerText = "Puxando custos de frete atualizados das MLBs ativas...";
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {
+                const mlbs = cacheItens.map(i => i.id);
+                
+                const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ ids: mlbs })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.fretes) {
+                    cacheItens.forEach(item => {
+                        if (data.fretes[item.id]) {
+                            item.shipping_cost = data.fretes[item.id].custo;
+                            item.free_shipping = data.fretes[item.id].gratis;
+                            item.net_received = item.price - item.sale_fee - (item.free_shipping ? item.shipping_cost : 0);
+                        }
+                    });
+
+                    atualizarCards(cacheItens);
+                    executarBusca();
+                    alert("Fretes reais sincronizados com sucesso para as MLBs existentes!");
+                } else {
+                    alert(data.erro || "Erro ao sincronizar fretes.");
+                }
+            } catch (e) {
+                alert("Erro de comunicação com o servidor ao puxar fretes.");
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function mudarAba(aba) {
+            abaAtualAtiva = aba;
+            document.getElementById('secao-gestao').classList.add('hidden');
+            document.getElementById('secao-simulacao').classList.add('hidden');
+            document.getElementById('secao-atualizacao').classList.add('hidden');
+            
+            document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+            document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+            document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+
+            if (aba === 'gestao') {
+                document.getElementById('secao-gestao').classList.remove('hidden');
+                document.getElementById('btn-gestao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+            } else if (aba === 'simulacao') {
+                document.getElementById('secao-simulacao').classList.remove('hidden');
+                document.getElementById('btn-simulacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+            } else if (aba === 'atualizacao') {
+                document.getElementById('secao-atualizacao').classList.remove('hidden');
+                document.getElementById('btn-atualizacao').className = "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
+            }
+            executarBusca();
+        }
+
+        function atualizarCards(itens) {
+            const ativos = itens.filter(i => i.status === 'active').length;
+            document.getElementById('total-listado').innerText = itens.length;
+            document.getElementById('total-ativos').innerText = ativos;
+            document.getElementById('total-outros').innerText = itens.length - ativos;
+        }
+
+        function montarTabelaGestao(itens) {
+            const tbody = document.getElementById('tabela-gestao');
+            tbody.innerHTML = '';
+            itens.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
+                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
+                            <div>
+                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
+                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 text-slate-400">
+                        Comissão: R$ ${item.sale_fee.toFixed(2)}<br>
+                        Frete: R$ ${item.shipping_cost.toFixed(2)}
+                    </td>
+                    <td class="p-3.5 font-bold text-emerald-400">R$ ${item.net_received.toFixed(2)}</td>
+                    <td class="p-3.5">${item.available_quantity} un.</td>
+                    <td class="p-3.5"><input type="checkbox" ${item.status === 'active' ? 'checked' : ''} disabled class="accent-emerald-500" /></td>
+                    <td class="p-3.5"><a href="${item.permalink}" target="_blank" class="text-blue-400 hover:underline font-medium">Ver</a></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function montarTabelaSimulacao(itens) {
+            const tbody = document.getElementById('tabela-simulacao');
+            tbody.innerHTML = '';
+            itens.forEach((item) => {
+                // Encontra o índice real no cache global para manter a consistência dos inputs
+                const index = cacheItens.findIndex(i => i.id === item.id);
+                const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
+                const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-medium text-slate-700">${item.id}</td>
+                    <td class="p-3 font-mono text-slate-600">${item.sku}</td>
+                    <td class="p-3 max-w-[200px] truncate text-slate-800 font-medium" title="${item.title}">${item.title}</td>
+                    <td class="p-3 font-bold text-slate-900">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="taxa_${index}" value="${comissaoPadrao}" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="10.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-20" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="12.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
+                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
+                    <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
+                `;
+                tbody.appendChild(tr);
+                recalcular(index, item.shipping_cost, item.free_shipping);
+            });
+        }
+
+        function recalcular(index, custoFrete, freteGratis) {
+            const taxaPercent = parseFloat(document.getElementById(`taxa_${index}`).value) || 0;
+            const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
+            const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
+            const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
+
+            const freteAplicado = freteGratis ? custoFrete : 6.85;
+            const somaPercentual = taxaPercent + impostoPercent + lucroDesejadoPercent;
+            const divisor = 1 - (somaPercentual / 100);
+            
+            let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
+
+            const valorTaxa = novoPreco * (taxaPercent / 100);
+            const valorImposto = novoPreco * (impostoPercent / 100);
+            const lucroLiquidoReal = novoPreco - custo - valorTaxa - valorImposto - freteAplicado;
+            const margemRealPercent = novoPreco > 0 ? (lucroLiquidoReal / novoPreco) * 100 : 0;
+
+            const elNovoPreco = document.getElementById(`novo_preco_${index}`);
+            const elLucroSim = document.getElementById(`lucro_sim_${index}`);
+            const elMargemReal = document.getElementById(`margem_real_${index}`);
+
+            if (elNovoPreco) elNovoPreco.innerText = `R$ ${novoPreco.toFixed(2)}`;
+            if (elLucroSim) elLucroSim.innerText = `R$ ${lucroLiquidoReal.toFixed(2)}`;
+            if (elMargemReal) elMargemReal.innerText = `${margemRealPercent.toFixed(2)}%`;
+
+            novosPrecosCalculados[index] = {
+                preco: novoPreco,
+                foraDaMargem: Math.abs(novoPreco - cacheItens[index].price) > 0.05
+            };
+        }
+
+        function aplicarEmMassa() {
+            const custoMassa = document.getElementById('massa-custo').value;
+            const taxaMassa = document.getElementById('massa-taxa').value;
+            const impostoMassa = document.getElementById('massa-imposto').value;
+            const lucroMassa = document.getElementById('massa-lucro').value;
+
+            cacheItens.forEach((item, index) => {
+                if (custoMassa !== '') {
+                    const elCusto = document.getElementById(`custo_${index}`);
+                    if (elCusto) elCusto.value = custoMassa;
+                }
+                if (taxaMassa !== '') {
+                    const elTaxa = document.getElementById(`taxa_${index}`);
+                    if (elTaxa) elTaxa.value = taxaMassa;
+                }
+                if (impostoMassa !== '') {
+                    const elImposto = document.getElementById(`imposto_${index}`);
+                    if (elImposto) elImposto.value = impostoMassa;
+                }
+                if (lucroMassa !== '') {
+                    const elLucro = document.getElementById(`lucro_${index}`);
+                    if (elLucro) elLucro.value = lucroMassa;
                 }
 
-                <button
-                  class="btn btn-small btn-danger"
-                  onclick="excluirConta('${account.id}')"
-                >
-                  Excluir
-                </button>
-
-              </div>
-
-            </div>
-          `;
-
+                recalcular(index, item.shipping_cost, item.free_shipping);
+            });
         }
-      ).join("");
 
-  }
-
-
-  function mascararToken(
-    token
-  ) {
-
-    const value =
-      normalizarToken(token);
-
-    if (!value) {
-      return "sem token";
-    }
-
-    if (value.length <= 12) {
-      return "••••••••";
-    }
-
-    return (
-      value.slice(0, 6) +
-      "••••••••••" +
-      value.slice(-4)
-    );
-
-  }
-
-
-  function selecionarConta(
-    accountId
-  ) {
-
-    activeAccountId =
-      accountId;
-
-    localStorage.setItem(
-      ACTIVE_ACCOUNT_KEY,
-      accountId
-    );
-
-    atualizarInterfaceContas();
-
-    fecharModalContas();
-
-    carregarTudo();
-
-  }
-
-
-  async function excluirConta(
-    accountId
-  ) {
-
-    const account =
-      accounts.find(
-        item =>
-          item.id === accountId
-      );
-
-    if (!account) {
-      return;
-    }
-
-
-    const ok =
-      confirm(
-        `Excluir a conta "${account.nome}" deste navegador?`
-      );
-
-    if (!ok) {
-      return;
-    }
-
-
-    accounts =
-      accounts.filter(
-        item =>
-          item.id !== accountId
-      );
-
-    saveAccounts();
-
-
-    if (
-      activeAccountId ===
-      accountId
-    ) {
-
-      if (accounts.length) {
-
-        activeAccountId =
-          accounts[0].id;
-
-        localStorage.setItem(
-          ACTIVE_ACCOUNT_KEY,
-          activeAccountId
-        );
-
-      } else {
-
-        activeAccountId =
-          null;
-
-        localStorage.removeItem(
-          ACTIVE_ACCOUNT_KEY
-        );
-
-      }
-
-    }
-
-
-    atualizarInterfaceContas();
-    atualizarListaContas();
-
-    anuncios = [];
-    anunciosFiltrados = [];
-
-    limparTabela();
-    limparDashboardVisual();
-
-    if (accounts.length) {
-
-      carregarTudo();
-
-    } else {
-
-      showToast(
-        "Conta removida.",
-        "success"
-      );
-
-    }
-
-  }
-
-
-  /* =========================================================
-     ADICIONAR CONTA
-  ========================================================= */
-
-  async function testarEAdicionarConta() {
-
-    const nome =
-      $("accountName")
-        .value
-        .trim();
-
-    const token =
-      normalizarToken(
-        $("accessToken").value
-      );
-
-
-    if (!token) {
-
-      showToast(
-        "Cole o Access Token antes de continuar.",
-        "warning"
-      );
-
-      return;
-
-    }
-
-
-    setLoading(
-      true,
-      "Validando Access Token..."
-    );
-
-
-    $("tokenResult").innerHTML =
-      `
-        <div class="badge blue">
-          Validando token...
-        </div>
-      `;
-
-
-    try {
-
-      const me =
-        await validarToken(
-          token
-        );
-
-
-      const userId =
-        me?.id ??
-        me?.user_id ??
-        "";
-
-      const nickname =
-        me?.nickname ??
-        me?.username ??
-        "";
-
-
-      const accountName =
-        nome ||
-        nickname ||
-        `Conta ${accounts.length + 1}`;
-
-
-      const duplicate =
-        accounts.find(
-          account =>
-            normalizarToken(
-              account.token
-            ) === token
-        );
-
-
-      if (duplicate) {
-
-        activeAccountId =
-          duplicate.id;
-
-        localStorage.setItem(
-          ACTIVE_ACCOUNT_KEY,
-          duplicate.id
-        );
-
-        atualizarInterfaceContas();
-
-        fecharModalAdicionarConta();
-
-        showToast(
-          "Esse token já estava cadastrado. A conta existente foi selecionada.",
-          "success"
-        );
-
-        carregarTudo();
-
-        return;
-
-      }
-
-
-      const account = {
-
-        id:
-          gerarId(),
-
-        nome:
-          accountName,
-
-        nickname:
-          nickname,
-
-        user_id:
-          userId,
-
-        token:
-          token,
-
-        valido:
-          true,
-
-        criadoEm:
-          Date.now()
-
-      };
-
-
-      accounts.push(
-        account
-      );
-
-      saveAccounts();
-
-
-      activeAccountId =
-        account.id;
-
-      localStorage.setItem(
-        ACTIVE_ACCOUNT_KEY,
-        account.id
-      );
-
-
-      atualizarInterfaceContas();
-
-      fecharModalAdicionarConta();
-
-      showToast(
-        nickname
-          ? `Conta ${nickname} conectada com sucesso.`
-          : "Conta conectada com sucesso.",
-        "success"
-      );
-
-
-      await carregarTudo();
-
-
-    } catch (error) {
-
-      console.error(
-        "Erro ao conectar:",
-        error
-      );
-
-
-      $("tokenResult").innerHTML =
-        `
-          <div class="badge red">
-            ${escapeHtml(error.message)}
-          </div>
-        `;
-
-
-      showToast(
-        error.message,
-        "error"
-      );
-
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
-
-
-  /* =========================================================
-     CARREGAR TUDO
-  ========================================================= */
-
-  async function carregarTudo() {
-
-    const account =
-      getActiveAccount();
-
-    if (!account) {
-
-      limparTabela();
-      limparDashboardVisual();
-
-      return;
-
-    }
-
-
-    setLoading(
-      true,
-      "Carregando anúncios..."
-    );
-
-
-    try {
-
-      await carregarAnuncios();
-
-      await carregarDashboard();
-
-      showToast(
-        "Dados atualizados.",
-        "success"
-      );
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      showToast(
-        error.message ||
-        "Erro ao carregar dados.",
-        "error"
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
-
-
-  /* =========================================================
-     ANÚNCIOS
-  ========================================================= */
-
-  async function carregarAnuncios() {
-
-    const data =
-      await apiFetch(
-        "/api/anuncios",
-        {
-          method: "GET"
+        function montarTabelaAtualizacao(itens) {
+            const tbody = document.getElementById('tabela-atualizacao');
+            tbody.innerHTML = '';
+            
+            let contadorForaDaMargem = 0;
+
+            itens.forEach((item) => {
+                const index = cacheItens.findIndex(i => i.id === item.id);
+                const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
+                
+                if (!dadosSim.foraDaMargem) return;
+
+                contadorForaDaMargem++;
+                const novoPreco = dadosSim.preco;
+                const tr = document.createElement('tr');
+                tr.id = `linha_atualizacao_${index}`;
+                tr.className = "hover:bg-slate-800/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5"><input type="checkbox" value="${index}" checked class="check-item accent-yellow-400" /></td>
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
+                            <img src="${item.thumbnail}" class="w-9 h-9 object-cover rounded-lg border border-slate-700" />
+                            <div>
+                                <span class="font-medium text-white block line-clamp-1">${item.title}</span>
+                                <span class="text-[10px] text-slate-400">${item.id} | SKU: ${item.sku}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3.5 font-bold text-white">R$ ${item.price.toFixed(2)}</td>
+                    <td class="p-3.5 font-black text-emerald-400">R$ ${novoPreco.toFixed(2)}</td>
+                    <td class="p-3.5"><span class="text-amber-400 font-bold">Fora da Margem</span></td>
+                    <td class="p-3.5" id="status_api_${index}"><span class="text-slate-500">Pendente</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('contador-atualizacao').innerText = contadorForaDaMargem;
         }
-      );
 
-
-    let itens =
-      data?.itens;
-
-
-    if (
-      !Array.isArray(itens)
-    ) {
-
-      if (
-        Array.isArray(data)
-      ) {
-
-        itens = data;
-
-      } else if (
-        Array.isArray(data?.data)
-      ) {
-
-        itens = data.data;
-
-      } else {
-
-        itens = [];
-
-      }
-
-    }
-
-
-    anuncios =
-      itens.map(
-        item => {
-
-          const copy =
-            {
-              ...item
-            };
-
-          copy.id =
-            String(
-              copy.id ??
-              copy.item_id ??
-              ""
-            );
-
-          copy.price =
-            Number(
-              copy.price || 0
-            );
-
-          copy.sale_fee =
-            Number(
-              copy.sale_fee || 0
-            );
-
-          copy.shipping_cost =
-            Number(
-              copy.shipping_cost || 0
-            );
-
-          copy.net_received =
-            Number(
-              copy.net_received || 0
-            );
-
-          copy.available_quantity =
-            Number(
-              copy.available_quantity || 0
-            );
-
-          copy.free_shipping =
-            Boolean(
-              copy.free_shipping
-            );
-
-          copy._selected =
-            false;
-
-          copy._originalPrice =
-            copy.price;
-
-          return copy;
-
+        function alternarTodos(master) {
+            const checkboxes = document.querySelectorAll('.check-item');
+            checkboxes.forEach(cb => cb.checked = master.checked);
         }
-      );
 
-
-    aplicarFiltros();
-    atualizarCards();
-
-  }
-
-
-  /* =========================================================
-     FILTROS
-  ========================================================= */
-
-  function aplicarFiltros() {
-
-    const search =
-      $("searchInput")
-        .value
-        .trim()
-        .toLowerCase();
-
-    const status =
-      $("statusFilter")
-        .value;
-
-    const listing =
-      $("listingFilter")
-        .value;
-
-    const stock =
-      $("stockFilter")
-        .value;
-
-
-    anunciosFiltrados =
-      anuncios.filter(
-        item => {
-
-          if (search) {
-
-            const haystack =
-              [
-                item.title,
-                item.sku,
-                item.id,
-                item.permalink
-              ]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase();
-
-            if (
-              !haystack.includes(
-                search
-              )
-            ) {
-
-              return false;
-
+        async function atualizarPrecosMassaApi() {
+            const token = localStorage.getItem('ml_access_token');
+            if(!token) {
+                solicitarToken();
+                return;
             }
 
-          }
-
-
-          if (
-            status &&
-            String(item.status || "") !==
-            status
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            listing &&
-            String(
-              item.listing_type_id || ""
-            ) !== listing
-          ) {
-
-            return false;
-
-          }
-
-
-          if (stock === "zero") {
-
-            if (
-              Number(
-                item.available_quantity || 0
-              ) !== 0
-            ) {
-
-              return false;
-
+            const checkboxes = document.querySelectorAll('.check-item:checked');
+            if(checkboxes.length === 0) {
+                alert("Nenhum anúncio selecionado para atualização.");
+                return;
             }
 
-          }
-
-
-          if (stock === "low") {
-
-            const q =
-              Number(
-                item.available_quantity || 0
-              );
-
-            if (
-              q <= 0 ||
-              q > 5
-            ) {
-
-              return false;
-
+            if(!confirm(`Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`)) {
+                return;
             }
 
-          }
+            let itensParaAtualizar = [];
+            checkboxes.forEach(cb => {
+                const index = cb.value;
+                const item = cacheItens[index];
+                const dadosSim = novosPrecosCalculados[index];
+                const novoPreco = dadosSim ? dadosSim.preco : item.price;
 
+                itensParaAtualizar.push({
+                    index: index,
+                    id: item.id,
+                    price: parseFloat(novoPreco.toFixed(2))
+                });
+            });
 
-          if (
-            stock === "available"
-          ) {
+            const tamanhoLote = 20;
+            
+            for (let i = 0; i < itensParaAtualizar.length; i += tamanhoLote) {
+                const lote = itensParaAtualizar.slice(i, i + tamanhoLote);
 
-            if (
-              Number(
-                item.available_quantity || 0
-              ) <= 0
-            ) {
+                lote.forEach(item => {
+                    const elStatus = document.getElementById(`status_api_${item.index}`);
+                    if (elStatus) elStatus.innerHTML = `<span class="text-blue-400 animate-pulse">Atualizando...</span>`;
+                });
 
-              return false;
-
-            }
-
-          }
-
-
-          return true;
-
-        }
-      );
-
-
-    renderTabela();
-
-    $("resultCount")
-      .textContent =
-      `${anunciosFiltrados.length} anúncio${
-        anunciosFiltrados.length === 1
-          ? ""
-          : "s"
-      }`;
-
-  }
-
-
-  function limparFiltros() {
-
-    $("searchInput")
-      .value = "";
-
-    $("statusFilter")
-      .value = "";
-
-    $("listingFilter")
-      .value = "";
-
-    $("stockFilter")
-      .value = "";
-
-    aplicarFiltros();
-
-  }
-
-
-  /* =========================================================
-     TABELA
-  ========================================================= */
-
-  function renderTabela() {
-
-    const body =
-      $("productsBody");
-
-
-    if (!anunciosFiltrados.length) {
-
-      body.innerHTML =
-        `
-          <tr>
-            <td colspan="10">
-              <div class="empty">
-                Nenhum anúncio encontrado.
-              </div>
-            </td>
-          </tr>
-        `;
-
-      return;
-
-    }
-
-
-    body.innerHTML =
-      anunciosFiltrados
-        .map(
-          item => {
-
-            const status =
-              String(
-                item.status || ""
-              );
-
-            const statusClass =
-              status === "active"
-                ? "green"
-                : status === "paused"
-                  ? "yellow"
-                  : "red";
-
-
-            const listing =
-              String(
-                item.listing_type_id || ""
-              );
-
-            const listingLabel =
-              listing === "gold_pro"
-                ? "Premium"
-                : "Clássico";
-
-
-            const quantity =
-              Number(
-                item.available_quantity || 0
-              );
-
-
-            const selected =
-              item._selected
-                ? "checked"
-                : "";
-
-
-            const changed =
-              Number(item.price) !==
-              Number(item._originalPrice)
-                ? "changed"
-                : "";
-
-
-            return `
-              <tr>
-
-                <td>
-                  <input
-                    type="checkbox"
-                    ${selected}
-                    onchange="alternarSelecao('${escapeHtml(item.id)}', this.checked)"
-                  >
-                </td>
-
-                <td>
-
-                  <div class="product">
-
-                    ${
-                      item.thumbnail
-                        ? `
-                          <img
-                            src="${escapeHtml(item.thumbnail)}"
-                            alt=""
-                            loading="lazy"
-                            onerror="this.style.display='none'"
-                          >
-                        `
-                        : `
-                          <div
-                            style="
-                              width:54px;
-                              height:54px;
-                              border:1px solid #eee;
-                              border-radius:8px;
-                              display:flex;
-                              align-items:center;
-                              justify-content:center;
-                              color:#aaa;
-                            "
-                          >
-                            ML
-                          </div>
-                        `
-                    }
-
-                    <div class="product-info">
-
-                      <strong
-                        title="${escapeHtml(item.title || "")}"
-                      >
-                        ${escapeHtml(
-                          item.title ||
-                          "Sem título"
-                        )}
-                      </strong>
-
-                      <span>
-                        ID:
-                        ${escapeHtml(item.id)}
-
-                        ${
-                          item.sku
-                            ? " • SKU: " +
-                              escapeHtml(item.sku)
-                            : ""
+                try {
+                    const response = await fetch(`${RENDER_URL}/api/atualizar-precos`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+                        body: JSON.stringify({ itens: lote.map(i => ({ id: i.id, price: i.price })) })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    lote.forEach(item => {
+                        const elStatus = document.getElementById(`status_api_${item.index}`);
+                        if (response.ok) {
+                            if (elStatus) elStatus.innerHTML = `<span class="text-emerald-400 font-bold">✓ Atualizado</span>`;
+                            cacheItens[item.index].price = item.price;
+                        } else {
+                            const erroMsg = data.erro || "Falha na API";
+                            if (elStatus) elStatus.innerHTML = `<span class="text-red-400 font-bold">✗ ${erroMsg}</span>`;
                         }
-                      </span>
-
-                      ${
-                        item.permalink
-                          ? `
-                            <a
-                              href="${escapeHtml(item.permalink)}"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style="font-size:11px;color:#3483fa;"
-                            >
-                              Abrir anúncio
-                            </a>
-                          `
-                          : ""
-                      }
-
-                    </div>
-
-                  </div>
-
-                </td>
-
-
-                <td>
-
-                  <span class="badge ${statusClass}">
-                    ${
-                      status === "active"
-                        ? "Ativo"
-                        : status === "paused"
-                          ? "Pausado"
-                          : status || "Indefinido"
-                    }
-                  </span>
-
-                </td>
-
-
-                <td>
-
-                  <input
-                    class="price-input ${changed}"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value="${Number(item.price || 0).toFixed(2)}"
-                    onchange="alterarPreco('${escapeHtml(item.id)}', this.value)"
-                  >
-
-                </td>
-
-
-                <td>
-                  ${moeda(item.sale_fee)}
-                </td>
-
-
-                <td>
-                  ${moeda(item.shipping_cost)}
-                </td>
-
-
-                <td>
-                  <strong>
-                    ${moeda(item.net_received)}
-                  </strong>
-                </td>
-
-
-                <td>
-
-                  <span
-                    class="badge ${
-                      quantity <= 0
-                        ? "red"
-                        : quantity <= 5
-                          ? "yellow"
-                          : "green"
-                    }"
-                  >
-                    ${numero(quantity)}
-                  </span>
-
-                </td>
-
-
-                <td>
-
-                  <span class="badge blue">
-                    ${listingLabel}
-                  </span>
-
-                </td>
-
-
-                <td>
-
-                  ${
-                    item.free_shipping
-                      ? '<span class="badge green">Sim</span>'
-                      : '<span class="badge">Não</span>'
-                  }
-
-                </td>
-
-              </tr>
-            `;
-
-          }
-        )
-        .join("");
-
-  }
-
-
-  function limparTabela() {
-
-    $("productsBody")
-      .innerHTML =
-      `
-        <tr>
-          <td colspan="10">
-            <div class="empty">
-              Conecte uma conta para carregar seus anúncios.
-            </div>
-          </td>
-        </tr>
-      `;
-
-    $("resultCount")
-      .textContent =
-      "0 anúncios";
-
-  }
-
-
-  function alterarPreco(
-    id,
-    value
-  ) {
-
-    const item =
-      anuncios.find(
-        product =>
-          String(product.id) ===
-          String(id)
-      );
-
-    if (!item) {
-      return;
-    }
-
-    item.price =
-      Number(value || 0);
-
-    renderTabela();
-
-  }
-
-
-  function alternarSelecao(
-    id,
-    checked
-  ) {
-
-    const item =
-      anuncios.find(
-        product =>
-          String(product.id) ===
-          String(id)
-      );
-
-    if (!item) {
-      return;
-    }
-
-    item._selected =
-      checked;
-
-  }
-
-
-  function alternarTodos(
-    checked
-  ) {
-
-    anunciosFiltrados.forEach(
-      item => {
-
-        item._selected =
-          checked;
-
-      }
-    );
-
-    renderTabela();
-
-  }
-
-
-  function selecionarTodosVisiveis() {
-
-    anunciosFiltrados.forEach(
-      item => {
-
-        item._selected =
-          true;
-
-      }
-    );
-
-    $("checkAll")
-      .checked = true;
-
-    renderTabela();
-
-  }
-
-
-  function limparSelecao() {
-
-    anuncios.forEach(
-      item => {
-
-        item._selected =
-          false;
-
-      }
-    );
-
-    $("checkAll")
-      .checked = false;
-
-    renderTabela();
-
-  }
-
-
-  /* =========================================================
-     CARDS
-  ========================================================= */
-
-  function atualizarCards() {
-
-    const ativos =
-      anuncios.filter(
-        item =>
-          String(item.status) ===
-          "active"
-      );
-
-
-    const stock =
-      anuncios.reduce(
-        (sum, item) =>
-          sum +
-          Number(
-            item.available_quantity || 0
-          ),
-        0
-      );
-
-
-    const stockValue =
-      anuncios.reduce(
-        (sum, item) =>
-          sum +
-          (
-            Number(item.price || 0) *
-            Number(
-              item.available_quantity || 0
-            )
-          ),
-        0
-      );
-
-
-    const avgPrice =
-      anuncios.length
-        ? anuncios.reduce(
-            (sum, item) =>
-              sum +
-              Number(
-                item.price || 0
-              ),
-            0
-          ) /
-          anuncios.length
-        : 0;
-
-
-    $("cardActive")
-      .textContent =
-      numero(ativos.length);
-
-    $("cardStock")
-      .textContent =
-      numero(stock);
-
-    $("cardStockValue")
-      .textContent =
-      moeda(stockValue);
-
-    $("cardAvgPrice")
-      .textContent =
-      moeda(avgPrice);
-
-  }
-
-
-  /* =========================================================
-     SALVAR PREÇOS
-  ========================================================= */
-
-  async function salvarPrecos() {
-
-    const alterados =
-      anuncios.filter(
-        item =>
-          Number(item.price) !==
-          Number(item._originalPrice)
-      );
-
-
-    if (!alterados.length) {
-
-      showToast(
-        "Não há alterações de preço para salvar.",
-        "warning"
-      );
-
-      return;
-
-    }
-
-
-    setLoading(
-      true,
-      `Salvando ${alterados.length} preço(s)...`
-    );
-
-
-    try {
-
-      const loteTamanho =
-        20;
-
-      let total =
-        0;
-
-
-      for (
-        let i = 0;
-        i < alterados.length;
-        i += loteTamanho
-      ) {
-
-        const lote =
-          alterados.slice(
-            i,
-            i + loteTamanho
-          );
-
-
-        const itens =
-          lote.map(
-            item => ({
-              id:
-                item.id,
-              price:
-                Number(
-                  item.price || 0
-                )
-            })
-          );
-
-
-        const data =
-          await apiFetch(
-            "/api/atualizar-precos",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json"
-              },
-              body:
-                JSON.stringify({
-                  itens
-                })
+                    });
+                } catch (e) {
+                    lote.forEach(item => {
+                        const elStatus = document.getElementById(`status_api_${item.index}`);
+                        if (elStatus) elStatus.innerHTML = `<span class="text-red-500 font-bold">Erro de Rede</span>`;
+                    });
+                }
+                
+                if (i + tamanhoLote < itensParaAtualizar.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
-          );
-
-
-        if (
-          data &&
-          data.erro
-        ) {
-
-          throw new Error(
-            data.erro
-          );
-
+            
+            alert("Processo de envio em massa finalizado!");
+            atualizarCards(cacheItens);
+            executarBusca();
         }
-
-
-        lote.forEach(
-          item => {
-
-            item._originalPrice =
-              item.price;
-
-          }
-        );
-
-
-        total +=
-          lote.length;
-
-
-        setLoading(
-          true,
-          `Salvando preços... ${total}/${alterados.length}`
-        );
-
-      }
-
-
-      renderTabela();
-
-      atualizarCards();
-
-
-      showToast(
-        `${total} preço(s) atualizado(s) com sucesso.`,
-        "success"
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      showToast(
-        error.message ||
-        "Erro ao atualizar preços.",
-        "error"
-      );
-
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
-
-
-  /* =========================================================
-     SINCRONIZAR PREÇOS
-  ========================================================= */
-
-  async function sincronizarPrecos() {
-
-    if (!anuncios.length) {
-
-      showToast(
-        "Nenhum anúncio carregado.",
-        "warning"
-      );
-
-      return;
-
-    }
-
-
-    const precos = {};
-
-
-    anuncios.forEach(
-      item => {
-
-        precos[
-          item.id
-        ] =
-          Number(
-            item.price || 0
-          );
-
-      }
-    );
-
-
-    setLoading(
-      true,
-      "Sincronizando preços..."
-    );
-
-
-    try {
-
-      const data =
-        await apiFetch(
-          "/api/sincronizar-precos",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify({
-                precos
-              })
-          }
-        );
-
-
-      if (
-        data &&
-        data.erro
-      ) {
-
-        throw new Error(
-          data.erro
-        );
-
-      }
-
-
-      showToast(
-        "Preços sincronizados com sucesso.",
-        "success"
-      );
-
-
-      await carregarAnuncios();
-
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      showToast(
-        error.message ||
-        "Erro ao sincronizar preços.",
-        "error"
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
-
-
-  /* =========================================================
-     SINCRONIZAR FRETES
-  ========================================================= */
-
-  async function sincronizarFretes() {
-
-    if (!anuncios.length) {
-
-      showToast(
-        "Nenhum anúncio carregado.",
-        "warning"
-      );
-
-      return;
-
-    }
-
-
-    const fretes = {};
-
-
-    anuncios.forEach(
-      item => {
-
-        fretes[
-          item.id
-        ] = {
-
-          custo:
-            Number(
-              item.shipping_cost || 0
-            ),
-
-          gratis:
-            Boolean(
-              item.free_shipping
-            )
-
-        };
-
-      }
-    );
-
-
-    setLoading(
-      true,
-      "Sincronizando fretes..."
-    );
-
-
-    try {
-
-      const data =
-        await apiFetch(
-          "/api/sincronizar-fretes",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify({
-                fretes
-              })
-          }
-        );
-
-
-      if (
-        data &&
-        data.erro
-      ) {
-
-        throw new Error(
-          data.erro
-        );
-
-      }
-
-
-      showToast(
-        "Fretes sincronizados com sucesso.",
-        "success"
-      );
-
-
-      if (
-        Array.isArray(
-          data?.itens
-        )
-      ) {
-
-        atualizarItensRecebidos(
-          data.itens
-        );
-
-      } else {
-
-        await carregarAnuncios();
-
-      }
-
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      showToast(
-        error.message ||
-        "Erro ao sincronizar fretes.",
-        "error"
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  }
-
-
-  function atualizarItensRecebidos(
-    itens
-  ) {
-
-    const map =
-      new Map(
-        itens.map(
-          item => [
-            String(item.id),
-            item
-          ]
-        )
-      );
-
-
-    anuncios =
-      anuncios.map(
-        item => {
-
-          const updated =
-            map.get(
-              String(item.id)
-            );
-
-          return updated
-            ? {
-                ...item,
-                ...updated
-              }
-            : item;
-
-        }
-      );
-
-
-    aplicarFiltros();
-    atualizarCards();
-
-  }
-
-
-  /* =========================================================
-     DASHBOARD
-  ========================================================= */
-
-  async function carregarDashboard() {
-
-    try {
-
-      const data =
-        await apiFetch(
-          "/api/dashboard",
-          {
-            method: "GET"
-          }
-        );
-
-
-      dashboardData =
-        data || {};
-
-
-      renderDashboard(
-        dashboardData
-      );
-
-
-    } catch (error) {
-
-      console.warn(
-        "Dashboard não disponível:",
-        error
-      );
-
-
-      dashboardData =
-        null;
-
-
-      renderDashboardFallback();
-
-    }
-
-  }
-
-
-  function renderDashboard(
-    data
-  ) {
-
-    const vendas =
-      Number(
-        data?.vendas_60_dias || 0
-      );
-
-    const faturamento =
-      Number(
-        data?.faturamento_60_dias || 0
-      );
-
-
-    $("cardSales")
-      .textContent =
-      numero(vendas);
-
-    $("cardRevenue")
-      .textContent =
-      moeda(faturamento);
-
-
-    $("dashboardSummary")
-      .textContent =
-      `${numero(vendas)} vendas • ${moeda(faturamento)}`;
-
-
-    renderChart(
-      data?.series_60_dias || []
-    );
-
-
-    renderTop10(
-      data?.top_10 || []
-    );
-
-  }
-
-
-  function renderDashboardFallback() {
-
-    $("cardSales")
-      .textContent =
-      "0";
-
-    $("cardRevenue")
-      .textContent =
-      "R$ 0,00";
-
-    $("dashboardSummary")
-      .textContent =
-      "Dashboard indisponível";
-
-    renderChart([]);
-
-    renderTop10([]);
-
-  }
-
-
-  function renderTop10(
-    top
-  ) {
-
-    const body =
-      $("topSalesBody");
-
-
-    if (
-      !Array.isArray(top) ||
-      !top.length
-    ) {
-
-      body.innerHTML =
-        `
-          <tr>
-            <td colspan="4">
-              <div class="empty">
-                Nenhum dado de vendas disponível.
-              </div>
-            </td>
-          </tr>
-        `;
-
-      return;
-
-    }
-
-
-    body.innerHTML =
-      top
-        .slice(0, 10)
-        .map(
-          (item, index) => {
-
-            const title =
-              item.title ||
-              item.name ||
-              item.id ||
-              "Produto";
-
-
-            const quantity =
-              Number(
-                item.quantity ||
-                item.quantidade ||
-                item.sold_quantity ||
-                0
-              );
-
-
-            const revenue =
-              Number(
-                item.revenue ||
-                item.faturamento ||
-                item.total ||
-                0
-              );
-
-
-            return `
-              <tr>
-
-                <td>
-                  <strong>
-                    ${index + 1}
-                  </strong>
-                </td>
-
-                <td>
-                  ${escapeHtml(title)}
-                </td>
-
-                <td>
-                  ${numero(quantity)}
-                </td>
-
-                <td>
-                  ${moeda(revenue)}
-                </td>
-
-              </tr>
-            `;
-
-          }
-        )
-        .join("");
-
-  }
-
-
-  /* =========================================================
-     GRÁFICO
-  ========================================================= */
-
-  function renderChart(
-    series
-  ) {
-
-    const canvas =
-      $("salesChart");
-
-    const ctx =
-      canvas.getContext("2d");
-
-
-    const rect =
-      canvas.getBoundingClientRect();
-
-
-    const width =
-      Math.max(
-        300,
-        Math.floor(
-          rect.width
-        )
-      );
-
-    const height =
-      Math.max(
-        250,
-        Math.floor(
-          rect.height
-        )
-      );
-
-
-    const dpr =
-      window.devicePixelRatio ||
-      1;
-
-
-    canvas.width =
-      width * dpr;
-
-    canvas.height =
-      height * dpr;
-
-    ctx.setTransform(
-      dpr,
-      0,
-      0,
-      dpr,
-      0,
-      0
-    );
-
-
-    ctx.clearRect(
-      0,
-      0,
-      width,
-      height
-    );
-
-
-    let values = [];
-
-
-    if (
-      Array.isArray(series)
-    ) {
-
-      values =
-        series.map(
-          item => {
-
-            if (
-              typeof item ===
-              "number"
-            ) {
-
-              return Number(item);
-
-            }
-
-            return Number(
-              item?.value ??
-              item?.vendas ??
-              item?.sales ??
-              item?.quantidade ??
-              0
-            );
-
-          }
-        );
-
-    }
-
-
-    if (!values.length) {
-
-      ctx.fillStyle =
-        "#999";
-
-      ctx.font =
-        "14px Arial";
-
-      ctx.textAlign =
-        "center";
-
-      ctx.fillText(
-        "Sem dados de vendas para exibir",
-        width / 2,
-        height / 2
-      );
-
-      return;
-
-    }
-
-
-    const max =
-      Math.max(
-        ...values,
-        1
-      );
-
-
-    const padding = {
-
-      top: 20,
-      right: 20,
-      bottom: 40,
-      left: 45
-
-    };
-
-
-    const chartWidth =
-      width -
-      padding.left -
-      padding.right;
-
-    const chartHeight =
-      height -
-      padding.top -
-      padding.bottom;
-
-
-    // linhas horizontais
-
-    ctx.strokeStyle =
-      "#eeeeee";
-
-    ctx.lineWidth =
-      1;
-
-    ctx.font =
-      "11px Arial";
-
-    ctx.fillStyle =
-      "#888";
-
-    ctx.textAlign =
-      "right";
-
-
-    for (
-      let i = 0;
-      i <= 4;
-      i++
-    ) {
-
-      const value =
-        max *
-        (
-          1 -
-          i / 4
-        );
-
-      const y =
-        padding.top +
-        chartHeight *
-        (i / 4);
-
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        padding.left,
-        y
-      );
-
-      ctx.lineTo(
-        width -
-        padding.right,
-        y
-      );
-
-      ctx.stroke();
-
-
-      ctx.fillText(
-        Math.round(value),
-        padding.left - 8,
-        y + 4
-      );
-
-    }
-
-
-    // pontos
-
-    const points =
-      values.map(
-        (value, index) => {
-
-          const x =
-            padding.left +
-            (
-              values.length === 1
-                ? chartWidth / 2
-                : (
-                    index /
-                    (values.length - 1)
-                  )
-                ) *
-                chartWidth;
-
-          const y =
-            padding.top +
-            chartHeight -
-            (
-              value /
-              max
-            ) *
-            chartHeight;
-
-          return {
-            x,
-            y,
-            value
-          };
-
-        }
-      );
-
-
-    // linha
-
-    ctx.strokeStyle =
-      "#3483fa";
-
-    ctx.lineWidth =
-      3;
-
-    ctx.beginPath();
-
-
-    points.forEach(
-      (point, index) => {
-
-        if (index === 0) {
-
-          ctx.moveTo(
-            point.x,
-            point.y
-          );
-
-        } else {
-
-          ctx.lineTo(
-            point.x,
-            point.y
-          );
-
-        }
-
-      }
-    );
-
-
-    ctx.stroke();
-
-
-    // pontos
-
-    ctx.fillStyle =
-      "#3483fa";
-
-
-    points.forEach(
-      point => {
-
-        ctx.beginPath();
-
-        ctx.arc(
-          point.x,
-          point.y,
-          4,
-          0,
-          Math.PI * 2
-        );
-
-        ctx.fill();
-
-      }
-    );
-
-
-    // eixo X
-
-    ctx.fillStyle =
-      "#888";
-
-    ctx.font =
-      "10px Arial";
-
-    ctx.textAlign =
-      "center";
-
-
-    const labelCount =
-      Math.min(
-        6,
-        values.length
-      );
-
-
-    for (
-      let i = 0;
-      i < labelCount;
-      i++
-    ) {
-
-      const index =
-        Math.round(
-          i *
-          (
-            (values.length - 1) /
-            Math.max(
-              labelCount - 1,
-              1
-            )
-          )
-        );
-
-
-      const point =
-        points[index];
-
-
-      const item =
-        Array.isArray(series)
-          ? series[index]
-          : null;
-
-
-      const label =
-        typeof item ===
-        "object"
-          ? (
-              item?.date ||
-              item?.data ||
-              item?.label ||
-              ""
-            )
-          : "";
-
-
-      ctx.fillText(
-        label
-          ? formatarDataCurta(label)
-          : String(index + 1),
-        point.x,
-        height - 15
-      );
-
-    }
-
-  }
-
-
-  function formatarDataCurta(
-    value
-  ) {
-
-    const date =
-      new Date(value);
-
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
-
-      return String(value)
-        .slice(0, 10);
-
-    }
-
-    return date.toLocaleDateString(
-      "pt-BR",
-      {
-        day: "2-digit",
-        month: "2-digit"
-      }
-    );
-
-  }
-
-
-  function limparDashboardVisual() {
-
-    $("cardSales")
-      .textContent =
-      "0";
-
-    $("cardRevenue")
-      .textContent =
-      "R$ 0,00";
-
-    $("dashboardSummary")
-      .textContent =
-      "Sem dados";
-
-    $("topSalesBody")
-      .innerHTML =
-      `
-        <tr>
-          <td colspan="4">
-            <div class="empty">
-              Conecte uma conta para visualizar as vendas.
-            </div>
-          </td>
-        </tr>
-      `;
-
-    renderChart([]);
-
-  }
-
-
-  /* =========================================================
-     RESIZE
-  ========================================================= */
-
-  window.addEventListener(
-    "resize",
-    () => {
-
-      if (
-        dashboardData
-      ) {
-
-        renderChart(
-          dashboardData.series_60_dias ||
-          []
-        );
-
-      }
-
-    }
-  );
-
-
-  /* =========================================================
-     INICIALIZAÇÃO
-  ========================================================= */
-
-  function inicializar() {
-
-    loadAccounts();
-
-    migrateLegacyToken();
-
-
-    activeAccountId =
-      localStorage.getItem(
-        ACTIVE_ACCOUNT_KEY
-      );
-
-
-    if (
-      !activeAccountId &&
-      accounts.length
-    ) {
-
-      activeAccountId =
-        accounts[0].id;
-
-      localStorage.setItem(
-        ACTIVE_ACCOUNT_KEY,
-        activeAccountId
-      );
-
-    }
-
-
-    if (
-      activeAccountId &&
-      !accounts.some(
-        account =>
-          account.id ===
-          activeAccountId
-      )
-    ) {
-
-      activeAccountId =
-        accounts.length
-          ? accounts[0].id
-          : null;
-
-      if (activeAccountId) {
-
-        localStorage.setItem(
-          ACTIVE_ACCOUNT_KEY,
-          activeAccountId
-        );
-
-      } else {
-
-        localStorage.removeItem(
-          ACTIVE_ACCOUNT_KEY
-        );
-
-      }
-
-    }
-
-
-    atualizarInterfaceContas();
-
-    atualizarListaContas();
-
-
-    if (
-      accounts.length
-    ) {
-
-      carregarTudo();
-
-    } else {
-
-      limparTabela();
-      limparDashboardVisual();
-
-    }
-
-  }
-
-
-  document.addEventListener(
-    "DOMContentLoaded",
-    inicializar
-  );
-
-</script>
-
+    </script>
 </body>
 </html>
