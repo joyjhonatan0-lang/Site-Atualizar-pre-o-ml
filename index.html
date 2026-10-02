@@ -95,15 +95,16 @@
             <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-sm font-bold text-white">Planilha de Simulação e Viabilidade Financeira</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - (Comissão + Imposto + Lucro) / 100]</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Fórmula: (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]</p>
                 </div>
                 
                 <!-- PAINEL DE PREENCHIMENTO EM MASSA -->
                 <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
                     <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">Preencher em Massa:</span>
                     <input type="number" step="0.01" id="massa-custo" placeholder="Custo R$" class="input-simulacao w-20" />
-                    <input type="number" step="0.1" id="massa-imposto" placeholder="Imposto %" class="input-simulacao w-20" />
-                    <input type="number" step="0.1" id="massa-lucro" placeholder="Lucro %" class="input-simulacao w-20" />
+                    <input type="number" step="0.1" id="massa-taxa" placeholder="Taxa %" class="input-simulacao w-16" />
+                    <input type="number" step="0.1" id="massa-imposto" placeholder="Imposto %" class="input-simulacao w-16" />
+                    <input type="number" step="0.1" id="massa-lucro" placeholder="Lucro %" class="input-simulacao w-16" />
                     <button onclick="aplicarEmMassa()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition">Aplicar</button>
                 </div>
             </div>
@@ -119,10 +120,10 @@
                                 <th class="p-3">Preço Atual</th>
                                 <th class="p-3">Frete</th>
                                 <th class="p-3">Tipo</th>
-                                <th class="p-3">Comissão %</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Preço Custo (R$)</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Taxa %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Custo (R$)</th>
                                 <th class="p-3 bg-yellow-100/60 text-yellow-900">Imposto %</th>
-                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Lucro Desejado %</th>
+                                <th class="p-3 bg-yellow-100/60 text-yellow-900">Lucro %</th>
                                 <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Novo Preço</th>
                                 <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Lucro Simulado</th>
                                 <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">Margem Real</th>
@@ -250,7 +251,7 @@
             tbody.innerHTML = '';
             itens.forEach((item, index) => {
                 const tipoNome = item.listing_type_id === 'gold_pro' ? 'Premium' : 'Clássico';
-                const comissaoPercent = item.listing_type_id === 'gold_pro' ? 16 : 11;
+                const comissaoPadrao = item.listing_type_id === 'gold_pro' ? 17 : 12; // Valor igual à sua planilha (17% ou 12%)
 
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 transition-colors";
@@ -261,35 +262,36 @@
                     <td class="p-3 font-bold text-slate-900">R$ ${item.price.toFixed(2)}</td>
                     <td class="p-3 text-slate-600">R$ ${item.shipping_cost.toFixed(2)}</td>
                     <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${tipoNome === 'Premium' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${tipoNome}</span></td>
-                    <td class="p-3 text-slate-600">${comissaoPercent}%</td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="10.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-24" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
-                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="12.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${comissaoPercent}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="taxa_${index}" value="${comissaoPadrao}" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.01" id="custo_${index}" value="10.00" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-20" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="imposto_${index}" value="0.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
+                    <td class="p-3 bg-yellow-50/50"><input type="number" step="0.1" id="lucro_${index}" value="12.0" oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})" class="input-simulacao w-16" /></td>
                     <td class="p-3 bg-emerald-50/60 font-black text-emerald-800" id="novo_preco_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-700" id="lucro_sim_${index}">R$ 0.00</td>
                     <td class="p-3 bg-emerald-50/60 font-bold text-emerald-900" id="margem_real_${index}">0.00%</td>
                 `;
                 tbody.appendChild(tr);
-                recalcular(index, item.shipping_cost, comissaoPercent, item.free_shipping);
+                recalcular(index, item.shipping_cost, item.free_shipping);
             });
         }
 
-        function recalcular(index, custoFrete, comissaoPercent, freteGratis) {
+        function recalcular(index, custoFrete, freteGratis) {
+            const taxaPercent = parseFloat(document.getElementById(`taxa_${index}`).value) || 0;
             const custo = parseFloat(document.getElementById(`custo_${index}`).value) || 0;
             const impostoPercent = parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
             const lucroDesejadoPercent = parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
 
-            const freteAplicado = freteGratis ? custoFrete : 0;
+            const freteAplicado = freteGratis ? custoFrete : 6.85; // Garante o valor de frete para o cálculo idêntico ao Sheets
             
-            // Fórmula idêntica ao Sheets: (Custo + Frete) / (1 - (Comissão + Imposto + Lucro) / 100)
-            const somaPercentual = comissaoPercent + impostoPercent + lucroDesejadoPercent;
+            // Fórmula exata do Sheets: (Custo + Frete) / (1 - (Taxa + Imposto + Lucro) / 100)
+            const somaPercentual = taxaPercent + impostoPercent + lucroDesejadoPercent;
             const divisor = 1 - (somaPercentual / 100);
             
             let novoPreco = divisor > 0 ? (custo + freteAplicado) / divisor : custo * 1.5;
 
-            const valorComissao = novoPreco * (comissaoPercent / 100);
+            const valorTaxa = novoPreco * (taxaPercent / 100);
             const valorImposto = novoPreco * (impostoPercent / 100);
-            const lucroLiquidoReal = novoPreco - custo - valorComissao - valorImposto - freteAplicado;
+            const lucroLiquidoReal = novoPreco - custo - valorTaxa - valorImposto - freteAplicado;
             const margemRealPercent = novoPreco > 0 ? (lucroLiquidoReal / novoPreco) * 100 : 0;
 
             document.getElementById(`novo_preco_${index}`).innerText = `R$ ${novoPreco.toFixed(2)}`;
@@ -299,16 +301,17 @@
 
         function aplicarEmMassa() {
             const custoMassa = document.getElementById('massa-custo').value;
+            const taxaMassa = document.getElementById('massa-taxa').value;
             const impostoMassa = document.getElementById('massa-imposto').value;
             const lucroMassa = document.getElementById('massa-lucro').value;
 
             cacheItens.forEach((item, index) => {
                 if (custoMassa !== '') document.getElementById(`custo_${index}`).value = custoMassa;
+                if (taxaMassa !== '') document.getElementById(`taxa_${index}`).value = taxaMassa;
                 if (impostoMassa !== '') document.getElementById(`imposto_${index}`).value = impostoMassa;
                 if (lucroMassa !== '') document.getElementById(`lucro_${index}`).value = lucroMassa;
 
-                const comissaoPercent = item.listing_type_id === 'gold_pro' ? 16 : 11;
-                recalcular(index, item.shipping_cost, comissaoPercent, item.free_shipping);
+                recalcular(index, item.shipping_cost, item.free_shipping);
             });
         }
 
