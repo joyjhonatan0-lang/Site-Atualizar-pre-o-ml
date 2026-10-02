@@ -16,6 +16,11 @@ app.get('/api/anuncios', async (req, res) => {
 
     token = token.replace('Bearer ', '').trim();
 
+    // Suporte ao parâmetro existingIds para append inteligente de novos anúncios
+    const existingIdsParam = req.query.existingIds;
+    const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
+    const isAppendMode = existingIdsSet.size > 0;
+
     try {
         // 1. Puxar ID do usuário
         const userRes = await fetch("https://api.mercadolibre.com/users/me", {
@@ -59,11 +64,20 @@ app.get('/api/anuncios', async (req, res) => {
             return res.json({ itens: [] });
         }
 
+        // Se estiver no modo append, busca detalhes apenas dos IDs que ainda não estão salvos
+        let targetIds = allIds;
+        if (isAppendMode) {
+            targetIds = allIds.filter(id => !existingIdsSet.has(id));
+            if (targetIds.length === 0) {
+                return res.json({ itens: [], mensagem: "Nenhum anúncio novo encontrado." });
+            }
+        }
+
         let listaFinal = [];
 
         // 3. Buscar detalhes em lotes de 20
-        for (let i = 0; i < allIds.length; i += 20) {
-            const chunk = allIds.slice(i, i + 20);
+        for (let i = 0; i < targetIds.length; i += 20) {
+            const chunk = targetIds.slice(i, i + 20);
             
             try {
                 const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
