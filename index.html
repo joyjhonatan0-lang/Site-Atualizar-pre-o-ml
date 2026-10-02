@@ -150,9 +150,16 @@
                     <h2 class="text-sm font-bold text-white">Atualização de Preço (Apenas Anúncios Fora da Margem)</h2>
                     <p class="text-xs text-slate-400 mt-0.5">Envio simultâneo em lotes de 20 para máxima velocidade.</p>
                 </div>
-                <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
-                    🚀 Iniciar Atualização em Lotes (20 em 20)
-                </button>
+                <div class="flex items-center space-x-4">
+                    <!-- Painel com a quantidade de anúncios fora da margem para atualizar -->
+                    <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm flex items-center space-x-2">
+                        <span class="text-slate-400 text-xs">Para atualizar:</span>
+                        <span id="contador-atualizacao" class="font-bold text-amber-400 text-base">0</span>
+                    </div>
+                    <button onclick="atualizarPrecosMassaApi()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
+                        🚀 Iniciar Atualização em Lotes (20 em 20)
+                    </button>
+                </div>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
@@ -377,11 +384,14 @@
             const tbody = document.getElementById('tabela-atualizacao');
             tbody.innerHTML = '';
             
+            let contadorForaDaMargem = 0;
+
             itens.forEach((item, index) => {
                 const dadosSim = novosPrecosCalculados[index] || { preco: item.price, foraDaMargem: true };
                 
                 if (!dadosSim.foraDaMargem) return;
 
+                contadorForaDaMargem++;
                 const novoPreco = dadosSim.preco;
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-800/50 transition-colors";
@@ -403,6 +413,9 @@
                 `;
                 tbody.appendChild(tr);
             });
+
+            // Atualiza o contador na interface
+            document.getElementById('contador-atualizacao').innerText = contadorForaDaMargem;
         }
 
         function alternarTodos(master) {
@@ -473,7 +486,6 @@
                                     if(resItem.sucesso) {
                                         statusEl.innerHTML = `<span class="text-emerald-400 font-bold">OK</span>`;
                                     } else {
-                                        // Exibe o motivo exato do erro truncado, e armazena o texto completo no title para leitura com o mouse
                                         statusEl.innerHTML = `<span class="text-rose-400 font-semibold cursor-help" title="${resItem.erro}">❌ ${resItem.erro}</span>`;
                                     }
                                 }
