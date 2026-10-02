@@ -1,4 +1,4 @@
-```javascript
+
 'use strict';
 
 /*
@@ -1934,4 +1934,4 @@ app.listen(
         );
     }
 );
-```
+
