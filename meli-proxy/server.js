@@ -1,5 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const fetch = (...args) =>
     import('node-fetch').then(({ default: fetch }) => fetch(...args));
@@ -11,6 +14,79 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ML_API = 'https://api.mercadolibre.com';
+const OAUTH_FILE = process.env.ML_OAUTH_FILE || path.join(__dirname, 'ml-oauth-store.json');
+const DEFAULT_FRONTEND_URL = process.env.FRONTEND_URL || 'https://joyjhonatan0-lang.github.io/Site-Atualizar-pre-o-ml/';
+let oauthRefreshPromise = null;
+
+function lerOAuthStore() {
+    try {
+        if (!fs.existsSync(OAUTH_FILE)) return {};
+        return JSON.parse(fs.readFileSync(OAUTH_FILE, 'utf8')) || {};
+    } catch (erro) {
+        console.error('Erro ao ler OAuth store:', erro.message);
+        return {};
+    }
+}
+
+function salvarOAuthStore(dados) {
+    fs.writeFileSync(OAUTH_FILE, JSON.stringify(dados, null, 2), { encoding: 'utf8', mode: 0o600 });
+}
+
+function limparOAuthStore() {
+    try { if (fs.existsSync(OAUTH_FILE)) fs.unlinkSync(OAUTH_FILE); } catch (erro) {}
+}
+
+function tokenExpirando(store) {
+    if (!store?.access_token) return true;
+    if (!store?.expires_at) return false;
+    return Date.now() >= Number(store.expires_at) - 120000;
+}
+
+async function renovarAccessTokenSeNecessario(forcar = false) {
+    let store = lerOAuthStore();
+    if (!store.access_token && !store.refresh_token) return null;
+    if (!forcar && !tokenExpirando(store)) return store.access_token;
+    if (!store.refresh_token || !store.client_id || !store.client_secret) return store.access_token || null;
+
+    if (oauthRefreshPromise) return oauthRefreshPromise;
+
+    oauthRefreshPromise = (async () => {
+        const atual = lerOAuthStore();
+        const body = new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: String(atual.client_id),
+            client_secret: String(atual.client_secret),
+            refresh_token: String(atual.refresh_token)
+        });
+
+        const response = await fetch(`${ML_API}/oauth/token`, {
+            method: 'POST',
+            headers: { 'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+            body
+        });
+        const data = await jsonSeguro(response);
+        if (!response.ok || !data.access_token) {
+            console.error('Falha ao renovar token Mercado Livre:', data);
+            throw new Error(formatarErroMercadoLivre(data) || 'Falha ao renovar Access Token.');
+        }
+
+        const novo = {
+            ...atual,
+            access_token: data.access_token,
+            refresh_token: data.refresh_token || atual.refresh_token,
+            expires_in: Number(data.expires_in || 21600),
+            expires_at: Date.now() + Number(data.expires_in || 21600) * 1000,
+            user_id: data.user_id || atual.user_id,
+            scope: data.scope || atual.scope,
+            updated_at: new Date().toISOString()
+        };
+        salvarOAuthStore(novo);
+        return novo.access_token;
+    })();
+
+    try { return await oauthRefreshPromise; }
+    finally { oauthRefreshPromise = null; }
+}
 
 app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
@@ -22,12 +98,12 @@ app.get('/', (req, res) => {
 
 function obterToken(req) {
     let token = req.headers['authorization'];
-
-    if (!token) {
-        return null;
+    if (token) {
+        token = token.replace(/^Bearer\s+/i, '').trim();
+        if (token && token !== 'AUTO' && token !== 'null' && token !== 'undefined') return token;
     }
-
-    return token.replace(/^Bearer\s+/i, '').trim();
+    const store = lerOAuthStore();
+    return store.access_token || null;
 }
 
 function respostaErro(res, status, mensagem) {
@@ -38,15 +114,40 @@ function respostaErro(res, status, mensagem) {
 }
 
 async function mlFetch(url, token, options = {}) {
+    let tokenFinal = token;
+    const store = lerOAuthStore();
+
+    // Se a chamada estiver usando o token gerenciado pelo servidor, renova antes de expirar.
+    if (!tokenFinal || tokenFinal === 'AUTO' || (store.access_token && tokenFinal === store.access_token)) {
+        try {
+            tokenFinal = await renovarAccessTokenSeNecessario(false);
+        } catch (erro) {
+            console.error('Renovação automática:', erro.message);
+            tokenFinal = store.access_token || tokenFinal;
+        }
+    }
+
     const headers = {
         ...(options.headers || {}),
-        Authorization: 'Bearer ' + token
+        Authorization: 'Bearer ' + tokenFinal
     };
 
-    return fetch(url, {
-        ...options,
-        headers
-    });
+    let response = await fetch(url, { ...options, headers });
+
+    // Se o ML responder 401 para o token gerenciado, tenta UMA renovação e repete a chamada.
+    if (response.status === 401 && store.refresh_token && (!token || token === 'AUTO' || token === store.access_token)) {
+        try {
+            tokenFinal = await renovarAccessTokenSeNecessario(true);
+            response = await fetch(url, {
+                ...options,
+                headers: { ...(options.headers || {}), Authorization: 'Bearer ' + tokenFinal }
+            });
+        } catch (erro) {
+            console.error('Falha na renovação após 401:', erro.message);
+        }
+    }
+
+    return response;
 }
 
 async function jsonSeguro(response) {
@@ -100,6 +201,166 @@ async function calcularFreteExato(itemObj, token) {
     }
     return 0;
 }
+
+
+/* =========================================================
+   OAUTH MERCADO LIVRE - LOGIN + RENOVAÇÃO AUTOMÁTICA
+========================================================= */
+
+app.get('/api/oauth/status', async (req, res) => {
+    try {
+        const store = lerOAuthStore();
+        if (!store.access_token && !store.refresh_token) {
+            return res.json({ connected: false });
+        }
+
+        let token = null;
+        try { token = await renovarAccessTokenSeNecessario(false); } catch (erro) { token = store.access_token || null; }
+
+        let nickname = store.nickname || null;
+        let userId = store.user_id || null;
+
+        if (token) {
+            try {
+                const meRes = await fetch(`${ML_API}/users/me`, {
+                    headers: { Authorization: 'Bearer ' + token }
+                });
+                const me = await jsonSeguro(meRes);
+                if (meRes.ok && me.id) {
+                    nickname = me.nickname || nickname;
+                    userId = me.id;
+                    salvarOAuthStore({ ...lerOAuthStore(), nickname, user_id: userId });
+                }
+            } catch (erro) {}
+        }
+
+        const atual = lerOAuthStore();
+        return res.json({
+            connected: Boolean(token),
+            renewable: Boolean(atual.refresh_token && atual.client_id && atual.client_secret),
+            user_id: userId,
+            nickname,
+            expires_at: atual.expires_at || null,
+            redirect_uri: atual.redirect_uri || null
+        });
+    } catch (erro) {
+        return respostaErro(res, 500, 'Erro ao consultar conexão OAuth: ' + erro.message);
+    }
+});
+
+app.post('/api/oauth/configure', async (req, res) => {
+    const { client_id, client_secret, redirect_uri, access_token, frontend_url } = req.body || {};
+    if (!client_id || !client_secret || !redirect_uri) {
+        return respostaErro(res, 400, 'Informe Client ID, Client Secret e URL de retorno.');
+    }
+
+    try {
+        new URL(redirect_uri);
+    } catch {
+        return respostaErro(res, 400, 'URL de retorno inválida.');
+    }
+
+    const state = crypto.randomBytes(24).toString('hex');
+    const storeAnterior = lerOAuthStore();
+    const store = {
+        ...storeAnterior,
+        client_id: String(client_id).trim(),
+        client_secret: String(client_secret).trim(),
+        redirect_uri: String(redirect_uri).trim(),
+        frontend_url: String(frontend_url || DEFAULT_FRONTEND_URL).trim(),
+        oauth_state: state,
+        oauth_state_created_at: Date.now()
+    };
+
+    if (access_token && String(access_token).trim()) {
+        store.access_token = String(access_token).trim();
+        store.expires_at = null;
+    }
+
+    salvarOAuthStore(store);
+
+    const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: store.client_id,
+        redirect_uri: store.redirect_uri,
+        state
+    });
+
+    return res.json({
+        sucesso: true,
+        authorization_url: `https://auth.mercadolivre.com.br/authorization?${params.toString()}`
+    });
+});
+
+app.get('/auth/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query || {};
+    const store = lerOAuthStore();
+    const frontend = store.frontend_url || DEFAULT_FRONTEND_URL;
+
+    if (error) {
+        return res.redirect(`${frontend}${frontend.includes('?') ? '&' : '?'}oauth=error&message=${encodeURIComponent(error_description || error)}`);
+    }
+    if (!code || !state || !store.oauth_state || state !== store.oauth_state) {
+        return res.status(400).send('OAuth inválido: state ou code não confere. Volte ao ML Hub Pro e tente novamente.');
+    }
+    if (Date.now() - Number(store.oauth_state_created_at || 0) > 15 * 60 * 1000) {
+        return res.status(400).send('OAuth expirado. Volte ao ML Hub Pro e inicie a conexão novamente.');
+    }
+
+    try {
+        const body = new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: String(store.client_id),
+            client_secret: String(store.client_secret),
+            code: String(code),
+            redirect_uri: String(store.redirect_uri)
+        });
+
+        const tokenRes = await fetch(`${ML_API}/oauth/token`, {
+            method: 'POST',
+            headers: { 'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+            body
+        });
+        const tokenData = await jsonSeguro(tokenRes);
+
+        if (!tokenRes.ok || !tokenData.access_token) {
+            console.error('Erro OAuth callback:', tokenData);
+            return res.status(tokenRes.status || 400).send('Não foi possível gerar o token do Mercado Livre: ' + (formatarErroMercadoLivre(tokenData) || 'erro desconhecido'));
+        }
+
+        const novo = {
+            ...store,
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+            expires_in: Number(tokenData.expires_in || 21600),
+            expires_at: Date.now() + Number(tokenData.expires_in || 21600) * 1000,
+            user_id: tokenData.user_id || null,
+            scope: tokenData.scope || null,
+            oauth_state: null,
+            oauth_state_created_at: null,
+            connected_at: new Date().toISOString()
+        };
+        salvarOAuthStore(novo);
+
+        return res.redirect(`${frontend}${frontend.includes('?') ? '&' : '?'}oauth=success`);
+    } catch (erroInterno) {
+        console.error('Erro no callback OAuth:', erroInterno);
+        return res.status(500).send('Erro interno ao concluir OAuth: ' + erroInterno.message);
+    }
+});
+
+app.post('/api/oauth/manual-token', (req, res) => {
+    const accessToken = String(req.body?.access_token || '').trim();
+    if (!accessToken) return respostaErro(res, 400, 'Access Token não informado.');
+    const store = lerOAuthStore();
+    salvarOAuthStore({ ...store, access_token: accessToken, expires_at: null, updated_at: new Date().toISOString() });
+    return res.json({ sucesso: true });
+});
+
+app.post('/api/oauth/disconnect', (req, res) => {
+    limparOAuthStore();
+    return res.json({ sucesso: true });
+});
 
 /* =========================================================
    1. ROTA ORIGINAL - TODOS OS ANÚNCIOS
