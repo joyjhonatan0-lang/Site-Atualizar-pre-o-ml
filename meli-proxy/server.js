@@ -67,66 +67,72 @@ function formatarErroMercadoLivre(data) {
     );
 }
 
-// Função auxiliar centralizada para calcular o frete exato do Mercado Livre
+// Função auxiliar centralizada para calcular o custo de envio do vendedor
+// usando a cotação oficial do Mercado Livre para o próprio anúncio.
 async function calcularFreteExato(itemObj, token) {
     const shipping = itemObj.shipping || {};
-    const freeShipping = shipping.free_shipping || false;
+    const freeShipping = Boolean(shipping.free_shipping);
+    const sellerId = itemObj.seller_id || itemObj.seller?.id;
 
-    let custoEnvio = 6.85;
-
-    if (freeShipping) {
+    // Fonte principal: shipping_options/free. O campo list_cost representa
+    // o custo de envio oferecido/cobrado ao vendedor para o anúncio.
+    if (sellerId && itemObj.id) {
         try {
-            const saleFeeRes = await mlFetch(
-                `${ML_API}/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`,
+            const params = new URLSearchParams({
+                item_id: String(itemObj.id),
+                free_shipping: freeShipping ? 'true' : 'false',
+                verbose: 'true'
+            });
+
+            // Envia também o contexto disponível do anúncio para evitar
+            // cotações incompletas ou divergentes.
+            if (itemObj.price != null) params.set('item_price', String(itemObj.price));
+            if (itemObj.listing_type_id) params.set('listing_type_id', String(itemObj.listing_type_id));
+            if (shipping.mode) params.set('mode', String(shipping.mode));
+            if (shipping.logistic_type) params.set('logistic_type', String(shipping.logistic_type));
+
+            const freteRes = await mlFetch(
+                `${ML_API}/users/${encodeURIComponent(sellerId)}/shipping_options/free?${params.toString()}`,
                 token
             );
 
-            if (saleFeeRes.ok) {
-                const saleFeeData = await jsonSeguro(saleFeeRes);
+            if (freteRes.ok) {
+                const freteData = await jsonSeguro(freteRes);
+                const cobertura = freteData?.coverage?.all_country;
+                const listCost = Number(cobertura?.list_cost);
 
-                if (
-                    saleFeeData.sale_fee_details &&
-                    saleFeeData.sale_fee_details.shipping_fee
-                ) {
-                    return saleFeeData.sale_fee_details.shipping_fee;
+                if (Number.isFinite(listCost) && listCost >= 0) {
+                    return listCost;
                 }
             }
         } catch (e) {
-            // fallback
-        }
-
-        if (
-            shipping.costs &&
-            Array.isArray(shipping.costs) &&
-            shipping.costs.length > 0
-        ) {
-            const cObj = shipping.costs.find(
-                c => c.cost !== undefined
-            );
-
-            if (cObj) {
-                return cObj.cost;
-            }
-        }
-
-        custoEnvio = 12.95;
-    } else {
-        if (
-            shipping.costs &&
-            Array.isArray(shipping.costs) &&
-            shipping.costs.length > 0
-        ) {
-            const cObj = shipping.costs.find(
-                c => c.cost !== undefined
-            );
-
-            if (cObj) {
-                custoEnvio = cObj.cost;
-            }
+            console.warn(`Falha ao consultar frete oficial do item ${itemObj.id}:`, e.message);
         }
     }
 
-    return custoEnvio;
+    // Fallback somente quando a cotação oficial não estiver disponível.
+    // Não usa mais o valor fixo de R$ 12,95.
+    if (Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+        const cObj = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
+        if (cObj) return Number(cObj.cost);
+    }
+
+    // Último fallback: tenta o detalhe de tarifa já usado pela integração.
+    try {
+        const saleFeeRes = await mlFetch(
+            `${ML_API}/items/${encodeURIComponent(itemObj.id)}/sale_fee?price=${encodeURIComponent(itemObj.price || 0)}&listing_type_id=${encodeURIComponent(itemObj.listing_type_id || 'gold_special')}`,
+            token
+        );
+        if (saleFeeRes.ok) {
+            const saleFeeData = await jsonSeguro(saleFeeRes);
+            const shippingFee = Number(saleFeeData?.sale_fee_details?.shipping_fee);
+            if (Number.isFinite(shippingFee) && shippingFee >= 0) return shippingFee;
+        }
+    } catch (e) {
+        console.warn(`Falha no fallback de frete do item ${itemObj.id}:`, e.message);
+    }
+
+    return 0;
 }
 
 /* =========================================================
