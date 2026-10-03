@@ -1182,6 +1182,37 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
 
 
+
+    <!-- RESUMO DE VENDAS NA PÁGINA INICIAL -->
+    <div class="mt-1 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Vendas</div>
+                <h2 class="text-lg font-black text-white mt-1">Resumo da conta</h2>
+                <p id="home-dashboard-periodo" class="text-xs text-slate-500 mt-1">Aguardando atualização dos dados.</p>
+            </div>
+            <div id="home-tempo-real-status" class="text-[10px] text-emerald-400 font-bold">● Atualização automática ativa</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Faturamento</div>
+                <div id="home-dashboard-vendas" class="text-3xl font-black text-emerald-400 mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Valor dos pedidos pagos</div>
+            </div>
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Pedidos pagos</div>
+                <div id="home-dashboard-pedidos" class="text-3xl font-black text-white mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Pedidos considerados</div>
+            </div>
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Unidades vendidas</div>
+                <div id="home-dashboard-unidades" class="text-3xl font-black text-yellow-400 mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Quantidade total</div>
+            </div>
+        </div>
+    </div>
+
     <!-- INDICADORES DO MERCADO LIVRE NA PÁGINA INICIAL -->
     <div class="mt-1">
         <div class="flex items-center justify-between mb-4">
@@ -5430,6 +5461,26 @@ function preencherDashboard(
         );
 
 
+    // Espelha o resumo de vendas também na página inicial.
+    const homeVendas = document.getElementById('home-dashboard-vendas');
+    const homePedidos = document.getElementById('home-dashboard-pedidos');
+    const homeUnidades = document.getElementById('home-dashboard-unidades');
+
+    if (homeVendas) homeVendas.innerText = moeda(vendas.valor_total);
+    if (homePedidos) homePedidos.innerText = Number(vendas.pedidos_pagos || 0).toLocaleString('pt-BR');
+    if (homeUnidades) homeUnidades.innerText = Number(vendas.unidades || 0).toLocaleString('pt-BR');
+
+    try {
+        localStorage.setItem('mlHubPro_resumoHome_v1', JSON.stringify({
+            vendas: homeVendas ? homeVendas.innerText : '',
+            pedidos: homePedidos ? homePedidos.innerText : '',
+            unidades: homeUnidades ? homeUnidades.innerText : ''
+        }));
+    } catch (erro) {
+        console.warn('Não foi possível salvar o resumo da Home:', erro);
+    }
+
+
     const periodo =
         data.periodo_vendas;
 
@@ -5439,6 +5490,13 @@ function preencherDashboard(
         periodo
             ? `Período consultado: ${formatarData(periodo.inicio)} até ${formatarData(periodo.fim)}. ${periodo.observacao || ''}`
             : 'Dados atualizados.';
+
+
+    const homePeriodo = document.getElementById('home-dashboard-periodo');
+    if (homePeriodo) {
+        homePeriodo.innerText = document.getElementById('dashboard-periodo').innerText;
+        try { localStorage.setItem('mlHubPro_periodoHome_v1', homePeriodo.innerText); } catch (erro) {}
+    }
 
 
     const indicadores =
@@ -5612,223 +5670,76 @@ function formatarData(
 }
 
 
-function montarTop10(
-    lista
-) {
+function montarTop10(lista) {
 
-    const container =
-        document.getElementById(
-            'top10-container'
-        );
+    const container = document.getElementById('top10-container');
+    const containerHome = document.getElementById('top10-home');
 
-    const containerHome =
-        document.getElementById(
-            'top10-home'
-        );
+    const vazia = `
+        <div class="text-center py-12 text-xs text-slate-600">
+            Nenhuma venda encontrada no período.
+        </div>
+    `;
 
-    if (!container && !containerHome) {
-        return;
-    }
+    let html = vazia;
 
-    if (
-        !lista ||
-        lista.length === 0
-    ) {
-
-        if (container) if (container) container.innerHTML =
-            `
-            <div
-                class="
-                    text-center
-                    py-12
-                    text-xs
-                    text-slate-600
-                "
-            >
-                Nenhuma venda encontrada no período.
-            </div>
-            `;
-
-        return;
-    }
-
-    container.innerHTML =
-        `
-        <div class="space-y-3">
-
-            ${lista.map(
-                (
-                    item,
-                    index
-                ) => {
-
-                    return `
-                    <div
-                        class="
-                            flex
-                            items-center
-                            gap-4
-                            p-4
-                            rounded-xl
-                            bg-slate-950/60
-                            border
-                            border-slate-800
-                        "
-                    >
-
-                        <div
-                            class="
-                                w-9
-                                h-9
-                                rounded-lg
-                                bg-yellow-400/10
-                                text-yellow-400
-                                flex
-                                items-center
-                                justify-center
-                                font-black
-                            "
-                        >
+    if (Array.isArray(lista) && lista.length > 0) {
+        html = `
+            <div class="space-y-3">
+                ${lista.slice(0, 10).map((item, index) => `
+                    <div class="flex items-center gap-4 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div class="w-9 h-9 rounded-lg bg-yellow-400/10 text-yellow-400 flex items-center justify-center font-black">
                             ${index + 1}
                         </div>
 
                         <img
                             src="${escapeHtml(item.thumbnail || '')}"
-                            class="
-                                w-14
-                                h-14
-                                rounded-xl
-                                object-cover
-                                bg-slate-800
-                            "
+                            class="w-14 h-14 rounded-xl object-cover bg-slate-800"
+                            onerror="this.style.visibility='hidden'"
                         >
 
-                        <div
-                            class="
-                                min-w-0
-                                flex-1
-                            "
-                        >
-
-                            <div
-                                class="
-                                    font-bold
-                                    text-white
-                                    text-sm
-                                    truncate
-                                "
-                            >
-                                ${escapeHtml(
-                                    item.titulo
-                                )}
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-white text-sm truncate">
+                                ${escapeHtml(item.titulo || '')}
                             </div>
-
-                            <div
-                                class="
-                                    text-[10px]
-                                    text-slate-500
-                                    mt-1
-                                "
-                            >
-                                ${escapeHtml(
-                                    item.item_id
-                                )}
+                            <div class="text-[10px] text-slate-500 mt-1">
+                                ${escapeHtml(item.item_id || '')}
                             </div>
-
                         </div>
 
-                        <div
-                            class="
-                                text-right
-                            "
-                        >
-
-                            <div
-                                class="
-                                    text-lg
-                                    font-black
-                                    text-emerald-400
-                                "
-                            >
-                                ${Number(
-                                    item.unidades || 0
-                                ).toLocaleString(
-                                    'pt-BR'
-                                )}
+                        <div class="text-right">
+                            <div class="text-lg font-black text-emerald-400">
+                                ${Number(item.unidades || 0).toLocaleString('pt-BR')}
                             </div>
-
-                            <div
-                                class="
-                                    text-[10px]
-                                    text-slate-500
-                                "
-                            >
-                                unidades
-                            </div>
-
+                            <div class="text-[10px] text-slate-500">unidades</div>
                         </div>
 
-                        <div
-                            class="
-                                hidden
-                                md:block
-                                text-right
-                                w-28
-                            "
-                        >
-
-                            <div
-                                class="
-                                    text-xs
-                                    font-bold
-                                    text-white
-                                "
-                            >
-                                ${moeda(
-                                    item.faturamento
-                                )}
+                        <div class="hidden md:block text-right w-28">
+                            <div class="text-xs font-bold text-white">
+                                ${moeda(item.faturamento)}
                             </div>
-
-                            <div
-                                class="
-                                    text-[10px]
-                                    text-slate-600
-                                    mt-1
-                                "
-                            >
-                                faturamento
-                            </div>
-
+                            <div class="text-[10px] text-slate-600 mt-1">faturamento</div>
                         </div>
 
                         <a
-                            href="${escapeHtml(
-                                item.permalink || '#'
-                            )}"
+                            href="${escapeHtml(item.permalink || '#')}"
                             target="_blank"
-                            class="
-                                hidden
-                                lg:flex
-                                px-3
-                                py-2
-                                rounded-lg
-                                bg-slate-800
-                                hover:bg-slate-700
-                                text-blue-400
-                                text-[10px]
-                                font-bold
-                            "
-                        >
-                            Ver
-                        </a>
-
+                            class="hidden lg:flex px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 text-[10px] font-bold"
+                        >Ver</a>
                     </div>
-                    `;
-                }
-            ).join('')}
-
-        </div>
+                `).join('')}
+            </div>
         `;
+    }
+
+    if (container) container.innerHTML = html;
+    if (containerHome) containerHome.innerHTML = html;
+
+    try {
+        localStorage.setItem('mlHubPro_top10Home_v2', html);
+    } catch (erro) {
+        console.warn('Não foi possível salvar o Top 10:', erro);
+    }
 }
 
 
@@ -6701,6 +6612,102 @@ document.addEventListener('DOMContentLoaded', function () {
         perfilStatus.className = token ? 'text-xs text-emerald-400 mt-2' : 'text-xs text-yellow-400 mt-2';
     }
 });
+</script>
+
+
+<script id="mlhub-home-tempo-real">
+(function () {
+    let atualizacaoHomeEmAndamento = false;
+
+    function homeEstaVisivel() {
+        const inicio = document.getElementById('secao-inicio');
+        return inicio && !inicio.classList.contains('hidden');
+    }
+
+    async function atualizarHomeTempoReal(forcar = false) {
+        if (atualizacaoHomeEmAndamento) return;
+        if (!forcar && !homeEstaVisivel()) return;
+
+        const token = typeof obterToken === 'function' ? obterToken() : '';
+        if (!token) return;
+
+        atualizacaoHomeEmAndamento = true;
+        const status = document.getElementById('home-tempo-real-status');
+
+        try {
+            if (status) {
+                status.innerText = '● Atualizando dados...';
+                status.className = 'text-[10px] text-yellow-400 font-bold';
+            }
+
+            const response = await fetch(`${RENDER_URL}/api/dashboard`, {
+                headers: { Authorization: token }
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.sucesso) {
+                throw new Error(data.erro || 'Falha ao atualizar os dados da página inicial.');
+            }
+
+            preencherDashboard(data);
+
+            try {
+                localStorage.setItem('mlHubPro_dashboardHome_v1', JSON.stringify(data));
+            } catch (erro) {}
+
+            if (status) {
+                status.innerText = '● Atualizado agora';
+                status.className = 'text-[10px] text-emerald-400 font-bold';
+            }
+        } catch (erro) {
+            console.warn('Atualização automática da Home:', erro);
+            if (status) {
+                status.innerText = '● Mantendo últimos dados salvos';
+                status.className = 'text-[10px] text-slate-500 font-bold';
+            }
+        } finally {
+            atualizacaoHomeEmAndamento = false;
+        }
+    }
+
+    window.atualizarHomeTempoReal = atualizarHomeTempoReal;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Restaura imediatamente os últimos dados, sem deixar a Home vazia.
+        try {
+            const resumo = JSON.parse(localStorage.getItem('mlHubPro_resumoHome_v1') || '{}');
+            if (resumo.vendas && document.getElementById('home-dashboard-vendas'))
+                document.getElementById('home-dashboard-vendas').innerText = resumo.vendas;
+            if (resumo.pedidos && document.getElementById('home-dashboard-pedidos'))
+                document.getElementById('home-dashboard-pedidos').innerText = resumo.pedidos;
+            if (resumo.unidades && document.getElementById('home-dashboard-unidades'))
+                document.getElementById('home-dashboard-unidades').innerText = resumo.unidades;
+
+            const periodo = localStorage.getItem('mlHubPro_periodoHome_v1');
+            if (periodo && document.getElementById('home-dashboard-periodo'))
+                document.getElementById('home-dashboard-periodo').innerText = periodo;
+
+            const top10 = localStorage.getItem('mlHubPro_top10Home_v2');
+            if (top10 && document.getElementById('top10-home'))
+                document.getElementById('top10-home').innerHTML = top10;
+
+            const dashboardSalvo = localStorage.getItem('mlHubPro_dashboardHome_v1');
+            if (dashboardSalvo) preencherDashboard(JSON.parse(dashboardSalvo));
+        } catch (erro) {
+            console.warn('Não foi possível restaurar os dados da Home:', erro);
+        }
+
+        // Atualiza ao entrar e depois consulta novamente a cada 60 segundos
+        // enquanto a página inicial estiver aberta.
+        setTimeout(() => atualizarHomeTempoReal(false), 800);
+        setInterval(() => atualizarHomeTempoReal(false), 60000);
+    });
+
+    // Atualiza também quando a aba do navegador volta a ficar visível.
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) atualizarHomeTempoReal(false);
+    });
+})();
 </script>
 
 </body>
