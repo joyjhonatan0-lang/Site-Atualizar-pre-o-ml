@@ -12,1939 +12,1308 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            ml: "#FFE600",
-            dark: "#0f172a",
-            panel: "#111827"
-          }
-        }
-      }
-    };
-  </script>
+  <style>
+    body {
+      background: #f3f4f6;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  </style>
 </head>
 
-<body class="bg-slate-950 text-white min-h-screen">
+<body class="min-h-screen">
 
   <!-- =====================================================
-       HEADER
-  ====================================================== -->
-
-  <header
-    class="border-b border-slate-800 bg-slate-900/95 sticky top-0 z-50"
-  >
-    <div
-      class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4"
-    >
-
-      <div class="flex items-center gap-3">
-
-        <div
-          class="w-11 h-11 rounded-xl bg-[#FFE600] text-slate-950 flex items-center justify-center font-black text-xl"
-        >
-          ML
-        </div>
-
-        <div>
-          <h1 class="font-bold text-lg">
-            ML Hub Pro
-          </h1>
-
-          <p class="text-xs text-slate-400">
-            Gestão da sua conta Mercado Livre
-          </p>
-        </div>
-
-      </div>
-
-      <div
-        id="connectionBadge"
-        class="hidden md:flex items-center gap-2 text-sm"
-      >
-        <span
-          id="connectionDot"
-          class="w-2.5 h-2.5 rounded-full bg-slate-500"
-        ></span>
-
-        <span id="connectionText">
-          Verificando...
-        </span>
-      </div>
-
-    </div>
-  </header>
-
-  <!-- =====================================================
-       APP
-  ====================================================== -->
-
-  <main class="max-w-7xl mx-auto px-4 py-8">
-
-    <!-- ===================================================
-         HOME
-    ==================================================== -->
-
-    <section id="homeScreen">
-
-      <div
-        class="max-w-4xl mx-auto text-center py-10"
-      >
-
-        <div
-          class="inline-flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-4 py-2 text-sm text-slate-300 mb-6"
-        >
-          <span class="w-2 h-2 rounded-full bg-green-400"></span>
-          Integração Mercado Livre
-        </div>
-
-        <h2
-          class="text-4xl md:text-6xl font-black tracking-tight"
-        >
-          Controle seus anúncios
-          <span class="text-[#FFE600]">
-            em um só lugar.
-          </span>
-        </h2>
-
-        <p
-          class="text-slate-400 text-lg mt-5 max-w-2xl mx-auto"
-        >
-          Conecte sua conta do Mercado Livre e gerencie
-          anúncios, preços, fretes e simulações diretamente
-          pelo seu painel.
-        </p>
-
-        <div
-          class="mt-8 flex flex-col sm:flex-row justify-center gap-3"
-        >
-
-          <button
-            onclick="showLogin()"
-            class="bg-[#FFE600] text-slate-950 font-black px-7 py-4 rounded-xl hover:brightness-95 transition"
-          >
-            Conectar Mercado Livre
-          </button>
-
-          <button
-            onclick="showLogin()"
-            class="border border-slate-700 bg-slate-900 px-7 py-4 rounded-xl hover:bg-slate-800 transition"
-          >
-            Configurar aplicação
-          </button>
-
-        </div>
-
-        <div
-          class="grid md:grid-cols-3 gap-4 mt-12 text-left"
-        >
-
-          <div
-            class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-          >
-            <div class="text-2xl mb-3">🔐</div>
-
-            <h3 class="font-bold">
-              Conexão segura
-            </h3>
-
-            <p class="text-sm text-slate-400 mt-2">
-              A senha da sua conta nunca passa pelo painel.
-              A autorização é feita diretamente pelo Mercado Livre.
-            </p>
-          </div>
-
-          <div
-            class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-          >
-            <div class="text-2xl mb-3">♻️</div>
-
-            <h3 class="font-bold">
-              Token automático
-            </h3>
-
-            <p class="text-sm text-slate-400 mt-2">
-              O sistema guarda o Refresh Token e renova
-              o acesso automaticamente.
-            </p>
-          </div>
-
-          <div
-            class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-          >
-            <div class="text-2xl mb-3">📦</div>
-
-            <h3 class="font-bold">
-              Seus anúncios
-            </h3>
-
-            <p class="text-sm text-slate-400 mt-2">
-              Consulte preços, estoque, vendas e informações
-              dos seus anúncios.
-            </p>
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-    <!-- ===================================================
-         LOGIN / CONFIG
-    ==================================================== -->
-
-    <section
-      id="loginScreen"
-      class="hidden"
-    >
-
-      <div class="max-w-xl mx-auto">
-
-        <button
-          onclick="showHome()"
-          class="text-sm text-slate-400 hover:text-white mb-5"
-        >
-          ← Voltar
-        </button>
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8"
-        >
-
-          <div class="mb-7">
-
-            <div
-              class="w-12 h-12 rounded-xl bg-[#FFE600] text-slate-950 flex items-center justify-center font-black mb-4"
-            >
-              ML
-            </div>
-
-            <h2 class="text-2xl font-black">
-              Conectar Mercado Livre
-            </h2>
-
-            <p class="text-slate-400 text-sm mt-2">
-              Informe as credenciais da sua aplicação
-              criada no Developers do Mercado Livre.
-            </p>
-
-          </div>
-
-          <div
-            id="loginError"
-            class="hidden bg-red-950/50 border border-red-800 text-red-300 rounded-xl p-4 mb-5 text-sm"
-          ></div>
-
-          <div
-            id="loginSuccess"
-            class="hidden bg-green-950/50 border border-green-800 text-green-300 rounded-xl p-4 mb-5 text-sm"
-          ></div>
-
-          <!-- CLIENT ID -->
-
-          <label
-            class="block text-sm font-semibold text-slate-300 mb-2"
-          >
-            Client ID / APP ID
-          </label>
-
-          <input
-            id="clientId"
-            type="text"
-            autocomplete="off"
-            placeholder="Ex.: 1234567890123456"
-            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-[#FFE600] mb-5"
-          >
-
-          <!-- CLIENT SECRET -->
-
-          <label
-            class="block text-sm font-semibold text-slate-300 mb-2"
-          >
-            Client Secret
-          </label>
-
-          <input
-            id="clientSecret"
-            type="password"
-            autocomplete="new-password"
-            placeholder="Client Secret da aplicação"
-            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-[#FFE600] mb-5"
-          >
-
-          <!-- REDIRECT -->
-
-          <label
-            class="block text-sm font-semibold text-slate-300 mb-2"
-          >
-            URL de retorno
-          </label>
-
-          <input
-            id="redirectUri"
-            type="text"
-            readonly
-            class="w-full bg-slate-800 border border-slate-700 text-slate-300 rounded-xl px-4 py-3 outline-none mb-2"
-          >
-
-          <p
-            class="text-xs text-slate-500 mb-5"
-          >
-            Essa é a URL que precisa estar cadastrada na configuração
-            OAuth da sua aplicação no Mercado Livre.
-          </p>
-
-          <!-- ACCESS TOKEN -->
-
-          <details
-            class="mb-6 bg-slate-950 border border-slate-800 rounded-xl p-4"
-          >
-
-            <summary
-              class="cursor-pointer text-sm font-semibold text-slate-300"
-            >
-              Tenho um Access Token e quero usar manualmente
-            </summary>
-
-            <div class="mt-4">
-
-              <input
-                id="accessToken"
-                type="password"
-                autocomplete="off"
-                placeholder="APP_USR-..."
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-[#FFE600]"
-              >
-
-              <p
-                class="text-xs text-slate-500 mt-2"
-              >
-                Para renovação automática, deixe este campo vazio
-                e faça a conexão pelo Mercado Livre.
-              </p>
-
-            </div>
-
-          </details>
-
-          <button
-            id="connectButton"
-            onclick="connectMercadoLivre()"
-            class="w-full bg-[#FFE600] text-slate-950 font-black py-4 rounded-xl hover:brightness-95 transition"
-          >
-            Conectar minha conta
-          </button>
-
-          <div
-            class="mt-5 text-xs text-slate-500 leading-relaxed"
-          >
-            Ao clicar, você será enviado ao Mercado Livre para
-            fazer login e autorizar sua aplicação. Sua senha
-            não é enviada para este painel.
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-    <!-- ===================================================
-         DASHBOARD
-    ==================================================== -->
-
-    <section
-      id="dashboardScreen"
-      class="hidden"
-    >
-
-      <!-- TOP -->
-
-      <div
-        class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-7"
-      >
-
-        <div>
-          <h2 class="text-3xl font-black">
-            Dashboard
-          </h2>
-
-          <p
-            id="dashboardSubtitle"
-            class="text-slate-400 mt-1"
-          >
-            Sua conta Mercado Livre
-          </p>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-
-          <button
-            onclick="loadAnuncios()"
-            class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700"
-          >
-            ↻ Atualizar anúncios
-          </button>
-
-          <button
-            onclick="logout()"
-            class="bg-red-950/50 border border-red-900 text-red-300 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-900/50"
-          >
-            Sair
-          </button>
-
-        </div>
-
-      </div>
-
-      <!-- CONNECTION -->
-
-      <div
-        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6"
-      >
-
-        <div
-          class="flex flex-col md:flex-row md:items-center justify-between gap-4"
-        >
-
-          <div>
-
-            <div class="flex items-center gap-2">
-
-              <span
-                class="w-3 h-3 rounded-full bg-green-400"
-              ></span>
-
-              <span class="font-bold">
-                Mercado Livre conectado
-              </span>
-
-            </div>
-
-            <p
-              id="tokenInfo"
-              class="text-sm text-slate-400 mt-2"
-            >
-              Token protegido e renovação automática ativada.
-            </p>
-
-          </div>
-
-          <div
-            id="userInfo"
-            class="text-sm text-slate-300"
-          >
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- STATS -->
-
-      <div
-        class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7"
-      >
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-        >
-          <p class="text-sm text-slate-400">
-            Anúncios
-          </p>
-
-          <p
-            id="statTotal"
-            class="text-3xl font-black mt-2"
-          >
-            0
-          </p>
-        </div>
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-        >
-          <p class="text-sm text-slate-400">
-            Ativos
-          </p>
-
-          <p
-            id="statActive"
-            class="text-3xl font-black mt-2"
-          >
-            0
-          </p>
-        </div>
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-        >
-          <p class="text-sm text-slate-400">
-            Estoque
-          </p>
-
-          <p
-            id="statStock"
-            class="text-3xl font-black mt-2"
-          >
-            0
-          </p>
-        </div>
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-5"
-        >
-          <p class="text-sm text-slate-400">
-            Vendidos
-          </p>
-
-          <p
-            id="statSold"
-            class="text-3xl font-black mt-2"
-          >
-            0
-          </p>
-        </div>
-
-      </div>
-
-      <!-- TABS -->
-
-      <div
-        class="flex flex-wrap gap-2 border-b border-slate-800 mb-6 pb-3"
-      >
-
-        <button
-          onclick="openTab('anuncios')"
-          id="tabAnuncios"
-          class="tabButton bg-[#FFE600] text-slate-950 px-4 py-2 rounded-xl text-sm font-bold"
-        >
-          Gestão de anúncios
-        </button>
-
-        <button
-          onclick="openTab('simulacao')"
-          id="tabSimulacao"
-          class="tabButton bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-sm font-bold"
-        >
-          Simulação & custos
-        </button>
-
-        <button
-          onclick="openTab('precos')"
-          id="tabPrecos"
-          class="tabButton bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-sm font-bold"
-        >
-          Atualização de preços
-        </button>
-
-      </div>
-
-      <!-- =================================================
-           ANÚNCIOS
-      ================================================== -->
-
-      <div id="tabContentAnuncios">
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden"
-        >
-
-          <div
-            class="p-5 border-b border-slate-800 flex flex-col md:flex-row gap-3 md:items-center justify-between"
-          >
-
-            <div>
-
-              <h3 class="font-bold text-lg">
-                Seus anúncios
-              </h3>
-
-              <p class="text-sm text-slate-400">
-                Dados consultados diretamente no Mercado Livre.
-              </p>
-
-            </div>
-
-            <input
-              id="searchInput"
-              oninput="renderAnuncios()"
-              type="text"
-              placeholder="Buscar anúncio..."
-              class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 outline-none focus:border-[#FFE600] w-full md:w-72"
-            >
-
-          </div>
-
-          <div
-            id="loadingAnuncios"
-            class="hidden p-10 text-center text-slate-400"
-          >
-            Carregando anúncios...
-          </div>
-
-          <div
-            id="anunciosEmpty"
-            class="hidden p-10 text-center text-slate-400"
-          >
-            Nenhum anúncio encontrado.
-          </div>
-
-          <div
-            class="overflow-x-auto"
-          >
-
-            <table
-              class="w-full text-sm"
-            >
-
-              <thead
-                class="bg-slate-950 text-slate-400"
-              >
-                <tr>
-                  <th class="text-left p-4">
-                    Anúncio
-                  </th>
-
-                  <th class="text-left p-4">
-                    Preço
-                  </th>
-
-                  <th class="text-left p-4">
-                    Estoque
-                  </th>
-
-                  <th class="text-left p-4">
-                    Vendidos
-                  </th>
-
-                  <th class="text-left p-4">
-                    Frete
-                  </th>
-
-                  <th class="text-left p-4">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody
-                id="anunciosTable"
-              ></tbody>
-
-            </table>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- =================================================
-           SIMULAÇÃO
-      ================================================== -->
-
-      <div
-        id="tabContentSimulacao"
-        class="hidden"
-      >
-
-        <div
-          class="max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6"
-        >
-
-          <h3 class="text-xl font-black">
-            Simulação de custos
-          </h3>
-
-          <p class="text-sm text-slate-400 mt-1 mb-6">
-            Calcule uma estimativa de resultado de venda.
-          </p>
-
-          <div class="grid md:grid-cols-2 gap-4">
-
-            <div>
-              <label class="text-sm text-slate-400">
-                Preço de venda
-              </label>
-
-              <input
-                id="simPrice"
-                type="number"
-                step="0.01"
-                value="100"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-            <div>
-              <label class="text-sm text-slate-400">
-                Taxa (%)
-              </label>
-
-              <input
-                id="simFee"
-                type="number"
-                step="0.01"
-                value="15"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-            <div>
-              <label class="text-sm text-slate-400">
-                Frete
-              </label>
-
-              <input
-                id="simShipping"
-                type="number"
-                step="0.01"
-                value="0"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-            <div>
-              <label class="text-sm text-slate-400">
-                Custo do produto
-              </label>
-
-              <input
-                id="simCost"
-                type="number"
-                step="0.01"
-                value="0"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-          </div>
-
-          <button
-            onclick="simulate()"
-            class="mt-5 bg-[#FFE600] text-slate-950 font-black px-5 py-3 rounded-xl"
-          >
-            Calcular
-          </button>
-
-          <div
-            id="simulationResult"
-            class="hidden mt-6 grid sm:grid-cols-2 gap-3"
-          >
-
-            <div class="bg-slate-950 rounded-xl p-4">
-              <p class="text-xs text-slate-500">
-                Taxa
-              </p>
-              <p
-                id="resultFee"
-                class="text-xl font-bold mt-1"
-              >
-                R$ 0,00
-              </p>
-            </div>
-
-            <div class="bg-slate-950 rounded-xl p-4">
-              <p class="text-xs text-slate-500">
-                Frete
-              </p>
-              <p
-                id="resultShipping"
-                class="text-xl font-bold mt-1"
-              >
-                R$ 0,00
-              </p>
-            </div>
-
-            <div class="bg-slate-950 rounded-xl p-4">
-              <p class="text-xs text-slate-500">
-                Custo
-              </p>
-              <p
-                id="resultCost"
-                class="text-xl font-bold mt-1"
-              >
-                R$ 0,00
-              </p>
-            </div>
-
-            <div class="bg-slate-950 rounded-xl p-4">
-              <p class="text-xs text-slate-500">
-                Resultado
-              </p>
-              <p
-                id="resultProfit"
-                class="text-xl font-black mt-1"
-              >
-                R$ 0,00
-              </p>
-            </div>
-
-            <div class="bg-slate-950 rounded-xl p-4 sm:col-span-2">
-              <p class="text-xs text-slate-500">
-                Margem
-              </p>
-              <p
-                id="resultMargin"
-                class="text-2xl font-black mt-1"
-              >
-                0%
-              </p>
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- =================================================
-           PREÇOS
-      ================================================== -->
-
-      <div
-        id="tabContentPrecos"
-        class="hidden"
-      >
-
-        <div
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-6"
-        >
-
-          <h3 class="text-xl font-black">
-            Atualização de preços
-          </h3>
-
-          <p class="text-sm text-slate-400 mt-1 mb-6">
-            Altere o preço de um anúncio ou vários anúncios.
-          </p>
-
-          <div
-            class="grid md:grid-cols-3 gap-4"
-          >
-
-            <div>
-              <label class="text-sm text-slate-400">
-                ID do anúncio
-              </label>
-
-              <input
-                id="priceItemId"
-                type="text"
-                placeholder="MLB123456789"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-            <div>
-              <label class="text-sm text-slate-400">
-                Novo preço
-              </label>
-
-              <input
-                id="priceValue"
-                type="number"
-                step="0.01"
-                placeholder="99.90"
-                class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3"
-              >
-            </div>
-
-            <div class="flex items-end">
-              <button
-                onclick="updatePrice()"
-                class="w-full bg-[#FFE600] text-slate-950 font-black px-5 py-3 rounded-xl"
-              >
-                Atualizar preço
-              </button>
-            </div>
-
-          </div>
-
-          <div
-            id="priceMessage"
-            class="hidden mt-5 rounded-xl p-4 text-sm"
-          ></div>
-
-          <div
-            class="mt-8 border-t border-slate-800 pt-6"
-          >
-
-            <h4 class="font-bold">
-              Atualização em massa
-            </h4>
-
-            <p class="text-sm text-slate-400 mt-1">
-              Use o formato: ID, preço. Um por linha.
-            </p>
-
-            <textarea
-              id="bulkPrices"
-              rows="7"
-              placeholder="MLB123456789, 99.90&#10;MLB987654321, 119.90"
-              class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm"
-            ></textarea>
-
-            <button
-              onclick="updateBulkPrices()"
-              class="mt-4 bg-slate-800 border border-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-700"
-            >
-              Atualizar preços
-            </button>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-  </main>
-
-  <!-- =====================================================
-       TOAST
+       CONEXÃO
   ====================================================== -->
 
   <div
-    id="toast"
-    class="fixed bottom-5 right-5 hidden max-w-sm bg-slate-900 border border-slate-700 shadow-2xl rounded-xl px-5 py-4 text-sm z-50"
-  ></div>
-
-<script>
-"use strict";
-
-/* =========================================================
-   CONFIG
-========================================================= */
-
-const API_URL = window.location.origin;
-
-const CALLBACK_URL =
-  `${window.location.origin}/auth/callback`;
-
-let anuncios = [];
-
-/* =========================================================
-   ELEMENTOS
-========================================================= */
-
-const homeScreen =
-  document.getElementById("homeScreen");
-
-const loginScreen =
-  document.getElementById("loginScreen");
-
-const dashboardScreen =
-  document.getElementById("dashboardScreen");
-
-const loginError =
-  document.getElementById("loginError");
-
-const loginSuccess =
-  document.getElementById("loginSuccess");
-
-/* =========================================================
-   UTILITÁRIOS
-========================================================= */
-
-function money(value) {
-  return Number(value || 0).toLocaleString(
-    "pt-BR",
-    {
-      style: "currency",
-      currency: "BRL"
-    }
-  );
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function showToast(message, type = "normal") {
-  const toast =
-    document.getElementById("toast");
-
-  toast.textContent = message;
-
-  toast.className =
-    "fixed bottom-5 right-5 max-w-sm shadow-2xl rounded-xl px-5 py-4 text-sm z-50 ";
-
-  if (type === "error") {
-    toast.className +=
-      "bg-red-950 border border-red-800 text-red-300";
-  } else if (type === "success") {
-    toast.className +=
-      "bg-green-950 border border-green-800 text-green-300";
-  } else {
-    toast.className +=
-      "bg-slate-900 border border-slate-700 text-white";
-  }
-
-  setTimeout(() => {
-    toast.classList.add("hidden");
-  }, 4000);
-}
-
-function showError(element, message) {
-  element.textContent = message;
-  element.classList.remove("hidden");
-}
-
-function hide(element) {
-  element.classList.add("hidden");
-}
-
-function show(element) {
-  element.classList.remove("hidden");
-}
-
-/* =========================================================
-   TELAS
-========================================================= */
-
-function showHome() {
-  show(homeScreen);
-  hide(loginScreen);
-  hide(dashboardScreen);
-}
-
-function showLogin() {
-  hide(homeScreen);
-  show(loginScreen);
-  hide(dashboardScreen);
-
-  document.getElementById(
-    "redirectUri"
-  ).value = CALLBACK_URL;
-
-  hide(loginError);
-  hide(loginSuccess);
-}
-
-function showDashboard() {
-  hide(homeScreen);
-  hide(loginScreen);
-  show(dashboardScreen);
-
-  updateConnectionBadge(true);
-}
-
-/* =========================================================
-   CONNECTION BADGE
-========================================================= */
-
-function updateConnectionBadge(connected) {
-  const badge =
-    document.getElementById("connectionBadge");
-
-  const dot =
-    document.getElementById("connectionDot");
-
-  const text =
-    document.getElementById("connectionText");
-
-  if (!connected) {
-    badge.classList.remove("hidden");
-
-    dot.className =
-      "w-2.5 h-2.5 rounded-full bg-red-500";
-
-    text.textContent =
-      "Desconectado";
-
-    return;
-  }
-
-  badge.classList.remove("hidden");
-
-  dot.className =
-    "w-2.5 h-2.5 rounded-full bg-green-400";
-
-  text.textContent =
-    "Mercado Livre conectado";
-}
-
-/* =========================================================
-   API
-========================================================= */
-
-async function api(path, options = {}) {
-  const response = await fetch(
-    `${API_URL}${path}`,
-    {
-      ...options,
-      headers: {
-        ...(options.body &&
-        typeof options.body !== "string"
-          ? {
-              "Content-Type":
-                "application/json"
-            }
-          : {}),
-        ...(options.headers || {})
-      }
-    }
-  );
-
-  const data = await response
-    .json()
-    .catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      data.error ||
-      `Erro HTTP ${response.status}`
-    );
-  }
-
-  return data;
-}
-
-/* =========================================================
-   STATUS
-========================================================= */
-
-async function checkAuth() {
-  try {
-    const data =
-      await api("/api/auth/status");
-
-    if (data.authenticated) {
-      showDashboard();
-
-      updateTokenInfo(data);
-
-      await loadUser();
-
-      await loadAnuncios();
-
-      return;
-    }
-
-    updateConnectionBadge(false);
-
-    showHome();
-  } catch (error) {
-    console.error(error);
-
-    updateConnectionBadge(false);
-
-    showHome();
-  }
-}
-
-function updateTokenInfo(data) {
-  const element =
-    document.getElementById("tokenInfo");
-
-  if (!data.expires_in_seconds) {
-    element.textContent =
-      "Conectado ao Mercado Livre.";
-    return;
-  }
-
-  const minutes = Math.max(
-    0,
-    Math.floor(
-      data.expires_in_seconds / 60
-    )
-  );
-
-  element.textContent =
-    `Conectado. O sistema renova o token automaticamente. Próxima validade aproximada: ${minutes} minutos.`;
-}
-
-/* =========================================================
-   CONECTAR
-========================================================= */
-
-async function connectMercadoLivre() {
-  hide(loginError);
-  hide(loginSuccess);
-
-  const button =
-    document.getElementById("connectButton");
-
-  const clientId =
-    document
-      .getElementById("clientId")
-      .value
-      .trim();
-
-  const clientSecret =
-    document
-      .getElementById("clientSecret")
-      .value
-      .trim();
-
-  const redirectUri =
-    document
-      .getElementById("redirectUri")
-      .value
-      .trim();
-
-  const accessToken =
-    document
-      .getElementById("accessToken")
-      .value
-      .trim();
-
-  if (!clientId) {
-    showError(
-      loginError,
-      "Informe o Client ID / APP ID."
-    );
-    return;
-  }
-
-  if (!clientSecret) {
-    showError(
-      loginError,
-      "Informe o Client Secret."
-    );
-    return;
-  }
-
-  if (!redirectUri) {
-    showError(
-      loginError,
-      "URL de retorno não encontrada."
-    );
-    return;
-  }
-
-  button.disabled = true;
-
-  button.textContent =
-    "Preparando conexão...";
-
-  try {
-    const data = await api(
-      "/api/auth/start",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          access_token:
-            accessToken || undefined
-        })
-      }
-    );
-
-    if (data.auth_url) {
-      /*
-        IMPORTANTE:
-        não usamos localStorage para guardar Client Secret.
-        O backend já guardou temporariamente os dados
-        necessários para concluir o OAuth.
-      */
-
-      window.location.href =
-        data.auth_url;
-
-      return;
-    }
-
-    if (data.connected) {
-      showDashboard();
-
-      await checkAuth();
-    }
-  } catch (error) {
-    console.error(error);
-
-    showError(
-      loginError,
-      error.message ||
-        "Não foi possível iniciar a conexão."
-    );
-
-    button.disabled = false;
-
-    button.textContent =
-      "Conectar minha conta";
-  }
-}
-
-/* =========================================================
-   USUÁRIO
-========================================================= */
-
-async function loadUser() {
-  try {
-    const data =
-      await api("/api/me");
-
-    const userInfo =
-      document.getElementById(
-        "userInfo"
-      );
-
-    const name =
-      data.nickname ||
-      data.first_name ||
-      data.email ||
-      `Usuário ${data.id}`;
-
-    userInfo.innerHTML =
-      `Conta: <strong>${escapeHtml(
-        name
-      )}</strong>`;
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-/* =========================================================
-   ANÚNCIOS
-========================================================= */
-
-async function loadAnuncios() {
-  const loading =
-    document.getElementById(
-      "loadingAnuncios"
-    );
-
-  const empty =
-    document.getElementById(
-      "anunciosEmpty"
-    );
-
-  show(loading);
-
-  hide(empty);
-
-  try {
-    const data =
-      await api("/api/anuncios");
-
-    anuncios =
-      Array.isArray(data.anuncios)
-        ? data.anuncios
-        : [];
-
-    updateStats();
-
-    renderAnuncios();
-
-    showToast(
-      `${anuncios.length} anúncio(s) carregado(s).`,
-      "success"
-    );
-  } catch (error) {
-    console.error(error);
-
-    if (
-      error.message.includes(
-        "Não conectado"
-      )
-    ) {
-      showHome();
-    }
-
-    showToast(
-      error.message ||
-        "Erro ao carregar anúncios.",
-      "error"
-    );
-  } finally {
-    hide(loading);
-  }
-}
-
-function updateStats() {
-  const total =
-    anuncios.length;
-
-  const active =
-    anuncios.filter(
-      (item) =>
-        item.status === "active"
-    ).length;
-
-  const stock =
-    anuncios.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.available_quantity || 0
-        ),
-      0
-    );
-
-  const sold =
-    anuncios.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.sold_quantity || 0
-        ),
-      0
-    );
-
-  document.getElementById(
-    "statTotal"
-  ).textContent = total;
-
-  document.getElementById(
-    "statActive"
-  ).textContent = active;
-
-  document.getElementById(
-    "statStock"
-  ).textContent = stock;
-
-  document.getElementById(
-    "statSold"
-  ).textContent = sold;
-}
-
-function renderAnuncios() {
-  const table =
-    document.getElementById(
-      "anunciosTable"
-    );
-
-  const empty =
-    document.getElementById(
-      "anunciosEmpty"
-    );
-
-  const search =
-    document.getElementById(
-      "searchInput"
-    )
-      .value
-      .toLowerCase()
-      .trim();
-
-  const filtered =
-    anuncios.filter(
-      (item) =>
-        String(item.id || "")
-          .toLowerCase()
-          .includes(search) ||
-        String(item.title || "")
-          .toLowerCase()
-          .includes(search)
-    );
-
-  table.innerHTML = "";
-
-  if (!filtered.length) {
-    show(empty);
-    return;
-  }
-
-  hide(empty);
-
-  for (const item of filtered) {
-    const tr =
-      document.createElement("tr");
-
-    tr.className =
-      "border-t border-slate-800 hover:bg-slate-800/50";
-
-    const image =
-      item.thumbnail
-        ? `<img src="${escapeHtml(
-            item.thumbnail
-          )}" class="w-12 h-12 object-cover rounded-lg bg-slate-800">`
-        : `<div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">📦</div>`;
-
-    const status =
-      item.status === "active"
-        ? `<span class="text-green-400">Ativo</span>`
-        : `<span class="text-slate-400">${escapeHtml(
-            item.status || "-"
-          )}</span>`;
-
-    const shipping =
-      item.free_shipping
-        ? `<span class="text-green-400">Grátis</span>`
-        : `<span class="text-slate-400">Normal</span>`;
-
-    tr.innerHTML = `
-      <td class="p-4">
-        <div class="flex items-center gap-3 min-w-[280px]">
-          ${image}
+    id="loginScreen"
+    class="min-h-screen flex items-center justify-center p-4"
+  >
+
+    <div
+      class="bg-white w-full max-w-md rounded-2xl shadow-xl p-8"
+    >
+
+      <div class="text-center mb-8">
+
+        <div
+          class="inline-flex items-center justify-center
+                 w-16 h-16 rounded-2xl
+                 bg-yellow-400 mb-4"
+        >
+          <span class="text-3xl">🛒</span>
+        </div>
+
+        <h1
+          class="text-3xl font-bold text-gray-900"
+        >
+          ML Hub Pro
+        </h1>
+
+        <p
+          class="text-gray-500 mt-2"
+        >
+          Gerenciamento do Mercado Livre
+        </p>
+
+      </div>
+
+      <div class="mb-5">
+
+        <label
+          class="block text-sm font-semibold
+                 text-gray-700 mb-2"
+        >
+          Access Token
+        </label>
+
+        <textarea
+          id="accessToken"
+          rows="5"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Cole aqui o Access Token do Mercado Livre"
+          class="w-full border border-gray-300
+                 rounded-xl px-4 py-3
+                 focus:outline-none
+                 focus:ring-2
+                 focus:ring-yellow-400
+                 resize-none"
+        ></textarea>
+
+        <p
+          class="text-xs text-gray-500 mt-2"
+        >
+          O token será usado para validar e acessar sua conta.
+        </p>
+
+      </div>
+
+      <button
+        id="connectButton"
+        onclick="connect()"
+        class="w-full bg-yellow-400
+               hover:bg-yellow-500
+               text-gray-900
+               font-bold
+               py-3
+               rounded-xl
+               transition"
+      >
+        Conectar Mercado Livre
+      </button>
+
+      <div
+        id="loginMessage"
+        class="mt-4 text-sm text-center hidden"
+      ></div>
+
+    </div>
+
+  </div>
+
+  <!-- =====================================================
+       PAINEL
+  ====================================================== -->
+
+  <div
+    id="dashboard"
+    class="hidden min-h-screen"
+  >
+
+    <!-- HEADER -->
+
+    <header
+      class="bg-gray-900 text-white shadow-lg"
+    >
+
+      <div
+        class="max-w-7xl mx-auto
+               px-4 py-4
+               flex items-center
+               justify-between"
+      >
+
+        <div>
+
+          <h1
+            class="text-xl md:text-2xl
+                   font-bold"
+          >
+            ML Hub Pro
+          </h1>
+
+          <p
+            id="accountName"
+            class="text-sm text-gray-400"
+          >
+            Mercado Livre conectado
+          </p>
+
+        </div>
+
+        <button
+          onclick="disconnect()"
+          class="bg-red-500
+                 hover:bg-red-600
+                 px-4 py-2
+                 rounded-lg
+                 text-sm
+                 font-semibold"
+        >
+          Desconectar
+        </button>
+
+      </div>
+
+    </header>
+
+    <!-- CONTEÚDO -->
+
+    <main
+      class="max-w-7xl mx-auto
+             px-4 py-6"
+    >
+
+      <!-- STATUS -->
+
+      <div
+        id="successBox"
+        class="bg-green-50
+               border border-green-200
+               rounded-xl
+               p-4
+               mb-6
+               text-green-800"
+      >
+        <strong>✓ Mercado Livre conectado</strong>
+        <div
+          id="accountInfo"
+          class="text-sm mt-1"
+        ></div>
+      </div>
+
+      <!-- AÇÕES -->
+
+      <div
+        class="grid grid-cols-1
+               sm:grid-cols-2
+               lg:grid-cols-4
+               gap-4
+               mb-6"
+      >
+
+        <button
+          onclick="loadAnuncios()"
+          class="bg-white
+                 hover:bg-gray-50
+                 rounded-xl
+                 shadow
+                 p-5
+                 text-left"
+        >
+
+          <div class="text-2xl mb-2">
+            📦
+          </div>
+
+          <div class="font-bold text-gray-900">
+            Carregar anúncios
+          </div>
+
+          <div class="text-sm text-gray-500">
+            Buscar produtos da conta
+          </div>
+
+        </button>
+
+        <button
+          onclick="checkConnection()"
+          class="bg-white
+                 hover:bg-gray-50
+                 rounded-xl
+                 shadow
+                 p-5
+                 text-left"
+        >
+
+          <div class="text-2xl mb-2">
+            🔄
+          </div>
+
+          <div class="font-bold text-gray-900">
+            Verificar conexão
+          </div>
+
+          <div class="text-sm text-gray-500">
+            Testar Access Token
+          </div>
+
+        </button>
+
+        <button
+          onclick="showSimulator()"
+          class="bg-white
+                 hover:bg-gray-50
+                 rounded-xl
+                 shadow
+                 p-5
+                 text-left"
+        >
+
+          <div class="text-2xl mb-2">
+            🧮
+          </div>
+
+          <div class="font-bold text-gray-900">
+            Simulador
+          </div>
+
+          <div class="text-sm text-gray-500">
+            Calcular margem
+          </div>
+
+        </button>
+
+        <button
+          onclick="location.reload()"
+          class="bg-white
+                 hover:bg-gray-50
+                 rounded-xl
+                 shadow
+                 p-5
+                 text-left"
+        >
+
+          <div class="text-2xl mb-2">
+            🔃
+          </div>
+
+          <div class="font-bold text-gray-900">
+            Atualizar
+          </div>
+
+          <div class="text-sm text-gray-500">
+            Recarregar painel
+          </div>
+
+        </button>
+
+      </div>
+
+      <!-- LISTA DE ANÚNCIOS -->
+
+      <div
+        class="bg-white
+               rounded-2xl
+               shadow
+               overflow-hidden"
+      >
+
+        <div
+          class="p-5
+                 border-b
+                 flex items-center
+                 justify-between"
+        >
 
           <div>
-            <div class="font-semibold">
-              ${escapeHtml(
-                item.title || "Sem título"
-              )}
-            </div>
 
-            <div class="text-xs text-slate-500 mt-1">
-              ${escapeHtml(item.id || "")}
-            </div>
+            <h2
+              class="text-xl
+                     font-bold
+                     text-gray-900"
+            >
+              Anúncios
+            </h2>
+
+            <p
+              id="totalAnuncios"
+              class="text-sm
+                     text-gray-500"
+            >
+              Nenhum anúncio carregado
+            </p>
+
           </div>
+
+          <button
+            onclick="loadAnuncios()"
+            class="bg-yellow-400
+                   hover:bg-yellow-500
+                   px-4 py-2
+                   rounded-lg
+                   font-semibold"
+          >
+            Carregar
+          </button>
+
         </div>
-      </td>
 
-      <td class="p-4 font-bold">
-        ${money(item.price)}
-      </td>
+        <div
+          id="loadingAnuncios"
+          class="hidden p-8 text-center text-gray-500"
+        >
+          Carregando anúncios...
+        </div>
 
-      <td class="p-4">
-        ${Number(
-          item.available_quantity || 0
-        )}
-      </td>
+        <div
+          id="emptyAnuncios"
+          class="p-8 text-center text-gray-500"
+        >
+          Clique em "Carregar anúncios".
+        </div>
 
-      <td class="p-4">
-        ${Number(
-          item.sold_quantity || 0
-        )}
-      </td>
+        <div
+          id="anunciosContainer"
+          class="hidden overflow-x-auto"
+        >
 
-      <td class="p-4">
-        ${shipping}
-      </td>
+          <table
+            class="w-full text-sm"
+          >
 
-      <td class="p-4">
-        ${status}
-      </td>
-    `;
+            <thead
+              class="bg-gray-50
+                     border-b"
+            >
 
-    table.appendChild(tr);
-  }
-}
+              <tr>
 
-/* =========================================================
-   TABS
-========================================================= */
+                <th class="text-left p-4">
+                  ID
+                </th>
 
-function openTab(tab) {
-  const contents = [
-    "tabContentAnuncios",
-    "tabContentSimulacao",
-    "tabContentPrecos"
-  ];
+                <th class="text-left p-4">
+                  Produto
+                </th>
 
-  const buttons = [
-    "tabAnuncios",
-    "tabSimulacao",
-    "tabPrecos"
-  ];
+                <th class="text-left p-4">
+                  Preço
+                </th>
 
-  contents.forEach(
-    (id) =>
-      document
-        .getElementById(id)
-        .classList.add("hidden")
-  );
+                <th class="text-left p-4">
+                  Estoque
+                </th>
 
-  buttons.forEach((id) => {
-    const button =
-      document.getElementById(id);
+                <th class="text-left p-4">
+                  Ação
+                </th>
 
-    button.className =
-      "tabButton bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-sm font-bold";
-  });
+              </tr>
 
-  if (tab === "anuncios") {
-    show(
-      document.getElementById(
-        "tabContentAnuncios"
-      )
-    );
+            </thead>
 
-    document.getElementById(
-      "tabAnuncios"
-    ).className =
-      "tabButton bg-[#FFE600] text-slate-950 px-4 py-2 rounded-xl text-sm font-bold";
-  }
+            <tbody
+              id="anunciosBody"
+            ></tbody>
 
-  if (tab === "simulacao") {
-    show(
-      document.getElementById(
-        "tabContentSimulacao"
-      )
-    );
+          </table>
 
-    document.getElementById(
-      "tabSimulacao"
-    ).className =
-      "tabButton bg-[#FFE600] text-slate-950 px-4 py-2 rounded-xl text-sm font-bold";
-  }
+        </div>
 
-  if (tab === "precos") {
-    show(
-      document.getElementById(
-        "tabContentPrecos"
-      )
-    );
+      </div>
 
-    document.getElementById(
-      "tabPrecos"
-    ).className =
-      "tabButton bg-[#FFE600] text-slate-950 px-4 py-2 rounded-xl text-sm font-bold";
-  }
-}
+      <!-- SIMULADOR -->
 
-/* =========================================================
-   SIMULAÇÃO
-========================================================= */
+      <div
+        id="simulator"
+        class="hidden
+               bg-white
+               rounded-2xl
+               shadow
+               p-6
+               mt-6"
+      >
 
-async function simulate() {
-  const price =
-    Number(
-      document.getElementById(
-        "simPrice"
-      ).value
-    );
+        <h2
+          class="text-xl
+                 font-bold
+                 mb-5"
+        >
+          Simulador de margem
+        </h2>
 
-  const fee =
-    Number(
-      document.getElementById(
-        "simFee"
-      ).value
-    );
+        <div
+          class="grid grid-cols-1
+                 md:grid-cols-3
+                 gap-4"
+        >
 
-  const shipping =
-    Number(
-      document.getElementById(
-        "simShipping"
-      ).value
-    );
+          <div>
 
-  const cost =
-    Number(
-      document.getElementById(
-        "simCost"
-      ).value
-    );
+            <label
+              class="block text-sm
+                     font-semibold
+                     mb-2"
+            >
+              Preço de venda
+            </label>
 
-  try {
-    const data =
-      await api("/api/simular", {
-        method: "POST",
-        body: JSON.stringify({
-          price,
-          fee_percent: fee,
-          shipping,
-          cost
-        })
-      });
+            <input
+              id="simPreco"
+              type="number"
+              step="0.01"
+              class="w-full border
+                     rounded-lg
+                     px-3 py-2"
+              placeholder="0,00"
+            >
 
-    document.getElementById(
-      "resultFee"
-    ).textContent =
-      money(data.fee);
+          </div>
 
-    document.getElementById(
-      "resultShipping"
-    ).textContent =
-      money(data.shipping);
+          <div>
 
-    document.getElementById(
-      "resultCost"
-    ).textContent =
-      money(data.cost);
+            <label
+              class="block text-sm
+                     font-semibold
+                     mb-2"
+            >
+              Custo
+            </label>
 
-    document.getElementById(
-      "resultProfit"
-    ).textContent =
-      money(data.profit);
+            <input
+              id="simCusto"
+              type="number"
+              step="0.01"
+              class="w-full border
+                     rounded-lg
+                     px-3 py-2"
+              placeholder="0,00"
+            >
 
-    document.getElementById(
-      "resultMargin"
-    ).textContent =
-      `${Number(
-        data.margin || 0
-      ).toFixed(2)}%`;
+          </div>
 
-    show(
-      document.getElementById(
-        "simulationResult"
-      )
-    );
-  } catch (error) {
-    showToast(
-      error.message,
-      "error"
-    );
-  }
-}
+          <div>
 
-/* =========================================================
-   ATUALIZAR PREÇO
-========================================================= */
+            <label
+              class="block text-sm
+                     font-semibold
+                     mb-2"
+            >
+              Frete
+            </label>
 
-async function updatePrice() {
-  const id =
-    document.getElementById(
-      "priceItemId"
-    ).value.trim();
+            <input
+              id="simFrete"
+              type="number"
+              step="0.01"
+              class="w-full border
+                     rounded-lg
+                     px-3 py-2"
+              placeholder="0,00"
+            >
 
-  const price =
-    Number(
-      document.getElementById(
-        "priceValue"
-      ).value
-    );
+          </div>
 
-  const message =
-    document.getElementById(
-      "priceMessage"
-    );
+        </div>
 
-  try {
-    const data =
-      await api(
-        "/api/atualizar-preco",
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            id,
-            price
-          })
-        }
-      );
+        <button
+          onclick="simulate()"
+          class="mt-5
+                 bg-gray-900
+                 hover:bg-gray-800
+                 text-white
+                 px-5 py-3
+                 rounded-lg
+                 font-semibold"
+        >
+          Calcular
+        </button>
 
-    message.className =
-      "mt-5 rounded-xl p-4 text-sm bg-green-950/50 border border-green-800 text-green-300";
+        <div
+          id="simulationResult"
+          class="mt-5 hidden"
+        ></div>
 
-    message.textContent =
-      "Preço atualizado com sucesso.";
+      </div>
 
-    show(message);
+    </main>
 
-    await loadAnuncios();
-  } catch (error) {
-    message.className =
-      "mt-5 rounded-xl p-4 text-sm bg-red-950/50 border border-red-800 text-red-300";
+  </div>
 
-    message.textContent =
-      error.message;
+  <script>
 
-    show(message);
-  }
-}
+    /* =====================================================
+       ESTADO
+    ====================================================== */
 
-/* =========================================================
-   ATUALIZAÇÃO EM MASSA
-========================================================= */
+    let token = "";
 
-async function updateBulkPrices() {
-  const text =
-    document.getElementById(
-      "bulkPrices"
-    ).value;
+    let anuncios = [];
 
-  const lines =
-    text
-      .split("\n")
-      .map(
-        (line) =>
-          line.trim()
-      )
-      .filter(Boolean);
+    /* =====================================================
+       ELEMENTOS
+    ====================================================== */
 
-  const items = [];
+    const loginScreen =
+      document.getElementById("loginScreen");
 
-  for (const line of lines) {
-    const parts =
-      line.split(",");
+    const dashboard =
+      document.getElementById("dashboard");
 
-    if (parts.length < 2) {
-      continue;
-    }
+    const loginMessage =
+      document.getElementById("loginMessage");
 
-    const id =
-      parts[0].trim();
+    const accessTokenInput =
+      document.getElementById("accessToken");
 
-    const price =
-      Number(
-        parts[1].trim()
-      );
+    /* =====================================================
+       MENSAGEM
+    ====================================================== */
 
-    if (
-      id &&
-      Number.isFinite(price) &&
-      price > 0
+    function showLoginMessage(
+      message,
+      type = "error"
     ) {
-      items.push({
-        id,
-        price
-      });
-    }
-  }
-
-  if (!items.length) {
-    showToast(
-      "Nenhum preço válido foi encontrado.",
-      "error"
-    );
-
-    return;
-  }
-
-  try {
-    const data =
-      await api(
-        "/api/atualizar-precos",
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            items
-          })
-        }
+      loginMessage.classList.remove(
+        "hidden",
+        "text-red-600",
+        "text-green-600"
       );
 
-    showToast(
-      `${data.sucesso} atualizado(s) e ${data.erros} erro(s).`,
-      data.erros
-        ? "normal"
-        : "success"
-    );
+      loginMessage.classList.add(
+        type === "success"
+          ? "text-green-600"
+          : "text-red-600"
+      );
 
-    await loadAnuncios();
-  } catch (error) {
-    showToast(
-      error.message,
-      "error"
-    );
-  }
-}
+      loginMessage.textContent = message;
+    }
 
-/* =========================================================
-   LOGOUT
-========================================================= */
+    /* =====================================================
+       CONECTAR
+    ====================================================== */
 
-async function logout() {
-  try {
-    await api(
-      "/api/auth/logout",
-      {
-        method: "POST"
+    async function connect() {
+
+      const button =
+        document.getElementById(
+          "connectButton"
+        );
+
+      const value =
+        accessTokenInput.value.trim();
+
+      if (!value) {
+        showLoginMessage(
+          "Cole o Access Token antes de conectar."
+        );
+
+        return;
       }
-    );
-  } catch (error) {
-    console.error(error);
-  }
 
-  anuncios = [];
+      button.disabled = true;
 
-  updateConnectionBadge(false);
+      button.textContent =
+        "Conectando...";
 
-  showHome();
-
-  showToast(
-    "Conta desconectada."
-  );
-}
-
-/* =========================================================
-   RESULTADO DO OAUTH
-========================================================= */
-
-function handleOAuthResult() {
-  const params =
-    new URLSearchParams(
-      window.location.search
-    );
-
-  const result =
-    params.get("oauth");
-
-  const message =
-    params.get("message");
-
-  if (result === "success") {
-    window.history.replaceState(
-      {},
-      document.title,
-      window.location.pathname
-    );
-
-    showDashboard();
-
-    showToast(
-      "Mercado Livre conectado com sucesso!",
-      "success"
-    );
-
-    checkAuth();
-
-    return true;
-  }
-
-  if (result === "error") {
-    window.history.replaceState(
-      {},
-      document.title,
-      window.location.pathname
-    );
-
-    showLogin();
-
-    showError(
-      loginError,
-      message ||
-        "Não foi possível conectar ao Mercado Livre."
-    );
-
-    return true;
-  }
-
-  return false;
-}
-
-/* =========================================================
-   INICIALIZAÇÃO
-========================================================= */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  async () => {
-
-    document.getElementById(
-      "redirectUri"
-    ).value = CALLBACK_URL;
-
-    /*
-      Se alguém abrir index.html diretamente pelo computador,
-      o OAuth não pode funcionar corretamente.
-    */
-
-    if (
-      window.location.protocol ===
-      "file:"
-    ) {
-      showLogin();
-
-      showError(
-        loginError,
-        "Abra o endereço do seu site no Render. Não abra o index.html diretamente pelo computador."
+      loginMessage.classList.add(
+        "hidden"
       );
 
-      return;
+      try {
+
+        const response =
+          await fetch(
+            "/api/connect",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+              body: JSON.stringify({
+                access_token: value
+              })
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data.ok) {
+
+          throw new Error(
+            data.error ||
+            "Não foi possível conectar."
+          );
+        }
+
+        token = value;
+
+        showDashboard(
+          data.user
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        showLoginMessage(
+          error.message
+        );
+
+      } finally {
+
+        button.disabled = false;
+
+        button.textContent =
+          "Conectar Mercado Livre";
+      }
     }
 
-    if (handleOAuthResult()) {
-      return;
+    /* =====================================================
+       MOSTRAR PAINEL
+    ====================================================== */
+
+    function showDashboard(user) {
+
+      loginScreen.classList.add(
+        "hidden"
+      );
+
+      dashboard.classList.remove(
+        "hidden"
+      );
+
+      const name =
+        user?.nickname ||
+        user?.first_name ||
+        user?.email ||
+        "Conta Mercado Livre";
+
+      document.getElementById(
+        "accountName"
+      ).textContent = name;
+
+      document.getElementById(
+        "accountInfo"
+      ).textContent =
+        `ID da conta: ${user?.id || "-"}`;
     }
 
-    await checkAuth();
-  }
-);
-</script>
+    /* =====================================================
+       VERIFICAR CONEXÃO
+    ====================================================== */
+
+    async function checkConnection() {
+
+      try {
+
+        const response =
+          await fetch(
+            "/api/status"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          data.ok &&
+          data.connected
+        ) {
+
+          showDashboard(
+            data.user
+          );
+
+          alert(
+            "✓ Conexão funcionando normalmente."
+          );
+
+          return;
+        }
+
+        alert(
+          data.error ||
+          "Token inválido ou conexão perdida."
+        );
+
+      } catch (error) {
+
+        alert(
+          "Erro ao verificar conexão: " +
+          error.message
+        );
+      }
+    }
+
+    /* =====================================================
+       CARREGAR ANÚNCIOS
+    ====================================================== */
+
+    async function loadAnuncios() {
+
+      const loading =
+        document.getElementById(
+          "loadingAnuncios"
+        );
+
+      const empty =
+        document.getElementById(
+          "emptyAnuncios"
+        );
+
+      const container =
+        document.getElementById(
+          "anunciosContainer"
+        );
+
+      const body =
+        document.getElementById(
+          "anunciosBody"
+        );
+
+      loading.classList.remove(
+        "hidden"
+      );
+
+      empty.classList.add(
+        "hidden"
+      );
+
+      container.classList.add(
+        "hidden"
+      );
+
+      body.innerHTML = "";
+
+      try {
+
+        const headers = {};
+
+        if (token) {
+          headers.Authorization =
+            `Bearer ${token}`;
+        }
+
+        const response =
+          await fetch(
+            "/api/anuncios",
+            {
+              headers
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data.ok) {
+
+          throw new Error(
+            data.error ||
+            "Erro ao carregar anúncios."
+          );
+        }
+
+        anuncios =
+          data.anuncios || [];
+
+        document.getElementById(
+          "totalAnuncios"
+        ).textContent =
+          `${anuncios.length} anúncio(s) encontrado(s)`;
+
+        if (!anuncios.length) {
+
+          empty.textContent =
+            "Nenhum anúncio encontrado.";
+
+          empty.classList.remove(
+            "hidden"
+          );
+
+          return;
+        }
+
+        anuncios.forEach(
+          (anuncio, index) => {
+
+            const row =
+              document.createElement(
+                "tr"
+              );
+
+            row.className =
+              "border-b hover:bg-gray-50";
+
+            const title =
+              escapeHtml(
+                anuncio.title ||
+                "Sem título"
+              );
+
+            const id =
+              escapeHtml(
+                anuncio.id ||
+                ""
+              );
+
+            const price =
+              Number(
+                anuncio.price || 0
+              );
+
+            const stock =
+              Number(
+                anuncio.available_quantity ||
+                0
+              );
+
+            row.innerHTML = `
+
+              <td class="p-4 font-mono text-xs">
+                ${id}
+              </td>
+
+              <td class="p-4">
+                <div class="font-semibold">
+                  ${title}
+                </div>
+
+                <div class="text-xs text-gray-400">
+                  ${escapeHtml(
+                    anuncio.status || ""
+                  )}
+                </div>
+              </td>
+
+              <td class="p-4">
+                <input
+                  id="price-${index}"
+                  type="number"
+                  step="0.01"
+                  value="${price.toFixed(2)}"
+                  class="w-28 border
+                         rounded-lg
+                         px-2 py-1"
+                >
+              </td>
+
+              <td class="p-4">
+                ${stock}
+              </td>
+
+              <td class="p-4">
+
+                <button
+                  onclick="updatePrice(${index})"
+                  class="bg-gray-900
+                         hover:bg-gray-800
+                         text-white
+                         px-3 py-2
+                         rounded-lg
+                         text-xs
+                         font-semibold"
+                >
+                  Salvar preço
+                </button>
+
+              </td>
+            `;
+
+            body.appendChild(
+              row
+            );
+          }
+        );
+
+        container.classList.remove(
+          "hidden"
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        empty.textContent =
+          error.message;
+
+        empty.classList.remove(
+          "hidden"
+        );
+
+      } finally {
+
+        loading.classList.add(
+          "hidden"
+        );
+      }
+    }
+
+    /* =====================================================
+       ATUALIZAR PREÇO
+    ====================================================== */
+
+    async function updatePrice(index) {
+
+      const anuncio =
+        anuncios[index];
+
+      if (!anuncio) {
+        return;
+      }
+
+      const input =
+        document.getElementById(
+          `price-${index}`
+        );
+
+      const price =
+        Number(input.value);
+
+      if (
+        !Number.isFinite(price) ||
+        price <= 0
+      ) {
+
+        alert(
+          "Informe um preço válido."
+        );
+
+        return;
+      }
+
+      try {
+
+        const headers = {
+          "Content-Type":
+            "application/json"
+        };
+
+        if (token) {
+          headers.Authorization =
+            `Bearer ${token}`;
+        }
+
+        const response =
+          await fetch(
+            "/api/atualizar-preco",
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                item_id: anuncio.id,
+                price
+              })
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data.ok) {
+
+          throw new Error(
+            data.error ||
+            data.data?.message ||
+            "Erro ao atualizar preço."
+          );
+        }
+
+        anuncio.price =
+          price;
+
+        alert(
+          "✓ Preço atualizado com sucesso."
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        alert(
+          "Erro: " +
+          error.message
+        );
+      }
+    }
+
+    /* =====================================================
+       SIMULADOR
+    ====================================================== */
+
+    function showSimulator() {
+
+      const simulator =
+        document.getElementById(
+          "simulator"
+        );
+
+      simulator.classList.toggle(
+        "hidden"
+      );
+
+      if (
+        !simulator.classList.contains(
+          "hidden"
+        )
+      ) {
+        simulator.scrollIntoView({
+          behavior: "smooth"
+        });
+      }
+    }
+
+    async function simulate() {
+
+      const preco =
+        Number(
+          document.getElementById(
+            "simPreco"
+          ).value
+        ) || 0;
+
+      const custo =
+        Number(
+          document.getElementById(
+            "simCusto"
+          ).value
+        ) || 0;
+
+      const frete =
+        Number(
+          document.getElementById(
+            "simFrete"
+          ).value
+        ) || 0;
+
+      try {
+
+        const response =
+          await fetch(
+            "/api/simular",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+              body: JSON.stringify({
+                preco,
+                custo,
+                frete
+              })
+            }
+          );
+
+        const data =
+          await response.json();
+
+        const result =
+          document.getElementById(
+            "simulationResult"
+          );
+
+        result.classList.remove(
+          "hidden"
+        );
+
+        result.innerHTML = `
+
+          <div
+            class="bg-gray-50
+                   rounded-xl
+                   p-5"
+          >
+
+            <div
+              class="grid
+                     grid-cols-1
+                     md:grid-cols-2
+                     gap-4"
+            >
+
+              <div>
+                <div
+                  class="text-sm
+                         text-gray-500"
+                >
+                  Lucro
+                </div>
+
+                <div
+                  class="text-2xl
+                         font-bold"
+                >
+                  ${formatMoney(
+                    data.lucro
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div
+                  class="text-sm
+                         text-gray-500"
+                >
+                  Margem
+                </div>
+
+                <div
+                  class="text-2xl
+                         font-bold"
+                >
+                  ${Number(
+                    data.margem || 0
+                  ).toFixed(2)}%
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        `;
+
+      } catch (error) {
+
+        alert(
+          "Erro no simulador: " +
+          error.message
+        );
+      }
+    }
+
+    /* =====================================================
+       DESCONECTAR
+    ====================================================== */
+
+    async function disconnect() {
+
+      try {
+
+        await fetch(
+          "/api/disconnect",
+          {
+            method: "POST"
+          }
+        );
+
+      } catch (error) {
+        console.error(error);
+      }
+
+      token = "";
+
+      dashboard.classList.add(
+        "hidden"
+      );
+
+      loginScreen.classList.remove(
+        "hidden"
+      );
+
+      accessTokenInput.value = "";
+
+      document.getElementById(
+        "anunciosBody"
+      ).innerHTML = "";
+
+      document.getElementById(
+        "anunciosContainer"
+      ).classList.add(
+        "hidden"
+      );
+
+      document.getElementById(
+        "emptyAnuncios"
+      ).classList.remove(
+        "hidden"
+      );
+    }
+
+    /* =====================================================
+       FORMATAÇÃO
+    ====================================================== */
+
+    function formatMoney(value) {
+
+      return Number(
+        value || 0
+      ).toLocaleString(
+        "pt-BR",
+        {
+          style: "currency",
+          currency: "BRL"
+        }
+      );
+    }
+
+    function escapeHtml(value) {
+
+      return String(
+        value ?? ""
+      )
+        .replace(
+          /&/g,
+          "&amp;"
+        )
+        .replace(
+          /</g,
+          "&lt;"
+        )
+        .replace(
+          />/g,
+          "&gt;"
+        )
+        .replace(
+          /"/g,
+          "&quot;"
+        )
+        .replace(
+          /'/g,
+          "&#039;"
+        );
+    }
+
+    /* =====================================================
+       INICIALIZAÇÃO
+    ====================================================== */
+
+    async function init() {
+
+      try {
+
+        const response =
+          await fetch(
+            "/api/status"
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          data.ok &&
+          data.connected
+        ) {
+
+          showDashboard(
+            data.user
+          );
+        }
+
+      } catch (error) {
+
+        console.error(
+          "Erro inicial:",
+          error
+        );
+      }
+    }
+
+    init();
+
+  </script>
 
 </body>
 </html>
