@@ -6,76 +6,37 @@ const crypto = require("crypto");
 
 const app = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+    process.env.PORT || 3000;
 
-const FRONTEND_URL =
+
+/* =========================================================
+   CONFIGURAÇÃO
+   ========================================================= */
+
+const SITE_URL =
+    process.env.SITE_URL ||
     "https://site-atualizar-pre-o-ml.onrender.com";
 
-const ML_API =
+
+const MERCADO_LIVRE_API =
     "https://api.mercadolibre.com";
 
-const ML_AUTH_URL =
+
+const MERCADO_LIVRE_AUTH =
     "https://auth.mercadolivre.com.br/authorization";
 
-const ML_TOKEN_URL =
+
+const MERCADO_LIVRE_TOKEN =
     "https://api.mercadolibre.com/oauth/token";
 
-
-/* =========================================================
-   MIDDLEWARE
-   ========================================================= */
-
-app.use(
-    cors({
-        origin: FRONTEND_URL,
-        credentials: true
-    })
-);
-
-app.use(
-    express.json({
-        limit: "2mb"
-    })
-);
-
-
-/* =========================================================
-   NODE FETCH
-   ========================================================= */
-
-let fetchFn;
-
-async function getFetch() {
-
-    if (!fetchFn) {
-
-        if (typeof fetch === "function") {
-
-            fetchFn = fetch;
-
-        } else {
-
-            const modulo =
-                await import("node-fetch");
-
-            fetchFn =
-                modulo.default;
-        }
-    }
-
-    return fetchFn;
-}
-
-
-/* =========================================================
-   ARMAZENAMENTO
-   ========================================================= */
 
 const AUTH_FILE =
     path.join(
         __dirname,
         ".ml-auth.enc"
     );
+
 
 const KEY_FILE =
     path.join(
@@ -84,27 +45,157 @@ const KEY_FILE =
     );
 
 
+const INDEX_FILE =
+    path.join(
+        __dirname,
+        "index.html"
+    );
+
+
+/* =========================================================
+   MIDDLEWARE
+   ========================================================= */
+
+app.use(
+    express.json({
+        limit: "2mb"
+    })
+);
+
+
+app.use(
+    express.urlencoded({
+        extended: true
+    })
+);
+
+
+/*
+ * O próprio Render vai servir o index.html.
+ * Isso evita o problema de CORS quando o frontend
+ * e a API estão em endereços diferentes.
+ */
+
+app.use(
+    express.static(
+        __dirname
+    )
+);
+
+
+/*
+ * CORS fica habilitado também para o domínio do projeto.
+ */
+
+app.use(
+    cors({
+        origin: [
+            SITE_URL,
+            "https://www.mercadolivre.com.br"
+        ],
+
+        credentials: true
+    })
+);
+
+
+/* =========================================================
+   FETCH
+   ========================================================= */
+
+let fetchFunction = null;
+
+
+async function getFetch() {
+
+    if (fetchFunction) {
+
+        return fetchFunction;
+    }
+
+
+    if (
+        typeof fetch ===
+        "function"
+    ) {
+
+        fetchFunction =
+            fetch;
+
+        return fetchFunction;
+    }
+
+
+    const modulo =
+        await import(
+            "node-fetch"
+        );
+
+
+    fetchFunction =
+        modulo.default;
+
+
+    return fetchFunction;
+}
+
+
+/* =========================================================
+   CRIPTOGRAFIA
+   ========================================================= */
+
 function obterChaveCriptografia() {
 
-    try {
+    if (
+        process.env.AUTH_ENCRYPTION_KEY
+    ) {
+
+        const chave =
+            Buffer.from(
+                process.env.AUTH_ENCRYPTION_KEY,
+                "hex"
+            );
+
 
         if (
-            fs.existsSync(KEY_FILE)
+            chave.length === 32
         ) {
 
-            return Buffer.from(
+            return chave;
+        }
+    }
+
+
+    if (
+        fs.existsSync(
+            KEY_FILE
+        )
+    ) {
+
+        const chave =
+            Buffer.from(
                 fs.readFileSync(
                     KEY_FILE,
                     "utf8"
-                ),
+                ).trim(),
                 "hex"
             );
+
+
+        if (
+            chave.length === 32
+        ) {
+
+            return chave;
         }
+    }
 
 
-        const chave =
-            crypto.randomBytes(32);
+    const chave =
+        crypto.randomBytes(32);
 
+
+    try {
 
         fs.writeFileSync(
             KEY_FILE,
@@ -114,22 +205,22 @@ function obterChaveCriptografia() {
             }
         );
 
-
-        return chave;
-
     } catch (erro) {
 
         console.error(
-            "Erro criando chave:",
-            erro
+            "Não foi possível salvar a chave:",
+            erro.message
         );
-
-        throw erro;
     }
+
+
+    return chave;
 }
 
 
-function salvarAuth(auth) {
+function salvarAuth(
+    dados
+) {
 
     const chave =
         obterChaveCriptografia();
@@ -148,10 +239,12 @@ function salvarAuth(auth) {
 
 
     const texto =
-        JSON.stringify(auth);
+        JSON.stringify(
+            dados
+        );
 
 
-    let criptografado =
+    let encrypted =
         cipher.update(
             texto,
             "utf8",
@@ -159,25 +252,32 @@ function salvarAuth(auth) {
         );
 
 
-    criptografado +=
-        cipher.final("base64");
+    encrypted +=
+        cipher.final(
+            "base64"
+        );
 
 
     const tag =
         cipher.getAuthTag();
 
 
-    const conteudo =
+    const arquivo =
         JSON.stringify({
-            iv: iv.toString("base64"),
-            tag: tag.toString("base64"),
-            data: criptografado
+            iv:
+                iv.toString("base64"),
+
+            tag:
+                tag.toString("base64"),
+
+            data:
+                encrypted
         });
 
 
     fs.writeFileSync(
         AUTH_FILE,
-        conteudo,
+        arquivo,
         {
             mode: 0o600
         }
@@ -199,7 +299,7 @@ function carregarAuth() {
         }
 
 
-        const conteudo =
+        const arquivo =
             JSON.parse(
                 fs.readFileSync(
                     AUTH_FILE,
@@ -217,7 +317,7 @@ function carregarAuth() {
                 "aes-256-gcm",
                 chave,
                 Buffer.from(
-                    conteudo.iv,
+                    arquivo.iv,
                     "base64"
                 )
             );
@@ -225,7 +325,7 @@ function carregarAuth() {
 
         decipher.setAuthTag(
             Buffer.from(
-                conteudo.tag,
+                arquivo.tag,
                 "base64"
             )
         );
@@ -233,24 +333,29 @@ function carregarAuth() {
 
         let texto =
             decipher.update(
-                conteudo.data,
+                arquivo.data,
                 "base64",
                 "utf8"
             );
 
 
         texto +=
-            decipher.final("utf8");
+            decipher.final(
+                "utf8"
+            );
 
 
-        return JSON.parse(texto);
+        return JSON.parse(
+            texto
+        );
 
     } catch (erro) {
 
         console.error(
-            "Não foi possível carregar autenticação:",
-            erro
+            "Erro lendo autenticação:",
+            erro.message
         );
+
 
         return null;
     }
@@ -276,7 +381,7 @@ function apagarAuth() {
 
         console.error(
             "Erro apagando autenticação:",
-            erro
+            erro.message
         );
     }
 }
@@ -290,20 +395,908 @@ let authData =
    OAUTH PENDENTE
    ========================================================= */
 
-const oauthPendentes =
+const oauthStates =
     new Map();
 
 
 /* =========================================================
-   TOKEN
+   LIMPAR STATES
+   ========================================================= */
+
+function limparOAuthStates() {
+
+    const agora =
+        Date.now();
+
+
+    for (
+        const [
+            state,
+            dados
+        ]
+        of oauthStates
+    ) {
+
+        if (
+            agora -
+            dados.criado_em >
+            10 * 60 * 1000
+        ) {
+
+            oauthStates.delete(
+                state
+            );
+        }
+    }
+}
+
+
+/* =========================================================
+   HOME
+   ========================================================= */
+
+app.get(
+    "/",
+    (req, res) => {
+
+        res.sendFile(
+            INDEX_FILE
+        );
+    }
+);
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+app.get(
+    "/api/auth/status",
+    (req, res) => {
+
+        if (
+            !authData
+        ) {
+
+            return res.json({
+                autenticado:
+                    false
+            });
+        }
+
+
+        return res.json({
+
+            autenticado:
+                Boolean(
+                    authData.access_token ||
+                    authData.refresh_token
+                ),
+
+            user_id:
+                authData.user_id ||
+                null,
+
+            renovacao_automatica:
+                Boolean(
+                    authData.refresh_token
+                )
+
+        });
+    }
+);
+
+
+/* =========================================================
+   INICIAR OAUTH
+   ========================================================= */
+
+app.post(
+    "/api/auth/start",
+    async (req, res) => {
+
+        try {
+
+            limparOAuthStates();
+
+
+            const clientId =
+                String(
+                    req.body.client_id ||
+                    ""
+                ).trim();
+
+
+            const clientSecret =
+                String(
+                    req.body.client_secret ||
+                    ""
+                ).trim();
+
+
+            const redirectUri =
+                String(
+                    req.body.redirect_uri ||
+                    ""
+                ).trim();
+
+
+            const accessToken =
+                String(
+                    req.body.access_token ||
+                    ""
+                ).trim();
+
+
+            if (
+                !clientId ||
+                !clientSecret ||
+                !redirectUri
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    erro:
+                        "Client ID, Client Secret e URL de retorno são obrigatórios."
+
+                });
+            }
+
+
+            /*
+             * A URL usada pelo OAuth precisa ser
+             * exatamente a mesma cadastrada no ML.
+             */
+
+            try {
+
+                const url =
+                    new URL(
+                        redirectUri
+                    );
+
+
+                if (
+                    url.protocol !==
+                    "https:"
+                ) {
+
+                    return res.status(
+                        400
+                    ).json({
+
+                        erro:
+                            "A URL de retorno precisa utilizar HTTPS."
+
+                    });
+                }
+
+            } catch (erroUrl) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    erro:
+                        "A URL de retorno informada é inválida."
+
+                });
+            }
+
+
+            /*
+             * Modo manual:
+             *
+             * Mantido apenas como compatibilidade.
+             * Access Token sozinho não fornece refresh token.
+             */
+
+            if (
+                accessToken
+            ) {
+
+                const fetch =
+                    await getFetch();
+
+
+                const resposta =
+                    await fetch(
+                        `${MERCADO_LIVRE_API}/users/me`,
+                        {
+                            headers: {
+                                Authorization:
+                                    `Bearer ${accessToken}`
+                            }
+                        }
+                    );
+
+
+                const dados =
+                    await resposta.json();
+
+
+                if (
+                    !resposta.ok
+                ) {
+
+                    return res.status(
+                        401
+                    ).json({
+
+                        erro:
+                            dados.message ||
+                            "Access Token inválido."
+
+                    });
+                }
+
+
+                authData = {
+
+                    client_id:
+                        clientId,
+
+                    client_secret:
+                        clientSecret,
+
+                    redirect_uri:
+                        redirectUri,
+
+                    access_token:
+                        accessToken,
+
+                    refresh_token:
+                        null,
+
+                    expires_at:
+                        Date.now() +
+                        (
+                            5 *
+                            60 *
+                            60 *
+                            1000
+                        ),
+
+                    user_id:
+                        dados.id ||
+                        null
+
+                };
+
+
+                salvarAuth(
+                    authData
+                );
+
+
+                return res.json({
+
+                    sucesso:
+                        true,
+
+                    autenticado:
+                        true,
+
+                    renovacao_automatica:
+                        false
+
+                });
+            }
+
+
+            /*
+             * OAuth normal.
+             */
+
+            const state =
+                crypto
+                    .randomBytes(32)
+                    .toString("hex");
+
+
+            oauthStates.set(
+                state,
+                {
+
+                    client_id:
+                        clientId,
+
+                    client_secret:
+                        clientSecret,
+
+                    redirect_uri:
+                        redirectUri,
+
+                    criado_em:
+                        Date.now()
+
+                }
+            );
+
+
+            /*
+             * O scope offline_access é importante
+             * para receber refresh token.
+             */
+
+            const parametros =
+                new URLSearchParams();
+
+
+            parametros.set(
+                "response_type",
+                "code"
+            );
+
+
+            parametros.set(
+                "client_id",
+                clientId
+            );
+
+
+            parametros.set(
+                "redirect_uri",
+                redirectUri
+            );
+
+
+            parametros.set(
+                "state",
+                state
+            );
+
+
+            parametros.set(
+                "scope",
+                "offline_access read write"
+            );
+
+
+            const authUrl =
+                `${MERCADO_LIVRE_AUTH}?${parametros.toString()}`;
+
+
+            return res.json({
+
+                auth_url:
+                    authUrl
+
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "Erro iniciando OAuth:",
+                erro
+            );
+
+
+            return res.status(
+                500
+            ).json({
+
+                erro:
+                    erro.message ||
+                    "Erro ao iniciar OAuth."
+
+            });
+        }
+    }
+);
+
+
+/* =========================================================
+   CALLBACK OAUTH
+   ========================================================= */
+
+app.get(
+    "/auth/callback",
+    async (req, res) => {
+
+        try {
+
+            const code =
+                String(
+                    req.query.code ||
+                    ""
+                );
+
+
+            const state =
+                String(
+                    req.query.state ||
+                    ""
+                );
+
+
+            const oauthError =
+                String(
+                    req.query.error ||
+                    ""
+                );
+
+
+            const errorDescription =
+                String(
+                    req.query.error_description ||
+                    ""
+                );
+
+
+            if (
+                oauthError
+            ) {
+
+                return res.status(
+                    400
+                ).send(`
+                    <!DOCTYPE html>
+
+                    <html lang="pt-BR">
+
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Erro Mercado Livre</title>
+                    </head>
+
+                    <body style="
+                        margin:0;
+                        font-family:Arial,sans-serif;
+                        background:#f8fafc;
+                        padding:50px;
+                    ">
+
+                        <div style="
+                            max-width:650px;
+                            margin:auto;
+                            background:white;
+                            padding:35px;
+                            border-radius:20px;
+                            box-shadow:0 10px 40px rgba(0,0,0,.10);
+                        ">
+
+                            <h1>
+                                Autorização não concluída
+                            </h1>
+
+                            <p>
+                                ${
+                                    errorDescription ||
+                                    oauthError
+                                }
+                            </p>
+
+                            <a
+                                href="${SITE_URL}"
+                                style="
+                                    display:inline-block;
+                                    margin-top:20px;
+                                    padding:12px 20px;
+                                    background:#111827;
+                                    color:white;
+                                    border-radius:10px;
+                                    text-decoration:none;
+                                "
+                            >
+                                Voltar ao ML Hub Pro
+                            </a>
+
+                        </div>
+
+                    </body>
+
+                    </html>
+                `);
+            }
+
+
+            if (
+                !code ||
+                !state
+            ) {
+
+                return res.status(
+                    400
+                ).send(
+                    "Código ou state não informado."
+                );
+            }
+
+
+            const pendente =
+                oauthStates.get(
+                    state
+                );
+
+
+            if (
+                !pendente
+            ) {
+
+                return res.status(
+                    400
+                ).send(
+                    "Estado OAuth inválido ou expirado. Inicie a conexão novamente."
+                );
+            }
+
+
+            oauthStates.delete(
+                state
+            );
+
+
+            const fetch =
+                await getFetch();
+
+
+            const body =
+                new URLSearchParams();
+
+
+            body.set(
+                "grant_type",
+                "authorization_code"
+            );
+
+
+            body.set(
+                "client_id",
+                pendente.client_id
+            );
+
+
+            body.set(
+                "client_secret",
+                pendente.client_secret
+            );
+
+
+            body.set(
+                "code",
+                code
+            );
+
+
+            body.set(
+                "redirect_uri",
+                pendente.redirect_uri
+            );
+
+
+            const resposta =
+                await fetch(
+                    MERCADO_LIVRE_TOKEN,
+                    {
+
+                        method:
+                            "POST",
+
+                        headers: {
+
+                            Accept:
+                                "application/json",
+
+                            "Content-Type":
+                                "application/x-www-form-urlencoded"
+
+                        },
+
+                        body:
+                            body
+
+                    }
+                );
+
+
+            const dados =
+                await resposta.json();
+
+
+            if (
+                !resposta.ok
+            ) {
+
+                console.error(
+                    "Mercado Livre recusou OAuth:",
+                    dados
+                );
+
+
+                return res.status(
+                    400
+                ).send(`
+                    <!DOCTYPE html>
+
+                    <html lang="pt-BR">
+
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Erro OAuth</title>
+                    </head>
+
+                    <body style="
+                        margin:0;
+                        font-family:Arial,sans-serif;
+                        background:#f8fafc;
+                        padding:50px;
+                    ">
+
+                        <div style="
+                            max-width:650px;
+                            margin:auto;
+                            background:white;
+                            padding:35px;
+                            border-radius:20px;
+                            box-shadow:0 10px 40px rgba(0,0,0,.10);
+                        ">
+
+                            <h1>
+                                Erro ao conectar
+                            </h1>
+
+                            <p>
+                                ${
+                                    dados.message ||
+                                    dados.error_description ||
+                                    dados.error ||
+                                    "O Mercado Livre não autorizou a conexão."
+                                }
+                            </p>
+
+                            <a
+                                href="${SITE_URL}"
+                                style="
+                                    display:inline-block;
+                                    margin-top:20px;
+                                    padding:12px 20px;
+                                    background:#111827;
+                                    color:white;
+                                    border-radius:10px;
+                                    text-decoration:none;
+                                "
+                            >
+                                Voltar
+                            </a>
+
+                        </div>
+
+                    </body>
+
+                    </html>
+                `);
+            }
+
+
+            if (
+                !dados.access_token
+            ) {
+
+                throw new Error(
+                    "Mercado Livre não retornou access_token."
+                );
+            }
+
+
+            if (
+                !dados.refresh_token
+            ) {
+
+                return res.status(
+                    400
+                ).send(`
+                    <!DOCTYPE html>
+
+                    <html lang="pt-BR">
+
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Refresh Token não recebido</title>
+                    </head>
+
+                    <body style="
+                        margin:0;
+                        font-family:Arial,sans-serif;
+                        background:#f8fafc;
+                        padding:50px;
+                    ">
+
+                        <div style="
+                            max-width:650px;
+                            margin:auto;
+                            background:white;
+                            padding:35px;
+                            border-radius:20px;
+                            box-shadow:0 10px 40px rgba(0,0,0,.10);
+                        ">
+
+                            <h1>
+                                Refresh Token não recebido
+                            </h1>
+
+                            <p>
+                                O Mercado Livre não retornou um
+                                refresh_token. Verifique se a aplicação
+                                possui a permissão offline_access.
+                            </p>
+
+                            <a
+                                href="${SITE_URL}"
+                                style="
+                                    display:inline-block;
+                                    margin-top:20px;
+                                    padding:12px 20px;
+                                    background:#111827;
+                                    color:white;
+                                    border-radius:10px;
+                                    text-decoration:none;
+                                "
+                            >
+                                Voltar
+                            </a>
+
+                        </div>
+
+                    </body>
+
+                    </html>
+                `);
+            }
+
+
+            authData = {
+
+                client_id:
+                    pendente.client_id,
+
+                client_secret:
+                    pendente.client_secret,
+
+                redirect_uri:
+                    pendente.redirect_uri,
+
+                access_token:
+                    dados.access_token,
+
+                refresh_token:
+                    dados.refresh_token,
+
+                expires_at:
+                    Date.now() +
+                    (
+                        Number(
+                            dados.expires_in ||
+                            21600
+                        ) *
+                        1000
+                    ),
+
+                user_id:
+                    dados.user_id ||
+                    null
+
+            };
+
+
+            /*
+             * Se o Mercado Livre não tiver enviado user_id,
+             * descobrimos através do /users/me.
+             */
+
+            if (
+                !authData.user_id
+            ) {
+
+                try {
+
+                    const respostaUsuario =
+                        await fetch(
+                            `${MERCADO_LIVRE_API}/users/me`,
+                            {
+                                headers: {
+
+                                    Authorization:
+                                        `Bearer ${authData.access_token}`
+
+                                }
+                            }
+                        );
+
+
+                    if (
+                        respostaUsuario.ok
+                    ) {
+
+                        const usuario =
+                            await respostaUsuario.json();
+
+
+                        authData.user_id =
+                            usuario.id ||
+                            null;
+                    }
+
+                } catch (erro) {
+
+                    console.error(
+                        "Erro buscando usuário:",
+                        erro.message
+                    );
+                }
+            }
+
+
+            salvarAuth(
+                authData
+            );
+
+
+            return res.redirect(
+                `${SITE_URL}/?oauth=success`
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "Erro no callback OAuth:",
+                erro
+            );
+
+
+            return res.status(
+                500
+            ).send(`
+                <!DOCTYPE html>
+
+                <html lang="pt-BR">
+
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Erro</title>
+                </head>
+
+                <body style="
+                    font-family:Arial;
+                    padding:50px;
+                    background:#f8fafc;
+                ">
+
+                    <h1>
+                        Erro interno
+                    </h1>
+
+                    <p>
+                        ${erro.message}
+                    </p>
+
+                    <a href="${SITE_URL}">
+                        Voltar
+                    </a>
+
+                </body>
+
+                </html>
+            `);
+        }
+    }
+);
+
+
+/* =========================================================
+   RENOVAR TOKEN
    ========================================================= */
 
 async function renovarAccessToken() {
 
-    if (!authData) {
+    if (
+        !authData
+    ) {
 
         throw new Error(
-            "Conta do Mercado Livre não configurada."
+            "Nenhuma conta conectada."
         );
     }
 
@@ -328,22 +1321,25 @@ async function renovarAccessToken() {
         new URLSearchParams();
 
 
-    body.append(
+    body.set(
         "grant_type",
         "refresh_token"
     );
 
-    body.append(
+
+    body.set(
         "client_id",
         authData.client_id
     );
 
-    body.append(
+
+    body.set(
         "client_secret",
         authData.client_secret
     );
 
-    body.append(
+
+    body.set(
         "refresh_token",
         authData.refresh_token
     );
@@ -351,16 +1347,25 @@ async function renovarAccessToken() {
 
     const resposta =
         await fetch(
-            ML_TOKEN_URL,
+            MERCADO_LIVRE_TOKEN,
             {
-                method: "POST",
+
+                method:
+                    "POST",
 
                 headers: {
+
+                    Accept:
+                        "application/json",
+
                     "Content-Type":
                         "application/x-www-form-urlencoded"
+
                 },
 
-                body
+                body:
+                    body
+
             }
         );
 
@@ -369,7 +1374,9 @@ async function renovarAccessToken() {
         await resposta.json();
 
 
-    if (!resposta.ok) {
+    if (
+        !resposta.ok
+    ) {
 
         console.error(
             "Erro renovando token:",
@@ -382,20 +1389,34 @@ async function renovarAccessToken() {
             "invalid_grant"
         ) {
 
-            authData = null;
+            authData =
+                null;
+
 
             apagarAuth();
 
+
             throw new Error(
-                "A autorização do Mercado Livre expirou. Conecte novamente."
+                "O refresh token expirou ou já foi utilizado. Faça a conexão novamente."
             );
         }
 
 
         throw new Error(
             dados.message ||
+            dados.error_description ||
             dados.error ||
             "Não foi possível renovar o token."
+        );
+    }
+
+
+    if (
+        !dados.access_token
+    ) {
+
+        throw new Error(
+            "O Mercado Livre não retornou um novo access token."
         );
     }
 
@@ -403,6 +1424,15 @@ async function renovarAccessToken() {
     authData.access_token =
         dados.access_token;
 
+
+    /*
+     * MUITO IMPORTANTE:
+     *
+     * O Mercado Livre gera um NOVO refresh token
+     * a cada renovação.
+     *
+     * O novo deve substituir o anterior.
+     */
 
     if (
         dados.refresh_token
@@ -417,8 +1447,10 @@ async function renovarAccessToken() {
         Date.now() +
         (
             Number(
-                dados.expires_in
-            ) * 1000
+                dados.expires_in ||
+                21600
+            ) *
+            1000
         );
 
 
@@ -431,12 +1463,18 @@ async function renovarAccessToken() {
 }
 
 
+/* =========================================================
+   TOKEN VÁLIDO
+   ========================================================= */
+
 async function obterAccessTokenValido() {
 
-    if (!authData) {
+    if (
+        !authData
+    ) {
 
         throw new Error(
-            "Não autenticado."
+            "Conta não conectada."
         );
     }
 
@@ -445,19 +1483,28 @@ async function obterAccessTokenValido() {
         Date.now();
 
 
-    const validade =
+    const expiresAt =
         Number(
-            authData.expires_at
-        ) || 0;
+            authData.expires_at ||
+            0
+        );
 
+
+    /*
+     * Renovamos com 5 minutos de margem.
+     */
 
     const margem =
-        5 * 60 * 1000;
+        5 *
+        60 *
+        1000;
 
 
     if (
         authData.access_token &&
-        validade > agora + margem
+        expiresAt >
+            agora +
+            margem
     ) {
 
         return authData.access_token;
@@ -487,7 +1534,7 @@ async function obterAccessTokenValido() {
 
 
 /* =========================================================
-   REQUISIÇÃO MERCADO LIVRE
+   FETCH MERCADO LIVRE
    ========================================================= */
 
 async function mlFetch(
@@ -495,56 +1542,62 @@ async function mlFetch(
     options = {}
 ) {
 
+    let token =
+        await obterAccessTokenValido();
+
+
     const fetch =
         await getFetch();
 
 
-    const token =
-        await obterAccessTokenValido();
-
-
     const headers = {
         ...(options.headers || {}),
+
         Authorization:
             `Bearer ${token}`
     };
 
 
-    const resposta =
+    let resposta =
         await fetch(
-            ML_API + endpoint,
+            `${MERCADO_LIVRE_API}${endpoint}`,
             {
                 ...options,
+
                 headers
             }
         );
 
 
+    /*
+     * Se mesmo assim retornar 401,
+     * força uma renovação e tenta novamente.
+     */
+
     if (
-        resposta.status === 401
+        resposta.status ===
+        401 &&
+        authData &&
+        authData.refresh_token
     ) {
 
-        if (
-            authData &&
-            authData.refresh_token
-        ) {
-
-            const novoToken =
-                await renovarAccessToken();
+        token =
+            await renovarAccessToken();
 
 
-            headers.Authorization =
-                `Bearer ${novoToken}`;
+        headers.Authorization =
+            `Bearer ${token}`;
 
 
-            return await fetch(
-                ML_API + endpoint,
+        resposta =
+            await fetch(
+                `${MERCADO_LIVRE_API}${endpoint}`,
                 {
                     ...options,
+
                     headers
                 }
             );
-        }
     }
 
 
@@ -553,551 +1606,32 @@ async function mlFetch(
 
 
 /* =========================================================
-   HOME
-   ========================================================= */
-
-app.get(
-    "/",
-    (req, res) => {
-
-        res.send(
-            "Servidor proxy do Mercado Livre online!"
-        );
-    }
-);
-
-
-/* =========================================================
-   STATUS AUTH
-   ========================================================= */
-
-app.get(
-    "/api/auth/status",
-    (req, res) => {
-
-        if (!authData) {
-
-            return res.json({
-                autenticado: false
-            });
-        }
-
-
-        return res.json({
-            autenticado:
-                Boolean(
-                    authData.access_token ||
-                    authData.refresh_token
-                ),
-
-            user_id:
-                authData.user_id || null
-        });
-    }
-);
-
-
-/* =========================================================
-   INICIAR OAUTH
-   ========================================================= */
-
-app.post(
-    "/api/auth/start",
-    async (req, res) => {
-
-        try {
-
-            const {
-                client_id,
-                client_secret,
-                redirect_uri,
-                access_token
-            } = req.body;
-
-
-            if (
-                !client_id ||
-                !client_secret ||
-                !redirect_uri
-            ) {
-
-                return res.status(400).json({
-                    erro:
-                        "Client ID, Client Secret e URL de retorno são obrigatórios."
-                });
-            }
-
-
-            /*
-             * Se o usuário forneceu somente um Access Token,
-             * validamos e salvamos o token.
-             *
-             * Porém, Access Token sozinho não permite
-             * renovação automática.
-             */
-
-            if (access_token) {
-
-                const fetch =
-                    await getFetch();
-
-
-                const resposta =
-                    await fetch(
-                        `${ML_API}/users/me`,
-                        {
-                            headers: {
-                                Authorization:
-                                    `Bearer ${access_token}`
-                            }
-                        }
-                    );
-
-
-                const dados =
-                    await resposta.json();
-
-
-                if (!resposta.ok) {
-
-                    return res.status(401).json({
-                        erro:
-                            "O Access Token informado não é válido."
-                    });
-                }
-
-
-                authData = {
-
-                    client_id,
-
-                    client_secret,
-
-                    redirect_uri,
-
-                    access_token,
-
-                    refresh_token:
-                        null,
-
-                    expires_at:
-                        Date.now() +
-                        5 * 60 * 60 * 1000,
-
-                    user_id:
-                        dados.id
-                };
-
-
-                salvarAuth(
-                    authData
-                );
-
-
-                return res.json({
-                    sucesso: true,
-                    autenticado: true,
-                    renovacao_automatica: false
-                });
-            }
-
-
-            /*
-             * OAuth com refresh token.
-             */
-
-            const state =
-                crypto.randomBytes(32)
-                    .toString("hex");
-
-
-            oauthPendentes.set(
-                state,
-                {
-                    client_id,
-                    client_secret,
-                    redirect_uri,
-                    criado_em: Date.now()
-                }
-            );
-
-
-            /*
-             * Limpeza automática de estados antigos.
-             */
-
-            for (
-                const [chave, valor]
-                of oauthPendentes
-            ) {
-
-                if (
-                    Date.now() -
-                    valor.criado_em >
-                    10 * 60 * 1000
-                ) {
-
-                    oauthPendentes.delete(
-                        chave
-                    );
-                }
-            }
-
-
-            const parametros =
-                new URLSearchParams({
-                    response_type:
-                        "code",
-
-                    client_id,
-
-                    redirect_uri,
-
-                    state
-                });
-
-
-            const authUrl =
-                `${ML_AUTH_URL}?${parametros.toString()}`;
-
-
-            return res.json({
-                auth_url: authUrl
-            });
-
-        } catch (erro) {
-
-            console.error(
-                erro
-            );
-
-            return res.status(500).json({
-                erro:
-                    erro.message ||
-                    "Erro iniciando OAuth."
-            });
-        }
-    }
-);
-
-
-/* =========================================================
-   CALLBACK OAUTH
-   ========================================================= */
-
-app.get(
-    "/auth/callback",
-    async (req, res) => {
-
-        try {
-
-            const {
-                code,
-                state,
-                error,
-                error_description
-            } = req.query;
-
-
-            if (error) {
-
-                return res.status(400).send(`
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Erro de autorização</title>
-                    </head>
-
-                    <body style="
-                        font-family:Arial;
-                        padding:40px;
-                        background:#f8fafc;
-                    ">
-
-                        <h1>Autorização não concluída</h1>
-
-                        <p>
-                            ${error_description || error}
-                        </p>
-
-                        <a href="${FRONTEND_URL}">
-                            Voltar para o ML Hub Pro
-                        </a>
-
-                    </body>
-                    </html>
-                `);
-            }
-
-
-            if (
-                !code ||
-                !state
-            ) {
-
-                return res.status(400).send(
-                    "Código ou state ausente."
-                );
-            }
-
-
-            const pendente =
-                oauthPendentes.get(
-                    state
-                );
-
-
-            if (!pendente) {
-
-                return res.status(400).send(
-                    "Sessão OAuth inválida ou expirada."
-                );
-            }
-
-
-            oauthPendentes.delete(
-                state
-            );
-
-
-            const fetch =
-                await getFetch();
-
-
-            const body =
-                new URLSearchParams();
-
-
-            body.append(
-                "grant_type",
-                "authorization_code"
-            );
-
-            body.append(
-                "client_id",
-                pendente.client_id
-            );
-
-            body.append(
-                "client_secret",
-                pendente.client_secret
-            );
-
-            body.append(
-                "code",
-                code
-            );
-
-            body.append(
-                "redirect_uri",
-                pendente.redirect_uri
-            );
-
-
-            const resposta =
-                await fetch(
-                    ML_TOKEN_URL,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/x-www-form-urlencoded"
-                        },
-
-                        body
-                    }
-                );
-
-
-            const dados =
-                await resposta.json();
-
-
-            if (!resposta.ok) {
-
-                console.error(
-                    "Erro trocando code:",
-                    dados
-                );
-
-
-                return res.status(400).send(`
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Erro OAuth</title>
-                    </head>
-
-                    <body style="
-                        font-family:Arial;
-                        padding:40px;
-                        background:#f8fafc;
-                    ">
-
-                        <h1>Erro ao conectar ao Mercado Livre</h1>
-
-                        <p>
-                            ${
-                                dados.message ||
-                                dados.error ||
-                                "Não foi possível obter o token."
-                            }
-                        </p>
-
-                        <a href="${FRONTEND_URL}">
-                            Voltar
-                        </a>
-
-                    </body>
-                    </html>
-                `);
-            }
-
-
-            authData = {
-
-                client_id:
-                    pendente.client_id,
-
-                client_secret:
-                    pendente.client_secret,
-
-                redirect_uri:
-                    pendente.redirect_uri,
-
-                access_token:
-                    dados.access_token,
-
-                refresh_token:
-                    dados.refresh_token,
-
-                expires_at:
-                    Date.now() +
-                    (
-                        Number(
-                            dados.expires_in
-                        ) * 1000
-                    ),
-
-                user_id:
-                    dados.user_id || null
-            };
-
-
-            /*
-             * Tenta descobrir o usuário caso o
-             * retorno OAuth não tenha enviado user_id.
-             */
-
-            if (!authData.user_id) {
-
-                try {
-
-                    const respostaUsuario =
-                        await fetch(
-                            `${ML_API}/users/me`,
-                            {
-                                headers: {
-                                    Authorization:
-                                        `Bearer ${authData.access_token}`
-                                }
-                            }
-                        );
-
-
-                    if (
-                        respostaUsuario.ok
-                    ) {
-
-                        const usuario =
-                            await respostaUsuario.json();
-
-
-                        authData.user_id =
-                            usuario.id;
-                    }
-
-                } catch (erroUsuario) {
-
-                    console.error(
-                        "Erro buscando usuário:",
-                        erroUsuario
-                    );
-                }
-            }
-
-
-            salvarAuth(
-                authData
-            );
-
-
-            return res.redirect(
-                `${FRONTEND_URL}?oauth=success`
-            );
-
-        } catch (erro) {
-
-            console.error(
-                "Erro callback OAuth:",
-                erro
-            );
-
-
-            return res.status(500).send(
-                "Erro interno ao finalizar a autorização."
-            );
-        }
-    }
-);
-
-
-/* =========================================================
-   LOGOUT
-   ========================================================= */
-
-app.post(
-    "/api/auth/logout",
-    (req, res) => {
-
-        authData = null;
-
-        apagarAuth();
-
-
-        res.json({
-            sucesso: true
-        });
-    }
-);
-
-
-/* =========================================================
-   ANÚNCIOS
+   CALCULAR FRETE
    ========================================================= */
 
 async function calcularFreteExato(
-    itemObj
+    item
 ) {
 
     try {
 
         if (
-            itemObj &&
-            itemObj.shipping &&
-            itemObj.shipping.free_shipping
+            item &&
+            item.shipping &&
+            item.shipping.free_shipping
         ) {
 
             try {
 
                 const resposta =
                     await mlFetch(
-                        `/items/${itemObj.id}/sale_fee?quantity=1`
+                        `/items/${item.id}/sale_fee?quantity=1`
                     );
 
 
-                if (resposta.ok) {
+                if (
+                    resposta.ok
+                ) {
 
                     const dados =
                         await resposta.json();
@@ -1105,7 +1639,7 @@ async function calcularFreteExato(
 
                     if (
                         dados &&
-                        dados.shipping_cost
+                        dados.shipping_cost != null
                     ) {
 
                         return Number(
@@ -1117,18 +1651,18 @@ async function calcularFreteExato(
             } catch (erro) {
 
                 console.error(
-                    "Erro consultando sale_fee:",
+                    "Erro sale_fee:",
                     erro.message
                 );
             }
 
 
             if (
-                itemObj.shipping.cost != null
+                item.shipping.cost != null
             ) {
 
                 return Number(
-                    itemObj.shipping.cost
+                    item.shipping.cost
                 );
             }
 
@@ -1138,13 +1672,13 @@ async function calcularFreteExato(
 
 
         if (
-            itemObj &&
-            itemObj.shipping &&
-            itemObj.shipping.cost != null
+            item &&
+            item.shipping &&
+            item.shipping.cost != null
         ) {
 
             return Number(
-                itemObj.shipping.cost
+                item.shipping.cost
             );
         }
 
@@ -1155,13 +1689,68 @@ async function calcularFreteExato(
 
         console.error(
             "Erro calculando frete:",
-            erro
+            erro.message
         );
+
 
         return 6.85;
     }
 }
 
+
+/* =========================================================
+   BUSCAR SKU
+   ========================================================= */
+
+function obterSku(
+    item
+) {
+
+    if (
+        item.seller_custom_field
+    ) {
+
+        return item.seller_custom_field;
+    }
+
+
+    if (
+        Array.isArray(
+            item.attributes
+        )
+    ) {
+
+        const atributo =
+            item.attributes.find(
+                attr =>
+                    String(
+                        attr.id ||
+                        ""
+                    ).toUpperCase() ===
+                    "SELLER_SKU"
+            );
+
+
+        if (
+            atributo
+        ) {
+
+            return (
+                atributo.value_name ||
+                atributo.value_id ||
+                ""
+            );
+        }
+    }
+
+
+    return "";
+}
+
+
+/* =========================================================
+   BUSCAR ANÚNCIOS
+   ========================================================= */
 
 app.get(
     "/api/anuncios",
@@ -1175,47 +1764,61 @@ app.get(
                 );
 
 
-            if (!respostaUsuario.ok) {
+            const dadosUsuario =
+                await respostaUsuario.json();
 
-                const erro =
-                    await respostaUsuario.text();
+
+            if (
+                !respostaUsuario.ok
+            ) {
 
                 return res.status(
                     respostaUsuario.status
                 ).json({
+
                     erro:
-                        erro ||
+                        dadosUsuario.message ||
+                        dadosUsuario.error ||
                         "Não foi possível consultar o usuário."
+
                 });
             }
 
 
-            const usuario =
-                await respostaUsuario.json();
-
-
             const userId =
-                usuario.id;
+                dadosUsuario.id;
 
 
-            let offset = 0;
-
-            const limit = 50;
-
-            const ids = [];
+            const ids =
+                [];
 
 
-            while (true) {
+            /*
+             * Busca por scan.
+             */
+
+            let url =
+                `/users/${userId}/items/search?search_type=scan&limit=100`;
+
+
+            while (url) {
 
                 const resposta =
                     await mlFetch(
-                        `/users/${userId}/items/search?search_type=scan&limit=${limit}&offset=${offset}`
+                        url
                     );
 
 
-                if (!resposta.ok) {
+                if (
+                    !resposta.ok
+                ) {
+
+                    const erro =
+                        await resposta.text();
+
 
                     throw new Error(
+                        erro ||
                         "Erro buscando anúncios."
                     );
                 }
@@ -1237,68 +1840,19 @@ app.get(
                 }
 
 
-                const scrollId =
-                    dados.scroll_id;
-
-
                 if (
-                    !scrollId ||
-                    !dados.results ||
-                    !dados.results.length
+                    dados.scroll_id &&
+                    dados.results &&
+                    dados.results.length
                 ) {
 
-                    break;
-                }
+                    url =
+                        `/users/${userId}/items/search?search_type=scan&scroll_id=${encodeURIComponent(dados.scroll_id)}`;
 
+                } else {
 
-                const proxima =
-                    await mlFetch(
-                        `/users/${userId}/items/search?search_type=scan&limit=${limit}&scroll_id=${encodeURIComponent(scrollId)}`
-                    );
-
-
-                if (!proxima.ok) {
-                    break;
-                }
-
-
-                const proximaDados =
-                    await proxima.json();
-
-
-                if (
-                    !Array.isArray(
-                        proximaDados.results
-                    ) ||
-                    !proximaDados.results.length
-                ) {
-
-                    break;
-                }
-
-
-                ids.push(
-                    ...proximaDados.results
-                );
-
-
-                if (
-                    proximaDados.results.length <
-                    limit
-                ) {
-
-                    break;
-                }
-
-
-                offset += limit;
-
-
-                if (
-                    offset > 10000
-                ) {
-
-                    break;
+                    url =
+                        null;
                 }
             }
 
@@ -1309,8 +1863,14 @@ app.get(
                 ];
 
 
-            const listaFinal = [];
+            const listaFinal =
+                [];
 
+
+            /*
+             * Mercado Livre limita quantidade por chamada,
+             * então buscamos os itens em lotes.
+             */
 
             for (
                 let inicio = 0;
@@ -1325,29 +1885,40 @@ app.get(
                     );
 
 
-                const respostas =
-                    await Promise.all(
-                        lote.map(
-                            id =>
-                                mlFetch(
-                                    `/items/${id}`
-                                )
-                        )
-                    );
-
-
                 const itens =
                     await Promise.all(
-                        respostas.map(
-                            async resposta => {
 
-                                if (
-                                    !resposta.ok
-                                ) {
+                        lote.map(
+                            async id => {
+
+                                try {
+
+                                    const resposta =
+                                        await mlFetch(
+                                            `/items/${id}`
+                                        );
+
+
+                                    if (
+                                        !resposta.ok
+                                    ) {
+
+                                        return null;
+                                    }
+
+
+                                    return await resposta.json();
+
+                                } catch (erro) {
+
+                                    console.error(
+                                        `Erro item ${id}:`,
+                                        erro.message
+                                    );
+
+
                                     return null;
                                 }
-
-                                return await resposta.json();
                             }
                         )
                     );
@@ -1358,7 +1929,10 @@ app.get(
                     of itens
                 ) {
 
-                    if (!item) {
+                    if (
+                        !item
+                    ) {
+
                         continue;
                     }
 
@@ -1369,7 +1943,8 @@ app.get(
                         ) || 0;
 
 
-                    let comissao = 0;
+                    let comissao =
+                        0;
 
 
                     try {
@@ -1390,18 +1965,18 @@ app.get(
 
                             comissao =
                                 Number(
-                                    fee.sale_fee ||
-                                    fee.sale_fee_amount ||
-                                    fee.total_fee ||
+                                    fee.sale_fee_amount ??
+                                    fee.sale_fee ??
+                                    fee.total_fee ??
                                     0
                                 );
                         }
 
-                    } catch (erroFee) {
+                    } catch (erro) {
 
                         console.error(
-                            "Erro comissão:",
-                            erroFee.message
+                            "Erro calculando comissão:",
+                            erro.message
                         );
                     }
 
@@ -1418,48 +1993,6 @@ app.get(
                         frete;
 
 
-                    let sku = "";
-
-
-                    if (
-                        item.attributes &&
-                        Array.isArray(
-                            item.attributes
-                        )
-                    ) {
-
-                        const atributoSku =
-                            item.attributes.find(
-                                atributo =>
-                                    String(
-                                        atributo.id || ""
-                                    ).toUpperCase() ===
-                                    "SELLER_SKU"
-                            );
-
-
-                        if (
-                            atributoSku
-                        ) {
-
-                            sku =
-                                atributoSku.value_name ||
-                                atributoSku.value_id ||
-                                "";
-                        }
-                    }
-
-
-                    if (
-                        !sku &&
-                        item.seller_custom_field
-                    ) {
-
-                        sku =
-                            item.seller_custom_field;
-                    }
-
-
                     listaFinal.push({
 
                         id:
@@ -1468,28 +2001,38 @@ app.get(
                         titulo:
                             item.title,
 
-                        sku,
+                        sku:
+                            obterSku(item),
 
                         status:
                             item.status,
 
-                        preco,
+                        preco:
+                            preco,
 
-                        comissao,
+                        comissao:
+                            comissao,
 
-                        frete,
+                        frete:
+                            frete,
 
-                        liquido,
+                        liquido:
+                            liquido,
 
                         shipping:
-                            item.shipping || null
+                            item.shipping ||
+                            null
+
                     });
                 }
             }
 
 
             return res.json({
-                itens: listaFinal
+
+                itens:
+                    listaFinal
+
             });
 
         } catch (erro) {
@@ -1500,10 +2043,14 @@ app.get(
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
+
                 erro:
                     erro.message ||
                     "Erro ao buscar anúncios."
+
             });
         }
     }
@@ -1528,7 +2075,8 @@ app.post(
                     : [];
 
 
-            const precos = {};
+            const precos =
+                {};
 
 
             for (
@@ -1546,6 +2094,7 @@ app.post(
 
                 const resultados =
                     await Promise.all(
+
                         lote.map(
                             async id => {
 
@@ -1570,11 +2119,15 @@ app.post(
 
 
                                     return {
-                                        id,
+
+                                        id:
+                                            id,
+
                                         preco:
                                             Number(
                                                 item.price
                                             ) || 0
+
                                     };
 
                                 } catch (erro) {
@@ -1604,7 +2157,10 @@ app.post(
 
 
             return res.json({
-                precos
+
+                precos:
+                    precos
+
             });
 
         } catch (erro) {
@@ -1614,10 +2170,14 @@ app.post(
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
+
                 erro:
                     erro.message ||
                     "Erro sincronizando preços."
+
             });
         }
     }
@@ -1642,7 +2202,8 @@ app.post(
                     : [];
 
 
-            const fretes = {};
+            const fretes =
+                {};
 
 
             for (
@@ -1660,6 +2221,7 @@ app.post(
 
                 const resultados =
                     await Promise.all(
+
                         lote.map(
                             async id => {
 
@@ -1689,30 +2251,33 @@ app.post(
                                         );
 
 
+                                    const gratis =
+                                        Boolean(
+                                            item.shipping &&
+                                            item.shipping.free_shipping
+                                        );
+
+
                                     return {
-                                        id,
-                                        custo,
+
+                                        id:
+                                            id,
+
+                                        custo:
+                                            custo,
+
                                         shipping_cost:
                                             custo,
 
                                         gratis:
-                                            Boolean(
-                                                item.shipping &&
-                                                item.shipping.free_shipping
-                                            ),
+                                            gratis,
 
                                         free_shipping:
-                                            Boolean(
-                                                item.shipping &&
-                                                item.shipping.free_shipping
-                                            )
+                                            gratis
+
                                     };
 
                                 } catch (erro) {
-
-                                    console.error(
-                                        erro
-                                    );
 
                                     return null;
                                 }
@@ -1739,7 +2304,10 @@ app.post(
 
 
             return res.json({
-                fretes
+
+                fretes:
+                    fretes
+
             });
 
         } catch (erro) {
@@ -1749,10 +2317,14 @@ app.post(
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
+
                 erro:
                     erro.message ||
                     "Erro sincronizando fretes."
+
             });
         }
     }
@@ -1769,22 +2341,34 @@ app.post(
 
         try {
 
-            const {
-                id,
-                preco
-            } = req.body;
+            const id =
+                String(
+                    req.body.id ||
+                    ""
+                );
+
+
+            const preco =
+                Number(
+                    req.body.preco
+                );
 
 
             if (
                 !id ||
                 !Number.isFinite(
-                    Number(preco)
-                )
+                    preco
+                ) ||
+                preco <= 0
             ) {
 
-                return res.status(400).json({
+                return res.status(
+                    400
+                ).json({
+
                     erro:
-                        "ID e preço são obrigatórios."
+                        "ID e preço válido são obrigatórios."
+
                 });
             }
 
@@ -1793,17 +2377,23 @@ app.post(
                 await mlFetch(
                     `/items/${id}`,
                     {
-                        method: "PUT",
+
+                        method:
+                            "PUT",
 
                         headers: {
+
                             "Content-Type":
                                 "application/json"
+
                         },
 
-                        body: JSON.stringify({
-                            price:
-                                Number(preco)
-                        })
+                        body:
+                            JSON.stringify({
+                                price:
+                                    preco
+                            })
+
                     }
                 );
 
@@ -1812,24 +2402,34 @@ app.post(
                 await resposta.json();
 
 
-            if (!resposta.ok) {
+            if (
+                !resposta.ok
+            ) {
 
                 return res.status(
                     resposta.status
                 ).json({
+
                     erro:
                         dados.message ||
                         dados.error ||
                         "Erro atualizando preço.",
+
                     detalhes:
                         dados
+
                 });
             }
 
 
             return res.json({
-                sucesso: true,
-                item: dados
+
+                sucesso:
+                    true,
+
+                item:
+                    dados
+
             });
 
         } catch (erro) {
@@ -1839,10 +2439,14 @@ app.post(
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
+
                 erro:
                     erro.message ||
                     "Erro atualizando preço."
+
             });
         }
     }
@@ -1867,24 +2471,34 @@ app.post(
                     : [];
 
 
-            if (!itens.length) {
+            if (
+                !itens.length
+            ) {
 
-                return res.status(400).json({
+                return res.status(
+                    400
+                ).json({
+
                     erro:
                         "Nenhum item enviado."
+
                 });
             }
 
 
             const resultados =
                 await Promise.all(
+
                     itens.map(
                         async item => {
 
                             try {
 
                                 const id =
-                                    item.id;
+                                    String(
+                                        item.id ||
+                                        ""
+                                    );
 
 
                                 const preco =
@@ -1903,13 +2517,15 @@ app.post(
 
                                     return {
 
-                                        id,
+                                        id:
+                                            id,
 
                                         sucesso:
                                             false,
 
                                         erro:
                                             "Preço inválido."
+
                                     };
                                 }
 
@@ -1918,12 +2534,15 @@ app.post(
                                     await mlFetch(
                                         `/items/${id}`,
                                         {
+
                                             method:
                                                 "PUT",
 
                                             headers: {
+
                                                 "Content-Type":
                                                     "application/json"
+
                                             },
 
                                             body:
@@ -1931,6 +2550,7 @@ app.post(
                                                     price:
                                                         preco
                                                 })
+
                                         }
                                     );
 
@@ -1945,7 +2565,8 @@ app.post(
 
                                     return {
 
-                                        id,
+                                        id:
+                                            id,
 
                                         sucesso:
                                             false,
@@ -1957,21 +2578,25 @@ app.post(
 
                                         detalhes:
                                             dados
+
                                     };
                                 }
 
 
                                 return {
 
-                                    id,
+                                    id:
+                                        id,
 
                                     sucesso:
                                         true,
 
-                                    preco,
+                                    preco:
+                                        preco,
 
                                     item:
                                         dados
+
                                 };
 
                             } catch (erro) {
@@ -1986,6 +2611,7 @@ app.post(
 
                                     erro:
                                         erro.message
+
                                 };
                             }
                         }
@@ -1994,7 +2620,10 @@ app.post(
 
 
             return res.json({
-                resultados
+
+                resultados:
+                    resultados
+
             });
 
         } catch (erro) {
@@ -2004,10 +2633,14 @@ app.post(
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
+
                 erro:
                     erro.message ||
                     "Erro atualizando preços."
+
             });
         }
     }
@@ -2015,7 +2648,42 @@ app.post(
 
 
 /* =========================================================
-   INICIAR SERVIDOR
+   ERRO GERAL
+   ========================================================= */
+
+app.use(
+    (erro, req, res, next) => {
+
+        console.error(
+            "Erro geral:",
+            erro
+        );
+
+
+        if (
+            res.headersSent
+        ) {
+
+            return next(
+                erro
+            );
+        }
+
+
+        return res.status(
+            500
+        ).json({
+
+            erro:
+                "Erro interno do servidor."
+
+        });
+    }
+);
+
+
+/* =========================================================
+   INICIAR
    ========================================================= */
 
 app.listen(
@@ -2023,7 +2691,27 @@ app.listen(
     () => {
 
         console.log(
-            `Servidor ML Hub Pro rodando na porta ${PORT}`
+            "======================================"
+        );
+
+        console.log(
+            "ML Hub Pro iniciado"
+        );
+
+        console.log(
+            `Porta: ${PORT}`
+        );
+
+        console.log(
+            `Site: ${SITE_URL}`
+        );
+
+        console.log(
+            `Callback: ${SITE_URL}/auth/callback`
+        );
+
+        console.log(
+            "======================================"
         );
 
     }
