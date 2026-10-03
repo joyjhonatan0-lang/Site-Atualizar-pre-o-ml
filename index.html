@@ -2224,6 +2224,86 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
 
 
+
+<!-- =====================================================
+     OPERAÇÃO EM ESCALA
+===================================================== -->
+<section id="secao-operacao" class="hidden space-y-6">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Escala</div>
+            <h1 class="text-2xl font-black text-white mt-1">Central de Operação</h1>
+            <p class="text-xs text-slate-500 mt-1">Paginação no servidor, filtros e ações em massa sem carregar toda a conta no navegador.</p>
+        </div>
+        <button onclick="carregarOperacaoV2(1)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">Atualizar anúncios</button>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            <input id="v2-busca" class="lg:col-span-2 bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs" placeholder="MLB, SKU ou título">
+            <select id="v2-status" class="bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs">
+                <option value="">Todos os status</option><option value="active">Ativos</option><option value="paused">Pausados</option><option value="closed">Finalizados</option>
+            </select>
+            <select id="v2-order" class="bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs">
+                <option value="last_updated_desc">Atualizados recentemente</option>
+                <option value="sold_quantity_desc">Mais vendidos</option>
+                <option value="price_desc">Maior preço</option>
+                <option value="price_asc">Menor preço</option>
+            </select>
+            <button onclick="carregarOperacaoV2(1)" class="bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl px-4 py-3 text-xs">Buscar / filtrar</button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Total na conta</div><div id="v2-total" class="text-2xl font-black text-white mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Página</div><div id="v2-pagina" class="text-2xl font-black text-yellow-400 mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Selecionados</div><div id="v2-selecionados" class="text-2xl font-black text-emerald-400 mt-2">0</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Modo</div><div class="text-sm font-black text-white mt-3">Server-side</div></div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-wrap gap-2 items-center">
+            <button onclick="acaoMassaV2('pausar')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-white">Pausar selecionados</button>
+            <button onclick="acaoMassaV2('ativar')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-white">Ativar selecionados</button>
+            <input id="v2-estoque-massa" type="number" min="0" class="w-28 bg-slate-950 border border-slate-700 text-white px-3 py-2.5 rounded-xl text-xs" placeholder="Estoque">
+            <button onclick="acaoMassaV2('estoque')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-white">Aplicar estoque</button>
+            <input id="v2-percentual" type="number" step="0.1" class="w-28 bg-slate-950 border border-slate-700 text-white px-3 py-2.5 rounded-xl text-xs" placeholder="% preço">
+            <button onclick="acaoMassaV2('preco_percentual')" class="px-4 py-2.5 rounded-xl bg-yellow-400 text-slate-950 text-xs font-black">Ajustar preço %</button>
+        </div>
+        <div id="v2-massa-status" class="text-[11px] text-slate-500 mt-3"></div>
+    </div>
+
+    <div class="panel rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="futuristic-table"><tr><th class="p-3"><input id="v2-check-all" type="checkbox" onchange="selecionarPaginaV2(this.checked)"></th><th class="p-3">Anúncio</th><th class="p-3">SKU</th><th class="p-3">Preço</th><th class="p-3">Estoque</th><th class="p-3">Vendidos</th><th class="p-3">Status</th></tr></thead>
+                <tbody id="v2-tabela" class="divide-y divide-slate-800"><tr><td colspan="7" class="p-10 text-center text-xs text-slate-600">Clique em Atualizar anúncios.</td></tr></tbody>
+            </table>
+        </div>
+        <div class="p-4 border-t border-slate-800 flex items-center justify-between">
+            <button onclick="carregarOperacaoV2(Math.max(1,v2PaginaAtual-1))" class="px-4 py-2 rounded-lg bg-slate-800 text-xs font-bold text-white">← Anterior</button>
+            <div id="v2-paginacao" class="text-xs text-slate-500">—</div>
+            <button onclick="carregarOperacaoV2(Math.min(v2Paginas,v2PaginaAtual+1))" class="px-4 py-2 rounded-lg bg-slate-800 text-xs font-bold text-white">Próxima →</button>
+        </div>
+    </div>
+</section>
+
+<!-- =====================================================
+     ALERTAS OPERACIONAIS
+===================================================== -->
+<section id="secao-alertas" class="hidden space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Monitoramento</div><h1 class="text-2xl font-black text-white mt-1">Central de Alertas</h1><p class="text-xs text-slate-500 mt-1">Estoque crítico, anúncios sem SKU e situações que precisam de atenção.</p></div>
+        <button onclick="carregarAlertasV2()" class="bg-yellow-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">Verificar agora</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Alertas encontrados</div><div id="v2-alertas-total" class="text-2xl font-black text-yellow-400 mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Anúncios analisados</div><div id="v2-alertas-analisados" class="text-2xl font-black text-white mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Total da conta</div><div id="v2-alertas-conta" class="text-2xl font-black text-white mt-2">—</div></div>
+    </div>
+    <div id="v2-alertas-lista" class="space-y-3"><div class="panel rounded-2xl p-10 text-center text-xs text-slate-600">Clique em Verificar agora.</div></div>
+</section>
+
 <!-- =====================================================
      PERFIL
 ===================================================== -->
@@ -6871,6 +6951,90 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     atualizarStatusOAuthML();
 });
+</script>
+
+
+<script id="mlhub-v2-escala">
+let v2PaginaAtual = 1;
+let v2Paginas = 1;
+let v2Selecionados = new Set();
+
+function atualizarContadorSelecionadosV2() {
+    const el = document.getElementById('v2-selecionados');
+    if (el) el.innerText = v2Selecionados.size.toLocaleString('pt-BR');
+}
+function selecionarPaginaV2(marcado) {
+    document.querySelectorAll('.v2-check-item').forEach(c => {
+        c.checked = marcado;
+        if (marcado) v2Selecionados.add(c.value); else v2Selecionados.delete(c.value);
+    });
+    atualizarContadorSelecionadosV2();
+}
+function alternarSelecionadoV2(id, marcado) {
+    if (marcado) v2Selecionados.add(id); else v2Selecionados.delete(id);
+    atualizarContadorSelecionadosV2();
+}
+async function carregarOperacaoV2(pagina=1) {
+    const token = obterToken();
+    if (!token) return solicitarToken();
+    const tabela = document.getElementById('v2-tabela');
+    if (tabela) tabela.innerHTML = '<tr><td colspan="7" class="p-10 text-center text-xs text-yellow-400">Carregando anúncios...</td></tr>';
+    const q = document.getElementById('v2-busca')?.value.trim() || '';
+    const status = document.getElementById('v2-status')?.value || '';
+    const order = document.getElementById('v2-order')?.value || 'last_updated_desc';
+    try {
+        const params = new URLSearchParams({page:String(pagina),limit:'50',q,status,order});
+        const r = await fetch(`${RENDER_URL}/api/v2/anuncios?${params}`, {headers:{Authorization:token}});
+        const d = await r.json();
+        if (!r.ok || !d.sucesso) throw new Error(d.erro || 'Falha ao carregar anúncios.');
+        v2PaginaAtual=d.pagina; v2Paginas=d.paginas;
+        document.getElementById('v2-total').innerText=Number(d.total||0).toLocaleString('pt-BR');
+        document.getElementById('v2-pagina').innerText=`${d.pagina}/${d.paginas}`;
+        document.getElementById('v2-paginacao').innerText=`Página ${d.pagina} de ${d.paginas} · ${Number(d.total||0).toLocaleString('pt-BR')} anúncios`;
+        tabela.innerHTML = (d.itens||[]).map(i=>`<tr class="hover:bg-slate-900/50">
+            <td class="p-3"><input class="v2-check-item" type="checkbox" value="${escapeHtml(i.id)}" ${v2Selecionados.has(i.id)?'checked':''} onchange="alternarSelecionadoV2(this.value,this.checked)"></td>
+            <td class="p-3"><div class="flex items-center gap-3"><img src="${escapeHtml(i.thumbnail||'')}" class="w-10 h-10 rounded-lg object-cover"><div><div class="text-xs font-bold text-white max-w-md truncate">${escapeHtml(i.titulo)}</div><div class="text-[10px] text-slate-500">${escapeHtml(i.id)}</div></div></div></td>
+            <td class="p-3 text-xs text-slate-300">${escapeHtml(i.sku||'—')}</td>
+            <td class="p-3 text-xs font-bold text-white">${moeda(i.preco)}</td>
+            <td class="p-3 text-xs text-white">${Number(i.estoque||0).toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-xs font-bold text-emerald-400">${Number(i.vendidos||0).toLocaleString('pt-BR')}</td>
+            <td class="p-3 text-xs text-slate-300">${escapeHtml(i.status||'')}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="p-10 text-center text-xs text-slate-600">Nenhum anúncio encontrado.</td></tr>';
+        atualizarContadorSelecionadosV2();
+    } catch(e) {
+        tabela.innerHTML=`<tr><td colspan="7" class="p-10 text-center text-xs text-red-300">${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+async function acaoMassaV2(acao) {
+    if (!v2Selecionados.size) return alert('Selecione ao menos um anúncio.');
+    if (v2Selecionados.size > 500) return alert('Faça a operação em lotes de até 500 anúncios.');
+    let valor=null;
+    if (acao==='estoque') valor=document.getElementById('v2-estoque-massa')?.value;
+    if (acao==='preco_percentual') valor=document.getElementById('v2-percentual')?.value;
+    if (!confirm(`Aplicar "${acao}" em ${v2Selecionados.size} anúncio(s)?`)) return;
+    const status=document.getElementById('v2-massa-status');
+    if(status) status.innerText='Processando lote...';
+    try {
+        const r=await fetch(`${RENDER_URL}/api/v2/anuncios/massa`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({ids:[...v2Selecionados],acao,valor})});
+        const d=await r.json();
+        if(!r.ok||!d.sucesso) throw new Error(d.erro||'Erro na operação.');
+        if(status) status.innerText=`Concluído: ${d.concluidos} sucesso(s), ${d.erros} erro(s).`;
+        v2Selecionados.clear(); atualizarContadorSelecionadosV2(); carregarOperacaoV2(v2PaginaAtual);
+    } catch(e) { if(status) status.innerText='Erro: '+e.message; }
+}
+async function carregarAlertasV2() {
+    const token=obterToken(); if(!token)return solicitarToken();
+    const lista=document.getElementById('v2-alertas-lista');
+    lista.innerHTML='<div class="panel rounded-2xl p-10 text-center text-xs text-yellow-400">Analisando...</div>';
+    try {
+        const r=await fetch(`${RENDER_URL}/api/v2/alertas`,{headers:{Authorization:token}});
+        const d=await r.json(); if(!r.ok||!d.sucesso)throw new Error(d.erro||'Falha ao gerar alertas.');
+        document.getElementById('v2-alertas-total').innerText=Number(d.alertas?.length||0).toLocaleString('pt-BR');
+        document.getElementById('v2-alertas-analisados').innerText=Number(d.analisados||0).toLocaleString('pt-BR');
+        document.getElementById('v2-alertas-conta').innerText=Number(d.total_conta||0).toLocaleString('pt-BR');
+        lista.innerHTML=(d.alertas||[]).map(a=>`<div class="panel rounded-2xl p-4 flex items-center justify-between gap-4"><div><div class="text-xs font-black text-white">${escapeHtml(a.titulo||a.item_id)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(a.mensagem)}</div></div><div class="text-[10px] uppercase font-black ${a.nivel==='alto'?'text-red-400':a.nivel==='medio'?'text-yellow-400':'text-blue-400'}">${escapeHtml(a.nivel)}</div></div>`).join('') || '<div class="panel rounded-2xl p-10 text-center text-xs text-emerald-400">Nenhum alerta encontrado na amostra analisada.</div>';
+    } catch(e){lista.innerHTML=`<div class="panel rounded-2xl p-10 text-center text-xs text-red-300">${escapeHtml(e.message)}</div>`;}
+}
 </script>
 
 </body>
