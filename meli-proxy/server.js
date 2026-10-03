@@ -255,12 +255,24 @@ app.post('/api/oauth/configure', async (req, res) => {
     }
 
     try {
-        new URL(redirect_uri);
+        const callback = new URL(redirect_uri);
+        if (callback.protocol !== 'https:') {
+            return respostaErro(res, 400, 'A URL de retorno precisa usar HTTPS.');
+        }
     } catch {
         return respostaErro(res, 400, 'URL de retorno inválida.');
     }
 
     const state = crypto.randomBytes(24).toString('hex');
+
+    // PKCE S256: necessário quando a aplicação do Mercado Livre está com PKCE habilitado.
+    // Também reforça a segurança do fluxo de autorização.
+    const codeVerifier = crypto.randomBytes(48).toString('base64url');
+    const codeChallenge = crypto
+        .createHash('sha256')
+        .update(codeVerifier)
+        .digest('base64url');
+
     const storeAnterior = lerOAuthStore();
     const store = {
         ...storeAnterior,
@@ -269,7 +281,8 @@ app.post('/api/oauth/configure', async (req, res) => {
         redirect_uri: String(redirect_uri).trim(),
         frontend_url: String(frontend_url || DEFAULT_FRONTEND_URL).trim(),
         oauth_state: state,
-        oauth_state_created_at: Date.now()
+        oauth_state_created_at: Date.now(),
+        pkce_code_verifier: codeVerifier
     };
 
     if (access_token && String(access_token).trim()) {
@@ -283,7 +296,9 @@ app.post('/api/oauth/configure', async (req, res) => {
         response_type: 'code',
         client_id: store.client_id,
         redirect_uri: store.redirect_uri,
-        state
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
     });
 
     return res.json({
@@ -308,13 +323,21 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     try {
-        const body = new URLSearchParams({
+        const tokenPayload = {
             grant_type: 'authorization_code',
             client_id: String(store.client_id),
             client_secret: String(store.client_secret),
             code: String(code),
             redirect_uri: String(store.redirect_uri)
-        });
+        };
+
+        // Se a autorização foi iniciada com PKCE, o mesmo verifier deve ser
+        // enviado na troca do authorization code pelo token.
+        if (store.pkce_code_verifier) {
+            tokenPayload.code_verifier = String(store.pkce_code_verifier);
+        }
+
+        const body = new URLSearchParams(tokenPayload);
 
         const tokenRes = await fetch(`${ML_API}/oauth/token`, {
             method: 'POST',
@@ -338,6 +361,7 @@ app.get('/auth/callback', async (req, res) => {
             scope: tokenData.scope || null,
             oauth_state: null,
             oauth_state_created_at: null,
+            pkce_code_verifier: null,
             connected_at: new Date().toISOString()
         };
         salvarOAuthStore(novo);
