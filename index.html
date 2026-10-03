@@ -3947,367 +3947,113 @@ async function sincronizarPrecosApi() {
 
 async function sincronizarFretesApi() {
 
-    const token =
-        obterToken();
+    const token = obterToken();
 
     if (!token) {
-
         solicitarToken();
-
         return;
     }
 
-    if (
-        !cacheItens ||
-        cacheItens.length === 0
-    ) {
-
-        alert(
-            "Nenhum anúncio carregado."
-        );
-
+    if (!cacheItens || cacheItens.length === 0) {
+        alert("Nenhum anúncio carregado.");
         return;
     }
 
-    mostrarLoading(
-        "Puxando custos de frete..."
-    );
+    const mlbs = cacheItens
+        .map(item => item.id)
+        .filter(Boolean);
+
+    // Divide a sincronização em lotes pequenos. Assim o navegador não fica
+    // esperando uma única requisição processar milhares de anúncios no Render.
+    const TAMANHO_LOTE = 20;
+    let atualizados = 0;
+    let falhas = 0;
+
+    mostrarLoading(`Puxando custos de frete... 0/${mlbs.length}`);
 
     try {
+        for (let inicio = 0; inicio < mlbs.length; inicio += TAMANHO_LOTE) {
+            const lote = mlbs.slice(inicio, inicio + TAMANHO_LOTE);
 
-        const mlbs =
-            cacheItens.map(
-                item => item.id
+            mostrarLoading(
+                `Puxando custos de frete... ${Math.min(inicio + lote.length, mlbs.length)}/${mlbs.length}`
             );
 
-        const response =
-            await fetch(
-                `${RENDER_URL}/api/sincronizar-fretes`,
-                {
-                    method:
-                        'POST',
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 45000);
 
-                    headers: {
-                        'Content-Type':
-                            'application/json',
-
-                        Authorization:
-                            token
-                    },
-
-                    body:
-                        JSON.stringify({
-                            ids:
-                                mlbs
-                        })
+                let response;
+                try {
+                    response = await fetch(
+                        `${RENDER_URL}/api/sincronizar-fretes`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: token
+                            },
+                            body: JSON.stringify({ ids: lote }),
+                            signal: controller.signal
+                        }
+                    );
+                } finally {
+                    clearTimeout(timeout);
                 }
-            );
 
-        const data =
-            await response.json();
+                const data = await response.json();
 
-        if (
-            response.ok &&
-            data.fretes
-        ) {
-
-            cacheItens.forEach(
-                item => {
-
-                    const frete =
-                        data.fretes[
-                            item.id
-                        ];
-
-                    if (frete) {
-
-                        item.shipping_cost =
-                            frete.custo;
-
-                        item.free_shipping =
-                            frete.gratis;
-
-                        item.net_received =
-                            Math.max(
-                                0,
-                                Number(item.price || 0) -
-                                Number(item.sale_fee || 0) -
-                                Number(item.shipping_cost || 0)
-                            );
-                    }
+                if (!response.ok || !data.fretes) {
+                    falhas += lote.length;
+                    console.error('Falha no lote de fretes:', data);
+                    continue;
                 }
-            );
 
-            atualizarCards(
-                cacheItens
-            );
+                cacheItens.forEach(item => {
+                    const frete = data.fretes[item.id];
+                    if (!frete) return;
 
-            executarBusca();
+                    item.shipping_cost = Number(frete.custo || 0);
+                    item.free_shipping = Boolean(frete.gratis);
+                    item.net_received = Math.max(
+                        0,
+                        Number(item.price || 0) -
+                        Number(item.sale_fee || 0) -
+                        Number(item.shipping_cost || 0)
+                    );
+                    atualizados++;
+                });
 
+                // Atualiza a tela a cada lote, sem esperar todos os anúncios.
+                atualizarCards(cacheItens);
+                executarBusca();
+
+            } catch (erroLote) {
+                falhas += lote.length;
+                console.error('Erro ao sincronizar lote de fretes:', erroLote);
+            }
+        }
+
+        atualizarCards(cacheItens);
+        executarBusca();
+
+        if (atualizados > 0) {
             alert(
-                'Fretes sincronizados com sucesso.'
+                falhas > 0
+                    ? `Fretes atualizados: ${atualizados}. Alguns anúncios não responderam e podem ser sincronizados novamente.`
+                    : `Fretes sincronizados com sucesso. ${atualizados} anúncios atualizados.`
             );
-
         } else {
-
-            alert(
-                data.erro ||
-                'Erro ao sincronizar fretes.'
-            );
+            alert('Não foi possível atualizar os fretes. Tente novamente.');
         }
 
     } catch (error) {
-
-        alert(
-            'Erro de comunicação.'
-        );
-
+        console.error(error);
+        alert('Erro de comunicação ao sincronizar fretes.');
     } finally {
-
         esconderLoading();
     }
 }
-
-
-function atualizarCards(
-    itens
-) {
-
-    const ativos =
-        itens.filter(
-            item =>
-                item.status ===
-                'active'
-        ).length;
-
-    document.getElementById(
-        'total-listado'
-    ).innerText =
-        itens.length;
-
-    document.getElementById(
-        'total-ativos'
-    ).innerText =
-        ativos;
-
-    document.getElementById(
-        'total-outros'
-    ).innerText =
-        itens.length -
-        ativos;
-}
-
-
-function montarTabelaGestao(
-    itens
-) {
-
-    const tbody =
-        document.getElementById(
-            'tabela-gestao'
-        );
-
-    if (!tbody) {
-        return;
-    }
-
-    tbody.innerHTML = '';
-
-    itens.forEach(
-        item => {
-
-            const index =
-                cacheItens.findIndex(
-                    i => i.id === item.id
-                );
-
-            const tr =
-                document.createElement(
-                    'tr'
-                );
-
-            tr.innerHTML =
-                `
-                <td class="p-4">
-                    <div class="flex items-center gap-3 min-w-[360px]">
-
-                        <img
-                            src="${escapeHtml(item.thumbnail)}"
-                            class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800 shrink-0"
-                        >
-
-                        <div class="min-w-0 flex-1 space-y-2">
-
-                            <div class="relative">
-                                <input
-                                    id="titulo_gestao_${index}"
-                                    type="text"
-                                    value="${escapeHtml(item.title)}"
-                                    maxlength="200"
-                                    oninput="atualizarContadorTituloGestao(${index})"
-                                    class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 pr-14 rounded-lg outline-none focus:border-yellow-400/60"
-                                    title="Editar título do anúncio - limite de 60 caracteres"
-                                >
-                                <span
-                                    id="contador_titulo_gestao_${index}"
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold ${String(item.title || '').length > 60 ? 'text-red-500' : 'text-slate-500'}"
-                                >
-                                    ${String(item.title || '').length}/60
-                                </span>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-slate-500 shrink-0">
-                                    ${escapeHtml(item.id)}
-                                </span>
-
-                                <span class="text-[10px] text-slate-600">•</span>
-
-                                <span class="text-[10px] text-slate-500 shrink-0">SKU:</span>
-
-                                <input
-                                    id="sku_gestao_${index}"
-                                    type="text"
-                                    value="${escapeHtml(item.sku === 'Sem SKU' ? '' : item.sku)}"
-                                    class="min-w-[120px] flex-1 bg-slate-950 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-1.5 rounded-lg outline-none focus:border-yellow-400/60"
-                                    placeholder="Sem SKU"
-                                    title="Editar SKU do anúncio"
-                                >
-                            </div>
-
-                        </div>
-
-                    </div>
-                </td>
-
-                <td class="p-4">
-                    <span class="font-black text-white">
-                        ${moeda(item.price)}
-                    </span>
-                </td>
-
-                <td class="p-4 text-slate-400">
-                    Comissão:
-                    <span class="text-slate-300">
-                        ${moeda(item.sale_fee)}
-                    </span>
-
-                    <br>
-
-                    Frete:
-                    <span class="text-slate-300">
-                        ${moeda(item.shipping_cost)}
-                    </span>
-                </td>
-
-                <td class="p-4">
-                    <span class="font-black text-emerald-400">
-                        ${moeda(item.net_received)}
-                    </span>
-                </td>
-
-                <td class="p-4">
-                    <div class="flex items-center gap-1.5 min-w-[90px]">
-                        <input
-                            id="estoque_gestao_${index}"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value="${Number(item.available_quantity || 0)}"
-                            class="w-20 bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-2 rounded-lg outline-none focus:border-yellow-400/60"
-                            title="Editar quantidade disponível no Mercado Livre"
-                        >
-                        <span class="text-slate-600">un.</span>
-                    </div>
-                </td>
-
-                <td class="p-4">
-                    <span class="font-black text-white">
-                        ${Number(item.sold_quantity || 0)}
-                    </span>
-                    <span class="text-slate-600">
-                        un.
-                    </span>
-                </td>
-
-                <td class="p-4">
-
-                    <div class="flex items-center gap-2">
-
-                        <span
-                            class="status-dot ${item.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}"
-                        ></span>
-
-                        <span
-                            class="text-[11px] font-bold ${item.status === 'active' ? 'text-emerald-400' : 'text-slate-400'}"
-                            title="Situação retornada pela API do Mercado Livre"
-                        >
-                            ${escapeHtml(item.status || '')}
-                        </span>
-
-                    </div>
-
-                </td>
-
-                <td class="p-4">
-                    <div class="flex flex-col gap-2 min-w-[105px]">
-
-                        <button
-                            type="button"
-                            onclick="salvarEdicaoAnuncio(${index})"
-                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-[10px] font-black"
-                        >
-                            Salvar
-                        </button>
-
-                        ${(item.status === 'active' || item.status === 'paused') ? `
-                        <button
-                            type="button"
-                            onclick="alternarStatusAnuncio(${index})"
-                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg ${item.status === 'active' ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} text-[10px] font-black"
-                        >
-                            ${item.status === 'active' ? 'Pausar' : 'Ativar'}
-                        </button>
-                        ` : ''}
-
-                        <a
-                            href="${escapeHtml(item.permalink)}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 text-[10px] font-bold"
-                        >
-                            Ver anúncio ↗
-                        </a>
-
-                    </div>
-                </td>
-                `;
-
-            tbody.appendChild(
-                tr
-            );
-        }
-    );
-}
-
-
-function atualizarContadorTituloGestao(index) {
-    const input = document.getElementById(`titulo_gestao_${index}`);
-    const contador = document.getElementById(`contador_titulo_gestao_${index}`);
-
-    if (!input || !contador) return;
-
-    const quantidade = input.value.length;
-    contador.textContent = `${quantidade}/60`;
-
-    const ultrapassou = quantidade > 60;
-    input.classList.toggle('text-red-500', ultrapassou);
-    input.classList.toggle('border-red-500', ultrapassou);
-    input.classList.toggle('text-white', !ultrapassou);
-    contador.classList.toggle('text-red-500', ultrapassou);
-    contador.classList.toggle('text-slate-500', !ultrapassou);
-}
-
 
 async function salvarEdicaoAnuncio(index) {
     const token = obterToken();
