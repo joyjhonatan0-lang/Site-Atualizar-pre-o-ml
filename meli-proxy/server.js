@@ -342,14 +342,12 @@ app.get('/api/anuncios', async (req, res) => {
                                 token
                             );
 
+                        // Valor líquido exibido no painel: preço - comissão - custo de envio.
+                        // O usuário pediu que o frete seja descontado sempre do campo "Você recebe".
                         let liquido =
                             preco -
                             comissao -
-                            (
-                                freeShipping
-                                    ? custoEnvio
-                                    : 0
-                            );
+                            custoEnvio;
 
                         if (liquido < 0) {
                             liquido = 0;
@@ -1623,7 +1621,7 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
         return respostaErro(res, 401, 'Token não fornecido.');
     }
 
-    const { id, title, sku } = req.body || {};
+    const { id, title, sku, available_quantity } = req.body || {};
 
     if (!id) {
         return respostaErro(res, 400, 'ID do anúncio não informado.');
@@ -1631,6 +1629,11 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
 
     const tituloLimpo = String(title ?? '').trim();
     const skuLimpo = String(sku ?? '').trim();
+    const estoqueNovo = Number(available_quantity);
+
+    if (!Number.isInteger(estoqueNovo) || estoqueNovo < 0) {
+        return respostaErro(res, 400, 'Quantidade de estoque inválida. Informe um número inteiro igual ou maior que zero.');
+    }
 
     if (!tituloLimpo) {
         return respostaErro(res, 400, 'O título do anúncio não pode ficar vazio.');
@@ -1666,8 +1669,10 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
         const tituloAtual = String(atual.title ?? '').trim();
         const alterouSku = skuLimpo !== skuAtual;
         const alterouTitulo = tituloLimpo !== tituloAtual;
+        const estoqueAtual = Number(atual.available_quantity || 0);
+        const alterouEstoque = estoqueNovo !== estoqueAtual;
 
-        if (!alterouSku && !alterouTitulo) {
+        if (!alterouSku && !alterouTitulo && !alterouEstoque) {
             return res.json({
                 sucesso: true,
                 alterou: false,
@@ -1676,7 +1681,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                     title: tituloAtual,
                     sku: skuAtual || 'Sem SKU',
                     status: atual.status,
-                    sold_quantity: Number(atual.sold_quantity || 0)
+                    sold_quantity: Number(atual.sold_quantity || 0),
+                    available_quantity: Number(atual.available_quantity || 0)
                 }
             });
         }
@@ -1721,6 +1727,29 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
             alteracoes.push('SKU');
         }
 
+        // Estoque é atualizado isoladamente para não misturar a alteração com título/SKU.
+        if (alterouEstoque) {
+            const estoqueRes = await mlFetch(
+                `${ML_API}/items/${encodeURIComponent(id)}`,
+                token,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ available_quantity: estoqueNovo })
+                }
+            );
+            const estoqueData = await jsonSeguro(estoqueRes);
+            if (!estoqueRes.ok) {
+                return respostaErro(
+                    res,
+                    estoqueRes.status || 400,
+                    formatarErroMercadoLivre(estoqueData) || 'O Mercado Livre recusou a alteração do estoque.'
+                );
+            }
+            ultimoRetorno = estoqueData;
+            alteracoes.push('estoque');
+        }
+
         // O Mercado Livre não permite alterar o título de um anúncio que já
         // possui vendas. Só tentamos o PUT de title quando ele realmente mudou.
         if (alterouTitulo) {
@@ -1737,7 +1766,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                         title: tituloAtual,
                         sku: skuLimpo || skuAtual || 'Sem SKU',
                         status: atual.status,
-                        sold_quantity: Number(atual.sold_quantity || 0)
+                        sold_quantity: Number(atual.sold_quantity || 0),
+                        available_quantity: Number(atual.available_quantity || 0)
                     }
                 });
             }
@@ -1816,7 +1846,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                         title: tituloAtual,
                         sku: skuLimpo || skuAtual || 'Sem SKU',
                         status: atual.status,
-                        sold_quantity: Number(atual.sold_quantity || 0)
+                        sold_quantity: Number(atual.sold_quantity || 0),
+                        available_quantity: Number(atual.available_quantity || 0)
                     }
                 });
             }
@@ -1868,6 +1899,45 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
 /* =========================================================
    SERVIDOR
 ========================================================= */
+
+
+
+/* =========================================================
+   ALTERAR STATUS DO ANÚNCIO - PAUSAR / ATIVAR
+========================================================= */
+app.put('/api/alterar-status-anuncio', async (req, res) => {
+    const token = obterToken(req);
+    if (!token) return respostaErro(res, 401, 'Token não fornecido.');
+
+    const { id, status } = req.body || {};
+    if (!id) return respostaErro(res, 400, 'ID do anúncio não informado.');
+    if (!['active', 'paused'].includes(status)) {
+        return respostaErro(res, 400, 'Status inválido. Use active ou paused.');
+    }
+
+    try {
+        const mlRes = await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}`, token, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ status })
+        });
+        const mlData = await jsonSeguro(mlRes);
+        if (!mlRes.ok) {
+            return respostaErro(res, mlRes.status || 400, formatarErroMercadoLivre(mlData) || 'O Mercado Livre recusou a alteração de status.');
+        }
+        return res.json({
+            sucesso: true,
+            item: {
+                id: mlData.id || id,
+                status: mlData.status || status,
+                available_quantity: Number(mlData.available_quantity || 0)
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao alterar status:', error);
+        return respostaErro(res, 500, 'Erro de conexão ao alterar status: ' + error.message);
+    }
+});
 
 app.listen(
     PORT,
