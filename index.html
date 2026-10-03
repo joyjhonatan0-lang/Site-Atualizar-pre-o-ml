@@ -3664,13 +3664,10 @@ function limparBusca() {
 
 async function carregarDados() {
 
-    const token =
-        obterToken();
+    const token = obterToken();
 
     if (!token) {
-
         solicitarToken();
-
         return;
     }
 
@@ -3679,64 +3676,82 @@ async function carregarDados() {
     );
 
     try {
+        // O Render pode estar acordando ou encerrar uma conexão longa.
+        // Faz até 3 tentativas sem interferir na rotina separada de fretes.
+        let response = null;
+        let ultimoErro = null;
 
-        const response =
-            await fetch(
-                `${RENDER_URL}/api/anuncios`,
-                {
-                    headers: {
-                        Authorization:
-                            token
-                    }
+        for (let tentativa = 1; tentativa <= 3; tentativa++) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 120000);
+
+                try {
+                    response = await fetch(
+                        `${RENDER_URL}/api/anuncios`,
+                        {
+                            headers: { Authorization: token },
+                            signal: controller.signal
+                        }
+                    );
+                } finally {
+                    clearTimeout(timeout);
                 }
-            );
 
-        const data =
-            await response.json();
+                if (response) break;
+            } catch (erroTentativa) {
+                ultimoErro = erroTentativa;
+                console.warn(`Tentativa ${tentativa}/3 ao carregar anúncios falhou:`, erroTentativa);
 
-        if (
-            response.ok &&
-            data.itens
-        ) {
+                if (tentativa < 3) {
+                    mostrarLoading(
+                        `Reconectando ao servidor... tentativa ${tentativa + 1}/3`
+                    );
+                    await new Promise(resolve => setTimeout(resolve, 2500));
+                }
+            }
+        }
 
-            cacheItens =
-                data.itens;
+        if (!response) {
+            throw ultimoErro || new Error('Servidor não respondeu.');
+        }
 
-            atualizarCards(
-                cacheItens
-            );
+        const texto = await response.text();
+        let data = {};
 
+        try {
+            data = texto ? JSON.parse(texto) : {};
+        } catch (_) {
+            throw new Error(`Resposta inválida do servidor (HTTP ${response.status}).`);
+        }
+
+        if (response.ok && Array.isArray(data.itens)) {
+            cacheItens = data.itens;
+            atualizarCards(cacheItens);
             executarBusca();
+            mudarAba('gestao');
 
-            mudarAba(
-                'gestao'
-            );
-
-            alert(
-                `Sucesso! ${cacheItens.length} anúncios carregados.`
-            );
-
+            alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
         } else {
-
             alert(
                 data.erro ||
-                'Erro ao carregar anúncios.'
+                `Erro ao carregar anúncios (HTTP ${response.status}).`
             );
-
         }
 
     } catch (error) {
+        console.error('Erro ao carregar anúncios:', error);
 
-        alert(
-            'Erro de comunicação com o servidor.'
-        );
+        const mensagem = error?.name === 'AbortError'
+            ? 'O servidor demorou demais para responder. Tente novamente em alguns segundos.'
+            : `Erro de comunicação com o servidor${error?.message ? ': ' + error.message : '.'}`;
 
+        alert(mensagem);
     } finally {
-
+        // Garante que a tela nunca fique presa no modal de processamento.
         esconderLoading();
     }
 }
-
 
 async function puxarNovosAnuncios() {
 
