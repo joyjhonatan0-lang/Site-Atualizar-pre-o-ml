@@ -1,997 +1,1125 @@
-'use strict';
-
 const express = require('express');
 const cors = require('cors');
-
 const fetch = (...args) =>
-  import('node-fetch').then(({ default: fetch }) => fetch(...args));
+    import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const app = express();
 
+app.use(cors());
+app.use(express.json());
+
+/* =========================================================
+   CONFIGURAÇÃO
+========================================================= */
+
 const PORT = process.env.PORT || 3000;
-const ML_API = 'https://api.mercadolibre.com';
-
-app.use(
-  cors({
-    origin: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
-
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
 
 /* =========================================================
-   UTILITÁRIOS
+   FUNÇÕES AUXILIARES
 ========================================================= */
 
+// Aceita:
+// Authorization: Bearer APP_USR-...
+// Authorization: APP_USR-...
+// ou variável de ambiente ML_ACCESS_TOKEN
 function obterToken(req) {
-  let token = req.headers.authorization || '';
+    let token = req.headers['authorization'] || '';
 
-  if (token.toLowerCase().startsWith('bearer ')) {
-    token = token.slice(7);
-  }
+    token = String(token).trim();
 
-  token = token.trim();
-
-  if (!token) {
-    token = String(process.env.ML_ACCESS_TOKEN || '').trim();
-  }
-
-  return token;
-}
-
-function erroMensagem(error) {
-  if (!error) return 'Erro desconhecido.';
-  if (typeof error === 'string') return error;
-  return error.message || 'Erro desconhecido.';
-}
-
-async function lerRespostaJson(response) {
-  const texto = await response.text();
-
-  if (!texto) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(texto);
-  } catch {
-    return {
-      _respostaNaoJson: true,
-      _texto: texto,
-    };
-  }
-}
-
-async function mlFetch(url, token, options = {}) {
-  const headers = {
-    Accept: 'application/json',
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const data = await lerRespostaJson(response);
-
-  return {
-    response,
-    data,
-  };
-}
-
-function respostaErroMercadoLivre(data, status) {
-  return (
-    data?.message ||
-    data?.error ||
-    data?.cause?.[0]?.message ||
-    `Mercado Livre retornou HTTP ${status}.`
-  );
-}
-
-/* =========================================================
-   VALIDAÇÃO DE TOKEN
-========================================================= */
-
-async function validarTokenML(token) {
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const { response, data } = await mlFetch(
-      `${ML_API}/users/me`,
-      token
-    );
-
-    if (!response.ok || !data?.id) {
-      return null;
+    if (token.toLowerCase().startsWith('bearer ')) {
+        token = token.slice(7).trim();
     }
 
-    return data;
-  } catch (error) {
-    console.error('Erro validando Access Token:', erroMensagem(error));
-    return null;
-  }
+    if (!token) {
+        token = String(process.env.ML_ACCESS_TOKEN || '').trim();
+    }
+
+    return token;
 }
 
+
+// Valida o Access Token diretamente no Mercado Livre
+async function validarToken(token) {
+    if (!token) {
+        return {
+            valido: false,
+            erro: 'Token não fornecido.'
+        };
+    }
+
+    try {
+        const response = await fetch(
+            'https://api.mercadolibre.com/users/me',
+            {
+                headers: {
+                    Authorization: 'Bearer ' + token
+                }
+            }
+        );
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = {};
+        }
+
+        if (!response.ok || !data.id) {
+            return {
+                valido: false,
+                erro: data.message || 'Token inválido ou expirado.'
+            };
+        }
+
+        return {
+            valido: true,
+            usuario: data
+        };
+
+    } catch (e) {
+        return {
+            valido: false,
+            erro: 'Erro ao validar token: ' + e.message
+        };
+    }
+}
+
+
+// Função para fazer requisições ao Mercado Livre
+async function mercadoLivreFetch(url, token, options = {}) {
+    const headers = {
+        ...(options.headers || {}),
+        Authorization: 'Bearer ' + token
+    };
+
+    return fetch(url, {
+        ...options,
+        headers
+    });
+}
+
+
 /* =========================================================
-   HEALTH CHECK
+   ROTA PRINCIPAL
 ========================================================= */
 
 app.get('/', (req, res) => {
-  res.json({
-    online: true,
-    sistema: 'Painel Mercado Livre',
-    status: 'operacional',
-    timestamp: new Date().toISOString(),
-  });
+    res.send('Servidor proxy do Mercado Livre online!');
 });
 
-app.get('/api/health', async (req, res) => {
-  const token = obterToken(req);
-
-  let mercadoLivre = false;
-  let usuario = null;
-
-  if (token) {
-    usuario = await validarTokenML(token);
-    mercadoLivre = Boolean(usuario);
-  }
-
-  res.json({
-    online: true,
-    mercado_livre: mercadoLivre,
-    usuario: usuario
-      ? {
-          id: usuario.id,
-          nickname: usuario.nickname || '',
-          permalink: usuario.permalink || '',
-        }
-      : null,
-    timestamp: new Date().toISOString(),
-  });
-});
 
 /* =========================================================
-   AUTENTICAÇÃO
+   VALIDAÇÃO DO TOKEN
 ========================================================= */
 
-/*
-  O sistema agora trabalha SOMENTE com Access Token.
-
-  Client ID, Client Secret e Redirect URI não são necessários
-  para autenticar quando o usuário já possui um Access Token.
-
-  O Client Secret nunca é salvo pelo servidor.
-*/
-
-app.post('/api/auth/start', async (req, res) => {
-  try {
-    const accessToken = String(req.body?.access_token || '').trim();
-
-    if (!accessToken) {
-      return res.status(400).json({
-        sucesso: false,
-        erro: 'Informe o Access Token do Mercado Livre.',
-      });
-    }
-
-    const usuario = await validarTokenML(accessToken);
-
-    if (!usuario) {
-      return res.status(401).json({
-        sucesso: false,
-        erro: 'Access Token inválido, expirado ou sem autorização.',
-      });
-    }
-
-    return res.json({
-      sucesso: true,
-      autenticado: true,
-      usuario: {
-        id: usuario.id,
-        nickname: usuario.nickname || '',
-        nome: usuario.first_name || '',
-        sobrenome: usuario.last_name || '',
-        email: usuario.email || '',
-        permalink: usuario.permalink || '',
-      },
-    });
-  } catch (error) {
-    console.error('POST /api/auth/start:', error);
-
-    return res.status(500).json({
-      sucesso: false,
-      erro: 'Não foi possível validar o Access Token.',
-      detalhes: erroMensagem(error),
-    });
-  }
-});
-
+// Essa rota permite testar o token sem OAuth.
 app.get('/api/auth/status', async (req, res) => {
-  try {
+
     const token = obterToken(req);
 
     if (!token) {
-      return res.status(401).json({
-        autenticado: false,
-        erro: 'Access Token não informado.',
-      });
-    }
-
-    const usuario = await validarTokenML(token);
-
-    if (!usuario) {
-      return res.status(401).json({
-        autenticado: false,
-        erro: 'Access Token inválido ou expirado.',
-      });
-    }
-
-    return res.json({
-      autenticado: true,
-      usuario: {
-        id: usuario.id,
-        nickname: usuario.nickname || '',
-        nome: usuario.first_name || '',
-        sobrenome: usuario.last_name || '',
-        email: usuario.email || '',
-        permalink: usuario.permalink || '',
-      },
-    });
-  } catch (error) {
-    console.error('GET /api/auth/status:', error);
-
-    return res.status(500).json({
-      autenticado: false,
-      erro: 'Erro ao verificar autenticação.',
-    });
-  }
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  /*
-    O token fica no sessionStorage do navegador.
-    Portanto, logout no servidor não precisa revogar o token
-    do Mercado Livre.
-  */
-
-  return res.json({
-    sucesso: true,
-    mensagem: 'Sessão encerrada.',
-  });
-});
-
-/* =========================================================
-   OBTENÇÃO DOS ANÚNCIOS
-========================================================= */
-
-app.get('/api/anuncios', async (req, res) => {
-  try {
-    const token = obterToken(req);
-
-    if (!token) {
-      return res.status(401).json({
-        erro: 'Access Token não informado.',
-      });
-    }
-
-    const usuario = await validarTokenML(token);
-
-    if (!usuario) {
-      return res.status(401).json({
-        erro: 'Access Token inválido ou expirado.',
-      });
-    }
-
-    const sellerId = usuario.id;
-
-    const limiteSolicitado = Number(req.query.limit || 50);
-
-    const limit = Math.min(
-      Math.max(Number.isFinite(limiteSolicitado) ? limiteSolicitado : 50, 1),
-      100
-    );
-
-    const offset = Math.max(Number(req.query.offset || 0), 0);
-
-    const status = req.query.status || 'active';
-
-    const searchParams = new URLSearchParams({
-      seller_id: String(sellerId),
-      status,
-      limit: String(limit),
-      offset: String(offset),
-    });
-
-    const busca = await mlFetch(
-      `${ML_API}/users/${sellerId}/items/search?${searchParams}`,
-      token
-    );
-
-    if (!busca.response.ok) {
-      return res.status(busca.response.status).json({
-        erro: respostaErroMercadoLivre(
-          busca.data,
-          busca.response.status
-        ),
-        mercado_livre: busca.data,
-      });
-    }
-
-    const ids = Array.isArray(busca.data?.results)
-      ? busca.data.results
-      : [];
-
-    if (!ids.length) {
-      return res.json({
-        sucesso: true,
-        usuario: {
-          id: usuario.id,
-          nickname: usuario.nickname || '',
-        },
-        total: Number(busca.data?.paging?.total || 0),
-        limit,
-        offset,
-        anuncios: [],
-      });
-    }
-
-    const anuncios = [];
-
-    /*
-      O endpoint de itens permite buscar vários anúncios.
-      Para evitar URLs gigantes, dividimos em lotes.
-    */
-
-    const tamanhoLote = 20;
-
-    for (let i = 0; i < ids.length; i += tamanhoLote) {
-      const lote = ids.slice(i, i + tamanhoLote);
-
-      const detalhes = await mlFetch(
-        `${ML_API}/items?ids=${encodeURIComponent(lote.join(','))}`,
-        token
-      );
-
-      if (!detalhes.response.ok) {
-        continue;
-      }
-
-      const lista = Array.isArray(detalhes.data)
-        ? detalhes.data
-        : [];
-
-      for (const resultado of lista) {
-        const item = resultado?.body || resultado;
-
-        if (!item?.id) {
-          continue;
-        }
-
-        let saleFee = 0;
-
-        try {
-          const feeResponse = await mlFetch(
-            `${ML_API}/items/${item.id}/sale_fee`,
-            token
-          );
-
-          if (
-            feeResponse.response.ok &&
-            feeResponse.data
-          ) {
-            saleFee = Number(
-              feeResponse.data.sale_fee_amount ||
-              feeResponse.data.sale_fee ||
-              0
-            );
-          }
-        } catch {
-          saleFee = 0;
-        }
-
-        let shippingCost = 0;
-
-        try {
-          shippingCost = await calcularFreteExato(
-            item,
-            token
-          );
-        } catch {
-          shippingCost = 0;
-        }
-
-        const preco = Number(item.price || 0);
-
-        const freteGratuito =
-          item.shipping?.free_shipping === true;
-
-        const freteConsiderado = freteGratuito
-          ? Number(shippingCost || 0)
-          : 0;
-
-        const liquido = Math.max(
-          0,
-          preco - saleFee - freteConsiderado
-        );
-
-        anuncios.push({
-          id: item.id,
-
-          title: item.title || '',
-          titulo: item.title || '',
-
-          price: preco,
-          preco,
-
-          sale_fee: saleFee,
-          comissao: saleFee,
-
-          shipping_cost: freteConsiderado,
-          frete: freteConsiderado,
-
-          net_received: liquido,
-          liquido,
-
-          status: item.status || '',
-          permalink: item.permalink || '',
-
-          thumbnail:
-            item.thumbnail ||
-            item.pictures?.[0]?.secure_url ||
-            item.pictures?.[0]?.url ||
-            '',
-
-          category_id: item.category_id || '',
-          condition: item.condition || '',
-
-          available_quantity: Number(
-            item.available_quantity || 0
-          ),
-
-          sold_quantity: Number(
-            item.sold_quantity || 0
-          ),
-
-          listing_type_id:
-            item.listing_type_id || '',
-
-          shipping: item.shipping || {},
+        return res.status(401).json({
+            autenticado: false,
+            erro: 'Token não fornecido.'
         });
-      }
+    }
+
+    const validacao = await validarToken(token);
+
+    if (!validacao.valido) {
+        return res.status(401).json({
+            autenticado: false,
+            erro: validacao.erro
+        });
     }
 
     return res.json({
-      sucesso: true,
-
-      usuario: {
-        id: usuario.id,
-        nickname: usuario.nickname || '',
-        nome: usuario.first_name || '',
-      },
-
-      total: Number(
-        busca.data?.paging?.total ||
-          anuncios.length
-      ),
-
-      limit,
-      offset,
-
-      anuncios,
+        autenticado: true,
+        user_id: validacao.usuario.id,
+        nickname: validacao.usuario.nickname || '',
+        permalink: validacao.usuario.permalink || ''
     });
-  } catch (error) {
-    console.error('GET /api/anuncios:', error);
-
-    return res.status(500).json({
-      erro: 'Erro ao carregar anúncios.',
-      detalhes: erroMensagem(error),
-    });
-  }
 });
 
+
+// Mantida apenas para compatibilidade.
+// Não existe OAuth neste sistema.
+app.post('/api/auth/start', async (req, res) => {
+
+    const token =
+        String(req.body?.access_token || '').trim() ||
+        obterToken(req);
+
+    if (!token) {
+        return res.status(400).json({
+            sucesso: false,
+            erro: 'Access Token não fornecido.'
+        });
+    }
+
+    const validacao = await validarToken(token);
+
+    if (!validacao.valido) {
+        return res.status(401).json({
+            sucesso: false,
+            erro: validacao.erro
+        });
+    }
+
+    return res.json({
+        sucesso: true,
+        autenticado: true,
+        user_id: validacao.usuario.id,
+        nickname: validacao.usuario.nickname || ''
+    });
+});
+
+
+// Como o token fica no navegador, logout simplesmente confirma.
+app.post('/api/auth/logout', (req, res) => {
+    res.json({
+        sucesso: true
+    });
+});
+
+
 /* =========================================================
-   FRETE
+   FRETE EXATO
 ========================================================= */
 
 async function calcularFreteExato(itemObj, token) {
-  const itemId = itemObj?.id;
 
-  if (!itemId) {
-    return 0;
-  }
+    const shipping = itemObj.shipping || {};
+    const freeShipping = shipping.free_shipping || false;
 
-  try {
-    const saleFee = await mlFetch(
-      `${ML_API}/items/${itemId}/sale_fee`,
-      token
-    );
+    let custoEnvio = 6.85;
 
-    const data = saleFee.data;
+    if (freeShipping) {
 
-    if (
-      data?.sale_fee_details &&
-      data.sale_fee_details.shipping_fee !== undefined
-    ) {
-      return Number(
-        data.sale_fee_details.shipping_fee || 0
-      );
+        // Tenta buscar o custo exato via API de sale_fee
+        try {
+
+            const saleFeeRes = await mercadoLivreFetch(
+                `https://api.mercadolibre.com/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`,
+                token
+            );
+
+            if (saleFeeRes.ok) {
+
+                const saleFeeData =
+                    await saleFeeRes.json();
+
+                if (
+                    saleFeeData.sale_fee_details &&
+                    saleFeeData.sale_fee_details.shipping_fee !== undefined
+                ) {
+                    // CORREÇÃO: return na mesma linha
+                    return saleFeeData.sale_fee_details.shipping_fee;
+                }
+            }
+
+        } catch (e) {
+            // Ignora e segue para fallback
+        }
+
+
+        // Se for frete grátis e não pegou na API,
+        // usa custos declarados
+        if (
+            shipping.costs &&
+            Array.isArray(shipping.costs) &&
+            shipping.costs.length > 0
+        ) {
+
+            const cObj =
+                shipping.costs.find(
+                    c => c.cost !== undefined
+                );
+
+            if (cObj) {
+                return cObj.cost;
+            }
+        }
+
+        // Fallback original
+        custoEnvio = 12.95;
+
+    } else {
+
+        if (
+            shipping.costs &&
+            Array.isArray(shipping.costs) &&
+            shipping.costs.length > 0
+        ) {
+
+            const cObj =
+                shipping.costs.find(
+                    c => c.cost !== undefined
+                );
+
+            if (cObj) {
+                custoEnvio = cObj.cost;
+            }
+        }
     }
 
-    if (data?.shipping_fee !== undefined) {
-      return Number(data.shipping_fee || 0);
-    }
-  } catch (error) {
-    console.warn(
-      `Falha calculando frete de ${itemId}:`,
-      erroMensagem(error)
-    );
-  }
-
-  /*
-    Fallback.
-    Esse valor só é utilizado quando a API não informa
-    o frete detalhado.
-  */
-
-  if (itemObj?.shipping?.free_shipping) {
-    return 12.95;
-  }
-
-  return 0;
+    return custoEnvio;
 }
 
+
 /* =========================================================
-   SINCRONIZAÇÃO DE PREÇOS
+   1. TODOS OS ANÚNCIOS
+========================================================= */
+
+app.get('/api/anuncios', async (req, res) => {
+
+    const token = obterToken(req);
+
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
+    }
+
+
+    // Valida o token antes de começar a buscar anúncios
+    const validacao = await validarToken(token);
+
+    if (!validacao.valido) {
+        return res.status(401).json({
+            erro: "Token inválido ou expirado."
+        });
+    }
+
+
+    const existingIdsParam =
+        req.query.existingIds;
+
+    const existingIdsSet =
+        new Set(
+            existingIdsParam
+                ? existingIdsParam.split(',')
+                : []
+        );
+
+    const isAppendMode =
+        existingIdsSet.size > 0;
+
+
+    try {
+
+        const userData =
+            validacao.usuario;
+
+        let allIds = [];
+
+        let scrollId = null;
+
+        let hasMore = true;
+
+
+        while (hasMore) {
+
+            let url =
+                `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=50`;
+
+            if (scrollId) {
+                url += `&scroll_id=${encodeURIComponent(scrollId)}`;
+            }
+
+
+            const searchRes =
+                await mercadoLivreFetch(
+                    url,
+                    token
+                );
+
+
+            let searchData = {};
+
+            try {
+                searchData =
+                    await searchRes.json();
+            } catch (e) {
+                searchData = {};
+            }
+
+
+            if (!searchRes.ok) {
+
+                return res.status(searchRes.status).json({
+                    erro:
+                        searchData.message ||
+                        "Erro ao buscar anúncios no Mercado Livre."
+                });
+            }
+
+
+            const results =
+                searchData.results || [];
+
+
+            if (results.length > 0) {
+                allIds =
+                    allIds.concat(results);
+            }
+
+
+            scrollId =
+                searchData.scroll_id;
+
+
+            if (
+                results.length === 0 ||
+                !scrollId
+            ) {
+                hasMore = false;
+            }
+        }
+
+
+        if (allIds.length === 0) {
+
+            return res.json({
+                itens: []
+            });
+        }
+
+
+        let targetIds =
+            allIds;
+
+
+        if (isAppendMode) {
+
+            targetIds =
+                allIds.filter(
+                    id => !existingIdsSet.has(id)
+                );
+
+
+            if (targetIds.length === 0) {
+
+                return res.json({
+                    itens: [],
+                    mensagem:
+                        "Nenhum anúncio novo encontrado."
+                });
+            }
+        }
+
+
+        let listaFinal = [];
+
+
+        for (
+            let i = 0;
+            i < targetIds.length;
+            i += 20
+        ) {
+
+            const chunk =
+                targetIds.slice(
+                    i,
+                    i + 20
+                );
+
+
+            try {
+
+                const multiRes =
+                    await mercadoLivreFetch(
+                        `https://api.mercadolibre.com/items?ids=${chunk.join(",")}`,
+                        token
+                    );
+
+
+                const multiData =
+                    await multiRes.json();
+
+
+                const itensArray =
+                    Array.isArray(multiData)
+                        ? multiData
+                        : [];
+
+
+                for (
+                    const itemObj
+                    of itensArray
+                ) {
+
+                    if (
+                        itemObj &&
+                        itemObj.code === 200 &&
+                        itemObj.body
+                    ) {
+
+                        const body =
+                            itemObj.body;
+
+
+                        const idItem =
+                            body.id;
+
+
+                        const preco =
+                            body.price || 0;
+
+
+                        const listingType =
+                            body.listing_type_id ||
+                            'gold_special';
+
+
+                        const availableQty =
+                            body.available_quantity ||
+                            0;
+
+
+                        const title =
+                            body.title ||
+                            'Sem Título';
+
+
+                        const permalink =
+                            body.permalink ||
+                            '#';
+
+
+                        const thumbnail =
+                            body.thumbnail ||
+                            '';
+
+
+                        let sku =
+                            'Sem SKU';
+
+
+                        if (body.attributes) {
+
+                            const attrSku =
+                                body.attributes.find(
+                                    a =>
+                                        a.id ===
+                                        'SELLER_SKU'
+                                );
+
+
+                            if (
+                                attrSku &&
+                                attrSku.value_name
+                            ) {
+                                sku =
+                                    attrSku.value_name;
+                            }
+                        }
+
+
+                        const status =
+                            body.status ||
+                            'active';
+
+
+                        let comissao =
+                            body.sale_fee ||
+                            (
+                                listingType ===
+                                'gold_pro'
+                                    ? preco * 0.16
+                                    : preco * 0.11
+                            );
+
+
+                        const shipping =
+                            body.shipping || {};
+
+
+                        const freeShipping =
+                            shipping.free_shipping ||
+                            false;
+
+
+                        // Aplica o cálculo exato
+                        const custoEnvio =
+                            await calcularFreteExato(
+                                body,
+                                token
+                            );
+
+
+                        let liquido =
+                            preco -
+                            comissao -
+                            (
+                                freeShipping
+                                    ? custoEnvio
+                                    : 0
+                            );
+
+
+                        if (liquido < 0) {
+                            liquido = 0;
+                        }
+
+
+                        listaFinal.push({
+
+                            id: idItem,
+
+                            title: title,
+
+                            price: preco,
+
+                            status: status,
+
+                            listing_type_id:
+                                listingType,
+
+                            available_quantity:
+                                availableQty,
+
+                            sku: sku,
+
+                            permalink:
+                                permalink,
+
+                            thumbnail:
+                                thumbnail,
+
+                            sale_fee:
+                                comissao,
+
+                            shipping_cost:
+                                custoEnvio,
+
+                            free_shipping:
+                                freeShipping,
+
+                            net_received:
+                                liquido
+
+                        });
+                    }
+                }
+
+
+            } catch (chunkErr) {
+
+                console.error(
+                    "Erro ao buscar lote de IDs:",
+                    chunkErr
+                );
+            }
+        }
+
+
+        res.json({
+            itens: listaFinal
+        });
+
+
+    } catch (e) {
+
+        console.error(
+            "Erro /api/anuncios:",
+            e
+        );
+
+        res.status(500).json({
+            erro:
+                "Erro ao processar dados da API: " +
+                e.message
+        });
+    }
+});
+
+
+/* =========================================================
+   2. SINCRONIZAR PREÇOS
 ========================================================= */
 
 app.post('/api/sincronizar-precos', async (req, res) => {
-  try {
+
     const token = obterToken(req);
 
     if (!token) {
-      return res.status(401).json({
-        erro: 'Access Token não informado.',
-      });
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
     }
 
-    const ids = Array.isArray(req.body?.ids)
-      ? req.body.ids
-      : [];
 
-    if (!ids.length) {
-      return res.status(400).json({
-        erro: 'Nenhum anúncio foi informado.',
-      });
+    const { ids } =
+        req.body;
+
+
+    if (
+        !ids ||
+        !Array.isArray(ids) ||
+        ids.length === 0
+    ) {
+
+        return res.status(400).json({
+            erro:
+                "Lista de IDs inválida."
+        });
     }
 
-    const resultados = [];
 
-    for (const id of ids) {
-      try {
-        const resposta = await mlFetch(
-          `${ML_API}/items/${encodeURIComponent(id)}`,
-          token
-        );
+    let precosMap = {};
 
-        if (!resposta.response.ok) {
-          resultados.push({
-            id,
-            sucesso: false,
-            erro: respostaErroMercadoLivre(
-              resposta.data,
-              resposta.response.status
-            ),
-          });
 
-          continue;
+    try {
+
+        for (
+            let i = 0;
+            i < ids.length;
+            i += 20
+        ) {
+
+            const blocoIds =
+                ids
+                    .slice(i, i + 20)
+                    .join(',');
+
+
+            const multiRes =
+                await mercadoLivreFetch(
+                    `https://api.mercadolibre.com/items?ids=${blocoIds}`,
+                    token
+                );
+
+
+            const multiData =
+                await multiRes.json();
+
+
+            if (
+                Array.isArray(multiData)
+            ) {
+
+                multiData.forEach(
+                    itemObj => {
+
+                        if (
+                            itemObj.code === 200 &&
+                            itemObj.body
+                        ) {
+
+                            precosMap[
+                                itemObj.body.id
+                            ] =
+                                itemObj.body.price;
+                        }
+                    }
+                );
+            }
         }
 
-        const item = resposta.data;
 
-        resultados.push({
-          id,
-          sucesso: true,
-          preco: Number(item.price || 0),
-          titulo: item.title || '',
+        res.json({
+            precos:
+                precosMap
         });
-      } catch (error) {
-        resultados.push({
-          id,
-          sucesso: false,
-          erro: erroMensagem(error),
+
+
+    } catch (e) {
+
+        res.status(500).json({
+            erro:
+                "Erro ao buscar preços: " +
+                e.message
         });
-      }
     }
-
-    return res.json({
-      sucesso: true,
-      resultados,
-    });
-  } catch (error) {
-    console.error(
-      'POST /api/sincronizar-precos:',
-      error
-    );
-
-    return res.status(500).json({
-      erro: 'Erro ao sincronizar preços.',
-      detalhes: erroMensagem(error),
-    });
-  }
 });
 
+
 /* =========================================================
-   SINCRONIZAÇÃO DE FRETES
+   3. SINCRONIZAR FRETES
 ========================================================= */
 
 app.post('/api/sincronizar-fretes', async (req, res) => {
-  try {
+
     const token = obterToken(req);
 
     if (!token) {
-      return res.status(401).json({
-        erro: 'Access Token não informado.',
-      });
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
     }
 
-    const ids = Array.isArray(req.body?.ids)
-      ? req.body.ids
-      : [];
 
-    if (!ids.length) {
-      return res.status(400).json({
-        erro: 'Nenhum anúncio foi informado.',
-      });
+    const { ids } =
+        req.body;
+
+
+    if (
+        !ids ||
+        !Array.isArray(ids) ||
+        ids.length === 0
+    ) {
+
+        return res.status(400).json({
+            erro:
+                "Lista de IDs inválida."
+        });
     }
 
-    const resultados = [];
 
-    for (const id of ids) {
-      try {
-        const itemResponse = await mlFetch(
-          `${ML_API}/items/${encodeURIComponent(id)}`,
-          token
-        );
+    let fretesMap = {};
 
-        if (!itemResponse.response.ok) {
-          resultados.push({
-            id,
-            sucesso: false,
-            erro: respostaErroMercadoLivre(
-              itemResponse.data,
-              itemResponse.response.status
-            ),
-          });
 
-          continue;
+    try {
+
+        for (
+            let i = 0;
+            i < ids.length;
+            i += 20
+        ) {
+
+            const blocoIds =
+                ids
+                    .slice(i, i + 20)
+                    .join(',');
+
+
+            const multiRes =
+                await mercadoLivreFetch(
+                    `https://api.mercadolibre.com/items?ids=${blocoIds}`,
+                    token
+                );
+
+
+            const multiData =
+                await multiRes.json();
+
+
+            if (
+                Array.isArray(multiData)
+            ) {
+
+                for (
+                    const itemObj
+                    of multiData
+                ) {
+
+                    if (
+                        itemObj.code === 200 &&
+                        itemObj.body
+                    ) {
+
+                        const body =
+                            itemObj.body;
+
+
+                        const freeShipping =
+                            (
+                                body.shipping &&
+                                body.shipping.free_shipping
+                            ) ||
+                            false;
+
+
+                        const custoEnvio =
+                            await calcularFreteExato(
+                                body,
+                                token
+                            );
+
+
+                        fretesMap[
+                            body.id
+                        ] = {
+
+                            custo:
+                                custoEnvio,
+
+                            shipping_cost:
+                                custoEnvio,
+
+                            gratis:
+                                freeShipping,
+
+                            free_shipping:
+                                freeShipping
+                        };
+                    }
+                }
+            }
         }
 
-        const item = itemResponse.data;
 
-        const frete =
-          await calcularFreteExato(
-            item,
-            token
-          );
+        res.json({
+            fretes:
+                fretesMap
+        });
 
-        resultados.push({
-          id,
-          sucesso: true,
-          frete,
-          frete_gratis:
-            item.shipping?.free_shipping === true,
+
+    } catch (e) {
+
+        res.status(500).json({
+            erro:
+                "Erro ao buscar fretes: " +
+                e.message
         });
-      } catch (error) {
-        resultados.push({
-          id,
-          sucesso: false,
-          erro: erroMensagem(error),
-        });
-      }
     }
-
-    return res.json({
-      sucesso: true,
-      resultados,
-    });
-  } catch (error) {
-    console.error(
-      'POST /api/sincronizar-fretes:',
-      error
-    );
-
-    return res.status(500).json({
-      erro: 'Erro ao sincronizar fretes.',
-      detalhes: erroMensagem(error),
-    });
-  }
 });
 
+
 /* =========================================================
-   ATUALIZAR PREÇO INDIVIDUAL
+   4. ATUALIZAÇÃO INDIVIDUAL
 ========================================================= */
 
 app.post('/api/atualizar-preco', async (req, res) => {
-  try {
+
     const token = obterToken(req);
 
     if (!token) {
-      return res.status(401).json({
-        erro: 'Access Token não informado.',
-      });
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
     }
 
-    const id = String(req.body?.id || '').trim();
 
-    const preco = Number(
-      req.body?.preco ??
-        req.body?.price
-    );
+    const {
+        id,
+        price
+    } = req.body;
 
-    if (!id) {
-      return res.status(400).json({
-        erro: 'ID do anúncio não informado.',
-      });
-    }
 
     if (
-      !Number.isFinite(preco) ||
-      preco <= 0
+        !id ||
+        price === undefined
     ) {
-      return res.status(400).json({
-        erro: 'Informe um preço válido maior que zero.',
-      });
+
+        return res.status(400).json({
+            erro:
+                "ID ou preço não informados."
+        });
     }
 
-    const resposta = await mlFetch(
-      `${ML_API}/items/${encodeURIComponent(id)}`,
-      token,
-      {
-        method: 'PUT',
 
-        headers: {
-          'Content-Type': 'application/json',
-        },
+    try {
 
-        body: JSON.stringify({
-          price: Number(preco.toFixed(2)),
-        }),
-      }
-    );
+        const mlRes =
+            await mercadoLivreFetch(
+                `https://api.mercadolibre.com/items/${id}`,
+                token,
+                {
+                    method: 'PUT',
 
-    if (!resposta.response.ok) {
-      return res.status(
-        resposta.response.status
-      ).json({
-        sucesso: false,
-        erro: respostaErroMercadoLivre(
-          resposta.data,
-          resposta.response.status
-        ),
-        mercado_livre: resposta.data,
-      });
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            price:
+                                Number(price)
+                        })
+                }
+            );
+
+
+        const mlData =
+            await mlRes.json();
+
+
+        if (mlRes.ok) {
+
+            return res.json({
+                sucesso: true,
+                resultado:
+                    mlData
+            });
+        }
+
+
+        const mensagemErro =
+            mlData.message ||
+            (
+                mlData.cause &&
+                mlData.cause[0] &&
+                mlData.cause[0].message
+            ) ||
+            JSON.stringify(mlData);
+
+
+        res.status(400).json({
+            erro:
+                mensagemErro
+        });
+
+
+    } catch (e) {
+
+        res.status(500).json({
+            erro:
+                "Erro de conexão ao atualizar preço: " +
+                e.message
+        });
     }
-
-    return res.json({
-      sucesso: true,
-
-      mensagem:
-        'Preço atualizado com sucesso.',
-
-      anuncio: {
-        id: resposta.data.id || id,
-        titulo:
-          resposta.data.title || '',
-        preco: Number(
-          resposta.data.price || preco
-        ),
-      },
-
-      dados: resposta.data,
-    });
-  } catch (error) {
-    console.error(
-      'POST /api/atualizar-preco:',
-      error
-    );
-
-    return res.status(500).json({
-      sucesso: false,
-      erro: 'Erro ao atualizar preço.',
-      detalhes: erroMensagem(error),
-    });
-  }
 });
 
+
 /* =========================================================
-   ATUALIZAÇÃO EM MASSA
+   5. ATUALIZAÇÃO EM LOTE
 ========================================================= */
 
 app.post('/api/atualizar-precos', async (req, res) => {
-  try {
+
     const token = obterToken(req);
 
     if (!token) {
-      return res.status(401).json({
-        erro: 'Access Token não informado.',
-      });
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
     }
 
-    const anuncios = Array.isArray(
-      req.body?.anuncios
-    )
-      ? req.body.anuncios
-      : [];
 
-    if (!anuncios.length) {
-      return res.status(400).json({
-        erro: 'Nenhum anúncio foi informado.',
-      });
+    const { itens } =
+        req.body;
+
+
+    if (
+        !itens ||
+        !Array.isArray(itens) ||
+        itens.length === 0
+    ) {
+
+        return res.status(400).json({
+            erro:
+                "Nenhum item informado para atualização em lote."
+        });
     }
 
-    const resultados = [];
 
-    for (const anuncio of anuncios) {
-      const id = String(
-        anuncio?.id || ''
-      ).trim();
+    try {
 
-      const preco = Number(
-        anuncio?.preco ??
-          anuncio?.price
-      );
+        const promises =
+            itens.map(
+                async item => {
 
-      if (
-        !id ||
-        !Number.isFinite(preco) ||
-        preco <= 0
-      ) {
-        resultados.push({
-          id,
-          sucesso: false,
-          erro: 'ID ou preço inválido.',
+                    try {
+
+                        const mlRes =
+                            await mercadoLivreFetch(
+                                `https://api.mercadolibre.com/items/${item.id}`,
+                                token,
+                                {
+                                    method: 'PUT',
+
+                                    headers: {
+                                        'Content-Type':
+                                            'application/json'
+                                    },
+
+                                    body:
+                                        JSON.stringify({
+                                            price:
+                                                Number(
+                                                    item.price
+                                                )
+                                        })
+                                }
+                            );
+
+
+                        const mlData =
+                            await mlRes.json();
+
+
+                        if (mlRes.ok) {
+
+                            return {
+                                id:
+                                    item.id,
+
+                                sucesso:
+                                    true
+                            };
+                        }
+
+
+                        const mensagemErro =
+                            mlData.message ||
+                            (
+                                mlData.cause &&
+                                mlData.cause[0] &&
+                                mlData.cause[0].message
+                            ) ||
+                            JSON.stringify(
+                                mlData
+                            );
+
+
+                        return {
+
+                            id:
+                                item.id,
+
+                            sucesso:
+                                false,
+
+                            erro:
+                                mensagemErro
+                        };
+
+
+                    } catch (err) {
+
+                        return {
+
+                            id:
+                                item.id,
+
+                            sucesso:
+                                false,
+
+                            erro:
+                                "Erro de conexão: " +
+                                err.message
+                        };
+                    }
+                }
+            );
+
+
+        const resultados =
+            await Promise.all(
+                promises
+            );
+
+
+        res.json({
+            resultados
         });
 
-        continue;
-      }
 
-      try {
-        const resposta = await mlFetch(
-          `${ML_API}/items/${encodeURIComponent(id)}`,
-          token,
-          {
-            method: 'PUT',
+    } catch (e) {
 
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
+        res.status(500).json({
+            erro:
+                "Erro no servidor ao processar lote: " +
+                e.message
+        });
+    }
+});
 
-            body: JSON.stringify({
-              price: Number(
-                preco.toFixed(2)
-              ),
-            }),
-          }
+
+/* =========================================================
+   INICIAR SERVIDOR
+========================================================= */
+
+app.listen(
+    PORT,
+    () => {
+        console.log(
+            `Servidor rodando na porta ${PORT}`
         );
-
-        if (!resposta.response.ok) {
-          resultados.push({
-            id,
-            sucesso: false,
-            erro: respostaErroMercadoLivre(
-              resposta.data,
-              resposta.response.status
-            ),
-          });
-
-          continue;
-        }
-
-        resultados.push({
-          id,
-          sucesso: true,
-          preco: Number(
-            resposta.data.price ||
-              preco
-          ),
-          titulo:
-            resposta.data.title ||
-            anuncio.titulo ||
-            '',
-        });
-      } catch (error) {
-        resultados.push({
-          id,
-          sucesso: false,
-          erro: erroMensagem(error),
-        });
-      }
     }
-
-    const sucesso = resultados.filter(
-      item => item.sucesso
-    ).length;
-
-    const falhas = resultados.length - sucesso;
-
-    return res.json({
-      sucesso: falhas === 0,
-      total: resultados.length,
-      atualizados: sucesso,
-      falhas,
-      resultados,
-    });
-  } catch (error) {
-    console.error(
-      'POST /api/atualizar-precos:',
-      error
-    );
-
-    return res.status(500).json({
-      sucesso: false,
-      erro: 'Erro na atualização em massa.',
-      detalhes: erroMensagem(error),
-    });
-  }
-});
-
-/* =========================================================
-   ERROS
-========================================================= */
-
-app.use((req, res) => {
-  res.status(404).json({
-    erro: 'Rota não encontrada.',
-    rota: req.originalUrl,
-    metodo: req.method,
-  });
-});
-
-app.use((error, req, res, next) => {
-  console.error('Erro geral:', error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  res.status(500).json({
-    erro: 'Erro interno do servidor.',
-    detalhes: erroMensagem(error),
-  });
-});
-
-/* =========================================================
-   SERVIDOR
-========================================================= */
-
-app.listen(PORT, () => {
-  console.log(
-    `Servidor Mercado Livre rodando na porta ${PORT}`
-  );
-
-  console.log(
-    `Modo: Access Token`
-  );
-
-  if (process.env.ML_ACCESS_TOKEN) {
-    console.log(
-      'ML_ACCESS_TOKEN configurado no ambiente.'
-    );
-  } else {
-    console.log(
-      'ML_ACCESS_TOKEN não configurado. O token deverá ser enviado pelo painel.'
-    );
-  }
-});
+);
