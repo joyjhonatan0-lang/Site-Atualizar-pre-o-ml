@@ -7276,5 +7276,38 @@ async function consultarQualidade(){const id=document.getElementById('qualidade-
 async function consultarCompeticao(){const id=document.getElementById('catalogo-mlb').value.trim(),out=document.getElementById('catalogo-out');if(!id)return;out.innerHTML=hubCard('Status','Consultando...');try{const d=await apiPro(`/api/v4/items/${encodeURIComponent(id)}/competition`);out.innerHTML=hubCard('Situação',d.status||'—','winning = ganhando; competing = disputando')+hubCard('Preço atual',d.current_price!=null?moeda(d.current_price):'—')+hubCard('Preço para competir',d.price_to_win!=null?moeda(d.price_to_win):'—','Sugestão retornada pela API')+`<div class="lg:col-span-3 panel rounded-2xl p-5"><div class="hub-section-title">Oportunidades e boosts</div><pre class="text-[11px] text-slate-400 mt-3 whitespace-pre-wrap overflow-auto">${escapeHtml(JSON.stringify(d,null,2))}</pre></div>`}catch(e){out.innerHTML=`<div class="lg:col-span-3 hub-info text-red-300">${escapeHtml(e.message)}</div>`}}
 </script>
 
+
+<script id="mlhub-scale90k">
+let mlScaleJobId=null, mlScaleTimer=null;
+async function verificarModoEscala(){
+  try{const r=await fetch(`${RENDER_URL}/api/scale/status`),d=await r.json();return !!d.database}catch(e){return false}
+}
+async function iniciarSincronizacao90k(){
+  const token=obterToken();if(!token)return solicitarToken();
+  try{
+    const r=await fetch(`${RENDER_URL}/api/scale/sync`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:'{}'});
+    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Falha ao iniciar sincronização.');
+    mlScaleJobId=d.job?.id; alert(d.mensagem||'Sincronização iniciada.');
+    if(mlScaleJobId) acompanharSync90k();
+  }catch(e){alert(e.message)}
+}
+async function acompanharSync90k(){
+  if(!mlScaleJobId)return;
+  clearTimeout(mlScaleTimer);
+  try{
+    const r=await fetch(`${RENDER_URL}/api/scale/jobs/${mlScaleJobId}`),d=await r.json(),j=d.job;
+    const status=document.getElementById('status-carregamento');
+    if(status&&j)status.innerText=`${j.message||'Sincronizando...'} · erros: ${j.errors||0}`;
+    if(j&&['queued','running'].includes(j.status))mlScaleTimer=setTimeout(acompanharSync90k,2500);
+  }catch(e){}
+}
+async function carregarAnuncios90k(page=1,q='',status=''){
+  const token=obterToken();if(!token)return null;
+  const p=new URLSearchParams({page:String(page),limit:'50',q,status});
+  const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${p}`,{headers:{Authorization:token}});
+  if(!r.ok)return null;return r.json();
+}
+</script>
+
 </body>
 </html>
