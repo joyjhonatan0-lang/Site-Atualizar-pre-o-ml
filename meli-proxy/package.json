@@ -1,7 +1,7 @@
 {
   "name": "ml-hub-pro",
-  "version": "2.1.0",
-  "description": "Painel de gerenciamento do Mercado Livre com OAuth e renovação automática de tokens",
+  "version": "2.2.0",
+  "description": "Painel Mercado Livre com OAuth 2.0 e renovacao automatica de tokens",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
