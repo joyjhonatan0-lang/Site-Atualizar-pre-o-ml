@@ -4109,10 +4109,18 @@ function montarTabelaGestao(
                 </td>
 
                 <td class="p-4">
-                    ${item.available_quantity}
-                    <span class="text-slate-600">
-                        un.
-                    </span>
+                    <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <input
+                            id="estoque_gestao_${index}"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value="${Number(item.available_quantity || 0)}"
+                            class="w-20 bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-2 rounded-lg outline-none focus:border-yellow-400/60"
+                            title="Editar quantidade disponível no Mercado Livre"
+                        >
+                        <span class="text-slate-600">un.</span>
+                    </div>
                 </td>
 
                 <td class="p-4">
@@ -4153,6 +4161,16 @@ function montarTabelaGestao(
                         >
                             Salvar
                         </button>
+
+                        ${(item.status === 'active' || item.status === 'paused') ? `
+                        <button
+                            type="button"
+                            onclick="alternarStatusAnuncio(${index})"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg ${item.status === 'active' ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} text-[10px] font-black"
+                        >
+                            ${item.status === 'active' ? 'Pausar' : 'Ativar'}
+                        </button>
+                        ` : ''}
 
                         <a
                             href="${escapeHtml(item.permalink)}"
@@ -4210,9 +4228,17 @@ async function salvarEdicaoAnuncio(index) {
 
     const inputTitulo = document.getElementById(`titulo_gestao_${index}`);
     const inputSku = document.getElementById(`sku_gestao_${index}`);
+    const inputEstoque = document.getElementById(`estoque_gestao_${index}`);
 
     const title = inputTitulo?.value.trim() || '';
     const sku = inputSku?.value.trim() || '';
+    const available_quantity = Number(inputEstoque?.value);
+
+    if (!Number.isInteger(available_quantity) || available_quantity < 0) {
+        alert('Informe uma quantidade de estoque válida, usando um número inteiro igual ou maior que zero.');
+        inputEstoque?.focus();
+        return;
+    }
 
     if (!title) {
         alert('O título do anúncio não pode ficar vazio.');
@@ -4239,7 +4265,8 @@ async function salvarEdicaoAnuncio(index) {
             body: JSON.stringify({
                 id: item.id,
                 title,
-                sku
+                sku,
+                available_quantity
             })
         });
 
@@ -4254,6 +4281,7 @@ async function salvarEdicaoAnuncio(index) {
                 item.sku = data.item.sku ?? item.sku;
                 if (data.item.status !== undefined) item.status = data.item.status;
                 if (data.item.sold_quantity !== undefined) item.sold_quantity = Number(data.item.sold_quantity || 0);
+                if (data.item.available_quantity !== undefined) item.available_quantity = Number(data.item.available_quantity || 0);
                 executarBusca();
                 atualizarCards(cacheItens);
             }
@@ -4272,6 +4300,10 @@ async function salvarEdicaoAnuncio(index) {
             item.sold_quantity = Number(data.item.sold_quantity || 0);
         }
 
+        if (data.item?.available_quantity !== undefined) {
+            item.available_quantity = Number(data.item.available_quantity || 0);
+        }
+
         executarBusca();
         atualizarCards(cacheItens);
         alert('Anúncio atualizado com sucesso.');
@@ -4279,6 +4311,44 @@ async function salvarEdicaoAnuncio(index) {
     } catch (error) {
         console.error(error);
         alert('Erro de comunicação ao atualizar o anúncio.');
+    } finally {
+        esconderLoading();
+    }
+}
+
+
+async function alternarStatusAnuncio(index) {
+    const token = obterToken();
+    if (!token) { solicitarToken(); return; }
+
+    const item = cacheItens[index];
+    if (!item) { alert('Anúncio não encontrado no painel.'); return; }
+
+    const novoStatus = item.status === 'active' ? 'paused' : 'active';
+    const acao = novoStatus === 'paused' ? 'pausar' : 'ativar';
+
+    mostrarLoading(`${novoStatus === 'paused' ? 'Pausando' : 'Ativando'} anúncio no Mercado Livre...`);
+    try {
+        const response = await fetch(`${RENDER_URL}/api/alterar-status-anuncio`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: token },
+            body: JSON.stringify({ id: item.id, status: novoStatus })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) {
+            alert(data.erro || `Não foi possível ${acao} o anúncio.`);
+            return;
+        }
+        item.status = data.item?.status || novoStatus;
+        if (data.item?.available_quantity !== undefined) {
+            item.available_quantity = Number(data.item.available_quantity || 0);
+        }
+        executarBusca();
+        atualizarCards(cacheItens);
+        alert(`Anúncio ${item.status === 'active' ? 'ativado' : 'pausado'} com sucesso.`);
+    } catch (error) {
+        console.error(error);
+        alert(`Erro de comunicação ao ${acao} o anúncio.`);
     } finally {
         esconderLoading();
     }
