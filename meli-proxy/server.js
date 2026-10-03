@@ -2332,6 +2332,217 @@ app.put('/api/alterar-status-anuncio', async (req, res) => {
     }
 });
 
+
+/* =========================================================
+   ML HUB PRO V2 - ESCALA / 100 MIL+ ANÚNCIOS
+   - paginação server-side
+   - busca por scan/scroll para sincronização grande
+   - filtros
+   - operações em massa em lotes controlados
+   - alertas operacionais
+   - webhook de notificações
+========================================================= */
+
+function normalizarItemGestao(item) {
+    const attrs = Array.isArray(item.attributes) ? item.attributes : [];
+    const skuAttr = attrs.find(a =>
+        ['SELLER_SKU', 'SKU'].includes(String(a.id || '').toUpperCase())
+    );
+    return {
+        id: item.id,
+        titulo: item.title || '',
+        sku: item.seller_custom_field || skuAttr?.value_name || '',
+        preco: Number(item.price || 0),
+        estoque: Number(item.available_quantity || 0),
+        vendidos: Number(item.sold_quantity || 0),
+        status: item.status || '',
+        listing_type_id: item.listing_type_id || '',
+        categoria: item.category_id || '',
+        thumbnail: item.thumbnail || item.secure_thumbnail || '',
+        permalink: item.permalink || '',
+        atualizado_em: item.last_updated || null
+    };
+}
+
+async function buscarIdsAnunciosPaginados(token, sellerId, { offset=0, limit=100, status='', q='', order='last_updated_desc' }={}) {
+    const params = new URLSearchParams({
+        offset: String(Math.max(0, Number(offset) || 0)),
+        limit: String(Math.min(100, Math.max(1, Number(limit) || 100)))
+    });
+    if (status) params.set('status', status);
+    if (q) params.set('q', q);
+    if (order) params.set('orders', order);
+
+    const response = await mlFetch(`${ML_API}/users/${sellerId}/items/search?${params}`, token);
+    const data = await jsonSeguro(response);
+    if (!response.ok) throw new Error(formatarErroMercadoLivre(data));
+    return data;
+}
+
+app.get('/api/v2/anuncios', async (req, res) => {
+    const token = obterToken(req);
+    if (!token) return respostaErro(res, 401, 'Token não fornecido.');
+
+    try {
+        const meRes = await mlFetch(`${ML_API}/users/me`, token);
+        const me = await jsonSeguro(meRes);
+        if (!meRes.ok || !me?.id) return respostaErro(res, 401, 'Token inválido ou expirado.');
+
+        const pagina = Math.max(1, Number(req.query.page || 1));
+        const limit = Math.min(100, Math.max(10, Number(req.query.limit || 50)));
+        const offset = (pagina - 1) * limit;
+        const status = String(req.query.status || '').trim();
+        const q = String(req.query.q || '').trim();
+        const order = String(req.query.order || 'last_updated_desc').trim();
+
+        // Offset é ideal para navegação comum. Sincronizações acima de 1000 usam /api/v2/sync/scan.
+        const busca = await buscarIdsAnunciosPaginados(token, me.id, { offset, limit, status, q, order });
+        const ids = Array.isArray(busca.results) ? busca.results : [];
+        const detalhes = await buscarItensBulk(token, ids);
+        const itens = ids.map(id => detalhes[id]).filter(Boolean).map(normalizarItemGestao);
+
+        res.json({
+            sucesso: true,
+            pagina,
+            limite: limit,
+            total: Number(busca.paging?.total || itens.length),
+            paginas: Math.max(1, Math.ceil(Number(busca.paging?.total || itens.length) / limit)),
+            itens
+        });
+    } catch (erro) {
+        respostaErro(res, 500, 'Erro ao listar anúncios: ' + erro.message);
+    }
+});
+
+app.get('/api/v2/sync/scan', async (req, res) => {
+    const token = obterToken(req);
+    if (!token) return respostaErro(res, 401, 'Token não fornecido.');
+
+    try {
+        const meRes = await mlFetch(`${ML_API}/users/me`, token);
+        const me = await jsonSeguro(meRes);
+        if (!meRes.ok || !me?.id) return respostaErro(res, 401, 'Token inválido ou expirado.');
+
+        const limit = Math.min(100, Math.max(10, Number(req.query.limit || 100)));
+        const scrollId = String(req.query.scroll_id || '').trim();
+        const params = new URLSearchParams({ search_type: 'scan', limit: String(limit) });
+        if (scrollId) params.set('scroll_id', scrollId);
+
+        const mlRes = await mlFetch(`${ML_API}/users/${me.id}/items/search?${params}`, token);
+        const data = await jsonSeguro(mlRes);
+        if (!mlRes.ok) return respostaErro(res, mlRes.status, formatarErroMercadoLivre(data));
+
+        const ids = Array.isArray(data.results) ? data.results : [];
+        const detalhes = await buscarItensBulk(token, ids);
+        res.json({
+            sucesso: true,
+            scroll_id: data.scroll_id || null,
+            terminou: ids.length === 0,
+            quantidade: ids.length,
+            itens: ids.map(id => detalhes[id]).filter(Boolean).map(normalizarItemGestao)
+        });
+    } catch (erro) {
+        respostaErro(res, 500, 'Erro na sincronização por scan: ' + erro.message);
+    }
+});
+
+app.post('/api/v2/anuncios/massa', async (req, res) => {
+    const token = obterToken(req);
+    if (!token) return respostaErro(res, 401, 'Token não fornecido.');
+
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(String).filter(Boolean))];
+    const acao = String(req.body?.acao || '').trim();
+    const valor = req.body?.valor;
+
+    if (!ids.length) return respostaErro(res, 400, 'Selecione ao menos um anúncio.');
+    if (ids.length > 500) return respostaErro(res, 400, 'Envie no máximo 500 anúncios por lote.');
+    if (!['pausar','ativar','estoque','preco_percentual'].includes(acao)) {
+        return respostaErro(res, 400, 'Ação em massa inválida.');
+    }
+
+    const resultados = [];
+    const concorrencia = 5;
+    for (let i=0; i<ids.length; i+=concorrencia) {
+        const grupo = ids.slice(i, i+concorrencia);
+        const lote = await Promise.all(grupo.map(async id => {
+            try {
+                let body;
+                if (acao === 'pausar') body = { status: 'paused' };
+                if (acao === 'ativar') body = { status: 'active' };
+                if (acao === 'estoque') body = { available_quantity: Math.max(0, Number(valor || 0)) };
+                if (acao === 'preco_percentual') {
+                    const itemRes = await mlFetch(`${ML_API}/items/${id}`, token);
+                    const item = await jsonSeguro(itemRes);
+                    if (!itemRes.ok) throw new Error(formatarErroMercadoLivre(item));
+                    const percentual = Number(valor || 0);
+                    body = { price: Number((Number(item.price || 0) * (1 + percentual/100)).toFixed(2)) };
+                }
+                const putRes = await mlFetch(`${ML_API}/items/${id}`, token, {
+                    method: 'PUT',
+                    headers: { 'Content-Type':'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await jsonSeguro(putRes);
+                if (!putRes.ok) throw new Error(formatarErroMercadoLivre(data));
+                return { id, sucesso:true, novo: body };
+            } catch (erro) {
+                return { id, sucesso:false, erro:erro.message };
+            }
+        }));
+        resultados.push(...lote);
+    }
+
+    res.json({
+        sucesso:true,
+        total:resultados.length,
+        concluidos:resultados.filter(x=>x.sucesso).length,
+        erros:resultados.filter(x=>!x.sucesso).length,
+        resultados
+    });
+});
+
+app.get('/api/v2/alertas', async (req, res) => {
+    const token = obterToken(req);
+    if (!token) return respostaErro(res, 401, 'Token não fornecido.');
+    try {
+        const meRes = await mlFetch(`${ML_API}/users/me`, token);
+        const me = await jsonSeguro(meRes);
+        if (!meRes.ok || !me?.id) return respostaErro(res, 401, 'Token inválido ou expirado.');
+
+        const busca = await buscarIdsAnunciosPaginados(token, me.id, { offset:0, limit:100, order:'last_updated_desc' });
+        const ids = Array.isArray(busca.results) ? busca.results : [];
+        const detalhes = await buscarItensBulk(token, ids);
+        const itens = ids.map(id=>detalhes[id]).filter(Boolean).map(normalizarItemGestao);
+
+        const alertas = [];
+        itens.forEach(i => {
+            if (i.status === 'active' && i.estoque <= 0) alertas.push({tipo:'estoque_zero', nivel:'alto', item_id:i.id, titulo:i.titulo, mensagem:'Anúncio ativo sem estoque.'});
+            else if (i.status === 'active' && i.estoque <= 3) alertas.push({tipo:'estoque_critico', nivel:'medio', item_id:i.id, titulo:i.titulo, mensagem:`Estoque crítico: ${i.estoque} unidade(s).`});
+            if (!i.sku) alertas.push({tipo:'sem_sku', nivel:'baixo', item_id:i.id, titulo:i.titulo, mensagem:'Anúncio sem SKU identificado.'});
+        });
+
+        res.json({sucesso:true, analisados:itens.length, total_conta:Number(busca.paging?.total||0), alertas:alertas.slice(0,100)});
+    } catch (erro) {
+        respostaErro(res,500,'Erro ao gerar alertas: '+erro.message);
+    }
+});
+
+// Configure esta URL como callback de notificações no DevCenter.
+// O endpoint responde imediatamente; em produção, encaminhe o evento para uma fila/worker persistente.
+app.post('/api/notifications', (req, res) => {
+    res.status(200).json({ recebido:true });
+    const evento = req.body || {};
+    setImmediate(() => {
+        console.log('[ML notification]', {
+            topic:evento.topic,
+            resource:evento.resource,
+            user_id:evento.user_id,
+            received:evento.received
+        });
+    });
+});
+
+
 app.listen(
     PORT,
     () => {
