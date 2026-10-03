@@ -381,7 +381,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 <div class="md:col-span-2">
                     <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno</label>
                     <input id="oauth-redirect-uri-login" type="url" autocomplete="off"
-                        value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"
+                        value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback" readonly
                         class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400">
                 </div>
                 <div class="md:col-span-2">
@@ -2280,7 +2280,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             </div>
             <div class="md:col-span-2">
                 <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no Mercado Livre</label>
-                <input id="oauth-redirect-uri-config" type="url" autocomplete="off"
+                <input id="oauth-redirect-uri-config"value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback" readonly  type="url" autocomplete="off"
                     class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
                     placeholder="https://site-atualizar-pre-o-ml.onrender.com/auth/callback">
             </div>
@@ -6751,7 +6751,7 @@ function lerCamposOAuth(origem) {
     return {
         client_id: document.getElementById(`oauth-client-id-${sufixo}`)?.value.trim() || '',
         client_secret: document.getElementById(`oauth-client-secret-${sufixo}`)?.value.trim() || '',
-        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || '',
+        redirect_uri: 'https://site-atualizar-pre-o-ml.onrender.com/auth/callback',
         access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
         frontend_url: ML_HUB_FRONTEND_URL
     };
