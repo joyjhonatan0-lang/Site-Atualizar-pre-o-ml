@@ -1627,65 +1627,170 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
         return respostaErro(res, 400, 'ID do anúncio não informado.');
     }
 
-    const tituloLimpo = String(title || '').trim();
-    const skuLimpo = String(sku || '').trim();
+    const tituloLimpo = String(title ?? '').trim();
+    const skuLimpo = String(sku ?? '').trim();
 
     if (!tituloLimpo) {
         return respostaErro(res, 400, 'O título do anúncio não pode ficar vazio.');
     }
 
     try {
-        const bodyAtualizacao = {
-            title: tituloLimpo,
-            attributes: [
-                {
-                    id: 'SELLER_SKU',
-                    value_name: skuLimpo
-                }
-            ]
-        };
-
-        const mlRes = await mlFetch(
+        // Primeiro consulta o anúncio atual. Isso evita reenviar campos que o
+        // usuário não alterou. O Mercado Livre pode rejeitar, por exemplo,
+        // o campo title em anúncios que já possuem vendas.
+        const atualRes = await mlFetch(
             `${ML_API}/items/${encodeURIComponent(id)}`,
-            token,
-            {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(bodyAtualizacao)
-            }
+            token
         );
+        const atual = await jsonSeguro(atualRes);
 
-        const mlData = await jsonSeguro(mlRes);
-
-        if (!mlRes.ok) {
+        if (!atualRes.ok) {
             return respostaErro(
                 res,
-                mlRes.status || 400,
-                formatarErroMercadoLivre(mlData) || 'Erro ao atualizar anúncio.'
+                atualRes.status || 400,
+                formatarErroMercadoLivre(atual) || 'Não foi possível consultar o anúncio antes da alteração.'
             );
         }
 
-        let skuRetornado = skuLimpo || 'Sem SKU';
+        const attrSkuAtual = Array.isArray(atual.attributes)
+            ? atual.attributes.find(a => a.id === 'SELLER_SKU')
+            : null;
 
-        if (Array.isArray(mlData.attributes)) {
-            const attrSku = mlData.attributes.find(
-                atributo => atributo.id === 'SELLER_SKU'
+        const skuAtual = String(attrSkuAtual?.value_name ?? '').trim();
+        const tituloAtual = String(atual.title ?? '').trim();
+        const alterouSku = skuLimpo !== skuAtual;
+        const alterouTitulo = tituloLimpo !== tituloAtual;
+
+        if (!alterouSku && !alterouTitulo) {
+            return res.json({
+                sucesso: true,
+                alterou: false,
+                item: {
+                    id: atual.id || id,
+                    title: tituloAtual,
+                    sku: skuAtual || 'Sem SKU',
+                    status: atual.status
+                }
+            });
+        }
+
+        let ultimoRetorno = atual;
+        const alteracoes = [];
+
+        // SKU é atualizado isoladamente. Assim uma restrição de título não
+        // impede a alteração do SKU e não enviamos campos desnecessários.
+        if (alterouSku) {
+            const skuRes = await mlFetch(
+                `${ML_API}/items/${encodeURIComponent(id)}`,
+                token,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        attributes: [
+                            {
+                                id: 'SELLER_SKU',
+                                value_name: skuLimpo || null
+                            }
+                        ]
+                    })
+                }
             );
 
-            if (attrSku?.value_name) {
-                skuRetornado = attrSku.value_name;
+            const skuData = await jsonSeguro(skuRes);
+
+            if (!skuRes.ok) {
+                return respostaErro(
+                    res,
+                    skuRes.status || 400,
+                    formatarErroMercadoLivre(skuData) || 'O Mercado Livre recusou a alteração do SKU.'
+                );
             }
+
+            ultimoRetorno = skuData;
+            alteracoes.push('SKU');
         }
+
+        // O Mercado Livre não permite alterar o título de um anúncio que já
+        // possui vendas. Só tentamos o PUT de title quando ele realmente mudou.
+        if (alterouTitulo) {
+            if (Number(atual.sold_quantity || 0) > 0) {
+                return res.status(409).json({
+                    sucesso: false,
+                    parcial: alterouSku,
+                    sku_atualizado: alterouSku,
+                    erro: alterouSku
+                        ? 'O SKU foi atualizado, mas o Mercado Livre não permite alterar o título deste anúncio porque ele já possui vendas.'
+                        : 'O Mercado Livre não permite alterar o título deste anúncio porque ele já possui vendas.',
+                    item: {
+                        id: atual.id || id,
+                        title: tituloAtual,
+                        sku: skuLimpo || skuAtual || 'Sem SKU',
+                        status: atual.status
+                    }
+                });
+            }
+
+            const tituloRes = await mlFetch(
+                `${ML_API}/items/${encodeURIComponent(id)}`,
+                token,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ title: tituloLimpo })
+                }
+            );
+
+            const tituloData = await jsonSeguro(tituloRes);
+
+            if (!tituloRes.ok) {
+                return res.status(tituloRes.status || 400).json({
+                    sucesso: false,
+                    parcial: alterouSku,
+                    sku_atualizado: alterouSku,
+                    erro: (alterouSku ? 'O SKU foi atualizado, porém o título foi recusado pelo Mercado Livre: ' : '') +
+                        (formatarErroMercadoLivre(tituloData) || 'Erro ao atualizar o título.'),
+                    item: {
+                        id: atual.id || id,
+                        title: tituloAtual,
+                        sku: skuLimpo || skuAtual || 'Sem SKU',
+                        status: atual.status
+                    }
+                });
+            }
+
+            ultimoRetorno = tituloData;
+            alteracoes.push('título');
+        }
+
+        // Consulta novamente para devolver ao painel exatamente o que ficou
+        // salvo no Mercado Livre.
+        const finalRes = await mlFetch(
+            `${ML_API}/items/${encodeURIComponent(id)}`,
+            token
+        );
+        const finalData = await jsonSeguro(finalRes);
+        const finalItem = finalRes.ok ? finalData : ultimoRetorno;
+
+        const attrSkuFinal = Array.isArray(finalItem.attributes)
+            ? finalItem.attributes.find(a => a.id === 'SELLER_SKU')
+            : null;
 
         return res.json({
             sucesso: true,
+            alterou: true,
+            alteracoes,
             item: {
-                id: mlData.id || id,
-                title: mlData.title || tituloLimpo,
-                sku: skuRetornado,
-                status: mlData.status
+                id: finalItem.id || id,
+                title: finalItem.title || tituloLimpo,
+                sku: String(attrSkuFinal?.value_name ?? skuLimpo).trim() || 'Sem SKU',
+                status: finalItem.status ?? atual.status
             }
         });
 
