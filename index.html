@@ -4199,6 +4199,16 @@ async function salvarEdicaoAnuncio(index) {
         const data = await response.json();
 
         if (!response.ok || !data.sucesso) {
+            // Se o SKU foi salvo, mas o título não pôde ser alterado (por
+            // exemplo, anúncio que já possui vendas), atualiza o painel com
+            // o resultado parcial real antes de mostrar a mensagem da API.
+            if (data.parcial && data.item) {
+                item.title = data.item.title ?? item.title;
+                item.sku = data.item.sku ?? item.sku;
+                if (data.item.status !== undefined) item.status = data.item.status;
+                executarBusca();
+                atualizarCards(cacheItens);
+            }
             alert(data.erro || 'Erro ao atualizar o anúncio.');
             return;
         }
