@@ -2533,13 +2533,12 @@ app.get('/api/v2/alertas', async (req, res) => {
 app.post('/api/notifications', (req, res) => {
     res.status(200).json({ recebido:true });
     const evento = req.body || {};
-    setImmediate(() => {
-        console.log('[ML notification]', {
-            topic:evento.topic,
-            resource:evento.resource,
-            user_id:evento.user_id,
-            received:evento.received
-        });
+    setImmediate(async () => {
+        console.log('[ML notification]', {topic:evento.topic,resource:evento.resource,user_id:evento.user_id,received:evento.received});
+        try {
+            if (db) await dbQuery(`INSERT INTO ml_notifications(external_id,seller_id,topic,resource,payload) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+              [evento._id||evento.id||null,evento.user_id||null,String(evento.topic||''),String(evento.resource||''),evento]);
+        } catch(e) { console.error('[ML notification queue]',e.message); }
     });
 });
 
@@ -2975,10 +2974,12 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         if(status){params.push(status);where+=` AND status=$${params.length}`}
         if(q){params.push(`%${q.toLowerCase()}%`);where+=` AND (lower(title) LIKE $${params.length} OR lower(sku) LIKE $${params.length} OR lower(item_id) LIKE $${params.length})`}
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
+        const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title titulo,sku,price preco,available_quantity estoque,sold_quantity vendidos,status,listing_type_id,category_id categoria,thumbnail,permalink,ml_updated_at atualizado_em FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,0::float8 sale_fee,0::float8 shipping_cost,(price)::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
-        res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),itens:rows.rows});
+        const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
+        res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
     }catch(e){respostaErro(res,500,e.message)}
 });
 
