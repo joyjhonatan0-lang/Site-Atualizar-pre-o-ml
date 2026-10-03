@@ -1785,6 +1785,10 @@
                         </th>
 
                         <th class="p-4">
+                            Vendas
+                        </th>
+
+                        <th class="p-4">
                             Status
                         </th>
 
@@ -4103,6 +4107,15 @@ function montarTabelaGestao(
                 </td>
 
                 <td class="p-4">
+                    <span class="font-black text-white">
+                        ${Number(item.sold_quantity || 0)}
+                    </span>
+                    <span class="text-slate-600">
+                        un.
+                    </span>
+                </td>
+
+                <td class="p-4">
 
                     <div class="flex items-center gap-2">
 
@@ -4206,6 +4219,7 @@ async function salvarEdicaoAnuncio(index) {
                 item.title = data.item.title ?? item.title;
                 item.sku = data.item.sku ?? item.sku;
                 if (data.item.status !== undefined) item.status = data.item.status;
+                if (data.item.sold_quantity !== undefined) item.sold_quantity = Number(data.item.sold_quantity || 0);
                 executarBusca();
                 atualizarCards(cacheItens);
             }
@@ -4218,6 +4232,10 @@ async function salvarEdicaoAnuncio(index) {
 
         if (data.item?.status !== undefined) {
             item.status = data.item.status;
+        }
+
+        if (data.item?.sold_quantity !== undefined) {
+            item.sold_quantity = Number(data.item.sold_quantity || 0);
         }
 
         executarBusca();
