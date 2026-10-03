@@ -1,4620 +1,2216 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
+<script>
+    const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+    let cacheItens = [];
+    let novosPrecosCalculados = {};
+    let abaAtualAtiva = 'gestao';
 
-  <meta
-    name="theme-color"
-    content="#0b1220"
-  >
 
-  <title>
-    Mercado Livre Manager
-  </title>
+    /* =========================================================
+       TOKEN
+    ========================================================= */
 
-  <style>
-    * {
-      box-sizing: border-box;
+    function obterTokenLocal() {
+        return (
+            localStorage.getItem('ml_access_token') ||
+            ''
+        ).trim();
     }
 
-    :root {
-      --bg: #080d18;
-      --bg-soft: #0e1626;
-      --panel: #111b2d;
-      --panel-2: #162237;
-      --border: rgba(255,255,255,.08);
-      --text: #f5f7fb;
-      --muted: #8d9ab1;
-      --primary: #3483fa;
-      --primary-dark: #1f67d6;
-      --success: #20c997;
-      --warning: #ffb020;
-      --danger: #ff5d6c;
-      --purple: #8b5cf6;
-      --radius: 18px;
-      --shadow: 0 20px 50px rgba(0,0,0,.25);
-    }
-
-    html,
-    body {
-      margin: 0;
-      min-height: 100%;
-      background:
-        radial-gradient(
-          circle at top right,
-          rgba(52,131,250,.12),
-          transparent 35%
-        ),
-        var(--bg);
-
-      color: var(--text);
-
-      font-family:
-        Inter,
-        ui-sans-serif,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-    }
-
-    button,
-    input,
-    select {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    /* =====================================================
-       LOGIN
-    ===================================================== */
-
-    #landing {
-      min-height: 100vh;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      padding: 30px;
-    }
-
-    .login-layout {
-      width: min(1120px, 100%);
-
-      display: grid;
-      grid-template-columns:
-        1.2fr
-        .8fr;
-
-      gap: 30px;
-    }
-
-    .hero {
-      padding: 48px;
-      border: 1px solid var(--border);
-      border-radius: 28px;
-
-      background:
-        linear-gradient(
-          145deg,
-          rgba(52,131,250,.16),
-          rgba(139,92,246,.08)
-        ),
-        var(--panel);
-
-      box-shadow: var(--shadow);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .brand-icon {
-      width: 52px;
-      height: 52px;
-
-      border-radius: 16px;
-
-      display: grid;
-      place-items: center;
-
-      font-size: 25px;
-      font-weight: 900;
-
-      background: var(--primary);
-      color: white;
-    }
-
-    .brand-name {
-      font-size: 21px;
-      font-weight: 800;
-    }
-
-    .hero h1 {
-      margin: 55px 0 18px;
-
-      font-size:
-        clamp(38px, 5vw, 66px);
-
-      line-height: .98;
-      letter-spacing: -3px;
-    }
-
-    .hero h1 span {
-      color: var(--primary);
-    }
-
-    .hero p {
-      color: var(--muted);
-
-      font-size: 17px;
-      line-height: 1.7;
-
-      max-width: 650px;
-    }
-
-    .feature-list {
-      margin-top: 38px;
-
-      display: grid;
-      grid-template-columns:
-        repeat(2, 1fr);
-
-      gap: 15px;
-    }
-
-    .feature {
-      padding: 17px;
-
-      border:
-        1px solid
-        var(--border);
-
-      background:
-        rgba(255,255,255,.025);
-
-      border-radius: 14px;
-    }
-
-    .feature strong {
-      display: block;
-      margin-bottom: 5px;
-    }
-
-    .feature span {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .login-card {
-      align-self: center;
-
-      padding: 32px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 24px;
-
-      background:
-        rgba(17,27,45,.95);
-
-      box-shadow: var(--shadow);
-    }
-
-    .login-card h2 {
-      margin: 0 0 8px;
-    }
-
-    .login-card > p {
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    .field {
-      margin-top: 18px;
-    }
-
-    .field label {
-      display: block;
-
-      margin-bottom: 8px;
-
-      color: #cbd5e1;
-
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .field input,
-    .field select {
-      width: 100%;
-
-      padding: 14px 15px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 12px;
-
-      outline: none;
-
-      background:
-        #0a1220;
-
-      color: white;
-    }
-
-    .field input:focus,
-    .field select:focus {
-      border-color: var(--primary);
-
-      box-shadow:
-        0 0 0 3px
-        rgba(52,131,250,.12);
-    }
-
-    .login-note {
-      margin-top: 15px;
-
-      color: var(--muted);
-
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .primary-btn,
-    .secondary-btn,
-    .danger-btn,
-    .success-btn {
-      border: 0;
-
-      border-radius: 12px;
-
-      padding: 13px 17px;
-
-      color: white;
-
-      font-weight: 800;
-
-      transition:
-        transform .15s,
-        opacity .15s,
-        background .15s;
-    }
-
-    .primary-btn:hover,
-    .secondary-btn:hover,
-    .danger-btn:hover,
-    .success-btn:hover {
-      transform: translateY(-1px);
-    }
-
-    .primary-btn {
-      background: var(--primary);
-    }
-
-    .primary-btn:hover {
-      background: var(--primary-dark);
-    }
-
-    .secondary-btn {
-      background: #24324b;
-    }
-
-    .success-btn {
-      background: #159f76;
-    }
-
-    .danger-btn {
-      background: #b52f42;
-    }
-
-    .full-btn {
-      width: 100%;
-      margin-top: 20px;
-    }
-
-    /* =====================================================
-       APP
-    ===================================================== */
-
-    #app {
-      min-height: 100vh;
-    }
-
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-
-      height: 72px;
-
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-
-      padding:
-        0 24px;
-
-      background:
-        rgba(8,13,24,.88);
-
-      border-bottom:
-        1px solid
-        var(--border);
-
-      backdrop-filter:
-        blur(18px);
-    }
-
-    .topbar-left {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .mini-logo {
-      width: 39px;
-      height: 39px;
-
-      display: grid;
-      place-items: center;
-
-      border-radius: 11px;
-
-      background: var(--primary);
-
-      font-weight: 900;
-    }
-
-    .system-title strong {
-      display: block;
-      font-size: 14px;
-    }
-
-    .system-title span {
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .connection-status {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-
-      padding:
-        8px 11px;
-
-      border-radius: 99px;
-
-      background:
-        rgba(32,201,151,.08);
-
-      color: var(--success);
-
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-
-      border-radius: 50%;
-
-      background: currentColor;
-    }
-
-    .app-layout {
-      display: grid;
-
-      grid-template-columns:
-        245px
-        1fr;
-
-      min-height:
-        calc(100vh - 72px);
-    }
-
-    .sidebar {
-      border-right:
-        1px solid
-        var(--border);
-
-      padding: 20px 14px;
-
-      background:
-        rgba(11,18,32,.7);
-    }
-
-    .nav-label {
-      margin:
-        14px 12px 8px;
-
-      color: #56647b;
-
-      font-size: 10px;
-      font-weight: 900;
-
-      letter-spacing: 1.2px;
-
-      text-transform: uppercase;
-    }
-
-    .nav-btn {
-      width: 100%;
-
-      display: flex;
-      align-items: center;
-      gap: 11px;
-
-      padding: 12px 13px;
-
-      border: 0;
-
-      border-radius: 11px;
-
-      background: transparent;
-
-      color: #9ca9bd;
-
-      text-align: left;
-
-      font-weight: 700;
-
-      margin-bottom: 4px;
-    }
-
-    .nav-btn:hover {
-      background:
-        rgba(255,255,255,.04);
-
-      color: white;
-    }
-
-    .nav-btn.active {
-      background:
-        rgba(52,131,250,.13);
-
-      color: #69a5ff;
-    }
-
-    .nav-icon {
-      width: 21px;
-      text-align: center;
-    }
-
-    .main {
-      min-width: 0;
-
-      padding: 28px;
-    }
-
-    .page-header {
-      display: flex;
-
-      justify-content: space-between;
-      align-items: flex-start;
-
-      gap: 20px;
-
-      margin-bottom: 25px;
-    }
-
-    .page-header h1 {
-      margin: 0 0 7px;
-
-      font-size: 29px;
-
-      letter-spacing: -.7px;
-    }
-
-    .page-header p {
-      margin: 0;
-
-      color: var(--muted);
-
-      font-size: 13px;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    /* =====================================================
-       CARDS
-    ===================================================== */
-
-    .stats-grid {
-      display: grid;
-
-      grid-template-columns:
-        repeat(4, minmax(0,1fr));
-
-      gap: 15px;
-
-      margin-bottom: 18px;
-    }
-
-    .stat-card {
-      position: relative;
-
-      overflow: hidden;
-
-      padding: 20px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        var(--radius);
-
-      background:
-        var(--panel);
-    }
-
-    .stat-card::after {
-      content: "";
-
-      position: absolute;
-
-      right: -25px;
-      bottom: -45px;
-
-      width: 110px;
-      height: 110px;
-
-      border-radius: 50%;
-
-      background:
-        rgba(52,131,250,.08);
-    }
-
-    .stat-label {
-      color: var(--muted);
-
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .stat-value {
-      margin-top: 9px;
-
-      font-size: 27px;
-      font-weight: 900;
-
-      letter-spacing: -.8px;
-    }
-
-    .stat-extra {
-      margin-top: 7px;
-
-      color: var(--muted);
-
-      font-size: 11px;
-    }
-
-    .dashboard-grid {
-      display: grid;
-
-      grid-template-columns:
-        1.5fr
-        1fr;
-
-      gap: 18px;
-    }
-
-    .panel {
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        var(--radius);
-
-      background:
-        var(--panel);
-
-      overflow: hidden;
-    }
-
-    .panel-header {
-      display: flex;
-
-      align-items: center;
-      justify-content: space-between;
-
-      gap: 15px;
-
-      padding: 18px 20px;
-
-      border-bottom:
-        1px solid
-        var(--border);
-    }
-
-    .panel-title {
-      font-size: 14px;
-      font-weight: 850;
-    }
-
-    .panel-subtitle {
-      margin-top: 3px;
-
-      color: var(--muted);
-
-      font-size: 11px;
-    }
-
-    .panel-body {
-      padding: 20px;
-    }
-
-    /* =====================================================
-       GRÁFICO
-    ===================================================== */
-
-    .chart {
-      height: 250px;
-
-      display: flex;
-      align-items: flex-end;
-      gap: 9px;
-
-      padding:
-        15px 5px 0;
-    }
-
-    .bar-wrap {
-      flex: 1;
-      height: 100%;
-
-      display: flex;
-      align-items: flex-end;
-
-      position: relative;
-    }
-
-    .bar {
-      width: 100%;
-
-      min-height: 5px;
-
-      border-radius:
-        7px 7px 2px 2px;
-
-      background:
-        linear-gradient(
-          180deg,
-          var(--primary),
-          #2559aa
-        );
-
-      transition:
-        height .5s;
-    }
-
-    .bar-label {
-      position: absolute;
-
-      bottom: -22px;
-
-      left: 50%;
-
-      transform:
-        translateX(-50%);
-
-      color: var(--muted);
-
-      font-size: 9px;
-    }
-
-    /* =====================================================
-       TABELA
-    ===================================================== */
-
-    .toolbar {
-      display: flex;
-
-      align-items: center;
-
-      gap: 10px;
-
-      flex-wrap: wrap;
-
-      padding: 15px 20px;
-
-      border-bottom:
-        1px solid
-        var(--border);
-    }
-
-    .search {
-      flex: 1;
-
-      min-width: 220px;
-
-      padding: 11px 13px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 10px;
-
-      background: #0a1220;
-
-      color: white;
-
-      outline: none;
-    }
-
-    .table-wrapper {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-
-      border-collapse:
-        collapse;
-
-      min-width: 900px;
-    }
-
-    th {
-      padding: 13px 15px;
-
-      background:
-        #0d1626;
-
-      color: #718099;
-
-      font-size: 10px;
-
-      text-align: left;
-
-      text-transform:
-        uppercase;
-
-      letter-spacing: .5px;
-    }
-
-    td {
-      padding: 14px 15px;
-
-      border-top:
-        1px solid
-        var(--border);
-
-      font-size: 12px;
-
-      vertical-align: middle;
-    }
-
-    tr:hover td {
-      background:
-        rgba(255,255,255,.015);
-    }
-
-    .product-cell {
-      display: flex;
-
-      align-items: center;
-
-      gap: 11px;
-
-      max-width: 350px;
-    }
-
-    .product-image {
-      width: 42px;
-      height: 42px;
-
-      flex-shrink: 0;
-
-      object-fit: cover;
-
-      border-radius: 9px;
-
-      background: #18243a;
-    }
-
-    .product-name {
-      font-weight: 750;
-
-      line-height: 1.3;
-    }
-
-    .product-id {
-      margin-top: 3px;
-
-      color: var(--muted);
-
-      font-size: 10px;
-    }
-
-    .money {
-      font-weight: 800;
-    }
-
-    .money.success {
-      color: var(--success);
-    }
-
-    .money.warning {
-      color: var(--warning);
-    }
-
-    .small-btn {
-      border: 0;
-
-      border-radius: 8px;
-
-      padding: 8px 10px;
-
-      color: white;
-
-      background: #263650;
-
-      font-size: 11px;
-
-      font-weight: 750;
-    }
-
-    .small-btn.primary {
-      background: var(--primary);
-    }
-
-    .small-btn.danger {
-      background: #7e2637;
-    }
-
-    .price-input {
-      width: 100px;
-
-      padding: 8px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 8px;
-
-      background: #09111f;
-
-      color: white;
-    }
-
-    /* =====================================================
-       PÁGINAS
-    ===================================================== */
-
-    .page {
-      display: none;
-    }
-
-    .page.active {
-      display: block;
-    }
-
-    .simulation-grid {
-      display: grid;
-
-      grid-template-columns:
-        330px
-        1fr;
-
-      gap: 18px;
-    }
-
-    .form-card {
-      padding: 20px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        var(--radius);
-
-      background: var(--panel);
-    }
-
-    .form-card h3 {
-      margin:
-        0 0 15px;
-    }
-
-    .result-grid {
-      display: grid;
-
-      grid-template-columns:
-        repeat(3, 1fr);
-
-      gap: 12px;
-
-      margin-top: 18px;
-    }
-
-    .result-box {
-      padding: 17px;
-
-      border-radius: 13px;
-
-      background:
-        #0c1525;
-
-      border:
-        1px solid
-        var(--border);
-    }
-
-    .result-box span {
-      display: block;
-
-      color: var(--muted);
-
-      font-size: 11px;
-    }
-
-    .result-box strong {
-      display: block;
-
-      margin-top: 7px;
-
-      font-size: 20px;
-    }
-
-    .log-list {
-      display: flex;
-
-      flex-direction: column;
-
-      gap: 9px;
-    }
-
-    .log {
-      padding: 12px 14px;
-
-      border-radius: 11px;
-
-      background:
-        #0b1423;
-
-      border:
-        1px solid
-        var(--border);
-
-      font-size: 12px;
-    }
-
-    .log time {
-      display: block;
-
-      margin-bottom: 3px;
-
-      color: var(--muted);
-
-      font-size: 10px;
-    }
-
-    .log.success {
-      border-left:
-        3px solid
-        var(--success);
-    }
-
-    .log.error {
-      border-left:
-        3px solid
-        var(--danger);
-    }
-
-    .log.info {
-      border-left:
-        3px solid
-        var(--primary);
-    }
-
-    /* =====================================================
-       MODAL
-    ===================================================== */
-
-    .modal {
-      position: fixed;
-
-      inset: 0;
-
-      z-index: 100;
-
-      display: none;
-
-      align-items: center;
-      justify-content: center;
-
-      padding: 20px;
-
-      background:
-        rgba(0,0,0,.65);
-
-      backdrop-filter:
-        blur(8px);
-    }
-
-    .modal.open {
-      display: flex;
-    }
-
-    .modal-card {
-      width:
-        min(560px,100%);
-
-      max-height:
-        90vh;
-
-      overflow: auto;
-
-      padding: 25px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 20px;
-
-      background:
-        var(--panel);
-    }
-
-    .modal-header {
-      display: flex;
-
-      justify-content:
-        space-between;
-
-      align-items:
-        center;
-    }
-
-    .close-btn {
-      width: 34px;
-      height: 34px;
-
-      border: 0;
-
-      border-radius: 9px;
-
-      background: #233149;
-
-      color: white;
-    }
-
-    /* =====================================================
-       TOAST
-    ===================================================== */
-
-    #toast-container {
-      position: fixed;
-
-      right: 20px;
-      bottom: 20px;
-
-      z-index: 300;
-
-      display: flex;
-
-      flex-direction: column;
-
-      gap: 9px;
-    }
-
-    .toast {
-      width: min(380px, calc(100vw - 40px));
-
-      padding: 14px 16px;
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius: 13px;
-
-      background:
-        #121d30;
-
-      box-shadow: var(--shadow);
-
-      font-size: 13px;
-
-      animation:
-        toastIn .2s ease;
-    }
-
-    .toast.success {
-      border-left:
-        3px solid
-        var(--success);
-    }
-
-    .toast.error {
-      border-left:
-        3px solid
-        var(--danger);
-    }
-
-    .toast.warning {
-      border-left:
-        3px solid
-        var(--warning);
-    }
-
-    @keyframes toastIn {
-      from {
-        opacity: 0;
-        transform:
-          translateY(10px);
-      }
-
-      to {
-        opacity: 1;
-        transform:
-          translateY(0);
-      }
-    }
-
-    .loading {
-      display: inline-flex;
-
-      align-items: center;
-
-      gap: 8px;
-    }
-
-    .spinner {
-      width: 14px;
-      height: 14px;
-
-      border:
-        2px solid
-        rgba(255,255,255,.2);
-
-      border-top-color:
-        white;
-
-      border-radius: 50%;
-
-      animation:
-        spin .7s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .empty {
-      padding: 50px 20px;
-
-      text-align: center;
-
-      color: var(--muted);
-    }
-
-    .empty strong {
-      display: block;
-
-      margin-bottom: 6px;
-
-      color: white;
-    }
-
-    .badge {
-      display: inline-flex;
-
-      align-items: center;
-
-      padding: 5px 8px;
-
-      border-radius: 7px;
-
-      background:
-        rgba(32,201,151,.1);
-
-      color: var(--success);
-
-      font-size: 10px;
-
-      font-weight: 800;
-    }
-
-    .danger-text {
-      color: var(--danger);
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    @media (max-width: 1050px) {
-      .login-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .hero {
-        display: none;
-      }
-
-      .stats-grid {
-        grid-template-columns:
-          repeat(2,1fr);
-      }
-
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .simulation-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 760px) {
-      .app-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .sidebar {
-        position: fixed;
-
-        left: 0;
-        right: 0;
-        bottom: 0;
-
-        z-index: 40;
-
-        height: 65px;
-
-        display: flex;
-
-        align-items: center;
-
-        justify-content: space-around;
-
-        border-right: 0;
-
-        border-top:
-          1px solid
-          var(--border);
-
-        padding: 5px;
-
-        background:
-          rgba(8,13,24,.97);
-      }
-
-      .nav-label {
-        display: none;
-      }
-
-      .nav-btn {
-        width: auto;
-
-        margin: 0;
-
-        padding: 9px;
-      }
-
-      .nav-btn span:not(.nav-icon) {
-        display: none;
-      }
-
-      .main {
-        padding: 18px;
-
-        padding-bottom: 90px;
-      }
-
-      .page-header {
-        flex-direction: column;
-      }
-
-      .stats-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .topbar {
-        padding: 0 14px;
-      }
-
-      .connection-status {
-        display: none;
-      }
-
-      .header-actions {
-        width: 100%;
-      }
-
-      .header-actions button {
-        flex: 1;
-      }
-    }
-  </style>
-</head>
-
-<body>
-
-  <!-- =====================================================
-       LOGIN
-  ====================================================== -->
-
-  <section id="landing">
-
-    <div class="login-layout">
-
-      <div class="hero">
-
-        <div class="brand">
-          <div class="brand-icon">ML</div>
-
-          <div class="brand-name">
-            Mercado Livre Manager
-          </div>
-        </div>
-
-        <h1>
-          Controle sua operação
-          <span>em um só lugar.</span>
-        </h1>
-
-        <p>
-          Painel operacional para acompanhar anúncios,
-          preços, comissão, frete, margem, atualizações
-          e sincronização diretamente com sua conta do
-          Mercado Livre.
-        </p>
-
-        <div class="feature-list">
-
-          <div class="feature">
-            <strong>📊 Dashboard</strong>
-            <span>
-              Indicadores operacionais em tempo real.
-            </span>
-          </div>
-
-          <div class="feature">
-            <strong>💰 Precificação</strong>
-            <span>
-              Simule e altere preços dos anúncios.
-            </span>
-          </div>
-
-          <div class="feature">
-            <strong>🚚 Fretes</strong>
-            <span>
-              Consulte e sincronize informações de envio.
-            </span>
-          </div>
-
-          <div class="feature">
-            <strong>⚡ Operação em massa</strong>
-            <span>
-              Atualize vários anúncios de uma só vez.
-            </span>
-          </div>
-
-        </div>
-
-      </div>
-
-      <div class="login-card">
-
-        <h2>
-          Conectar conta
-        </h2>
-
-        <p>
-          Para entrar no painel, informe apenas o
-          <strong>Access Token</strong> da sua conta
-          do Mercado Livre.
-        </p>
-
-        <form
-          id="login-form"
-        >
-
-          <div class="field">
-
-            <label for="access-token">
-              Access Token
-            </label>
-
-            <input
-              id="access-token"
-              type="password"
-              autocomplete="off"
-              placeholder="APP_USR-..."
-              required
-            >
-
-          </div>
-
-          <button
-            id="login-button"
-            class="primary-btn full-btn"
-            type="submit"
-          >
-            Conectar ao Mercado Livre
-          </button>
-
-        </form>
-
-        <div class="login-note">
-          🔒 O token desta sessão é mantido somente
-          no armazenamento temporário do navegador.
-          O Client Secret não é solicitado nem armazenado.
-        </div>
-
-      </div>
-
-    </div>
-
-  </section>
-
-
-  <!-- =====================================================
-       APP
-  ====================================================== -->
-
-  <section
-    id="app"
-    class="hidden"
-  >
-
-    <header class="topbar">
-
-      <div class="topbar-left">
-
-        <div class="mini-logo">
-          ML
-        </div>
-
-        <div class="system-title">
-
-          <strong>
-            Mercado Livre Manager
-          </strong>
-
-          <span id="user-name">
-            Conta conectada
-          </span>
-
-        </div>
-
-      </div>
-
-      <div class="top-actions">
-
-        <div class="connection-status">
-
-          <span class="status-dot"></span>
-
-          Mercado Livre conectado
-
-        </div>
-
-        <button
-          class="secondary-btn"
-          onclick="abrirConfiguracao()"
-        >
-          ⚙ Configurações
-        </button>
-
-        <button
-          class="danger-btn"
-          onclick="logout()"
-        >
-          Sair
-        </button>
-
-      </div>
-
-    </header>
-
-
-    <div class="app-layout">
-
-      <!-- SIDEBAR -->
-
-      <aside class="sidebar">
-
-        <div class="nav-label">
-          Operação
-        </div>
-
-        <button
-          class="nav-btn active"
-          data-page="dashboard"
-          onclick="abrirPagina('dashboard')"
-        >
-          <span class="nav-icon">📊</span>
-          <span>Dashboard</span>
-        </button>
-
-        <button
-          class="nav-btn"
-          data-page="anuncios"
-          onclick="abrirPagina('anuncios')"
-        >
-          <span class="nav-icon">📦</span>
-          <span>Anúncios</span>
-        </button>
-
-        <button
-          class="nav-btn"
-          data-page="simulacao"
-          onclick="abrirPagina('simulacao')"
-        >
-          <span class="nav-icon">🧮</span>
-          <span>Simulação</span>
-        </button>
-
-        <button
-          class="nav-btn"
-          data-page="atualizacao"
-          onclick="abrirPagina('atualizacao')"
-        >
-          <span class="nav-icon">⚡</span>
-          <span>Atualização</span>
-        </button>
-
-        <div class="nav-label">
-          Sistema
-        </div>
-
-        <button
-          class="nav-btn"
-          data-page="logs"
-          onclick="abrirPagina('logs')"
-        >
-          <span class="nav-icon">📝</span>
-          <span>Logs</span>
-        </button>
-
-        <button
-          class="nav-btn"
-          onclick="abrirConfiguracao()"
-        >
-          <span class="nav-icon">⚙</span>
-          <span>Configuração</span>
-        </button>
-
-      </aside>
-
-
-      <!-- MAIN -->
-
-      <main class="main">
-
-        <!-- DASHBOARD -->
-
-        <section
-          id="page-dashboard"
-          class="page active"
-        >
-
-          <div class="page-header">
-
-            <div>
-
-              <h1>
-                Dashboard
-              </h1>
-
-              <p>
-                Visão geral da sua operação.
-              </p>
-
-            </div>
-
-            <div class="header-actions">
-
-              <button
-                class="secondary-btn"
-                onclick="carregarDados(true)"
-              >
-                ↻ Atualizar dados
-              </button>
-
-              <button
-                class="primary-btn"
-                onclick="abrirPagina('anuncios')"
-              >
-                Ver anúncios
-              </button>
-
-            </div>
-
-          </div>
-
-
-          <div class="stats-grid">
-
-            <div class="stat-card">
-
-              <div class="stat-label">
-                ANÚNCIOS
-              </div>
-
-              <div
-                id="stat-anuncios"
-                class="stat-value"
-              >
-                0
-              </div>
-
-              <div class="stat-extra">
-                Anúncios carregados
-              </div>
-
-            </div>
-
-            <div class="stat-card">
-
-              <div class="stat-label">
-                FATURAMENTO POTENCIAL
-              </div>
-
-              <div
-                id="stat-faturamento"
-                class="stat-value"
-              >
-                R$ 0,00
-              </div>
-
-              <div class="stat-extra">
-                Soma dos preços atuais
-              </div>
-
-            </div>
-
-            <div class="stat-card">
-
-              <div class="stat-label">
-                COMISSÕES
-              </div>
-
-              <div
-                id="stat-comissao"
-                class="stat-value"
-              >
-                R$ 0,00
-              </div>
-
-              <div class="stat-extra">
-                Estimativa dos anúncios
-              </div>
-
-            </div>
-
-            <div class="stat-card">
-
-              <div class="stat-label">
-                LÍQUIDO ESTIMADO
-              </div>
-
-              <div
-                id="stat-liquido"
-                class="stat-value"
-              >
-                R$ 0,00
-              </div>
-
-              <div class="stat-extra">
-                Após comissão e frete
-              </div>
-
-            </div>
-
-          </div>
-
-
-          <div class="dashboard-grid">
-
-            <div class="panel">
-
-              <div class="panel-header">
-
-                <div>
-
-                  <div class="panel-title">
-                    Distribuição de preços
-                  </div>
-
-                  <div class="panel-subtitle">
-                    Faixas de preço dos anúncios
-                  </div>
-
-                </div>
-
-              </div>
-
-              <div class="panel-body">
-
-                <div
-                  id="price-chart"
-                  class="chart"
-                ></div>
-
-              </div>
-
-            </div>
-
-
-            <div class="panel">
-
-              <div class="panel-header">
-
-                <div>
-
-                  <div class="panel-title">
-                    Operação
-                  </div>
-
-                  <div class="panel-subtitle">
-                    Resumo da sessão atual
-                  </div>
-
-                </div>
-
-              </div>
-
-              <div class="panel-body">
-
-                <div class="result-grid">
-
-                  <div class="result-box">
-
-                    <span>
-                      Produtos
-                    </span>
-
-                    <strong
-                      id="dash-produtos"
-                    >
-                      0
-                    </strong>
-
-                  </div>
-
-                  <div class="result-box">
-
-                    <span>
-                      Vendidos
-                    </span>
-
-                    <strong
-                      id="dash-vendidos"
-                    >
-                      0
-                    </strong>
-
-                  </div>
-
-                  <div class="result-box">
-
-                    <span>
-                      Estoque
-                    </span>
-
-                    <strong
-                      id="dash-estoque"
-                    >
-                      0
-                    </strong>
-
-                  </div>
-
-                </div>
-
-                <div style="height:20px"></div>
-
-                <button
-                  class="success-btn"
-                  style="width:100%"
-                  onclick="sincronizarTudo()"
-                >
-                  ↻ Sincronizar operação
-
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        <!-- ANÚNCIOS -->
-
-        <section
-          id="page-anuncios"
-          class="page"
-        >
-
-          <div class="page-header">
-
-            <div>
-
-              <h1>
-                Anúncios
-              </h1>
-
-              <p>
-                Gerencie preços e informações dos seus anúncios.
-              </p>
-
-            </div>
-
-            <div class="header-actions">
-
-              <button
-                class="secondary-btn"
-                onclick="sincronizarPrecosApi()"
-              >
-                ↻ Preços
-              </button>
-
-              <button
-                class="secondary-btn"
-                onclick="sincronizarFretesApi()"
-              >
-                🚚 Fretes
-              </button>
-
-            </div>
-
-          </div>
-
-
-          <div class="panel">
-
-            <div class="toolbar">
-
-              <input
-                id="search-anuncios"
-                class="search"
-                type="search"
-                placeholder="Pesquisar por nome ou ID..."
-                oninput="filtrarAnuncios()"
-              >
-
-              <select
-                id="filter-sort"
-                class="search"
-                style="max-width:190px"
-                onchange="filtrarAnuncios()"
-              >
-
-                <option value="nome">
-                  Nome
-                </option>
-
-                <option value="preco-menor">
-                  Menor preço
-                </option>
-
-                <option value="preco-maior">
-                  Maior preço
-                </option>
-
-                <option value="liquido-maior">
-                  Maior líquido
-                </option>
-
-              </select>
-
-              <button
-                class="primary-btn"
-                onclick="carregarDados(true)"
-              >
-                Atualizar
-              </button>
-
-            </div>
-
-
-            <div
-              id="anuncios-table-container"
-              class="table-wrapper"
-            >
-
-              <div class="empty">
-
-                <strong>
-                  Carregando anúncios...
-                </strong>
-
-                Aguarde enquanto buscamos os dados.
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        <!-- SIMULAÇÃO -->
-
-        <section
-          id="page-simulacao"
-          class="page"
-        >
-
-          <div class="page-header">
-
-            <div>
-
-              <h1>
-                Simulador de preço
-              </h1>
-
-              <p>
-                Calcule comissão, frete e valor líquido antes de alterar.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div class="simulation-grid">
-
-            <div class="form-card">
-
-              <h3>
-                Parâmetros
-              </h3>
-
-              <div class="field">
-
-                <label>
-                  Preço atual
-                </label>
-
-                <input
-                  id="sim-atual"
-                  type="number"
-                  step="0.01"
-                  value="100"
-                  oninput="calcularSimulacao()"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  Novo preço
-                </label>
-
-                <input
-                  id="sim-novo"
-                  type="number"
-                  step="0.01"
-                  value="100"
-                  oninput="calcularSimulacao()"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  Comissão (%)
-                </label>
-
-                <input
-                  id="sim-comissao"
-                  type="number"
-                  step="0.01"
-                  value="16"
-                  oninput="calcularSimulacao()"
-                >
-
-              </div>
-
-              <div class="field">
-
-                <label>
-                  Frete
-                </label>
-
-                <input
-                  id="sim-frete"
-                  type="number"
-                  step="0.01"
-                  value="0"
-                  oninput="calcularSimulacao()"
-                >
-
-              </div>
-
-              <button
-                class="primary-btn full-btn"
-                onclick="calcularSimulacao()"
-              >
-                Calcular
-              </button>
-
-            </div>
-
-
-            <div class="panel">
-
-              <div class="panel-header">
-
-                <div>
-
-                  <div class="panel-title">
-                    Resultado
-                  </div>
-
-                  <div class="panel-subtitle">
-                    Estimativa financeira
-                  </div>
-
-                </div>
-
-              </div>
-
-              <div class="panel-body">
-
-                <div class="result-grid">
-
-                  <div class="result-box">
-
-                    <span>
-                      Comissão
-                    </span>
-
-                    <strong
-                      id="sim-result-comissao"
-                    >
-                      R$ 0,00
-                    </strong>
-
-                  </div>
-
-                  <div class="result-box">
-
-                    <span>
-                      Frete
-                    </span>
-
-                    <strong
-                      id="sim-result-frete"
-                    >
-                      R$ 0,00
-                    </strong>
-
-                  </div>
-
-                  <div class="result-box">
-
-                    <span>
-                      Líquido
-                    </span>
-
-                    <strong
-                      id="sim-result-liquido"
-                    >
-                      R$ 0,00
-                    </strong>
-
-                  </div>
-
-                </div>
-
-                <div style="height:20px"></div>
-
-                <div class="result-box">
-
-                  <span>
-                    Diferença de líquido
-                  </span>
-
-                  <strong
-                    id="sim-result-diferenca"
-                  >
-                    R$ 0,00
-                  </strong>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        <!-- ATUALIZAÇÃO -->
-
-        <section
-          id="page-atualizacao"
-          class="page"
-        >
-
-          <div class="page-header">
-
-            <div>
-
-              <h1>
-                Atualização em massa
-              </h1>
-
-              <p>
-                Ajuste vários preços de uma única vez.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div class="panel">
-
-            <div class="panel-header">
-
-              <div>
-
-                <div class="panel-title">
-                  Alterações pendentes
-                </div>
-
-                <div class="panel-subtitle">
-                  Edite os preços e aplique as alterações.
-                </div>
-
-              </div>
-
-              <button
-                class="primary-btn"
-                onclick="aplicarAtualizacaoEmMassa()"
-              >
-                Aplicar alterações
-              </button>
-
-            </div>
-
-            <div
-              id="bulk-update-container"
-              class="table-wrapper"
-            ></div>
-
-          </div>
-
-        </section>
-
-
-        <!-- LOGS -->
-
-        <section
-          id="page-logs"
-          class="page"
-        >
-
-          <div class="page-header">
-
-            <div>
-
-              <h1>
-                Logs da operação
-              </h1>
-
-              <p>
-                Histórico das ações executadas no painel.
-              </p>
-
-            </div>
-
-            <button
-              class="danger-btn"
-              onclick="limparLogs()"
-            >
-              Limpar logs
-            </button>
-
-          </div>
-
-
-          <div class="panel">
-
-            <div
-              id="log-list"
-              class="panel-body log-list"
-            ></div>
-
-          </div>
-
-        </section>
-
-      </main>
-
-    </div>
-
-  </section>
-
-
-  <!-- =====================================================
-       MODAL CONFIGURAÇÃO
-  ====================================================== -->
-
-  <div
-    id="config-modal"
-    class="modal"
-  >
-
-    <div class="modal-card">
-
-      <div class="modal-header">
-
-        <div>
-
-          <h2 style="margin:0">
-            Configurações
-          </h2>
-
-          <div
-            class="muted"
-            style="margin-top:4px;font-size:12px"
-          >
-            Preferências do painel
-          </div>
-
-        </div>
-
-        <button
-          class="close-btn"
-          onclick="fecharConfiguracao()"
-        >
-          ×
-        </button>
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Quantidade de anúncios por página
-        </label>
-
-        <select id="config-limit">
-
-          <option value="20">
-            20
-          </option>
-
-          <option value="50" selected>
-            50
-          </option>
-
-          <option value="100">
-            100
-          </option>
-
-        </select>
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Comissão padrão para simulações (%)
-        </label>
-
-        <input
-          id="config-comissao"
-          type="number"
-          step="0.01"
-          value="16"
-        >
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Frete padrão para simulações
-        </label>
-
-        <input
-          id="config-frete"
-          type="number"
-          step="0.01"
-          value="0"
-        >
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Nome da operação
-        </label>
-
-        <input
-          id="config-nome"
-          type="text"
-          value="Minha operação"
-        >
-
-      </div>
-
-
-      <div
-        style="
-          margin-top:25px;
-          padding:15px;
-          border-radius:12px;
-          background:#0a1424;
-          border:1px solid var(--border);
-        "
-      >
-
-        <strong>
-          Conta conectada
-        </strong>
-
-        <div
-          id="config-account"
-          class="muted"
-          style="margin-top:6px;font-size:12px"
-        >
-          Verificando...
-        </div>
-
-      </div>
-
-
-      <div
-        style="
-          display:flex;
-          gap:10px;
-          margin-top:22px;
-        "
-      >
-
-        <button
-          class="secondary-btn"
-          style="flex:1"
-          onclick="fecharConfiguracao()"
-        >
-          Cancelar
-        </button>
-
-        <button
-          class="primary-btn"
-          style="flex:1"
-          onclick="salvarConfiguracao()"
-        >
-          Salvar configurações
-        </button>
-
-      </div>
-
-
-      <button
-        class="danger-btn full-btn"
-        onclick="desconectarConta()"
-      >
-        Desconectar conta
-      </button>
-
-    </div>
-
-  </div>
-
-
-  <div id="toast-container"></div>
-
-
-  <!-- =====================================================
-       JAVASCRIPT
-  ====================================================== -->
-
-  <script>
-    'use strict';
-
-    /* =====================================================
-       CONFIGURAÇÃO
-    ===================================================== */
-
-    const RENDER_URL =
-      'https://site-atualizar-pre-o-ml.onrender.com';
-
-    let accessToken =
-      sessionStorage.getItem(
-        'ml_access_token'
-      ) || '';
-
-    let usuarioLogado = null;
-
-    let anuncios = [];
-
-    let anunciosFiltrados = [];
-
-    let logs =
-      JSON.parse(
-        localStorage.getItem(
-          'ml_manager_logs'
-        ) || '[]'
-      );
-
-    let configuracao =
-      JSON.parse(
-        localStorage.getItem(
-          'ml_manager_config'
-        ) || '{}'
-      );
-
-    configuracao.limit =
-      configuracao.limit || 50;
-
-    configuracao.comissao =
-      configuracao.comissao ?? 16;
-
-    configuracao.frete =
-      configuracao.frete ?? 0;
-
-    configuracao.nome =
-      configuracao.nome ||
-      'Minha operação';
 
+    function solicitarToken() {
 
-    /* =====================================================
-       UTILITÁRIOS
-    ===================================================== */
+        const aviso =
+            document.getElementById('aviso-token');
 
-    function moeda(valor) {
-      return Number(
-        valor || 0
-      ).toLocaleString(
-        'pt-BR',
-        {
-          style: 'currency',
-          currency: 'BRL'
+        if (aviso) {
+            aviso.classList.remove('hidden');
         }
-      );
     }
 
 
-    function numero(valor) {
-      const n =
-        Number(valor);
+    function salvarTokenManual() {
 
-      return Number.isFinite(n)
-        ? n
-        : 0;
-    }
+        const input =
+            document.getElementById(
+                'input-token-manual'
+            );
 
-
-    function escapeHtml(valor) {
-      return String(
-        valor ?? ''
-      )
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-    }
+        const tokenVal =
+            input
+                ? input.value.trim()
+                : '';
 
 
-    function mostrarToast(
-      mensagem,
-      tipo = 'info'
-    ) {
-      const container =
-        document.getElementById(
-          'toast-container'
+        if (!tokenVal) {
+
+            alert(
+                "Digite um Access Token válido."
+            );
+
+            return;
+        }
+
+
+        localStorage.setItem(
+            'ml_access_token',
+            tokenVal
         );
 
-      const toast =
-        document.createElement(
-          'div'
-        );
 
-      toast.className =
-        `toast ${tipo}`;
+        if (input) {
+            input.value = '';
+        }
 
-      toast.textContent =
-        mensagem;
 
-      container.appendChild(
-        toast
-      );
+        const aviso =
+            document.getElementById(
+                'aviso-token'
+            );
 
-      setTimeout(() => {
-        toast.remove();
-      }, 4500);
+        if (aviso) {
+            aviso.classList.add('hidden');
+        }
+
+
+        carregarDados();
     }
 
 
-    function adicionarLog(
-      mensagem,
-      tipo = 'info'
-    ) {
-      logs.unshift({
-        mensagem,
-        tipo,
-        data:
-          new Date().toISOString()
-      });
-
-      logs =
-        logs.slice(0, 200);
-
-      localStorage.setItem(
-        'ml_manager_logs',
-        JSON.stringify(logs)
-      );
-
-      renderizarLogs();
-    }
-
-
-    function renderizarLogs() {
-      const container =
-        document.getElementById(
-          'log-list'
-        );
-
-      if (!container) {
-        return;
-      }
-
-      if (!logs.length) {
-        container.innerHTML = `
-          <div class="empty">
-            <strong>
-              Nenhum registro ainda.
-            </strong>
-            As operações realizadas aparecerão aqui.
-          </div>
-        `;
-
-        return;
-      }
-
-      container.innerHTML =
-        logs
-          .map(log => `
-            <div class="log ${escapeHtml(log.tipo)}">
-
-              <time>
-                ${new Date(
-                  log.data
-                ).toLocaleString('pt-BR')}
-              </time>
-
-              ${escapeHtml(
-                log.mensagem
-              )}
-
-            </div>
-          `)
-          .join('');
-    }
-
-
-    function limparLogs() {
-      logs = [];
-
-      localStorage.removeItem(
-        'ml_manager_logs'
-      );
-
-      renderizarLogs();
-
-      mostrarToast(
-        'Logs limpos.',
-        'success'
-      );
-    }
-
-
-    /* =====================================================
-       API
-    ===================================================== */
-
-    function headersComToken(
-      headers = {}
-    ) {
-      const result =
-        new Headers(headers);
-
-      if (accessToken) {
-        result.set(
-          'Authorization',
-          `Bearer ${accessToken}`
-        );
-      }
-
-      return result;
-    }
-
+    /* =========================================================
+       FETCH CENTRALIZADO
+    ========================================================= */
 
     async function apiFetch(
-      rota,
-      options = {}
+        endpoint,
+        options = {}
     ) {
-      const headers =
-        headersComToken(
-          options.headers || {}
-        );
 
-      const resposta =
-        await fetch(
-          `${RENDER_URL}${rota}`,
-          {
-            ...options,
-            headers
-          }
-        );
+        const token =
+            obterTokenLocal();
 
-      const texto =
-        await resposta.text();
 
-      let dados = {};
-
-      if (texto) {
-        try {
-          dados =
-            JSON.parse(texto);
-        } catch {
-          throw new Error(
-            `O servidor retornou uma resposta inválida ` +
-            `(HTTP ${resposta.status}). ` +
-            `Verifique se a rota ${rota} existe no Render.`
-          );
-        }
-      }
-
-      return {
-        resposta,
-        dados
-      };
-    }
-
-
-    /* =====================================================
-       LOGIN
-    ===================================================== */
-
-    async function iniciarOAuth(
-      event
-    ) {
-      event?.preventDefault();
-
-      const input =
-        document.getElementById(
-          'access-token'
-        );
-
-      const button =
-        document.getElementById(
-          'login-button'
-        );
-
-      const token =
-        String(
-          input?.value || ''
-        ).trim();
-
-      if (!token) {
-        mostrarToast(
-          'Informe o Access Token.',
-          'warning'
-        );
-
-        return;
-      }
-
-      accessToken =
-        token;
-
-      button.disabled =
-        true;
-
-      button.innerHTML = `
-        <span class="loading">
-          <span class="spinner"></span>
-          Validando token...
-        </span>
-      `;
-
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/auth/start',
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
-
-            body: JSON.stringify({
-              access_token:
-                token
-            })
-          }
-        );
-
-        if (
-          !resposta.ok ||
-          !dados.sucesso
-        ) {
-          throw new Error(
-            dados.erro ||
-            'Access Token inválido.'
-          );
-        }
-
-        sessionStorage.setItem(
-          'ml_access_token',
-          token
-        );
-
-        usuarioLogado =
-          dados.usuario || null;
-
-        document.getElementById(
-          'landing'
-        ).classList.add(
-          'hidden'
-        );
-
-        document.getElementById(
-          'app'
-        ).classList.remove(
-          'hidden'
-        );
-
-        atualizarUsuario();
-
-        adicionarLog(
-          'Login realizado com sucesso.',
-          'success'
-        );
-
-        mostrarToast(
-          'Conta conectada com sucesso.',
-          'success'
-        );
-
-        await carregarDados();
-
-      } catch (error) {
-        accessToken = '';
-
-        sessionStorage.removeItem(
-          'ml_access_token'
-        );
-
-        adicionarLog(
-          `Falha no login: ${error.message}`,
-          'error'
-        );
-
-        mostrarToast(
-          error.message,
-          'error'
-        );
-
-      } finally {
-        button.disabled =
-          false;
-
-        button.textContent =
-          'Conectar ao Mercado Livre';
-      }
-    }
-
-
-    async function verificarLogin() {
-      accessToken =
-        sessionStorage.getItem(
-          'ml_access_token'
-        ) || '';
-
-      if (!accessToken) {
-        mostrarLogin();
-        return false;
-      }
-
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/auth/status'
-        );
-
-        if (
-          !resposta.ok ||
-          !dados.autenticado
-        ) {
-          throw new Error(
-            dados.erro ||
-            'Sessão inválida.'
-          );
-        }
-
-        usuarioLogado =
-          dados.usuario || null;
-
-        document.getElementById(
-          'landing'
-        ).classList.add(
-          'hidden'
-        );
-
-        document.getElementById(
-          'app'
-        ).classList.remove(
-          'hidden'
-        );
-
-        atualizarUsuario();
-
-        await carregarDados();
-
-        return true;
-
-      } catch {
-        sessionStorage.removeItem(
-          'ml_access_token'
-        );
-
-        accessToken = '';
-
-        mostrarLogin();
-
-        return false;
-      }
-    }
-
-
-    function mostrarLogin() {
-      document.getElementById(
-        'landing'
-      ).classList.remove(
-        'hidden'
-      );
-
-      document.getElementById(
-        'app'
-      ).classList.add(
-        'hidden'
-      );
-    }
-
-
-    async function logout() {
-      try {
-        if (accessToken) {
-          await apiFetch(
-            '/api/auth/logout',
-            {
-              method: 'POST'
-            }
-          );
-        }
-      } catch {
-        // logout local continua válido
-      }
-
-      sessionStorage.removeItem(
-        'ml_access_token'
-      );
-
-      accessToken = '';
-
-      usuarioLogado = null;
-
-      anuncios = [];
-
-      anunciosFiltrados = [];
-
-      adicionarLog(
-        'Sessão encerrada.',
-        'info'
-      );
-
-      mostrarLogin();
-
-      const input =
-        document.getElementById(
-          'access-token'
-        );
-
-      if (input) {
-        input.value = '';
-      }
-
-      mostrarToast(
-        'Sessão encerrada.',
-        'success'
-      );
-    }
-
-
-    function atualizarUsuario() {
-      const el =
-        document.getElementById(
-          'user-name'
-        );
-
-      if (!el) {
-        return;
-      }
-
-      if (!usuarioLogado) {
-        el.textContent =
-          'Conta conectada';
-
-        return;
-      }
-
-      el.textContent =
-        usuarioLogado.nickname
-          ? `@${usuarioLogado.nickname}`
-          : `ID ${usuarioLogado.id}`;
-    }
-
-
-    /* =====================================================
-       NAVEGAÇÃO
-    ===================================================== */
-
-    function abrirPagina(
-      pagina
-    ) {
-      document
-        .querySelectorAll('.page')
-        .forEach(el => {
-          el.classList.remove(
-            'active'
-          );
-        });
-
-      document
-        .querySelectorAll('.nav-btn')
-        .forEach(el => {
-          el.classList.remove(
-            'active'
-          );
-        });
-
-      const page =
-        document.getElementById(
-          `page-${pagina}`
-        );
-
-      if (page) {
-        page.classList.add(
-          'active'
-        );
-      }
-
-      const nav =
-        document.querySelector(
-          `.nav-btn[data-page="${pagina}"]`
-        );
-
-      if (nav) {
-        nav.classList.add(
-          'active'
-        );
-      }
-
-      if (pagina === 'logs') {
-        renderizarLogs();
-      }
-
-      if (pagina === 'simulacao') {
-        aplicarConfiguracaoSimulacao();
-        calcularSimulacao();
-      }
-
-      if (pagina === 'atualizacao') {
-        renderizarAtualizacaoMassa();
-      }
-    }
-
-
-    /* =====================================================
-       CARREGAMENTO
-    ===================================================== */
-
-    async function carregarDados(
-      mostrarMensagem = false
-    ) {
-      if (!accessToken) {
-        mostrarLogin();
-        return;
-      }
-
-      const container =
-        document.getElementById(
-          'anuncios-table-container'
-        );
-
-      if (container) {
-        container.innerHTML = `
-          <div class="empty">
-            <strong>
-              Carregando anúncios...
-            </strong>
-            Consultando o Mercado Livre.
-          </div>
-        `;
-      }
-
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          `/api/anuncios?limit=${configuracao.limit}`
-        );
-
-        if (
-          resposta.status === 401
-        ) {
-          sessionStorage.removeItem(
-            'ml_access_token'
-          );
-
-          accessToken = '';
-
-          mostrarLogin();
-
-          throw new Error(
-            'Seu Access Token expirou ou foi invalidado.'
-          );
-        }
-
-        if (!resposta.ok) {
-          throw new Error(
-            dados.erro ||
-            'Não foi possível carregar os anúncios.'
-          );
-        }
-
-        anuncios =
-          Array.isArray(
-            dados.anuncios
-          )
-            ? dados.anuncios
-            : [];
-
-        anunciosFiltrados =
-          [...anuncios];
-
-        renderizarTabelaAnuncios();
-
-        atualizarDashboard();
-
-        renderizarAtualizacaoMassa();
-
-        if (mostrarMensagem) {
-          mostrarToast(
-            `${anuncios.length} anúncios carregados.`,
-            'success'
-          );
-        }
-
-        adicionarLog(
-          `${anuncios.length} anúncios sincronizados.`,
-          'success'
-        );
-
-      } catch (error) {
-        if (container) {
-          container.innerHTML = `
-            <div class="empty">
-              <strong>
-                Não foi possível carregar os anúncios.
-              </strong>
-
-              ${escapeHtml(
-                error.message
-              )}
-            </div>
-          `;
-        }
-
-        mostrarToast(
-          error.message,
-          'error'
-        );
-
-        adicionarLog(
-          `Erro ao carregar anúncios: ${error.message}`,
-          'error'
-        );
-      }
-    }
-
-
-    /* =====================================================
-       DASHBOARD
-    ===================================================== */
-
-    function atualizarDashboard() {
-      const total =
-        anuncios.length;
-
-      const faturamento =
-        anuncios.reduce(
-          (soma, item) =>
-            soma +
-            numero(
-              item.preco ??
-              item.price
-            ),
-          0
-        );
-
-      const comissao =
-        anuncios.reduce(
-          (soma, item) =>
-            soma +
-            numero(
-              item.comissao ??
-              item.sale_fee
-            ),
-          0
-        );
-
-      const liquido =
-        anuncios.reduce(
-          (soma, item) =>
-            soma +
-            numero(
-              item.liquido ??
-              item.net_received
-            ),
-          0
-        );
-
-      const estoque =
-        anuncios.reduce(
-          (soma, item) =>
-            soma +
-            numero(
-              item.available_quantity
-            ),
-          0
-        );
-
-      const vendidos =
-        anuncios.reduce(
-          (soma, item) =>
-            soma +
-            numero(
-              item.sold_quantity
-            ),
-          0
-        );
-
-      document.getElementById(
-        'stat-anuncios'
-      ).textContent =
-        total.toLocaleString(
-          'pt-BR'
-        );
-
-      document.getElementById(
-        'stat-faturamento'
-      ).textContent =
-        moeda(faturamento);
-
-      document.getElementById(
-        'stat-comissao'
-      ).textContent =
-        moeda(comissao);
-
-      document.getElementById(
-        'stat-liquido'
-      ).textContent =
-        moeda(liquido);
-
-      document.getElementById(
-        'dash-produtos'
-      ).textContent =
-        total.toLocaleString(
-          'pt-BR'
-        );
-
-      document.getElementById(
-        'dash-vendidos'
-      ).textContent =
-        vendidos.toLocaleString(
-          'pt-BR'
-        );
-
-      document.getElementById(
-        'dash-estoque'
-      ).textContent =
-        estoque.toLocaleString(
-          'pt-BR'
-        );
-
-      renderizarGrafico();
-    }
-
-
-    function renderizarGrafico() {
-      const chart =
-        document.getElementById(
-          'price-chart'
-        );
-
-      if (!chart) {
-        return;
-      }
-
-      if (!anuncios.length) {
-        chart.innerHTML = `
-          <div class="empty" style="width:100%">
-            Sem dados para o gráfico.
-          </div>
-        `;
-
-        return;
-      }
-
-      const faixas = [
-        {
-          nome: 'Até R$50',
-          min: 0,
-          max: 50
-        },
-        {
-          nome: 'R$50–100',
-          min: 50,
-          max: 100
-        },
-        {
-          nome: 'R$100–250',
-          min: 100,
-          max: 250
-        },
-        {
-          nome: 'R$250–500',
-          min: 250,
-          max: 500
-        },
-        {
-          nome: 'R$500–1k',
-          min: 500,
-          max: 1000
-        },
-        {
-          nome: '+R$1k',
-          min: 1000,
-          max: Infinity
-        }
-      ];
-
-      const valores =
-        faixas.map(faixa =>
-          anuncios.filter(item => {
-            const preco =
-              numero(
-                item.preco ??
-                item.price
-              );
-
-            return (
-              preco >= faixa.min &&
-              preco < faixa.max
+        const headers =
+            new Headers(
+                options.headers || {}
             );
-          }).length
-        );
 
-      const maior =
-        Math.max(
-          ...valores,
-          1
-        );
 
-      chart.innerHTML =
-        valores
-          .map(
-            (valor, index) => {
+        if (token) {
 
-              const altura =
-                Math.max(
-                  5,
-                  (valor / maior) *
-                    90
+            headers.set(
+                'Authorization',
+                'Bearer ' + token
+            );
+        }
+
+
+        if (
+            options.body &&
+            typeof options.body === 'string' &&
+            !headers.has('Content-Type')
+        ) {
+
+            headers.set(
+                'Content-Type',
+                'application/json'
+            );
+        }
+
+
+        const response =
+            await fetch(
+                RENDER_URL + endpoint,
+                {
+                    ...options,
+                    headers
+                }
+            );
+
+
+        const texto =
+            await response.text();
+
+
+        let data = {};
+
+
+        if (texto) {
+
+            try {
+
+                data =
+                    JSON.parse(texto);
+
+            } catch (e) {
+
+                throw new Error(
+                    `O servidor retornou uma resposta inválida (HTTP ${response.status}).`
+                );
+            }
+        }
+
+
+        return {
+            response,
+            data
+        };
+    }
+
+
+    /* =========================================================
+       BUSCA
+    ========================================================= */
+
+    function executarBusca() {
+
+        const termo =
+            document
+                .getElementById('input-busca')
+                .value
+                .toLowerCase()
+                .trim();
+
+
+        let itensFiltrados =
+            cacheItens;
+
+
+        if (termo !== '') {
+
+            itensFiltrados =
+                cacheItens.filter(
+                    item =>
+
+                        String(
+                            item.id
+                        )
+                            .toLowerCase()
+                            .includes(termo)
+
+                        ||
+
+                        String(
+                            item.sku
+                        )
+                            .toLowerCase()
+                            .includes(termo)
+
+                        ||
+
+                        String(
+                            item.title
+                        )
+                            .toLowerCase()
+                            .includes(termo)
+                );
+        }
+
+
+        if (
+            abaAtualAtiva ===
+            'gestao'
+        ) {
+
+            montarTabelaGestao(
+                itensFiltrados
+            );
+
+        } else if (
+            abaAtualAtiva ===
+            'simulacao'
+        ) {
+
+            montarTabelaSimulacao(
+                itensFiltrados
+            );
+
+        } else if (
+            abaAtualAtiva ===
+            'atualizacao'
+        ) {
+
+            montarTabelaAtualizacao(
+                itensFiltrados
+            );
+        }
+    }
+
+
+    function limparBusca() {
+
+        document
+            .getElementById(
+                'input-busca'
+            )
+            .value = '';
+
+        executarBusca();
+    }
+
+
+    /* =========================================================
+       CARREGAR ANÚNCIOS
+    ========================================================= */
+
+    async function carregarDados() {
+
+        const token =
+            obterTokenLocal();
+
+
+        if (!token) {
+
+            solicitarToken();
+
+            return;
+        }
+
+
+        document.getElementById(
+            'loading-text'
+        ).innerText =
+            "Buscando todos os seus anúncios na API do Mercado Livre...";
+
+
+        document
+            .getElementById('loading')
+            .classList
+            .remove('hidden');
+
+
+        document
+            .getElementById('loading')
+            .classList
+            .add('flex');
+
+
+        document
+            .getElementById('aviso-token')
+            .classList
+            .add('hidden');
+
+
+        try {
+
+            const {
+                response,
+                data
+            } =
+                await apiFetch(
+                    '/api/anuncios'
                 );
 
-              return `
-                <div class="bar-wrap">
 
-                  <div
-                    class="bar"
-                    style="height:${altura}%"
-                    title="${valor} anúncios"
-                  ></div>
+            if (
+                response.status ===
+                401
+            ) {
 
-                  <div class="bar-label">
-                    ${faixas[index].nome}
-                  </div>
+                localStorage.removeItem(
+                    'ml_access_token'
+                );
 
-                </div>
-              `;
+                solicitarToken();
+
+                alert(
+                    data.erro ||
+                    "O Access Token é inválido ou expirou."
+                );
+
+                return;
             }
-          )
-          .join('');
-    }
 
 
-    /* =====================================================
-       ANÚNCIOS
-    ===================================================== */
+            if (
+                response.ok &&
+                data.itens
+            ) {
 
-    function filtrarAnuncios() {
-      const busca =
-        String(
-          document.getElementById(
-            'search-anuncios'
-          )?.value || ''
-        )
-          .trim()
-          .toLowerCase();
+                cacheItens =
+                    data.itens;
 
-      const ordem =
-        document.getElementById(
-          'filter-sort'
-        )?.value ||
-        'nome';
 
-      anunciosFiltrados =
-        anuncios.filter(item => {
+                atualizarCards(
+                    cacheItens
+                );
 
-          const nome =
-            String(
-              item.titulo ??
-              item.title ??
-              ''
-            ).toLowerCase();
 
-          const id =
-            String(
-              item.id || ''
-            ).toLowerCase();
+                executarBusca();
 
-          return (
-            !busca ||
-            nome.includes(busca) ||
-            id.includes(busca)
-          );
-        });
 
-      anunciosFiltrados.sort(
-        (a, b) => {
+                alert(
+                    `Sucesso! ${cacheItens.length} anúncios carregados.`
+                );
 
-          const precoA =
-            numero(
-              a.preco ??
-              a.price
+            } else {
+
+                alert(
+                    data.erro ||
+                    "Erro ao carregar anúncios."
+                );
+            }
+
+
+        } catch (e) {
+
+            console.error(e);
+
+
+            alert(
+                e.message ||
+                "Erro de comunicação com o servidor no Render."
             );
 
-          const precoB =
-            numero(
-              b.preco ??
-              b.price
-            );
 
-          const liquidoA =
-            numero(
-              a.liquido ??
-              a.net_received
-            );
+        } finally {
 
-          const liquidoB =
-            numero(
-              b.liquido ??
-              b.net_received
-            );
+            document
+                .getElementById('loading')
+                .classList
+                .add('hidden');
 
-          if (
-            ordem ===
-            'preco-menor'
-          ) {
-            return precoA - precoB;
-          }
 
-          if (
-            ordem ===
-            'preco-maior'
-          ) {
-            return precoB - precoA;
-          }
-
-          if (
-            ordem ===
-            'liquido-maior'
-          ) {
-            return (
-              liquidoB -
-              liquidoA
-            );
-          }
-
-          return String(
-            a.titulo ??
-            a.title ??
-            ''
-          ).localeCompare(
-            String(
-              b.titulo ??
-              b.title ??
-              ''
-            )
-          );
+            document
+                .getElementById('loading')
+                .classList
+                .remove('flex');
         }
-      );
-
-      renderizarTabelaAnuncios();
     }
 
 
-    function renderizarTabelaAnuncios() {
-      const container =
+    /* =========================================================
+       SINCRONIZAR PREÇOS
+    ========================================================= */
+
+    async function sincronizarPrecosApi() {
+
+        const token =
+            obterTokenLocal();
+
+
+        if (!token) {
+
+            solicitarToken();
+
+            return;
+        }
+
+
+        if (
+            !cacheItens ||
+            cacheItens.length === 0
+        ) {
+
+            alert(
+                "Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro."
+            );
+
+            return;
+        }
+
+
         document.getElementById(
-          'anuncios-table-container'
-        );
+            'loading-text'
+        ).innerText =
+            "Puxando preços atuais das MLBs ativas...";
 
-      if (!container) {
-        return;
-      }
 
-      if (!anunciosFiltrados.length) {
-        container.innerHTML = `
-          <div class="empty">
+        document
+            .getElementById('loading')
+            .classList
+            .remove('hidden');
 
-            <strong>
-              Nenhum anúncio encontrado.
-            </strong>
 
-            Tente alterar sua pesquisa ou sincronizar novamente.
+        document
+            .getElementById('loading')
+            .classList
+            .add('flex');
 
-          </div>
-        `;
 
-        return;
-      }
+        try {
 
-      container.innerHTML = `
+            const mlbs =
+                cacheItens.map(
+                    i => i.id
+                );
 
-        <table>
 
-          <thead>
+            const {
+                response,
+                data
+            } =
+                await apiFetch(
+                    '/api/sincronizar-precos',
+                    {
+                        method: 'POST',
 
-            <tr>
+                        body:
+                            JSON.stringify({
+                                ids: mlbs
+                            })
+                    }
+                );
 
-              <th>
-                Produto
-              </th>
 
-              <th>
-                Preço
-              </th>
+            if (
+                response.status ===
+                401
+            ) {
 
-              <th>
-                Comissão
-              </th>
+                localStorage.removeItem(
+                    'ml_access_token'
+                );
 
-              <th>
-                Frete
-              </th>
+                solicitarToken();
 
-              <th>
-                Líquido
-              </th>
+                alert(
+                    data.erro ||
+                    "Token inválido ou expirado."
+                );
 
-              <th>
-                Estoque
-              </th>
+                return;
+            }
 
-              <th>
-                Ação
-              </th>
 
-            </tr>
+            if (
+                response.ok &&
+                data.precos
+            ) {
 
-          </thead>
+                cacheItens.forEach(
+                    item => {
 
-          <tbody>
+                        if (
+                            data.precos[
+                                item.id
+                            ] !== undefined
+                        ) {
 
-            ${anunciosFiltrados
-              .map(item => {
+                            item.price =
+                                Number(
+                                    data.precos[
+                                        item.id
+                                    ]
+                                );
+
+
+                            item.net_received =
+                                item.price -
+                                item.sale_fee -
+                                (
+                                    item.free_shipping
+                                        ? item.shipping_cost
+                                        : 0
+                                );
+
+
+                            if (
+                                item.net_received < 0
+                            ) {
+                                item.net_received = 0;
+                            }
+                        }
+                    }
+                );
+
+
+                atualizarCards(
+                    cacheItens
+                );
+
+
+                executarBusca();
+
+
+                alert(
+                    "Preços reais sincronizados com sucesso para as MLBs existentes!"
+                );
+
+            } else {
+
+                alert(
+                    data.erro ||
+                    "Erro ao sincronizar preços."
+                );
+            }
+
+
+        } catch (e) {
+
+            console.error(e);
+
+
+            alert(
+                e.message ||
+                "Erro de comunicação com o servidor ao puxar preços."
+            );
+
+
+        } finally {
+
+            document
+                .getElementById('loading')
+                .classList
+                .add('hidden');
+
+
+            document
+                .getElementById('loading')
+                .classList
+                .remove('flex');
+        }
+    }
+
+
+    /* =========================================================
+       SINCRONIZAR FRETES
+    ========================================================= */
+
+    async function sincronizarFretesApi() {
+
+        const token =
+            obterTokenLocal();
+
+
+        if (!token) {
+
+            solicitarToken();
+
+            return;
+        }
+
+
+        if (
+            !cacheItens ||
+            cacheItens.length === 0
+        ) {
+
+            alert(
+                "Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro."
+            );
+
+            return;
+        }
+
+
+        document.getElementById(
+            'loading-text'
+        ).innerText =
+            "Puxando custos de frete atualizados das MLBs ativas...";
+
+
+        document
+            .getElementById('loading')
+            .classList
+            .remove('hidden');
+
+
+        document
+            .getElementById('loading')
+            .classList
+            .add('flex');
+
+
+        try {
+
+            const mlbs =
+                cacheItens.map(
+                    i => i.id
+                );
+
+
+            const {
+                response,
+                data
+            } =
+                await apiFetch(
+                    '/api/sincronizar-fretes',
+                    {
+                        method: 'POST',
+
+                        body:
+                            JSON.stringify({
+                                ids: mlbs
+                            })
+                    }
+                );
+
+
+            if (
+                response.status ===
+                401
+            ) {
+
+                localStorage.removeItem(
+                    'ml_access_token'
+                );
+
+                solicitarToken();
+
+                alert(
+                    data.erro ||
+                    "Token inválido ou expirado."
+                );
+
+                return;
+            }
+
+
+            if (
+                response.ok &&
+                data.fretes
+            ) {
+
+                cacheItens.forEach(
+                    item => {
+
+                        if (
+                            data.fretes[
+                                item.id
+                            ]
+                        ) {
+
+                            item.shipping_cost =
+                                Number(
+                                    data.fretes[
+                                        item.id
+                                    ].custo
+                                );
+
+
+                            item.free_shipping =
+                                data.fretes[
+                                    item.id
+                                ].gratis;
+
+
+                            item.net_received =
+                                item.price -
+                                item.sale_fee -
+                                (
+                                    item.free_shipping
+                                        ? item.shipping_cost
+                                        : 0
+                                );
+
+
+                            if (
+                                item.net_received < 0
+                            ) {
+                                item.net_received = 0;
+                            }
+                        }
+                    }
+                );
+
+
+                atualizarCards(
+                    cacheItens
+                );
+
+
+                executarBusca();
+
+
+                alert(
+                    "Fretes reais sincronizados com sucesso para as MLBs existentes!"
+                );
+
+            } else {
+
+                alert(
+                    data.erro ||
+                    "Erro ao sincronizar fretes."
+                );
+            }
+
+
+        } catch (e) {
+
+            console.error(e);
+
+
+            alert(
+                e.message ||
+                "Erro de comunicação com o servidor ao puxar fretes."
+            );
+
+
+        } finally {
+
+            document
+                .getElementById('loading')
+                .classList
+                .add('hidden');
+
+
+            document
+                .getElementById('loading')
+                .classList
+                .remove('flex');
+        }
+    }
+
+
+    /* =========================================================
+       ABAS
+    ========================================================= */
+
+    function mudarAba(aba) {
+
+        abaAtualAtiva =
+            aba;
+
+
+        document
+            .getElementById(
+                'secao-gestao'
+            )
+            .classList
+            .add('hidden');
+
+
+        document
+            .getElementById(
+                'secao-simulacao'
+            )
+            .classList
+            .add('hidden');
+
+
+        document
+            .getElementById(
+                'secao-atualizacao'
+            )
+            .classList
+            .add('hidden');
+
+
+        document.getElementById(
+            'btn-gestao'
+        ).className =
+            "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+
+
+        document.getElementById(
+            'btn-simulacao'
+        ).className =
+            "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+
+
+        document.getElementById(
+            'btn-atualizacao'
+        ).className =
+            "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+
+
+        if (
+            aba ===
+            'gestao'
+        ) {
+
+            document
+                .getElementById(
+                    'secao-gestao'
+                )
+                .classList
+                .remove('hidden');
+
+
+            document.getElementById(
+                'btn-gestao'
+            ).className =
+                "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+
+
+        } else if (
+            aba ===
+            'simulacao'
+        ) {
+
+            document
+                .getElementById(
+                    'secao-simulacao'
+                )
+                .classList
+                .remove('hidden');
+
+
+            document.getElementById(
+                'btn-simulacao'
+            ).className =
+                "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+
+
+        } else if (
+            aba ===
+            'atualizacao'
+        ) {
+
+            document
+                .getElementById(
+                    'secao-atualizacao'
+                )
+                .classList
+                .remove('hidden');
+
+
+            document.getElementById(
+                'btn-atualizacao'
+            ).className =
+                "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+        }
+
+
+        executarBusca();
+    }
+
+
+    /* =========================================================
+       CARDS
+    ========================================================= */
+
+    function atualizarCards(
+        itens
+    ) {
+
+        const ativos =
+            itens.filter(
+                i =>
+                    i.status ===
+                    'active'
+            ).length;
+
+
+        document.getElementById(
+            'total-listado'
+        ).innerText =
+            itens.length;
+
+
+        document.getElementById(
+            'total-ativos'
+        ).innerText =
+            ativos;
+
+
+        document.getElementById(
+            'total-outros'
+        ).innerText =
+            itens.length -
+            ativos;
+    }
+
+
+    /* =========================================================
+       TABELA DE GESTÃO
+    ========================================================= */
+
+    function montarTabelaGestao(
+        itens
+    ) {
+
+        const tbody =
+            document.getElementById(
+                'tabela-gestao'
+            );
+
+
+        tbody.innerHTML = '';
+
+
+        itens.forEach(
+            item => {
+
+                const tr =
+                    document.createElement(
+                        'tr'
+                    );
+
+
+                tr.className =
+                    "hover:bg-slate-800/50 transition-colors";
+
 
                 const preco =
-                  numero(
-                    item.preco ??
-                    item.price
-                  );
+                    Number(
+                        item.price || 0
+                    );
+
 
                 const comissao =
-                  numero(
-                    item.comissao ??
-                    item.sale_fee
-                  );
+                    Number(
+                        item.sale_fee || 0
+                    );
+
 
                 const frete =
-                  numero(
-                    item.frete ??
-                    item.shipping_cost
-                  );
+                    Number(
+                        item.shipping_cost || 0
+                    );
+
 
                 const liquido =
-                  numero(
-                    item.liquido ??
-                    item.net_received
-                  );
+                    Number(
+                        item.net_received || 0
+                    );
 
-                const imagem =
-                  item.thumbnail ||
-                  '';
 
-                return `
+                tr.innerHTML = `
 
-                  <tr>
+                    <td class="p-4">
 
-                    <td>
+                        <div class="flex items-center gap-3 min-w-[280px]">
 
-                      <div class="product-cell">
+                            <img
+                                src="${item.thumbnail || ''}"
+                                class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800"
+                            />
 
-                        ${
-                          imagem
-                            ? `
-                              <img
-                                class="product-image"
-                                src="${escapeHtml(imagem)}"
-                                alt=""
-                              >
-                            `
-                            : `
-                              <div class="product-image"></div>
-                            `
-                        }
+                            <div class="min-w-0">
 
-                        <div>
+                                <span class="font-semibold text-white block line-clamp-1">
+                                    ${escapeHtml(item.title || 'Sem título')}
+                                </span>
 
-                          <div class="product-name">
-                            ${escapeHtml(
-                              item.titulo ??
-                              item.title ??
-                              'Sem título'
-                            )}
-                          </div>
+                                <span class="text-[10px] text-slate-500 mt-1 block">
 
-                          <div class="product-id">
-                            ${escapeHtml(
-                              item.id
-                            )}
-                          </div>
+                                    ${escapeHtml(item.id || '')}
+
+                                    <span class="text-slate-700 mx-1">
+                                        •
+                                    </span>
+
+                                    SKU:
+                                    ${escapeHtml(item.sku || 'Sem SKU')}
+
+                                </span>
+
+                            </div>
 
                         </div>
 
-                      </div>
+                    </td>
+
+
+                    <td class="p-4">
+
+                        <span class="font-black text-white">
+                            R$ ${preco.toFixed(2)}
+                        </span>
 
                     </td>
 
-                    <td>
 
-                      <input
-                        class="price-input"
-                        id="price-${escapeHtml(item.id)}"
-                        type="number"
-                        step="0.01"
-                        value="${preco.toFixed(2)}"
-                      >
+                    <td class="p-4 text-slate-400 leading-5">
 
-                    </td>
+                        <div>
+                            Comissão:
+                            <span class="text-slate-300">
+                                R$ ${comissao.toFixed(2)}
+                            </span>
+                        </div>
 
-                    <td>
-
-                      <span class="money warning">
-                        ${moeda(comissao)}
-                      </span>
-
-                    </td>
-
-                    <td>
-
-                      <span class="money">
-                        ${moeda(frete)}
-                      </span>
+                        <div>
+                            Frete:
+                            <span class="text-slate-300">
+                                R$ ${frete.toFixed(2)}
+                            </span>
+                        </div>
 
                     </td>
 
-                    <td>
 
-                      <span class="money success">
-                        ${moeda(liquido)}
-                      </span>
+                    <td class="p-4">
 
-                    </td>
-
-                    <td>
-
-                      ${numero(
-                        item.available_quantity
-                      ).toLocaleString(
-                        'pt-BR'
-                      )}
+                        <span class="font-black text-emerald-400">
+                            R$ ${liquido.toFixed(2)}
+                        </span>
 
                     </td>
 
-                    <td>
 
-                      <button
-                        class="small-btn primary"
-                        onclick="atualizarPrecoIndividual('${escapeHtml(item.id)}')"
-                      >
-                        Atualizar
-                      </button>
+                    <td class="p-4">
+
+                        <span class="text-slate-300">
+                            ${Number(item.available_quantity || 0)}
+                        </span>
+
+                        <span class="text-slate-600 text-[10px]">
+                            un.
+                        </span>
 
                     </td>
 
-                  </tr>
 
+                    <td class="p-4">
+
+                        <div class="flex items-center gap-2">
+
+                            <span class="status-dot ${
+                                item.status === 'active'
+                                    ? 'bg-emerald-400'
+                                    : 'bg-slate-500'
+                            }"></span>
+
+                            <span class="${
+                                item.status === 'active'
+                                    ? 'text-emerald-400'
+                                    : 'text-slate-500'
+                            } text-[11px] font-bold">
+
+                                ${
+                                    item.status === 'active'
+                                        ? 'Ativo'
+                                        : escapeHtml(item.status || '')
+                                }
+
+                            </span>
+
+                        </div>
+
+                    </td>
+
+
+                    <td class="p-4">
+
+                        <a
+                            href="${item.permalink || '#'}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 font-bold text-[10px] transition"
+                        >
+                            Ver anúncio
+                            <span>↗</span>
+                        </a>
+
+                    </td>
                 `;
-              })
-              .join('')}
 
-          </tbody>
 
-        </table>
-      `;
+                tbody.appendChild(
+                    tr
+                );
+            }
+        );
     }
 
 
-    /* =====================================================
-       ATUALIZAÇÃO INDIVIDUAL
-    ===================================================== */
+    /* =========================================================
+       SIMULAÇÃO
+    ========================================================= */
 
-    async function atualizarPrecoIndividual(
-      id
+    function montarTabelaSimulacao(
+        itens
     ) {
-      const input =
-        document.getElementById(
-          `price-${id}`
-        );
 
-      const preco =
-        numero(
-          input?.value
-        );
-
-      if (
-        !id ||
-        !preco ||
-        preco <= 0
-      ) {
-        mostrarToast(
-          'Informe um preço válido.',
-          'warning'
-        );
-
-        return;
-      }
-
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/atualizar-preco',
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
-
-            body: JSON.stringify({
-              id,
-              preco
-            })
-          }
-        );
-
-        if (!resposta.ok) {
-          throw new Error(
-            dados.erro ||
-            'Não foi possível atualizar o anúncio.'
-          );
-        }
-
-        const anuncio =
-          anuncios.find(
-            item =>
-              String(item.id) ===
-              String(id)
-          );
-
-        if (anuncio) {
-          anuncio.preco =
-            preco;
-
-          anuncio.price =
-            preco;
-        }
-
-        renderizarTabelaAnuncios();
-
-        atualizarDashboard();
-
-        adicionarLog(
-          `Preço do anúncio ${id} atualizado para ${moeda(preco)}.`,
-          'success'
-        );
-
-        mostrarToast(
-          'Preço atualizado com sucesso.',
-          'success'
-        );
-
-      } catch (error) {
-        adicionarLog(
-          `Erro atualizando ${id}: ${error.message}`,
-          'error'
-        );
-
-        mostrarToast(
-          error.message,
-          'error'
-        );
-      }
-    }
-
-
-    /* =====================================================
-       ATUALIZAÇÃO EM MASSA
-    ===================================================== */
-
-    function renderizarAtualizacaoMassa() {
-      const container =
-        document.getElementById(
-          'bulk-update-container'
-        );
-
-      if (!container) {
-        return;
-      }
-
-      if (!anuncios.length) {
-        container.innerHTML = `
-          <div class="empty">
-            <strong>
-              Nenhum anúncio carregado.
-            </strong>
-            Carregue os anúncios para iniciar uma atualização em massa.
-          </div>
-        `;
-
-        return;
-      }
-
-      container.innerHTML = `
-
-        <table>
-
-          <thead>
-
-            <tr>
-
-              <th>
-                Anúncio
-              </th>
-
-              <th>
-                Preço atual
-              </th>
-
-              <th>
-                Novo preço
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            ${anuncios
-              .map(item => {
-
-                const preco =
-                  numero(
-                    item.preco ??
-                    item.price
-                  );
-
-                return `
-
-                  <tr>
-
-                    <td>
-
-                      <div class="product-name">
-                        ${escapeHtml(
-                          item.titulo ??
-                          item.title ??
-                          ''
-                        )}
-                      </div>
-
-                      <div class="product-id">
-                        ${escapeHtml(
-                          item.id
-                        )}
-                      </div>
-
-                    </td>
-
-                    <td>
-                      ${moeda(preco)}
-                    </td>
-
-                    <td>
-
-                      <input
-                        id="bulk-${escapeHtml(item.id)}"
-                        class="price-input"
-                        type="number"
-                        step="0.01"
-                        value="${preco.toFixed(2)}"
-                      >
-
-                    </td>
-
-                  </tr>
-                `;
-              })
-              .join('')}
-
-          </tbody>
-
-        </table>
-      `;
-    }
-
-
-    async function aplicarAtualizacaoEmMassa() {
-      if (!anuncios.length) {
-        mostrarToast(
-          'Nenhum anúncio carregado.',
-          'warning'
-        );
-
-        return;
-      }
-
-      const alteracoes =
-        anuncios.map(item => {
-
-          const input =
+        const tbody =
             document.getElementById(
-              `bulk-${item.id}`
+                'tabela-simulacao'
             );
 
-          return {
-            id: item.id,
-            preco: numero(
-              input?.value
-            )
-          };
-        })
-        .filter(
-          item =>
-            item.preco > 0
-        );
 
-      if (!alteracoes.length) {
-        mostrarToast(
-          'Nenhuma alteração válida foi encontrada.',
-          'warning'
-        );
+        tbody.innerHTML = '';
 
-        return;
-      }
 
-      if (
-        !confirm(
-          `Deseja atualizar ${alteracoes.length} anúncios?`
-        )
-      ) {
-        return;
-      }
+        itens.forEach(
+            item => {
 
-      try {
-        mostrarToast(
-          'Enviando alterações...',
-          'info'
-        );
+                const index =
+                    cacheItens.findIndex(
+                        i =>
+                            i.id ===
+                            item.id
+                    );
 
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/atualizar-precos',
-          {
-            method: 'POST',
 
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
+                const tipoNome =
+                    item.listing_type_id ===
+                    'gold_pro'
+                        ? 'Premium'
+                        : 'Clássico';
 
-            body: JSON.stringify({
-              anuncios:
-                alteracoes
-            })
-          }
-        );
 
-        if (!resposta.ok) {
-          throw new Error(
-            dados.erro ||
-            'Falha na atualização em massa.'
-          );
-        }
+                const comissaoPadrao =
+                    item.listing_type_id ===
+                    'gold_pro'
+                        ? 17
+                        : 12;
 
-        for (
-          const resultado
-          of dados.resultados || []
-        ) {
-          if (
-            resultado.sucesso
-          ) {
-            const item =
-              anuncios.find(
-                anuncio =>
-                  String(
-                    anuncio.id
-                  ) ===
-                  String(
-                    resultado.id
-                  )
-              );
 
-            if (item) {
-              item.preco =
-                resultado.preco;
+                const tr =
+                    document.createElement(
+                        'tr'
+                    );
 
-              item.price =
-                resultado.preco;
+
+                tr.className =
+                    "hover:bg-slate-50 transition-colors";
+
+
+                tr.innerHTML = `
+
+                    <td class="p-3 font-mono font-medium text-slate-700 whitespace-nowrap">
+                        ${escapeHtml(item.id || '')}
+                    </td>
+
+
+                    <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
+                        ${escapeHtml(item.sku || 'Sem SKU')}
+                    </td>
+
+
+                    <td
+                        class="p-3 max-w-[220px] truncate text-slate-800 font-medium"
+                        title="${escapeHtml(item.title || '')}"
+                    >
+                        ${escapeHtml(item.title || 'Sem título')}
+                    </td>
+
+
+                    <td class="p-3 font-bold text-slate-900 whitespace-nowrap">
+                        R$ ${Number(item.price || 0).toFixed(2)}
+                    </td>
+
+
+                    <td class="p-3 text-slate-600 whitespace-nowrap">
+                        R$ ${Number(item.shipping_cost || 0).toFixed(2)}
+                    </td>
+
+
+                    <td class="p-3">
+
+                        <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                            tipoNome === 'Premium'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                        }">
+
+                            ${tipoNome}
+
+                        </span>
+
+                    </td>
+
+
+                    <td class="p-3 bg-yellow-50/60">
+
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="taxa_${index}"
+                            value="${comissaoPadrao}"
+                            oninput="recalcular(${index}, ${Number(item.shipping_cost || 0)}, ${!!item.free_shipping})"
+                            class="input-simulacao w-16"
+                        />
+
+                    </td>
+
+
+                    <td class="p-3 bg-yellow-50/60">
+
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="custo_${index}"
+                            value="10.00"
+                            oninput="recalcular(${index}, ${Number(item.shipping_cost || 0)}, ${!!item.free_shipping})"
+                            class="input-simulacao w-20"
+                        />
+
+                    </td>
+
+
+                    <td class="p-3 bg-yellow-50/60">
+
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="imposto_${index}"
+                            value="0.0"
+                            oninput="recalcular(${index}, ${Number(item.shipping_cost || 0)}, ${!!item.free_shipping})"
+                            class="input-simulacao w-16"
+                        />
+
+                    </td>
+
+
+                    <td class="p-3 bg-yellow-50/60">
+
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="lucro_${index}"
+                            value="12.0"
+                            oninput="recalcular(${index}, ${Number(item.shipping_cost || 0)}, ${!!item.free_shipping})"
+                            class="input-simulacao w-16"
+                        />
+
+                    </td>
+
+
+                    <td
+                        class="p-3 bg-emerald-50/70 font-black text-emerald-800 whitespace-nowrap"
+                        id="novo_preco_${index}"
+                    >
+                        R$ 0.00
+                    </td>
+
+
+                    <td
+                        class="p-3 bg-emerald-50/70 font-bold text-emerald-700 whitespace-nowrap"
+                        id="lucro_sim_${index}"
+                    >
+                        R$ 0.00
+                    </td>
+
+
+                    <td
+                        class="p-3 bg-emerald-50/70 font-bold text-emerald-900 whitespace-nowrap"
+                        id="margem_real_${index}"
+                    >
+                        0.00%
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(
+                    tr
+                );
+
+
+                recalcular(
+                    index,
+                    Number(
+                        item.shipping_cost ||
+                        0
+                    ),
+                    !!item.free_shipping
+                );
             }
-          }
-        }
-
-        renderizarTabelaAnuncios();
-
-        renderizarAtualizacaoMassa();
-
-        atualizarDashboard();
-
-        adicionarLog(
-          `${dados.atualizados || 0} anúncios atualizados. ${dados.falhas || 0} falhas.`,
-          dados.falhas
-            ? 'error'
-            : 'success'
         );
-
-        mostrarToast(
-          `Atualização concluída: ${dados.atualizados || 0} sucesso(s).`,
-          dados.falhas
-            ? 'warning'
-            : 'success'
-        );
-
-      } catch (error) {
-        adicionarLog(
-          `Erro na atualização em massa: ${error.message}`,
-          'error'
-        );
-
-        mostrarToast(
-          error.message,
-          'error'
-        );
-      }
     }
 
 
-    /* =====================================================
-       SINCRONIZAÇÃO
-    ===================================================== */
+    function recalcular(
+        index,
+        custoFrete,
+        freteGratis
+    ) {
 
-    async function sincronizarPrecosApi() {
-      const ids =
-        anuncios.map(
-          item => item.id
-        );
+        const taxaEl =
+            document.getElementById(
+                `taxa_${index}`
+            );
 
-      if (!ids.length) {
-        mostrarToast(
-          'Nenhum anúncio carregado.',
-          'warning'
-        );
 
-        return;
-      }
+        const custoEl =
+            document.getElementById(
+                `custo_${index}`
+            );
 
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/sincronizar-precos',
-          {
-            method: 'POST',
 
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
+        const impostoEl =
+            document.getElementById(
+                `imposto_${index}`
+            );
 
-            body: JSON.stringify({
-              ids
-            })
-          }
-        );
 
-        if (!resposta.ok) {
-          throw new Error(
-            dados.erro ||
-            'Falha ao sincronizar preços.'
-          );
-        }
+        const lucroEl =
+            document.getElementById(
+                `lucro_${index}`
+            );
 
-        for (
-          const resultado
-          of dados.resultados || []
+
+        if (
+            !taxaEl ||
+            !custoEl ||
+            !impostoEl ||
+            !lucroEl ||
+            !cacheItens[index]
         ) {
-          if (
-            resultado.sucesso
-          ) {
-            const item =
-              anuncios.find(
-                a =>
-                  String(a.id) ===
-                  String(resultado.id)
-              );
-
-            if (item) {
-              item.preco =
-                resultado.preco;
-
-              item.price =
-                resultado.preco;
-            }
-          }
+            return;
         }
 
-        renderizarTabelaAnuncios();
 
-        atualizarDashboard();
-
-        adicionarLog(
-          'Preços sincronizados com o Mercado Livre.',
-          'success'
-        );
-
-        mostrarToast(
-          'Preços sincronizados.',
-          'success'
-        );
-
-      } catch (error) {
-        adicionarLog(
-          `Erro sincronizando preços: ${error.message}`,
-          'error'
-        );
-
-        mostrarToast(
-          error.message,
-          'error'
-        );
-      }
-    }
+        const taxaPercent =
+            parseFloat(
+                taxaEl.value
+            ) || 0;
 
 
-    async function sincronizarFretesApi() {
-      const ids =
-        anuncios.map(
-          item => item.id
-        );
+        const custo =
+            parseFloat(
+                custoEl.value
+            ) || 0;
 
-      if (!ids.length) {
-        mostrarToast(
-          'Nenhum anúncio carregado.',
-          'warning'
-        );
 
-        return;
-      }
+        const impostoPercent =
+            parseFloat(
+                impostoEl.value
+            ) || 0;
 
-      try {
-        const {
-          resposta,
-          dados
-        } = await apiFetch(
-          '/api/sincronizar-fretes',
-          {
-            method: 'POST',
 
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
+        const lucroDesejadoPercent =
+            parseFloat(
+                lucroEl.value
+            ) || 0;
 
-            body: JSON.stringify({
-              ids
-            })
-          }
-        );
 
-        if (!resposta.ok) {
-          throw new Error(
-            dados.erro ||
-            'Falha ao sincronizar fretes.'
-          );
+        const freteAplicado =
+            freteGratis
+                ? Number(custoFrete || 0)
+                : 6.85;
+
+
+        const somaPercentual =
+            taxaPercent +
+            impostoPercent +
+            lucroDesejadoPercent;
+
+
+        const divisor =
+            1 -
+            (
+                somaPercentual /
+                100
+            );
+
+
+        let novoPreco =
+            divisor > 0
+                ? (
+                    custo +
+                    freteAplicado
+                ) / divisor
+                : custo * 1.5;
+
+
+        const valorTaxa =
+            novoPreco *
+            (
+                taxaPercent /
+                100
+            );
+
+
+        const valorImposto =
+            novoPreco *
+            (
+                impostoPercent /
+                100
+            );
+
+
+        const lucroLiquidoReal =
+            novoPreco -
+            custo -
+            valorTaxa -
+            valorImposto -
+            freteAplicado;
+
+
+        const margemRealPercent =
+            novoPreco > 0
+                ? (
+                    lucroLiquidoReal /
+                    novoPreco
+                ) * 100
+                : 0;
+
+
+        const elNovoPreco =
+            document.getElementById(
+                `novo_preco_${index}`
+            );
+
+
+        const elLucroSim =
+            document.getElementById(
+                `lucro_sim_${index}`
+            );
+
+
+        const elMargemReal =
+            document.getElementById(
+                `margem_real_${index}`
+            );
+
+
+        if (elNovoPreco) {
+
+            elNovoPreco.innerText =
+                `R$ ${novoPreco.toFixed(2)}`;
         }
 
-        for (
-          const resultado
-          of dados.resultados || []
-        ) {
-          if (
-            resultado.sucesso
-          ) {
-            const item =
-              anuncios.find(
-                a =>
-                  String(a.id) ===
-                  String(resultado.id)
-              );
 
-            if (item) {
-              item.frete =
-                resultado.frete;
+        if (elLucroSim) {
 
-              item.shipping_cost =
-                resultado.frete;
+            elLucroSim.innerText =
+                `R$ ${lucroLiquidoReal.toFixed(2)}`;
+        }
 
-              const preco =
-                numero(
-                  item.preco ??
-                  item.price
-                );
 
-              const comissao =
-                numero(
-                  item.comissao ??
-                  item.sale_fee
-                );
+        if (elMargemReal) {
 
-              item.liquido =
-                Math.max(
-                  0,
-                  preco -
-                    comissao -
-                    numero(
-                      resultado.frete
+            elMargemReal.innerText =
+                `${margemRealPercent.toFixed(2)}%`;
+        }
+
+
+        novosPrecosCalculados[index] = {
+
+            preco:
+                novoPreco,
+
+            foraDaMargem:
+                Math.abs(
+                    novoPreco -
+                    Number(
+                        cacheItens[index].price ||
+                        0
                     )
+                ) > 0.05
+        };
+    }
+
+
+    /* =========================================================
+       APLICAÇÃO EM MASSA
+    ========================================================= */
+
+    function aplicarEmMassa() {
+
+        const custoMassa =
+            document.getElementById(
+                'massa-custo'
+            ).value;
+
+
+        const taxaMassa =
+            document.getElementById(
+                'massa-taxa'
+            ).value;
+
+
+        const impostoMassa =
+            document.getElementById(
+                'massa-imposto'
+            ).value;
+
+
+        const lucroMassa =
+            document.getElementById(
+                'massa-lucro'
+            ).value;
+
+
+        cacheItens.forEach(
+            (
+                item,
+                index
+            ) => {
+
+                if (
+                    custoMassa !== ''
+                ) {
+
+                    const el =
+                        document.getElementById(
+                            `custo_${index}`
+                        );
+
+                    if (el) {
+                        el.value =
+                            custoMassa;
+                    }
+                }
+
+
+                if (
+                    taxaMassa !== ''
+                ) {
+
+                    const el =
+                        document.getElementById(
+                            `taxa_${index}`
+                        );
+
+                    if (el) {
+                        el.value =
+                            taxaMassa;
+                    }
+                }
+
+
+                if (
+                    impostoMassa !== ''
+                ) {
+
+                    const el =
+                        document.getElementById(
+                            `imposto_${index}`
+                        );
+
+                    if (el) {
+                        el.value =
+                            impostoMassa;
+                    }
+                }
+
+
+                if (
+                    lucroMassa !== ''
+                ) {
+
+                    const el =
+                        document.getElementById(
+                            `lucro_${index}`
+                        );
+
+                    if (el) {
+                        el.value =
+                            lucroMassa;
+                    }
+                }
+
+
+                recalcular(
+                    index,
+                    Number(
+                        item.shipping_cost ||
+                        0
+                    ),
+                    !!item.free_shipping
+                );
+            }
+        );
+    }
+
+
+    /* =========================================================
+       TABELA DE ATUALIZAÇÃO
+    ========================================================= */
+
+    function montarTabelaAtualizacao(
+        itens
+    ) {
+
+        const tbody =
+            document.getElementById(
+                'tabela-atualizacao'
+            );
+
+
+        tbody.innerHTML = '';
+
+
+        let contadorForaDaMargem =
+            0;
+
+
+        itens.forEach(
+            item => {
+
+                const index =
+                    cacheItens.findIndex(
+                        i =>
+                            i.id ===
+                            item.id
+                    );
+
+
+                const dadosSim =
+                    novosPrecosCalculados[
+                        index
+                    ] || {
+
+                        preco:
+                            item.price,
+
+                        foraDaMargem:
+                            true
+                    };
+
+
+                if (
+                    !dadosSim.foraDaMargem
+                ) {
+                    return;
+                }
+
+
+                contadorForaDaMargem++;
+
+
+                const novoPreco =
+                    Number(
+                        dadosSim.preco ||
+                        item.price ||
+                        0
+                    );
+
+
+                const tr =
+                    document.createElement(
+                        'tr'
+                    );
+
+
+                tr.id =
+                    `linha_atualizacao_${index}`;
+
+
+                tr.className =
+                    "hover:bg-slate-800/50 transition-colors";
+
+
+                tr.innerHTML = `
+
+                    <td class="p-4">
+
+                        <input
+                            type="checkbox"
+                            value="${index}"
+                            checked
+                            class="check-item accent-yellow-400 w-4 h-4"
+                        />
+
+                    </td>
+
+
+                    <td class="p-4">
+
+                        <div class="flex items-center gap-3 min-w-[280px]">
+
+                            <img
+                                src="${item.thumbnail || ''}"
+                                class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800"
+                            />
+
+
+                            <div class="min-w-0">
+
+                                <span class="font-semibold text-white block line-clamp-1">
+                                    ${escapeHtml(item.title || 'Sem título')}
+                                </span>
+
+
+                                <span class="text-[10px] text-slate-500 mt-1 block">
+
+                                    ${escapeHtml(item.id || '')}
+
+                                    <span class="text-slate-700 mx-1">
+                                        •
+                                    </span>
+
+                                    SKU:
+                                    ${escapeHtml(item.sku || 'Sem SKU')}
+
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </td>
+
+
+                    <td class="p-4 font-bold text-white whitespace-nowrap">
+
+                        R$ ${Number(
+                            item.price || 0
+                        ).toFixed(2)}
+
+                    </td>
+
+
+                    <td class="p-4 whitespace-nowrap">
+
+                        <span class="font-black text-emerald-400">
+
+                            R$ ${novoPreco.toFixed(2)}
+
+                        </span>
+
+                    </td>
+
+
+                    <td class="p-4">
+
+                        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-400/10 border border-amber-400/10 text-amber-400 font-bold text-[10px]">
+
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+
+                            Fora da margem
+
+                        </span>
+
+                    </td>
+
+
+                    <td
+                        class="p-4"
+                        id="status_api_${index}"
+                    >
+
+                        <span class="text-slate-500 text-[10px]">
+                            Pendente
+                        </span>
+
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(
+                    tr
+                );
+            }
+        );
+
+
+        document.getElementById(
+            'contador-atualizacao'
+        ).innerText =
+            contadorForaDaMargem;
+    }
+
+
+    /* =========================================================
+       SELEÇÃO
+    ========================================================= */
+
+    function alternarTodos(
+        master
+    ) {
+
+        const checkboxes =
+            document.querySelectorAll(
+                '.check-item'
+            );
+
+
+        checkboxes.forEach(
+            cb => {
+                cb.checked =
+                    master.checked;
+            }
+        );
+    }
+
+
+    /* =========================================================
+       ATUALIZAÇÃO EM MASSA
+    ========================================================= */
+
+    async function atualizarPrecosMassaApi() {
+
+        const token =
+            obterTokenLocal();
+
+
+        if (!token) {
+
+            solicitarToken();
+
+            return;
+        }
+
+
+        const checkboxes =
+            document.querySelectorAll(
+                '.check-item:checked'
+            );
+
+
+        if (
+            checkboxes.length === 0
+        ) {
+
+            alert(
+                "Nenhum anúncio selecionado para atualização."
+            );
+
+            return;
+        }
+
+
+        if (
+            !confirm(
+                `Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`
+            )
+        ) {
+            return;
+        }
+
+
+        let itensParaAtualizar =
+            [];
+
+
+        checkboxes.forEach(
+            cb => {
+
+                const index =
+                    Number(
+                        cb.value
+                    );
+
+
+                const item =
+                    cacheItens[index];
+
+
+                if (!item) {
+                    return;
+                }
+
+
+                const dadosSim =
+                    novosPrecosCalculados[
+                        index
+                    ];
+
+
+                const novoPreco =
+                    dadosSim
+                        ? dadosSim.preco
+                        : item.price;
+
+
+                itensParaAtualizar.push({
+
+                    index:
+                        index,
+
+                    id:
+                        item.id,
+
+                    price:
+                        parseFloat(
+                            Number(
+                                novoPreco
+                            ).toFixed(2)
+                        )
+                });
+            }
+        );
+
+
+        const tamanhoLote =
+            20;
+
+
+        for (
+            let i = 0;
+            i < itensParaAtualizar.length;
+            i += tamanhoLote
+        ) {
+
+            const lote =
+                itensParaAtualizar.slice(
+                    i,
+                    i + tamanhoLote
                 );
 
-              item.net_received =
-                item.liquido;
+
+            lote.forEach(
+                item => {
+
+                    const elStatus =
+                        document.getElementById(
+                            `status_api_${item.index}`
+                        );
+
+
+                    if (elStatus) {
+
+                        elStatus.innerHTML = `
+
+                            <span class="inline-flex items-center gap-2 text-blue-400 animate-pulse font-bold text-[10px]">
+
+                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+
+                                Atualizando...
+
+                            </span>
+
+                        `;
+                    }
+                }
+            );
+
+
+            try {
+
+                const {
+                    response,
+                    data
+                } =
+                    await apiFetch(
+                        '/api/atualizar-precos',
+                        {
+                            method: 'POST',
+
+                            body:
+                                JSON.stringify({
+                                    itens:
+                                        lote.map(
+                                            i => ({
+                                                id:
+                                                    i.id,
+
+                                                price:
+                                                    i.price
+                                            })
+                                        )
+                                })
+                        }
+                    );
+
+
+                if (
+                    response.status ===
+                    401
+                ) {
+
+                    localStorage.removeItem(
+                        'ml_access_token'
+                    );
+
+                    solicitarToken();
+
+                    alert(
+                        data.erro ||
+                        "Token inválido ou expirado."
+                    );
+
+                    return;
+                }
+
+
+                lote.forEach(
+                    item => {
+
+                        const elStatus =
+                            document.getElementById(
+                                `status_api_${item.index}`
+                            );
+
+
+                        const resultado =
+                            Array.isArray(
+                                data.resultados
+                            )
+                                ? data.resultados.find(
+                                    r =>
+                                        String(r.id) ===
+                                        String(item.id)
+                                )
+                                : null;
+
+
+                        if (
+                            response.ok &&
+                            resultado &&
+                            resultado.sucesso
+                        ) {
+
+                            if (elStatus) {
+
+                                elStatus.innerHTML = `
+
+                                    <span class="inline-flex items-center gap-2 text-emerald-400 font-bold text-[10px]">
+
+                                        <span class="w-5 h-5 rounded-full bg-emerald-400/10 flex items-center justify-center">
+                                            ✓
+                                        </span>
+
+                                        Atualizado
+
+                                    </span>
+
+                                `;
+                            }
+
+
+                            cacheItens[
+                                item.index
+                            ].price =
+                                item.price;
+
+
+                            const cacheItem =
+                                cacheItens[
+                                    item.index
+                                ];
+
+
+                            cacheItem.net_received =
+                                Math.max(
+                                    0,
+                                    Number(
+                                        cacheItem.price
+                                    ) -
+                                    Number(
+                                        cacheItem.sale_fee || 0
+                                    ) -
+                                    (
+                                        cacheItem.free_shipping
+                                            ? Number(
+                                                cacheItem.shipping_cost || 0
+                                            )
+                                            : 0
+                                    )
+                                );
+
+
+                        } else {
+
+                            const erroMsg =
+                                (
+                                    resultado &&
+                                    resultado.erro
+                                ) ||
+                                data.erro ||
+                                "Falha na API";
+
+
+                            if (elStatus) {
+
+                                elStatus.innerHTML = `
+
+                                    <span
+                                        class="text-red-400 font-bold text-[10px]"
+                                        title="${escapeHtml(erroMsg)}"
+                                    >
+                                        ✗ ${escapeHtml(erroMsg)}
+                                    </span>
+
+                                `;
+                            }
+                        }
+                    }
+                );
+
+
+            } catch (e) {
+
+                console.error(e);
+
+
+                lote.forEach(
+                    item => {
+
+                        const elStatus =
+                            document.getElementById(
+                                `status_api_${item.index}`
+                            );
+
+
+                        if (elStatus) {
+
+                            elStatus.innerHTML = `
+
+                                <span class="text-red-400 font-bold text-[10px]">
+                                    Erro de rede
+                                </span>
+
+                            `;
+                        }
+                    }
+                );
             }
-          }
+
+
+            if (
+                i +
+                tamanhoLote <
+                itensParaAtualizar.length
+            ) {
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            1000
+                        )
+                );
+            }
         }
 
-        renderizarTabelaAnuncios();
 
-        atualizarDashboard();
-
-        adicionarLog(
-          'Fretes sincronizados com o Mercado Livre.',
-          'success'
+        alert(
+            "Processo de envio em massa finalizado!"
         );
 
-        mostrarToast(
-          'Fretes sincronizados.',
-          'success'
+
+        atualizarCards(
+            cacheItens
         );
 
-      } catch (error) {
-        adicionarLog(
-          `Erro sincronizando fretes: ${error.message}`,
-          'error'
-        );
 
-        mostrarToast(
-          error.message,
-          'error'
-        );
-      }
+        executarBusca();
     }
 
 
-    async function sincronizarTudo() {
-      await sincronizarPrecosApi();
+    /* =========================================================
+       SEGURANÇA BÁSICA DO HTML
+    ========================================================= */
 
-      await sincronizarFretesApi();
+    function escapeHtml(
+        valor
+    ) {
 
-      await carregarDados();
-
-      mostrarToast(
-        'Sincronização completa concluída.',
-        'success'
-      );
-    }
-
-
-    /* =====================================================
-       SIMULAÇÃO
-    ===================================================== */
-
-    function aplicarConfiguracaoSimulacao() {
-      const comissao =
-        document.getElementById(
-          'sim-comissao'
-        );
-
-      const frete =
-        document.getElementById(
-          'sim-frete'
-        );
-
-      if (comissao) {
-        comissao.value =
-          configuracao.comissao;
-      }
-
-      if (frete) {
-        frete.value =
-          configuracao.frete;
-      }
-    }
-
-
-    function calcularSimulacao() {
-      const atual =
-        numero(
-          document.getElementById(
-            'sim-atual'
-          )?.value
-        );
-
-      const novo =
-        numero(
-          document.getElementById(
-            'sim-novo'
-          )?.value
-        );
-
-      const percentual =
-        numero(
-          document.getElementById(
-            'sim-comissao'
-          )?.value
-        );
-
-      const frete =
-        numero(
-          document.getElementById(
-            'sim-frete'
-          )?.value
-        );
-
-      const comissaoAtual =
-        atual *
-        percentual /
-        100;
-
-      const comissaoNova =
-        novo *
-        percentual /
-        100;
-
-      const liquidoAtual =
-        Math.max(
-          0,
-          atual -
-            comissaoAtual -
-            frete
-        );
-
-      const liquidoNovo =
-        Math.max(
-          0,
-          novo -
-            comissaoNova -
-            frete
-        );
-
-      const diferenca =
-        liquidoNovo -
-        liquidoAtual;
-
-      document.getElementById(
-        'sim-result-comissao'
-      ).textContent =
-        moeda(comissaoNova);
-
-      document.getElementById(
-        'sim-result-frete'
-      ).textContent =
-        moeda(frete);
-
-      document.getElementById(
-        'sim-result-liquido'
-      ).textContent =
-        moeda(liquidoNovo);
-
-      document.getElementById(
-        'sim-result-diferenca'
-      ).textContent =
-        moeda(diferenca);
-
-      document.getElementById(
-        'sim-result-diferenca'
-      ).className =
-        diferenca >= 0
-          ? ''
-          : 'danger-text';
-    }
-
-
-    /* =====================================================
-       CONFIGURAÇÃO
-    ===================================================== */
-
-    function abrirConfiguracao() {
-      document.getElementById(
-        'config-limit'
-      ).value =
-        configuracao.limit;
-
-      document.getElementById(
-        'config-comissao'
-      ).value =
-        configuracao.comissao;
-
-      document.getElementById(
-        'config-frete'
-      ).value =
-        configuracao.frete;
-
-      document.getElementById(
-        'config-nome'
-      ).value =
-        configuracao.nome;
-
-      const account =
-        document.getElementById(
-          'config-account'
-        );
-
-      if (usuarioLogado) {
-        account.innerHTML = `
-          <strong>
-            ${escapeHtml(
-              usuarioLogado.nickname ||
-              'Conta Mercado Livre'
-            )}
-          </strong>
-
-          <br>
-
-          ID:
-          ${escapeHtml(
-            usuarioLogado.id
-          )}
-        `;
-      } else {
-        account.textContent =
-          'Conta não identificada.';
-      }
-
-      document.getElementById(
-        'config-modal'
-      ).classList.add(
-        'open'
-      );
-    }
-
-
-    function fecharConfiguracao() {
-      document.getElementById(
-        'config-modal'
-      ).classList.remove(
-        'open'
-      );
-    }
-
-
-    function salvarConfiguracao() {
-      configuracao.limit =
-        Number(
-          document.getElementById(
-            'config-limit'
-          ).value
-        ) || 50;
-
-      configuracao.comissao =
-        numero(
-          document.getElementById(
-            'config-comissao'
-          ).value
-        );
-
-      configuracao.frete =
-        numero(
-          document.getElementById(
-            'config-frete'
-          ).value
-        );
-
-      configuracao.nome =
-        document.getElementById(
-          'config-nome'
-        ).value.trim() ||
-        'Minha operação';
-
-      localStorage.setItem(
-        'ml_manager_config',
-        JSON.stringify(
-          configuracao
+        return String(
+            valor ?? ''
         )
-      );
-
-      aplicarConfiguracaoSimulacao();
-
-      fecharConfiguracao();
-
-      adicionarLog(
-        'Configurações salvas.',
-        'success'
-      );
-
-      mostrarToast(
-        'Configurações salvas.',
-        'success'
-      );
+            .replace(
+                /&/g,
+                '&amp;'
+            )
+            .replace(
+                /</g,
+                '&lt;'
+            )
+            .replace(
+                />/g,
+                '&gt;'
+            )
+            .replace(
+                /"/g,
+                '&quot;'
+            )
+            .replace(
+                /'/g,
+                '&#039;'
+            );
     }
 
 
-    async function desconectarConta() {
-      if (
-        !confirm(
-          'Deseja realmente desconectar a conta?'
-        )
-      ) {
-        return;
-      }
-
-      fecharConfiguracao();
-
-      await logout();
-    }
-
-
-    /* =====================================================
-       EVENTOS
-    ===================================================== */
-
-    document
-      .getElementById(
-        'login-form'
-      )
-      .addEventListener(
-        'submit',
-        iniciarOAuth
-      );
-
-
-    document
-      .getElementById(
-        'config-modal'
-      )
-      .addEventListener(
-        'click',
-        event => {
-          if (
-            event.target.id ===
-            'config-modal'
-          ) {
-            fecharConfiguracao();
-          }
-        }
-      );
-
+    /* =========================================================
+       INICIALIZAÇÃO
+    ========================================================= */
 
     window.addEventListener(
-      'load',
-      async () => {
-        renderizarLogs();
+        'load',
+        () => {
 
-        aplicarConfiguracaoSimulacao();
+            const token =
+                obterTokenLocal();
 
-        calcularSimulacao();
 
-        await verificarLogin();
-      }
+            if (token) {
+
+                carregarDados();
+
+            } else {
+
+                solicitarToken();
+            }
+        }
     );
-
-  </script>
-
-</body>
-</html>
+</script>
