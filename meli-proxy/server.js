@@ -2650,6 +2650,60 @@ app.get('/api/bling/callback',async(req,res)=>{
 app.post('/api/bling/webhook',(req,res)=>{res.status(200).json({recebido:true});setImmediate(()=>console.log('[Bling webhook]',req.body?.eventId||req.body?.event||req.body?.type||'evento'));});
 
 
+
+/* =========================================================
+   ML HUB PRO V4 - CONTEÚDO, QUALIDADE E CATÁLOGO
+========================================================= */
+async function chamarOpenAITexto(prompt, instructions) {
+    if (!process.env.OPENAI_API_KEY) throw new Error('IA não configurada. Adicione OPENAI_API_KEY no Render.');
+    const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
+        model:process.env.OPENAI_MODEL||'gpt-5.6-luna',store:false,instructions,input:prompt
+    })});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error?.message||'Erro na IA.');
+    return d.output_text || (d.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
+}
+function extrairJsonIA(texto) {
+    const limpo=String(texto||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    try{return JSON.parse(limpo)}catch(e){const a=limpo.indexOf('{'),b=limpo.lastIndexOf('}');if(a>=0&&b>a)return JSON.parse(limpo.slice(a,b+1));throw e}
+}
+app.post('/api/v4/conteudo/titulos',async(req,res)=>{
+    try{
+        const produtos=(Array.isArray(req.body?.produtos)?req.body.produtos:[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50);
+        const quantidade=Math.min(10,Math.max(1,Number(req.body?.quantidade||5))),limite=Math.min(200,Math.max(30,Number(req.body?.limite||60)));
+        if(!produtos.length)return respostaErro(res,400,'Informe os produtos.');
+        const texto=await chamarOpenAITexto(`Produtos:\n${produtos.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nCrie ${quantidade} títulos diferentes por produto, cada um com no máximo ${limite} caracteres. Retorne SOMENTE JSON no formato {"resultados":[{"produto":"...","titulos":["..."]}]}. Não invente marca, modelo, material ou característica não fornecida.`, 'Você cria títulos claros e comerciais para anúncios de marketplace brasileiro. Priorize termos descritivos úteis e legibilidade. Não faça alegações falsas nem invente atributos.');
+        const obj=extrairJsonIA(texto);
+        res.json({sucesso:true,resultados:obj.resultados||[]});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+app.post('/api/v4/conteudo/descricao',async(req,res)=>{
+    const base=String(req.body?.base||'').trim();if(!base)return respostaErro(res,400,'Informe os dados do produto.');
+    try{const texto=await chamarOpenAITexto(base,'Crie uma descrição profissional em português do Brasil para marketplace. Use somente os fatos fornecidos. Organize benefícios, características, itens inclusos e observações quando aplicável. Não invente especificações. Seja clara e fácil de ler.');res.json({sucesso:true,texto})}catch(e){respostaErro(res,500,e.message)}
+});
+app.post('/api/v4/conteudo/keywords',async(req,res)=>{
+    const produto=String(req.body?.produto||'').trim();if(!produto)return respostaErro(res,400,'Informe o produto.');
+    try{const texto=await chamarOpenAITexto(`Produto: ${produto}\nRetorne SOMENTE JSON: {"keywords":["termo 1","termo 2"]}, com até 30 termos relacionados, sem inventar marca ou especificações.`,'Gere palavras-chave relevantes para organização e criação de conteúdo de marketplace brasileiro.');const o=extrairJsonIA(texto);res.json({sucesso:true,keywords:(o.keywords||[]).slice(0,30)})}catch(e){respostaErro(res,500,e.message)}
+});
+app.post('/api/v4/conteudo/imagem-brief',async(req,res)=>{
+    const brief=String(req.body?.brief||'').trim();if(!brief)return respostaErro(res,400,'Informe o briefing.');
+    try{const prompt=await chamarOpenAITexto(`Produto/objetivo: ${brief}\nFormato: ${req.body?.formato||'1:1'}\nEstilo: ${req.body?.estilo||'Marketplace profissional'}\nCrie um briefing/prompt visual detalhado para uma imagem comercial de produto. Preserve fielmente características fornecidas e não invente certificações, acessórios ou textos promocionais não solicitados.`,'Você é diretor de arte de e-commerce. Gere apenas o briefing visual, em português do Brasil.');res.json({sucesso:true,prompt,image_generation_available:Boolean(process.env.IMAGE_API_KEY)})}catch(e){respostaErro(res,500,e.message)}
+});
+app.get('/api/v4/items/:id/performance',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{const id=encodeURIComponent(req.params.id);const r=await mlFetch(`${ML_API}/items/${id}/performance`,token);const d=await jsonSeguro(r);if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));res.json({sucesso:true,performance:d})}catch(e){respostaErro(res,500,e.message)}
+});
+app.get('/api/v4/items/:id/competition',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const id=encodeURIComponent(req.params.id);
+        const [ir,cr]=await Promise.all([mlFetch(`${ML_API}/items/${id}`,token),mlFetch(`${ML_API}/items/${id}/price_to_win?version=v2`,token)]);
+        const item=await jsonSeguro(ir),comp=await jsonSeguro(cr);
+        if(!cr.ok)return respostaErro(res,cr.status,formatarErroMercadoLivre(comp));
+        res.json({sucesso:true,current_price:Number(item?.price||0),...comp});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
 app.listen(
     PORT,
     () => {
