@@ -255,7 +255,7 @@ app.get('/api/version', (req, res) => {
     res.json({
         ok: true,
         service: 'ML Hub Pro',
-        version: 'manual-token-refresh-v1',
+        version: 'oauth-pkce-refresh-v2',
         oauth_callback: '/auth/callback',
         manual_credentials: '/api/oauth/manual-credentials'
     });
@@ -311,7 +311,8 @@ app.post('/api/oauth/configure', async (req, res) => {
         redirect_uri: store.redirect_uri,
         state,
         code_challenge: codeChallenge,
-        code_challenge_method: 'S256'
+        code_challenge_method: 'S256',
+            scope: 'offline_access read write'
     });
 
     return res.json({
