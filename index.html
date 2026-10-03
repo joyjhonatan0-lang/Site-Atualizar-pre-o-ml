@@ -1179,6 +1179,54 @@ body.painel-interno-ativo header nav [onclick*='"inicio"'] {
     </div>
 
 
+
+    <!-- INDICADORES DO MERCADO LIVRE NA PÁGINA INICIAL -->
+    <div class="mt-1">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">
+                    Indicadores
+                </div>
+                <h2 class="text-lg font-black text-white mt-1">
+                    Indicadores do Mercado Livre
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">
+                    Dados da reputação da conta.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-emerald-400 text-lg">✓</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Vendas</div>
+                <div id="home-metric-vendas" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-vendas-periodo" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-red-400 text-lg">!</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Reclamações</div>
+                <div id="home-metric-reclamacoes" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-reclamacoes-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-orange-400 text-lg">⏱</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Atrasos</div>
+                <div id="home-metric-atrasos" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-atrasos-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-purple-400 text-lg">×</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Cancelamentos</div>
+                <div id="home-metric-cancelamentos" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-cancelamentos-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+        </div>
+    </div>
+
     <!-- FUNCIONALIDADES -->
 
     <div
@@ -5622,6 +5670,61 @@ function preencherDashboard(
         data.top10 ||
         []
     );
+
+    // Mantém os mesmos indicadores também na página inicial.
+    if (document.getElementById('home-metric-vendas') && document.getElementById('metric-vendas')) {
+        document.getElementById('home-metric-vendas').innerText =
+            document.getElementById('metric-vendas').innerText;
+    }
+    if (document.getElementById('home-metric-vendas-periodo') && document.getElementById('metric-vendas-periodo')) {
+        document.getElementById('home-metric-vendas-periodo').innerText =
+            document.getElementById('metric-vendas-periodo').innerText;
+    }
+    if (document.getElementById('home-metric-reclamacoes') && document.getElementById('metric-reclamacoes')) {
+        document.getElementById('home-metric-reclamacoes').innerText =
+            document.getElementById('metric-reclamacoes').innerText;
+    }
+    if (document.getElementById('home-metric-reclamacoes-extra') && document.getElementById('metric-reclamacoes-extra')) {
+        document.getElementById('home-metric-reclamacoes-extra').innerText =
+            document.getElementById('metric-reclamacoes-extra').innerText;
+    }
+    if (document.getElementById('home-metric-atrasos') && document.getElementById('metric-atrasos')) {
+        document.getElementById('home-metric-atrasos').innerText =
+            document.getElementById('metric-atrasos').innerText;
+    }
+    if (document.getElementById('home-metric-atrasos-extra') && document.getElementById('metric-atrasos-extra')) {
+        document.getElementById('home-metric-atrasos-extra').innerText =
+            document.getElementById('metric-atrasos-extra').innerText;
+    }
+    if (document.getElementById('home-metric-cancelamentos') && document.getElementById('metric-cancelamentos')) {
+        document.getElementById('home-metric-cancelamentos').innerText =
+            document.getElementById('metric-cancelamentos').innerText;
+    }
+    if (document.getElementById('home-metric-cancelamentos-extra') && document.getElementById('metric-cancelamentos-extra')) {
+        document.getElementById('home-metric-cancelamentos-extra').innerText =
+            document.getElementById('metric-cancelamentos-extra').innerText;
+    }
+
+    try {
+        const indicadoresHomeCache = {};
+        [
+            'home-metric-vendas',
+            'home-metric-vendas-periodo',
+            'home-metric-reclamacoes',
+            'home-metric-reclamacoes-extra',
+            'home-metric-atrasos',
+            'home-metric-atrasos-extra',
+            'home-metric-cancelamentos',
+            'home-metric-cancelamentos-extra'
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) indicadoresHomeCache[id] = el.innerText;
+        });
+        localStorage.setItem('mlHubPro_indicadoresHome_v1', JSON.stringify(indicadoresHomeCache));
+    } catch (erro) {
+        console.warn('Não foi possível salvar os indicadores da página inicial:', erro);
+    }
+
 }
 
 
@@ -6565,8 +6668,22 @@ document.addEventListener(
             }
         }
 
+        const abaSalva =
+            localStorage.getItem('mlHubPro_abaAtual_v1');
+
+        const abasValidas = [
+            'inicio',
+            'gestao',
+            'dashboard',
+            'simulacao',
+            'atualizacao',
+            'perguntas'
+        ];
+
         mudarAba(
-            'inicio'
+            abaSalva && abasValidas.includes(abaSalva)
+                ? abaSalva
+                : 'inicio'
         );
     }
 );
@@ -6590,34 +6707,22 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        const abaSalva = localStorage.getItem('mlHubPro_abaAtual_v1');
-        const abasValidas = ['inicio', 'gestao', 'dashboard', 'simulacao', 'atualizacao', 'perguntas'];
 
-        if (abaSalva && abasValidas.includes(abaSalva) && typeof mudarAba === 'function') {
-            setTimeout(() => mudarAba(abaSalva), 0);
-        }
-    } catch (erro) {
-        console.warn('Não foi possível restaurar a última aba aberta:', erro);
-    }
-});
-</script>
+
 
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        const abaSalva = localStorage.getItem('mlHubPro_abaAtual_v1');
-        const destino = abaSalva && abaSalva !== 'inicio' ? abaSalva : 'inicio';
-        if (typeof mudarAba === 'function') {
-            setTimeout(() => mudarAba(destino), 0);
-        } else {
-            document.body.classList.add('pagina-inicial-ativa');
-        }
+        const bruto = localStorage.getItem('mlHubPro_indicadoresHome_v1');
+        if (!bruto) return;
+        const dados = JSON.parse(bruto);
+        Object.entries(dados || {}).forEach(([id, valor]) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = valor;
+        });
     } catch (erro) {
-        document.body.classList.add('pagina-inicial-ativa');
+        console.warn('Não foi possível restaurar os indicadores da página inicial:', erro);
     }
 });
 </script>
