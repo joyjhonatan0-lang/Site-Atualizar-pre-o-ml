@@ -364,6 +364,8 @@ app.get('/api/anuncios', async (req, res) => {
                                 listingType,
                             available_quantity:
                                 availableQty,
+                            sold_quantity:
+                                Number(body.sold_quantity || 0),
                             sku,
                             permalink,
                             thumbnail,
@@ -1669,7 +1671,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                     id: atual.id || id,
                     title: tituloAtual,
                     sku: skuAtual || 'Sem SKU',
-                    status: atual.status
+                    status: atual.status,
+                    sold_quantity: Number(atual.sold_quantity || 0)
                 }
             });
         }
@@ -1729,7 +1732,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                         id: atual.id || id,
                         title: tituloAtual,
                         sku: skuLimpo || skuAtual || 'Sem SKU',
-                        status: atual.status
+                        status: atual.status,
+                        sold_quantity: Number(atual.sold_quantity || 0)
                     }
                 });
             }
@@ -1760,7 +1764,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                         id: atual.id || id,
                         title: tituloAtual,
                         sku: skuLimpo || skuAtual || 'Sem SKU',
-                        status: atual.status
+                        status: atual.status,
+                        sold_quantity: Number(atual.sold_quantity || 0)
                     }
                 });
             }
@@ -1790,7 +1795,8 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                 id: finalItem.id || id,
                 title: finalItem.title || tituloLimpo,
                 sku: String(attrSkuFinal?.value_name ?? skuLimpo).trim() || 'Sem SKU',
-                status: finalItem.status ?? atual.status
+                status: finalItem.status ?? atual.status,
+                sold_quantity: Number(finalItem.sold_quantity ?? atual.sold_quantity ?? 0)
             }
         });
 
