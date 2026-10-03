@@ -67,54 +67,37 @@ function formatarErroMercadoLivre(data) {
     );
 }
 
-// Função auxiliar centralizada para consultar o custo de envio do anúncio.
-// Mantém o carregamento normal dos anúncios intacto: esta consulta é usada
-// somente quando a rota de sincronização de fretes é acionada.
+// Consulta de frete usada SOMENTE pela rota /api/sincronizar-fretes.
+// O carregamento normal de anúncios não faz esta consulta individual.
 async function calcularFreteExato(itemObj, token) {
     const shipping = itemObj?.shipping || {};
-    const freeShipping = Boolean(shipping.free_shipping);
     const itemId = itemObj?.id;
     const sellerId = itemObj?.seller_id;
-
-    if (!itemId || !sellerId) {
-        return 0;
-    }
+    if (!itemId || !sellerId) return 0;
 
     try {
         const params = new URLSearchParams({
             item_id: String(itemId),
-            free_shipping: freeShipping ? 'true' : 'false',
+            free_shipping: shipping.free_shipping ? 'true' : 'false',
             verbose: 'true'
         });
-
         const freteRes = await mlFetch(
             `${ML_API}/users/${sellerId}/shipping_options/free?${params.toString()}`,
             token
         );
-
         const freteData = await jsonSeguro(freteRes);
-
         if (freteRes.ok) {
-            const valor = Number(
-                freteData?.coverage?.all_country?.list_cost
-            );
-
-            if (Number.isFinite(valor) && valor >= 0) {
-                return valor;
-            }
+            const valor = Number(freteData?.coverage?.all_country?.list_cost);
+            if (Number.isFinite(valor) && valor >= 0) return valor;
         }
-    } catch (error) {
-        console.error(`Erro ao consultar frete do anúncio ${itemId}:`, error.message);
+    } catch (e) {
+        console.error(`Erro ao consultar frete ${itemId}:`, e.message);
     }
 
-    // Fallback somente para um custo realmente retornado no próprio item.
-    // Não usa mais valores fixos (R$ 6,85 / R$ 12,95), pois eles podem
-    // divergir do custo de envio atual exibido pelo Mercado Livre.
     if (Array.isArray(shipping.costs)) {
-        const custo = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
-        if (custo) return Number(custo.cost);
+        const c = shipping.costs.find(x => Number.isFinite(Number(x?.cost)));
+        if (c) return Number(c.cost);
     }
-
     return 0;
 }
 
@@ -325,11 +308,16 @@ app.get('/api/anuncios', async (req, res) => {
                             shipping.free_shipping ||
                             false;
 
-                        const custoEnvio =
-                            await calcularFreteExato(
-                                body,
-                                token
+                        // Não consulta cotação de frete aqui: isso deixava o carregamento
+                        // de milhares de anúncios extremamente lento. O frete correto
+                        // é atualizado exclusivamente pelo botão "Puxar fretes".
+                        let custoEnvio = 0;
+                        if (Array.isArray(shipping.costs)) {
+                            const custoDoItem = shipping.costs.find(
+                                c => Number.isFinite(Number(c?.cost))
                             );
+                            if (custoDoItem) custoEnvio = Number(custoDoItem.cost);
+                        }
 
                         // Valor líquido exibido no painel: preço - comissão - custo de envio.
                         // O usuário pediu que o frete seja descontado sempre do campo "Você recebe".
