@@ -503,40 +503,29 @@ app.post('/api/sincronizar-fretes', async (req, res) => {
                 await jsonSeguro(multiRes);
 
             if (Array.isArray(multiData)) {
-                for (
-                    const itemObj
-                    of multiData
-                ) {
-                    if (
-                        itemObj.code === 200 &&
-                        itemObj.body
-                    ) {
-                        const body =
-                            itemObj.body;
+                const itensValidos = multiData
+                    .filter(itemObj => itemObj.code === 200 && itemObj.body)
+                    .map(itemObj => itemObj.body);
 
-                        const freeShipping =
-                            (
-                                body.shipping &&
-                                body.shipping.free_shipping
-                            ) || false;
+                // Consulta os custos em paralelo para acelerar lotes grandes,
+                // sem alterar o carregamento normal dos anúncios.
+                const concorrencia = 20;
+                for (let j = 0; j < itensValidos.length; j += concorrencia) {
+                    const grupo = itensValidos.slice(j, j + concorrencia);
+                    const resultados = await Promise.all(
+                        grupo.map(async body => {
+                            const freeShipping = Boolean(body.shipping?.free_shipping);
+                            const custoEnvio = await calcularFreteExato(body, token);
+                            return { body, freeShipping, custoEnvio };
+                        })
+                    );
 
-                        const custoEnvio =
-                            await calcularFreteExato(
-                                body,
-                                token
-                            );
-
-                        fretesMap[
-                            body.id
-                        ] = {
-                            custo:
-                                custoEnvio,
-                            shipping_cost:
-                                custoEnvio,
-                            gratis:
-                                freeShipping,
-                            free_shipping:
-                                freeShipping
+                    for (const { body, freeShipping, custoEnvio } of resultados) {
+                        fretesMap[body.id] = {
+                            custo: custoEnvio,
+                            shipping_cost: custoEnvio,
+                            gratis: freeShipping,
+                            free_shipping: freeShipping
                         };
                     }
                 }
