@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Pool } = require('pg');
 
 const fetch = (...args) =>
     import('node-fetch').then(({ default: fetch }) => fetch(...args));
@@ -2703,6 +2704,305 @@ app.get('/api/v4/items/:id/competition',async(req,res)=>{
         res.json({sucesso:true,current_price:Number(item?.price||0),...comp});
     }catch(e){respostaErro(res,500,e.message)}
 });
+
+
+/* =========================================================
+   ML HUB PRO V5 - CORE PARA 90 MIL+ ANÚNCIOS
+   PostgreSQL + fila persistente + worker + paginação DB
+========================================================= */
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const ML_WORKER_ENABLED = String(process.env.ML_WORKER_ENABLED || 'true').toLowerCase() !== 'false';
+const ML_WORKER_CONCURRENCY = Math.max(1, Math.min(5, Number(process.env.ML_WORKER_CONCURRENCY || 2)));
+const db = DATABASE_URL ? new Pool({
+    connectionString: DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: Math.max(2, Number(process.env.DB_POOL_MAX || 10)),
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+}) : null;
+
+async function dbQuery(text, params=[]) {
+    if (!db) throw new Error('PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
+    return db.query(text, params);
+}
+
+async function inicializarBancoEscala() {
+    if (!db) {
+        console.warn('[ESCALA] DATABASE_URL ausente: modo 90k desativado até configurar PostgreSQL.');
+        return;
+    }
+    await dbQuery(`
+      CREATE TABLE IF NOT EXISTS ml_items (
+        seller_id BIGINT NOT NULL,
+        item_id TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        sku TEXT NOT NULL DEFAULT '',
+        price NUMERIC(18,2) NOT NULL DEFAULT 0,
+        available_quantity INTEGER NOT NULL DEFAULT 0,
+        sold_quantity INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT '',
+        listing_type_id TEXT NOT NULL DEFAULT '',
+        category_id TEXT NOT NULL DEFAULT '',
+        thumbnail TEXT NOT NULL DEFAULT '',
+        permalink TEXT NOT NULL DEFAULT '',
+        ml_updated_at TIMESTAMPTZ NULL,
+        synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        raw JSONB NULL,
+        PRIMARY KEY (seller_id, item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_status ON ml_items(seller_id,status);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_sku ON ml_items(seller_id,sku);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_sold ON ml_items(seller_id,sold_quantity DESC);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_updated ON ml_items(seller_id,ml_updated_at DESC NULLS LAST);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_title_lower ON ml_items(seller_id,lower(title));
+
+      CREATE TABLE IF NOT EXISTS ml_jobs (
+        id BIGSERIAL PRIMARY KEY,
+        seller_id BIGINT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'queued',
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        progress_current INTEGER NOT NULL DEFAULT 0,
+        progress_total INTEGER NOT NULL DEFAULT 0,
+        processed INTEGER NOT NULL DEFAULT 0,
+        errors INTEGER NOT NULL DEFAULT 0,
+        cursor TEXT NULL,
+        message TEXT NOT NULL DEFAULT '',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        locked_at TIMESTAMPTZ NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        finished_at TIMESTAMPTZ NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_jobs_queue ON ml_jobs(status,available_at,created_at);
+      CREATE INDEX IF NOT EXISTS idx_ml_jobs_seller ON ml_jobs(seller_id,created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ml_notifications (
+        id BIGSERIAL PRIMARY KEY,
+        external_id TEXT NULL,
+        seller_id BIGINT NULL,
+        topic TEXT NOT NULL DEFAULT '',
+        resource TEXT NOT NULL DEFAULT '',
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        status TEXT NOT NULL DEFAULT 'queued',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        processed_at TIMESTAMPTZ NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_notifications_external
+      ON ml_notifications(external_id) WHERE external_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_ml_notifications_queue ON ml_notifications(status,available_at,created_at);
+    `);
+    console.log('[ESCALA] PostgreSQL pronto.');
+}
+
+function itemParaDb(item, sellerId) {
+    const n=normalizarItemGestao(item);
+    return [sellerId,n.id,n.titulo,n.sku,n.preco,n.estoque,n.vendidos,n.status,n.listing_type_id,n.categoria,n.thumbnail,n.permalink,n.atualizado_em,item];
+}
+async function upsertItensDb(sellerId, itens) {
+    if (!itens.length) return;
+    const client=await db.connect();
+    try {
+        await client.query('BEGIN');
+        for (const item of itens) {
+            const v=itemParaDb(item,sellerId);
+            await client.query(`
+              INSERT INTO ml_items
+              (seller_id,item_id,title,sku,price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,raw,synced_at)
+              VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+              ON CONFLICT(seller_id,item_id) DO UPDATE SET
+                title=EXCLUDED.title,sku=EXCLUDED.sku,price=EXCLUDED.price,
+                available_quantity=EXCLUDED.available_quantity,sold_quantity=EXCLUDED.sold_quantity,
+                status=EXCLUDED.status,listing_type_id=EXCLUDED.listing_type_id,
+                category_id=EXCLUDED.category_id,thumbnail=EXCLUDED.thumbnail,
+                permalink=EXCLUDED.permalink,ml_updated_at=EXCLUDED.ml_updated_at,
+                raw=EXCLUDED.raw,synced_at=NOW()
+            `,v);
+        }
+        await client.query('COMMIT');
+    } catch(e) {
+        await client.query('ROLLBACK'); throw e;
+    } finally { client.release(); }
+}
+
+async function criarJob(sellerId,type,payload={}) {
+    const r=await dbQuery(`INSERT INTO ml_jobs(seller_id,type,payload) VALUES($1,$2,$3) RETURNING *`,[sellerId,type,payload]);
+    return r.rows[0];
+}
+async function claimJob() {
+    const client=await db.connect();
+    try {
+        await client.query('BEGIN');
+        const r=await client.query(`
+          SELECT * FROM ml_jobs
+          WHERE status='queued' AND available_at<=NOW()
+          ORDER BY created_at ASC
+          FOR UPDATE SKIP LOCKED LIMIT 1
+        `);
+        if(!r.rows.length){await client.query('COMMIT');return null}
+        const job=r.rows[0];
+        await client.query(`UPDATE ml_jobs SET status='running',locked_at=NOW(),updated_at=NOW(),attempts=attempts+1 WHERE id=$1`,[job.id]);
+        await client.query('COMMIT');
+        return job;
+    } catch(e){await client.query('ROLLBACK');throw e} finally{client.release()}
+}
+
+async function processarSyncCompleto(job) {
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token) throw new Error('Token Mercado Livre indisponível para o seller do job.');
+    let scrollId=job.cursor||null, processed=Number(job.processed||0), errors=Number(job.errors||0), ciclos=0;
+    do {
+        const params=new URLSearchParams({search_type:'scan',limit:'100'});
+        if(scrollId) params.set('scroll_id',scrollId);
+        const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
+        const sd=await jsonSeguro(sr);
+        if(!sr.ok) throw new Error(formatarErroMercadoLivre(sd));
+        const ids=Array.isArray(sd.results)?sd.results:[];
+        if(!ids.length){scrollId=null;break}
+        const mapa=await buscarItensBulk(token,ids);
+        const itens=ids.map(id=>mapa[id]).filter(Boolean);
+        errors += Math.max(0,ids.length-itens.length);
+        await upsertItensDb(job.seller_id,itens);
+        processed += ids.length;
+        scrollId=sd.scroll_id||null;
+        ciclos++;
+        await dbQuery(`UPDATE ml_jobs SET processed=$2,progress_current=$2,errors=$3,cursor=$4,message=$5,updated_at=NOW() WHERE id=$1`,
+          [job.id,processed,errors,scrollId,`Sincronizados ${processed.toLocaleString('pt-BR')} anúncios`]);
+        // O scroll_id expira rapidamente; o worker segue sem pausas longas.
+    } while(scrollId && ciclos<2000);
+    await dbQuery(`UPDATE ml_jobs SET status='completed',progress_current=$2,processed=$2,errors=$3,cursor=NULL,message=$4,finished_at=NOW(),updated_at=NOW() WHERE id=$1`,
+      [job.id,processed,errors,`Sincronização concluída: ${processed.toLocaleString('pt-BR')} anúncios`]);
+}
+
+async function obterTokenPersistenteParaSeller(sellerId) {
+    // O projeto atual usa um store OAuth único. Valida se ele pertence ao seller do job.
+    try {
+        const store=lerOAuthStore();
+        if(!store?.access_token) return null;
+        const token=await renovarAccessTokenSeNecessario(false);
+        const meRes=await mlFetch(`${ML_API}/users/me`,token);
+        const me=await jsonSeguro(meRes);
+        return String(me?.id)===String(sellerId)?token:null;
+    } catch(e){return null}
+}
+
+async function processarNotificacaoFila() {
+    if(!db) return;
+    const client=await db.connect();
+    let n=null;
+    try {
+        await client.query('BEGIN');
+        const r=await client.query(`SELECT * FROM ml_notifications WHERE status='queued' AND available_at<=NOW() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`);
+        if(!r.rows.length){await client.query('COMMIT');return}
+        n=r.rows[0];
+        await client.query(`UPDATE ml_notifications SET status='running',attempts=attempts+1 WHERE id=$1`,[n.id]);
+        await client.query('COMMIT');
+    } catch(e){await client.query('ROLLBACK');throw e} finally{client.release()}
+    try {
+        const token=await obterTokenPersistenteParaSeller(n.seller_id);
+        if(!token) throw new Error('Token indisponível.');
+        const resource=String(n.resource||'');
+        if(resource.startsWith('/items/')) {
+            const r=await mlFetch(`${ML_API}${resource}`,token);
+            const item=await jsonSeguro(r);
+            if(r.ok && item?.id) await upsertItensDb(n.seller_id,[item]);
+        }
+        await dbQuery(`UPDATE ml_notifications SET status='completed',processed_at=NOW() WHERE id=$1`,[n.id]);
+    } catch(e) {
+        const delay=Math.min(3600,Math.pow(2,Math.min(8,Number(n.attempts||0)+1))*15);
+        await dbQuery(`UPDATE ml_notifications SET status=CASE WHEN attempts>=8 THEN 'failed' ELSE 'queued' END,available_at=NOW()+($2||' seconds')::interval WHERE id=$1`,[n.id,String(delay)]);
+    }
+}
+
+async function workerLoop(indice) {
+    while(true) {
+        try {
+            const job=await claimJob();
+            if(job) {
+                try {
+                    if(job.type==='full_sync') await processarSyncCompleto(job);
+                    else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
+                } catch(e) {
+                    const retry=Number(job.attempts||0)<4;
+                    await dbQuery(`UPDATE ml_jobs SET status=$2,message=$3,available_at=NOW()+INTERVAL '30 seconds',updated_at=NOW(),finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END WHERE id=$1`,
+                      [job.id,retry?'queued':'failed',e.message.slice(0,500)]);
+                }
+            }
+            await processarNotificacaoFila();
+        } catch(e){console.error(`[WORKER ${indice}]`,e.message)}
+        await new Promise(r=>setTimeout(r,jobSleepMs()));
+    }
+}
+function jobSleepMs(){return 1200}
+
+app.get('/api/scale/status',async(req,res)=>{
+    if(!db)return res.json({sucesso:true,database:false,worker:false,mensagem:'Configure DATABASE_URL para ativar o modo 90k.'});
+    try{
+        const q=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items`);
+        const j=await dbQuery(`SELECT status,COUNT(*)::int total FROM ml_jobs GROUP BY status`);
+        res.json({sucesso:true,database:true,worker:ML_WORKER_ENABLED,itens:q.rows[0]?.total||0,jobs:j.rows});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
+app.post('/api/scale/sync',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
+    try{
+        const me=await usuarioML(token);
+        const existente=await dbQuery(`SELECT id,status FROM ml_jobs WHERE seller_id=$1 AND type='full_sync' AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`,[me.id]);
+        if(existente.rows.length)return res.status(202).json({sucesso:true,job:existente.rows[0],mensagem:'Já existe uma sincronização em andamento.'});
+        const job=await criarJob(me.id,'full_sync',{source:'manual'});
+        res.status(202).json({sucesso:true,job,mensagem:'Sincronização colocada na fila. Pode fechar o navegador.'});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
+app.get('/api/scale/jobs/:id',async(req,res)=>{
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{const r=await dbQuery(`SELECT * FROM ml_jobs WHERE id=$1`,[req.params.id]);if(!r.rows.length)return respostaErro(res,404,'Job não encontrado.');res.json({sucesso:true,job:r.rows[0]})}catch(e){respostaErro(res,500,e.message)}
+});
+
+app.get('/api/scale/anuncios',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const page=Math.max(1,Number(req.query.page||1)),limit=Math.min(100,Math.max(10,Number(req.query.limit||50))),offset=(page-1)*limit;
+        const q=String(req.query.q||'').trim(),status=String(req.query.status||'').trim();
+        const params=[me.id];let where=`seller_id=$1`;
+        if(status){params.push(status);where+=` AND status=$${params.length}`}
+        if(q){params.push(`%${q.toLowerCase()}%`);where+=` AND (lower(title) LIKE $${params.length} OR lower(sku) LIKE $${params.length} OR lower(item_id) LIKE $${params.length})`}
+        const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
+        params.push(limit,offset);
+        const rows=await dbQuery(`SELECT item_id id,title titulo,sku,price preco,available_quantity estoque,sold_quantity vendidos,status,listing_type_id,category_id categoria,thumbnail,permalink,ml_updated_at atualizado_em FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const total=count.rows[0]?.total||0;
+        res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),itens:rows.rows});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
+// Substitui o comportamento "só logar": confirma 200 imediatamente e persiste o evento para worker.
+app.post('/api/scale/notifications',async(req,res)=>{
+    res.status(200).json({recebido:true});
+    if(!db)return;
+    try{
+        const e=req.body||{};
+        await dbQuery(`INSERT INTO ml_notifications(external_id,seller_id,topic,resource,payload) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+          [e._id||e.id||null,e.user_id||null,String(e.topic||''),String(e.resource||''),e]);
+    }catch(err){console.error('[NOTIFICATION QUEUE]',err.message)}
+});
+
+async function iniciarCoreEscala(){
+    try{
+        await inicializarBancoEscala();
+        if(db && ML_WORKER_ENABLED){
+            for(let i=1;i<=ML_WORKER_CONCURRENCY;i++) workerLoop(i);
+            console.log(`[ESCALA] ${ML_WORKER_CONCURRENCY} worker(s) iniciado(s).`);
+        }
+    }catch(e){console.error('[ESCALA INIT]',e)}
+}
+iniciarCoreEscala();
 
 app.listen(
     PORT,
