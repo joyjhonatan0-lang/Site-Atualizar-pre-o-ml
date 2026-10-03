@@ -180,7 +180,7 @@ app.get('/api/anuncios', async (req, res) => {
 
         while (hasMore) {
             let url =
-                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=50`;
+                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=100`;
 
             if (scrollId) {
                 url += `&scroll_id=${encodeURIComponent(scrollId)}`;
