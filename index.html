@@ -392,14 +392,17 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 "
             >
 
-                <!-- LOGO -->
+                <!-- LOGO / PERFIL -->
 
                 <div
+                    onclick="mudarAba('perfil')"
+                    title="Abrir perfil"
                     class="
                         flex
                         items-center
                         gap-3
                         shrink-0
+                        cursor-pointer
                     "
                 >
 
@@ -1227,6 +1230,22 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
     </div>
 
     <!-- FUNCIONALIDADES -->
+
+
+    <!-- TOP 10 MAIS VENDIDOS - PÁGINA INICIAL -->
+    <div class="panel rounded-2xl overflow-hidden mt-6">
+        <div class="px-5 py-4 border-b border-slate-800">
+            <h2 class="text-sm font-bold text-white">🏆 Top 10 anúncios mais vendidos</h2>
+            <p class="text-[11px] text-slate-500 mt-1">
+                Ranking calculado pelas unidades vendidas nos pedidos pagos.
+            </p>
+        </div>
+        <div id="top10-home" class="p-5">
+            <div class="text-center py-10 text-xs text-slate-600">
+                Os dados aparecerão aqui após atualizar o painel de vendas.
+            </div>
+        </div>
+    </div>
 
     <div
         class="
@@ -2215,6 +2234,81 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
 </section>
 
+
+
+<!-- =====================================================
+     PERFIL
+===================================================== -->
+<section id="secao-perfil" class="hidden space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Conta</div>
+            <h1 class="text-2xl font-black text-white mt-1">Perfil</h1>
+            <p class="text-xs text-slate-500 mt-1">Informações da conta conectada ao ML Hub Pro.</p>
+        </div>
+        <button onclick="mudarAba('inicio')" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl">
+            ← Voltar ao início
+        </button>
+    </div>
+
+    <div class="panel rounded-2xl p-6">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center text-xl font-black">M</div>
+            <div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Nome da conta</div>
+                <div id="perfil-nome-conta" class="text-xl font-black text-white mt-1">Mercado Livre</div>
+                <div id="perfil-status-conta" class="text-xs text-emerald-400 mt-2">● Conta conectada</div>
+            </div>
+        </div>
+        <div class="mt-6 pt-5 border-t border-slate-800 text-xs text-slate-500">
+            Este espaço já está preparado para receber as próximas informações do perfil que você quiser adicionar.
+        </div>
+    </div>
+</section>
+
+<!-- =====================================================
+     CONFIGURAÇÕES
+===================================================== -->
+<section id="secao-configuracoes" class="hidden space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Preferências</div>
+            <h1 class="text-2xl font-black text-white mt-1">Configurações</h1>
+            <p class="text-xs text-slate-500 mt-1">Personalize a aparência do ML Hub Pro.</p>
+        </div>
+        <button onclick="mudarAba('inicio')" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl">
+            ← Voltar ao início
+        </button>
+    </div>
+
+    <div class="panel rounded-2xl p-6">
+        <h2 class="text-sm font-black text-white">Tema</h2>
+        <p class="text-xs text-slate-500 mt-1">Escolha o tema do painel. A preferência fica salva neste navegador.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            <button onclick="aplicarTema('claro')" data-theme-option="claro"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-300 bg-white"></div>
+                <div class="font-bold mt-3">Tema claro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Fundo claro e cartões suaves.</div>
+            </button>
+
+            <button onclick="aplicarTema('escuro')" data-theme-option="escuro"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-700 bg-black"></div>
+                <div class="font-bold mt-3">Tema escuro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Visual preto e alto contraste.</div>
+            </button>
+
+            <button onclick="aplicarTema('azul')" data-theme-option="azul"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-700 bg-slate-900"></div>
+                <div class="font-bold mt-3">Azul escuro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Tema padrão atual do painel.</div>
+            </button>
+        </div>
+    </div>
+</section>
 
 <!-- =====================================================
      SIMULAÇÃO
@@ -3320,6 +3414,8 @@ function mudarAba(aba) {
         'inicio',
         'gestao',
         'dashboard',
+        'perfil',
+        'configuracoes',
         'simulacao',
         'atualizacao',
         'perguntas'
@@ -5525,7 +5621,12 @@ function montarTop10(
             'top10-container'
         );
 
-    if (!container) {
+    const containerHome =
+        document.getElementById(
+            'top10-home'
+        );
+
+    if (!container && !containerHome) {
         return;
     }
 
@@ -5534,7 +5635,7 @@ function montarTop10(
         lista.length === 0
     ) {
 
-        container.innerHTML =
+        if (container) if (container) container.innerHTML =
             `
             <div
                 class="
@@ -5902,6 +6003,15 @@ async function carregarPerguntas() {
             'Erro de comunicação ao buscar perguntas.'
         );
     }
+    if (containerHome && container) {
+        containerHome.innerHTML = container.innerHTML;
+        try {
+            localStorage.setItem('mlHubPro_top10Home_v1', containerHome.innerHTML);
+        } catch (erro) {
+            console.warn('Não foi possível salvar o Top 10 da página inicial:', erro);
+        }
+    }
+
 }
 
 
@@ -6517,6 +6627,80 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 })();
+</script>
+
+
+<style id="mlhub-temas-configuracoes">
+#btn-configuracoes-flutuante{
+    position:fixed; right:22px; bottom:22px; z-index:70;
+    width:48px; height:48px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    background:#facc15; color:#0f172a; font-size:21px; font-weight:900;
+    box-shadow:0 14px 35px rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.12);
+}
+#btn-configuracoes-flutuante:hover{transform:translateY(-2px)}
+.theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
+body.tema-escuro{background:#030712!important}
+body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
+body.tema-escuro .panel{background:#090d16!important}
+
+body.tema-claro{background:#f1f5f9!important;color:#0f172a!important}
+body.tema-claro header, body.tema-claro .glass{background:rgba(255,255,255,.96)!important;border-color:#cbd5e1!important}
+body.tema-claro .panel,
+body.tema-claro section > div[class*="bg-slate-900"]{background:#fff!important;border-color:#cbd5e1!important}
+body.tema-claro .bg-slate-950,
+body.tema-claro .bg-slate-950\/80{background:#e2e8f0!important}
+body.tema-claro .bg-slate-900,
+body.tema-claro .bg-slate-900\/80{background:#fff!important}
+body.tema-claro .bg-slate-800{background:#e2e8f0!important}
+body.tema-claro .text-white,
+body.tema-claro .text-slate-100{color:#0f172a!important}
+body.tema-claro .text-slate-300,
+body.tema-claro .text-slate-400,
+body.tema-claro .text-slate-500{color:#475569!important}
+body.tema-claro .border-slate-800,
+body.tema-claro .border-slate-700{border-color:#cbd5e1!important}
+body.tema-claro input{background:#fff!important;color:#0f172a!important}
+</style>
+
+<button id="btn-configuracoes-flutuante"
+        onclick="mudarAba('configuracoes')"
+        title="Configurações"
+        aria-label="Configurações">⚙</button>
+
+<script id="mlhub-perfil-temas-top10">
+function aplicarTema(tema) {
+    const valor = ['claro','escuro','azul'].includes(tema) ? tema : 'azul';
+    document.body.classList.remove('tema-claro','tema-escuro','tema-azul');
+    document.body.classList.add(`tema-${valor}`);
+    try { localStorage.setItem('mlHubPro_tema_v1', valor); } catch(e) {}
+
+    document.querySelectorAll('[data-theme-option]').forEach(el => {
+        el.classList.toggle('tema-selecionado', el.dataset.themeOption === valor);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    let tema = 'azul';
+    try { tema = localStorage.getItem('mlHubPro_tema_v1') || 'azul'; } catch(e) {}
+    aplicarTema(tema);
+
+    const homeTop10 = document.getElementById('top10-home');
+    if (homeTop10) {
+        try {
+            const cache = localStorage.getItem('mlHubPro_top10Home_v1');
+            if (cache) homeTop10.innerHTML = cache;
+        } catch(e) {}
+    }
+
+    const token = typeof obterToken === 'function' ? obterToken() : '';
+    const perfilStatus = document.getElementById('perfil-status-conta');
+    if (perfilStatus) {
+        perfilStatus.innerText = token ? '● Conta conectada' : '● Token não configurado';
+        perfilStatus.className = token ? 'text-xs text-emerald-400 mt-2' : 'text-xs text-yellow-400 mt-2';
+    }
+});
 </script>
 
 </body>
