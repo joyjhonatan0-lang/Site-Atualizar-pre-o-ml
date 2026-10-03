@@ -314,7 +314,35 @@
                     nowrap;
             }
         }
-    </style>
+    
+/* =========================================================
+   ML HUB PRO V4 - DESIGN SYSTEM PROFISSIONAL
+========================================================= */
+:root{
+  --hub-bg:#050a14;--hub-panel:#0b1322;--hub-panel2:#0f1a2d;
+  --hub-line:#1d2b42;--hub-muted:#7f91ad;--hub-text:#edf3ff;
+  --hub-yellow:#ffd21f;--hub-green:#27e0a3;--hub-blue:#5ba6ff;
+}
+body{background:radial-gradient(circle at 15% 0%,rgba(37,99,235,.08),transparent 26%),var(--hub-bg);color:var(--hub-text)}
+.panel{background:linear-gradient(145deg,rgba(15,26,45,.92),rgba(7,14,26,.96));border-color:var(--hub-line)!important;box-shadow:0 14px 45px rgba(0,0,0,.16)}
+.panel-hover{transition:.2s ease}.panel-hover:hover{transform:translateY(-2px);border-color:#344b6d!important;box-shadow:0 18px 48px rgba(0,0,0,.25)}
+.nav-button{transition:.18s ease}.nav-button:hover{background:#111d31;color:#fff}.nav-button.active{background:var(--hub-yellow);color:#07101e!important;box-shadow:0 6px 18px rgba(255,210,31,.18)}
+.hub-page-head{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;margin-bottom:4px}
+.hub-eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:900;color:var(--hub-yellow)}
+.hub-title{font-size:24px;line-height:1.1;font-weight:950;color:#fff;margin-top:5px}
+.hub-help{font-size:12px;line-height:1.7;color:var(--hub-muted);margin-top:7px;max-width:850px}
+.hub-kpi{min-height:112px}.hub-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:800;color:var(--hub-muted)}
+.hub-kpi-value{font-size:27px;line-height:1;font-weight:950;margin-top:13px}
+.hub-field label,.hub-label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:800;color:#8496b2;margin-bottom:7px}
+.hub-input{width:100%;background:#050b16;border:1px solid #24344d;border-radius:12px;padding:11px 13px;color:#fff;font-size:12px;outline:none}
+.hub-input:focus{border-color:#5477a8;box-shadow:0 0 0 3px rgba(84,119,168,.12)}
+.hub-tip{font-size:10px;color:#637692;line-height:1.5;margin-top:6px}
+.hub-section-title{font-size:14px;font-weight:900;color:#fff}.hub-section-help{font-size:11px;color:#71839f;margin-top:4px;line-height:1.6}
+.hub-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #263851;background:#0a1423;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800;color:#a9b8cf}
+.hub-info{border:1px solid #203554;background:rgba(23,51,86,.18);border-radius:14px;padding:12px 14px;font-size:11px;color:#9db1cd;line-height:1.6}
+@media(max-width:900px){.hub-page-head{flex-direction:column}.hub-title{font-size:21px}}
+
+</style>
 
 <style id="separacao-pagina-inicial">
 /* Página inicial independente do painel interno */
@@ -597,7 +625,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
                     <button
                         onclick="mudarAba('gestao')"
-                        id="btn-gestao"
+                        id="btn-gestao" title="Gestão: preços, estoque, títulos, SKU e status dos anúncios"
                         class="
                             nav-button
                             px-3
@@ -616,7 +644,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
                     <button
                         onclick="mudarAba('simulacao')"
-                        id="btn-simulacao"
+                        id="btn-simulacao" title="Simulação: calcule preço, custos, comissão e margem"
                         class="
                             nav-button
                             px-3
@@ -633,7 +661,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
                     <button
                         onclick="mudarAba('atualizacao')"
-                        id="btn-atualizacao"
+                        id="btn-atualizacao" title="Atualização: sincronize preços e informações dos anúncios"
                         class="
                             nav-button
                             px-3
@@ -648,16 +676,20 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                         ↻ Atualização
                     </button>
 
-                    <button onclick="mudarAba('central')" id="btn-central" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">◈ Central</button>
-                    <button onclick="mudarAba('operacao')" id="btn-operacao" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚡ Escala</button>
-                    <button onclick="mudarAba('atendimento')" id="btn-atendimento" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✦ IA</button>
-                    <button onclick="mudarAba('reclamacoes')" id="btn-reclamacoes" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚠ Pós-venda</button>
-                    <button onclick="mudarAba('integracoes')" id="btn-integracoes" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⌁ Integrações</button>
-                    <button onclick="mudarAba('oportunidades')" id="btn-oportunidades" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">↗ Crescimento</button>
+                    <button onclick="mudarAba('central')" id="btn-central" title="Central: prioridades, alertas e visão operacional" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">◈ Central</button>
+                    <button onclick="mudarAba('operacao')" id="btn-operacao" title="Escala: gerencie grandes volumes com paginação e ações em massa" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚡ Escala</button>
+                    <button onclick="mudarAba('atendimento')" id="btn-atendimento" title="IA: assistente para atendimento e operação" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✦ IA</button>
+                    <button onclick="mudarAba('reclamacoes')" id="btn-reclamacoes" title="Pós-venda: reclamações, reputação e proteção" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚠ Pós-venda</button>
+                    <button onclick="mudarAba('integracoes')" id="btn-integracoes" title="Integrações: Bling, IA e webhooks" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⌁ Integrações</button>
+                    <button onclick="mudarAba('oportunidades')" id="btn-oportunidades" title="Crescimento: auditoria e oportunidades comerciais" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">↗ Crescimento</button>
+
+                    <button onclick="mudarAba('conteudo')" id="btn-conteudo" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✎ Conteúdo IA</button>
+                    <button onclick="mudarAba('qualidade')" id="btn-qualidade" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">★ Qualidade</button>
+                    <button onclick="mudarAba('catalogo')" id="btn-catalogo" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">♛ Catálogo</button>
 
                     <button
                         onclick="mudarAba('perguntas')"
-                        id="btn-perguntas"
+                        id="btn-perguntas" title="Perguntas: consulte e responda clientes do Mercado Livre"
                         class="
                             nav-button
                             px-3
@@ -2380,6 +2412,63 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
   <div class="panel rounded-2xl p-5"><div class="font-black text-white">Mercado Ads</div><div class="text-[11px] text-slate-500 mt-1">Área preparada para ROAS, campanhas e Ad Groups. A API atual de Product Ads usa o novo fluxo de agrupamento por produto/família; endpoints legados foram removidos em 2026.</div></div>
 </section>
 
+
+<!-- =====================================================
+     ESTÚDIO DE CONTEÚDO IA
+===================================================== -->
+<section id="secao-conteudo" class="hidden space-y-6">
+  <div class="hub-page-head"><div><div class="hub-eyebrow">Conteúdo & conversão</div><h1 class="hub-title">Estúdio de Conteúdo IA</h1><p class="hub-help">Crie títulos, descrições, palavras-chave e prompts profissionais para imagens. Para geração visual real, conecte um provedor de imagens no servidor; o painel não publica nada automaticamente sem sua confirmação.</p></div><span class="hub-badge">✦ IA assistida</span></div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+    <div class="xl:col-span-2 panel rounded-2xl p-5">
+      <div class="hub-section-title">Gerador de títulos em massa</div><div class="hub-section-help">Cole um produto por linha. A IA cria opções focadas em clareza, busca e conversão, respeitando o limite configurado.</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
+        <div class="md:col-span-2 hub-field"><label>Produtos / termos base</label><textarea id="conteudo-produtos" rows="8" class="hub-input" placeholder="Ex.: Aparador corporal masculino recarregável&#10;Máquina de cortar cabelo sem fio"></textarea><div class="hub-tip">Um produto por linha. Para grandes volumes, trabalhe em lotes para revisar a qualidade.</div></div>
+        <div class="space-y-3">
+          <div class="hub-field"><label>Quantidade por produto</label><select id="conteudo-qtd" class="hub-input"><option>3</option><option selected>5</option><option>10</option></select></div>
+          <div class="hub-field"><label>Máximo de caracteres</label><input id="conteudo-limite" type="number" value="60" min="30" max="200" class="hub-input"><div class="hub-tip">Use o limite exigido pela sua estratégia/categoria.</div></div>
+          <button onclick="gerarTitulosMassa()" class="w-full bg-yellow-400 text-slate-950 px-4 py-3 rounded-xl text-xs font-black">Gerar títulos</button>
+        </div>
+      </div>
+      <div id="conteudo-titulos-out" class="mt-5 hidden"></div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+      <div class="hub-section-title">Descrição profissional</div><div class="hub-section-help">Transforma características em uma descrição organizada, sem inventar especificações.</div>
+      <div class="hub-field mt-5"><label>Informações reais do produto</label><textarea id="conteudo-descricao-base" rows="9" class="hub-input" placeholder="Material, medidas, voltagem, itens inclusos, benefícios reais..."></textarea></div>
+      <button onclick="gerarDescricaoIA()" class="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl text-xs font-black">Gerar descrição</button>
+      <pre id="conteudo-descricao-out" class="hidden mt-4 whitespace-pre-wrap text-xs text-slate-300 bg-slate-950 p-4 rounded-xl max-h-80 overflow-auto"></pre>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="panel rounded-2xl p-5"><div class="hub-section-title">Gerador de imagem de produto</div><div class="hub-section-help">Cria um briefing/prompt visual profissional com fundo, composição, benefícios e restrições. Se o servidor tiver um provedor de imagem configurado, a imagem pode ser gerada diretamente.</div>
+      <div class="hub-field mt-5"><label>Produto e objetivo da imagem</label><textarea id="imagem-brief" rows="5" class="hub-input" placeholder="Ex.: Aparador dourado, fundo branco premium, destacar leveza e precisão, sem alterar o formato real do produto."></textarea></div>
+      <div class="grid grid-cols-2 gap-3 mt-3"><div class="hub-field"><label>Formato</label><select id="imagem-formato" class="hub-input"><option value="1:1">Quadrado 1:1</option><option value="4:5">Vertical 4:5</option><option value="16:9">Banner 16:9</option></select></div><div class="hub-field"><label>Estilo</label><select id="imagem-estilo" class="hub-input"><option>Marketplace profissional</option><option>Premium minimalista</option><option>Infográfico comercial</option><option>Ambientado realista</option></select></div></div>
+      <button onclick="gerarBriefImagem()" class="mt-3 bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Gerar briefing visual</button>
+      <div id="imagem-out" class="hidden mt-4"></div>
+    </div>
+    <div class="panel rounded-2xl p-5"><div class="hub-section-title">Palavras-chave & SEO</div><div class="hub-section-help">Gera termos relacionados ao produto para pesquisa, organização interna e apoio na criação de conteúdo.</div><div class="hub-field mt-5"><label>Produto</label><input id="seo-produto" class="hub-input" placeholder="Digite o produto"></div><button onclick="gerarKeywords()" class="mt-3 bg-slate-800 text-white px-5 py-3 rounded-xl text-xs font-black">Gerar palavras-chave</button><div id="seo-out" class="flex flex-wrap gap-2 mt-4"></div></div>
+  </div>
+</section>
+
+<!-- =====================================================
+     QUALIDADE DOS ANÚNCIOS
+===================================================== -->
+<section id="secao-qualidade" class="hidden space-y-6">
+ <div class="hub-page-head"><div><div class="hub-eyebrow">Auditoria</div><h1 class="hub-title">Qualidade dos Anúncios</h1><p class="hub-help">Consulte a qualidade real informada pelo Mercado Livre para um anúncio e veja ações pendentes. A API atual utiliza <b>/performance</b>, substituindo o recurso antigo de health.</p></div><span class="hub-badge">★ Performance</span></div>
+ <div class="panel rounded-2xl p-5"><div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3"><div class="hub-field"><label>ID do anúncio</label><input id="qualidade-mlb" class="hub-input" placeholder="Ex.: MLB1234567890"><div class="hub-tip">Informe o MLB para consultar o nível e as ações de melhoria disponibilizadas pela API.</div></div><button onclick="consultarQualidade()" class="md:self-end bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Analisar qualidade</button></div></div>
+ <div id="qualidade-out" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
+</section>
+
+<!-- =====================================================
+     CATÁLOGO / COMPETIÇÃO
+===================================================== -->
+<section id="secao-catalogo" class="hidden space-y-6">
+ <div class="hub-page-head"><div><div class="hub-eyebrow">Competitividade</div><h1 class="hub-title">Catálogo & Competição</h1><p class="hub-help">Veja se sua publicação está ganhando a página de produto, o preço sugerido para competir e oportunidades como frete grátis, Full, parcelamento e envio no mesmo dia quando a API disponibilizar esses dados.</p></div><span class="hub-badge">♛ Price to win</span></div>
+ <div class="panel rounded-2xl p-5"><div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3"><div class="hub-field"><label>ID do anúncio de catálogo</label><input id="catalogo-mlb" class="hub-input" placeholder="MLB..."><div class="hub-tip">Funciona para publicações elegíveis à competição de catálogo.</div></div><button onclick="consultarCompeticao()" class="md:self-end bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Consultar competição</button></div></div>
+ <div id="catalogo-out" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
+</section>
 <!-- =====================================================
      PERFIL
 ===================================================== -->
@@ -3592,6 +3681,9 @@ function mudarAba(aba) {
         'reclamacoes',
         'integracoes',
         'oportunidades',
+        'conteudo',
+        'qualidade',
+        'catalogo',
         'perfil',
         'configuracoes',
         'simulacao',
@@ -7175,6 +7267,21 @@ async function carregarIntegracoesPro(){try{const d=await fetch(`${RENDER_URL}/a
 async function conectarBling(){try{const d=await fetch(`${RENDER_URL}/api/bling/authorize`).then(r=>r.json());if(!d.authorization_url)throw new Error(d.erro||'Bling não configurado.');location.href=d.authorization_url;}catch(e){alert(e.message)}}
 async function carregarOportunidades(){const box=document.getElementById('op-lista');box.innerHTML='<div class="panel rounded-2xl p-6 text-xs text-yellow-400">Auditando amostra recente...</div>';try{const d=await apiPro('/api/v3/auditoria');document.getElementById('op-sem-venda').innerText=d.metricas.sem_venda;document.getElementById('op-sem-sku').innerText=d.metricas.sem_sku;document.getElementById('op-estoque').innerText=d.metricas.estoque_critico;document.getElementById('op-score').innerText=d.metricas.score+'%';box.innerHTML=(d.oportunidades||[]).map(x=>`<div class="panel rounded-2xl p-4"><div class="text-xs font-black text-white">${escapeHtml(x.titulo)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(x.mensagem)}</div></div>`).join('')||'<div class="panel rounded-2xl p-6 text-xs text-emerald-400">Nenhuma oportunidade crítica na amostra.</div>';}catch(e){box.innerHTML=`<div class="panel rounded-2xl p-6 text-xs text-red-300">${escapeHtml(e.message)}</div>`}}
 document.addEventListener('DOMContentLoaded',carregarIntegracoesPro);
+</script>
+
+
+<script id="mlhub-v4-profissional">
+function hubCard(t,v,d=''){return `<div class="panel rounded-2xl p-5 hub-kpi"><div class="hub-kpi-label">${escapeHtml(t)}</div><div class="hub-kpi-value text-white">${escapeHtml(String(v??'—'))}</div>${d?`<div class="hub-tip">${escapeHtml(d)}</div>`:''}</div>`}
+async function gerarTitulosMassa(){
+ const produtos=document.getElementById('conteudo-produtos').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!produtos.length)return alert('Digite pelo menos um produto.');
+ const qtd=Number(document.getElementById('conteudo-qtd').value||5),limite=Number(document.getElementById('conteudo-limite').value||60),out=document.getElementById('conteudo-titulos-out');out.classList.remove('hidden');out.innerHTML='<div class="hub-info">Gerando títulos...</div>';
+ try{const d=await apiPro('/api/v4/conteudo/titulos',{method:'POST',body:JSON.stringify({produtos:produtos.slice(0,50),quantidade:qtd,limite})});out.innerHTML=(d.resultados||[]).map(r=>`<div class="panel rounded-2xl p-4 mt-3"><div class="text-xs font-black text-white">${escapeHtml(r.produto)}</div><div class="mt-3 space-y-2">${(r.titulos||[]).map(t=>`<div class="flex justify-between gap-3 bg-slate-950 rounded-xl p-3"><span class="text-xs text-slate-300">${escapeHtml(t)}</span><span class="text-[10px] text-slate-600">${t.length} car.</span></div>`).join('')}</div></div>`).join('')}catch(e){out.innerHTML=`<div class="hub-info text-red-300">${escapeHtml(e.message)}</div>`}
+}
+async function gerarDescricaoIA(){const base=document.getElementById('conteudo-descricao-base').value.trim(),out=document.getElementById('conteudo-descricao-out');if(!base)return alert('Informe os dados reais do produto.');out.classList.remove('hidden');out.innerText='Gerando...';try{const d=await apiPro('/api/v4/conteudo/descricao',{method:'POST',body:JSON.stringify({base})});out.innerText=d.texto}catch(e){out.innerText=e.message}}
+async function gerarBriefImagem(){const brief=document.getElementById('imagem-brief').value.trim();if(!brief)return alert('Descreva o produto e o objetivo.');const out=document.getElementById('imagem-out');out.classList.remove('hidden');out.innerHTML='<div class="hub-info">Criando direção visual...</div>';try{const d=await apiPro('/api/v4/conteudo/imagem-brief',{method:'POST',body:JSON.stringify({brief,formato:document.getElementById('imagem-formato').value,estilo:document.getElementById('imagem-estilo').value})});out.innerHTML=`<div class="bg-slate-950 rounded-xl p-4 text-xs text-slate-300 whitespace-pre-wrap">${escapeHtml(d.prompt)}</div><div class="hub-tip">${d.image_generation_available?'Gerador de imagem configurado no servidor.':'O briefing está pronto. Para renderização automática, configure o provedor de imagem no servidor.'}</div>`}catch(e){out.innerHTML=`<div class="hub-info text-red-300">${escapeHtml(e.message)}</div>`}}
+async function gerarKeywords(){const produto=document.getElementById('seo-produto').value.trim(),out=document.getElementById('seo-out');if(!produto)return;out.innerHTML='<span class="hub-badge">Gerando...</span>';try{const d=await apiPro('/api/v4/conteudo/keywords',{method:'POST',body:JSON.stringify({produto})});out.innerHTML=(d.keywords||[]).map(x=>`<span class="hub-badge">${escapeHtml(x)}</span>`).join('')}catch(e){out.innerHTML=`<span class="text-xs text-red-300">${escapeHtml(e.message)}</span>`}}
+async function consultarQualidade(){const id=document.getElementById('qualidade-mlb').value.trim(),out=document.getElementById('qualidade-out');if(!id)return;out.innerHTML=hubCard('Status','Consultando...');try{const d=await apiPro(`/api/v4/items/${encodeURIComponent(id)}/performance`);const p=d.performance||{};out.innerHTML=hubCard('Nível',p.level_wording||p.level||'—','Qualidade informada pelo Mercado Livre')+hubCard('Pontuação',p.score??p.level??'—','Quando disponibilizada pela API')+hubCard('Ações pendentes',(p.actions||p.improvements||[]).length,'Itens sugeridos para melhoria')+`<div class="lg:col-span-3 panel rounded-2xl p-5"><div class="hub-section-title">Detalhes</div><pre class="text-[11px] text-slate-400 mt-3 whitespace-pre-wrap overflow-auto">${escapeHtml(JSON.stringify(p,null,2))}</pre></div>`}catch(e){out.innerHTML=`<div class="lg:col-span-3 hub-info text-red-300">${escapeHtml(e.message)}</div>`}}
+async function consultarCompeticao(){const id=document.getElementById('catalogo-mlb').value.trim(),out=document.getElementById('catalogo-out');if(!id)return;out.innerHTML=hubCard('Status','Consultando...');try{const d=await apiPro(`/api/v4/items/${encodeURIComponent(id)}/competition`);out.innerHTML=hubCard('Situação',d.status||'—','winning = ganhando; competing = disputando')+hubCard('Preço atual',d.current_price!=null?moeda(d.current_price):'—')+hubCard('Preço para competir',d.price_to_win!=null?moeda(d.price_to_win):'—','Sugestão retornada pela API')+`<div class="lg:col-span-3 panel rounded-2xl p-5"><div class="hub-section-title">Oportunidades e boosts</div><pre class="text-[11px] text-slate-400 mt-3 whitespace-pre-wrap overflow-auto">${escapeHtml(JSON.stringify(d,null,2))}</pre></div>`}catch(e){out.innerHTML=`<div class="lg:col-span-3 hub-info text-red-300">${escapeHtml(e.message)}</div>`}}
 </script>
 
 </body>
