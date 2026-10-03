@@ -359,8 +359,8 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
             <h1 class="text-2xl md:text-3xl font-black text-white">Entrar no painel</h1>
             <p class="text-sm text-slate-400 mt-2 leading-6">
-                Informe as credenciais da sua aplicação. A URL deve ser exatamente uma URI cadastrada no DevCenter. O Mercado Livre abrirá a autorização oficial uma única vez para conceder o acesso.
-                O servidor guardará o Refresh Token e renovará o Access Token automaticamente.
+                Cadastre Client ID, Client Secret, URL de retorno e o Access Token que você já gerou. Se você também tiver o Refresh Token, informe-o para ativar a renovação automática.
+                Depois de salvar, o painel usará o token guardado no servidor para consultar as APIs do Mercado Livre.
             </p>
 
             <div id="oauth-login-status" class="hidden mt-4 p-3 rounded-xl text-xs font-bold"></div>
@@ -385,16 +385,28 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                         class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400">
                 </div>
                 <div class="md:col-span-2">
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token</label>
                     <input id="oauth-access-token-login" type="password" autocomplete="off"
                         class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
                         placeholder="APP_USR-...">
                 </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Refresh Token (opcional, recomendado)</label>
+                    <input id="oauth-refresh-token-login" type="password" autocomplete="off"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="TG-...">
+                    <p class="text-[10px] text-slate-600 mt-2">Se você colar também o Refresh Token gerado junto com o Access Token, o servidor poderá renovar o acesso automaticamente.</p>
+                </div>
             </div>
 
-            <button onclick="iniciarOAuthML('login')" class="mt-6 w-full bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm px-5 py-3.5 rounded-xl">
-                Gerar acesso renovável e entrar
-            </button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
+                <button onclick="salvarCredenciaisEEntrar()" class="w-full bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm px-5 py-3.5 rounded-xl">
+                    Salvar dados e entrar
+                </button>
+                <button onclick="iniciarOAuthML('login')" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-black text-sm px-5 py-3.5 rounded-xl border border-slate-700">
+                    Gerar Access + Refresh pelo Mercado Livre
+                </button>
+            </div>
 
             <div class="mt-5">
                 <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Token gerado</label>
@@ -6778,6 +6790,47 @@ function lerCamposOAuth(origem) {
         access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
         frontend_url: ML_HUB_FRONTEND_URL
     };
+}
+
+
+async function salvarCredenciaisEEntrar() {
+    const dados = lerCamposOAuth('login');
+    dados.refresh_token = document.getElementById('oauth-refresh-token-login')?.value.trim() || '';
+
+    if (!dados.client_id || !dados.client_secret || !dados.redirect_uri || !dados.access_token) {
+        mostrarStatusLoginOAuth('Preencha Client ID, Client Secret, URL de retorno e Access Token.', true);
+        return;
+    }
+
+    try {
+        mostrarStatusLoginOAuth('Validando o Access Token e salvando a conta...');
+        const response = await fetch(`${RENDER_URL}/api/oauth/manual-credentials`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) {
+            throw new Error(data.erro || 'Não foi possível salvar as credenciais.');
+        }
+
+        localStorage.setItem('ml_oauth_connected', '1');
+        localStorage.removeItem('ml_access_token');
+
+        const gate = document.getElementById('oauth-login-gate');
+        if (gate) gate.classList.add('hidden');
+
+        mostrarStatusLoginOAuth(
+            data.renewable
+                ? 'Conta conectada. Renovação automática ativada.'
+                : 'Conta conectada com o Access Token atual. Para renovação automática, salve também o Refresh Token.'
+        );
+
+        await atualizarStatusOAuthML();
+        if (typeof mudarAba === 'function') mudarAba('inicio');
+    } catch (erro) {
+        mostrarStatusLoginOAuth(erro.message, true);
+    }
 }
 
 async function iniciarOAuthML(origem = 'login') {
