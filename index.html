@@ -3243,6 +3243,33 @@ const RENDER_URL =
 
 let cacheItens = [];
 
+const ML_HUB_CACHE_KEY = 'mlHubPro_cacheItens_v1';
+
+function salvarCacheItensLocal() {
+    try {
+        localStorage.setItem(ML_HUB_CACHE_KEY, JSON.stringify(cacheItens || []));
+    } catch (erro) {
+        console.warn('Não foi possível salvar os anúncios localmente:', erro);
+    }
+}
+
+function carregarCacheItensLocal() {
+    try {
+        const bruto = localStorage.getItem(ML_HUB_CACHE_KEY);
+        if (!bruto) return false;
+
+        const dados = JSON.parse(bruto);
+        if (!Array.isArray(dados) || !dados.length) return false;
+
+        cacheItens = dados;
+        return true;
+    } catch (erro) {
+        console.warn('Não foi possível recuperar os anúncios salvos:', erro);
+        return false;
+    }
+}
+
+
 let novosPrecosCalculados = {};
 
 let abaAtualAtiva =
@@ -3701,6 +3728,7 @@ async function carregarDados() {
 
             cacheItens =
                 data.itens;
+        salvarCacheItensLocal();
 
             atualizarCards(
                 cacheItens
@@ -4362,6 +4390,7 @@ async function salvarEdicaoAnuncio(index) {
             item.available_quantity = Number(data.item.available_quantity || 0);
         }
 
+        salvarCacheItensLocal();
         executarBusca();
         atualizarCards(cacheItens);
         alert('Anúncio atualizado com sucesso.');
@@ -4401,6 +4430,7 @@ async function alternarStatusAnuncio(index) {
         if (data.item?.available_quantity !== undefined) {
             item.available_quantity = Number(data.item.available_quantity || 0);
         }
+        salvarCacheItensLocal();
         executarBusca();
         atualizarCards(cacheItens);
         alert(`Anúncio ${item.status === 'active' ? 'ativado' : 'pausado'} com sucesso.`);
@@ -6512,6 +6542,22 @@ document.addEventListener(
     }
 );
 
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (!carregarCacheItensLocal()) return;
+
+    try {
+        if (typeof atualizarCards === 'function') atualizarCards(cacheItens);
+        if (typeof montarTabelaGestao === 'function') montarTabelaGestao(cacheItens);
+        if (typeof renderizarTabelaSimulacao === 'function') renderizarTabelaSimulacao(cacheItens);
+        if (typeof atualizarTabelaSimulacao === 'function') atualizarTabelaSimulacao();
+    } catch (erro) {
+        console.warn('Os anúncios foram recuperados do navegador, mas alguma tela ainda não estava pronta:', erro);
+    }
+});
 </script>
 
 </body>
