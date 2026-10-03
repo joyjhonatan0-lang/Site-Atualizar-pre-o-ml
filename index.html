@@ -4014,6 +4014,11 @@ function montarTabelaGestao(
     itens.forEach(
         item => {
 
+            const index =
+                cacheItens.findIndex(
+                    i => i.id === item.id
+                );
+
             const tr =
                 document.createElement(
                     'tr'
@@ -4022,24 +4027,42 @@ function montarTabelaGestao(
             tr.innerHTML =
                 `
                 <td class="p-4">
-                    <div class="flex items-center gap-3 min-w-[280px]">
+                    <div class="flex items-center gap-3 min-w-[360px]">
 
                         <img
                             src="${escapeHtml(item.thumbnail)}"
-                            class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800"
+                            class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800 shrink-0"
                         >
 
-                        <div class="min-w-0">
+                        <div class="min-w-0 flex-1 space-y-2">
 
-                            <span class="font-semibold text-white block line-clamp-1">
-                                ${escapeHtml(item.title)}
-                            </span>
+                            <input
+                                id="titulo_gestao_${index}"
+                                type="text"
+                                value="${escapeHtml(item.title)}"
+                                maxlength="200"
+                                class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg outline-none focus:border-yellow-400/60"
+                                title="Editar título do anúncio"
+                            >
 
-                            <span class="text-[10px] text-slate-500 mt-1 block">
-                                ${escapeHtml(item.id)}
-                                •
-                                SKU: ${escapeHtml(item.sku)}
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-slate-500 shrink-0">
+                                    ${escapeHtml(item.id)}
+                                </span>
+
+                                <span class="text-[10px] text-slate-600">•</span>
+
+                                <span class="text-[10px] text-slate-500 shrink-0">SKU:</span>
+
+                                <input
+                                    id="sku_gestao_${index}"
+                                    type="text"
+                                    value="${escapeHtml(item.sku === 'Sem SKU' ? '' : item.sku)}"
+                                    class="min-w-[120px] flex-1 bg-slate-950 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-1.5 rounded-lg outline-none focus:border-yellow-400/60"
+                                    placeholder="Sem SKU"
+                                    title="Editar SKU do anúncio"
+                                >
+                            </div>
 
                         </div>
 
@@ -4084,37 +4107,14 @@ function montarTabelaGestao(
                     <div class="flex items-center gap-2">
 
                         <span
-                            class="
-                                status-dot
-                                ${
-                                    item.status ===
-                                    'active'
-                                        ? 'bg-emerald-400'
-                                        : 'bg-slate-500'
-                                }
-                            "
+                            class="status-dot ${item.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}"
                         ></span>
 
                         <span
-                            class="
-                                text-[11px]
-                                font-bold
-                                ${
-                                    item.status ===
-                                    'active'
-                                        ? 'text-emerald-400'
-                                        : 'text-slate-500'
-                                }
-                            "
+                            class="text-[11px] font-bold ${item.status === 'active' ? 'text-emerald-400' : 'text-slate-400'}"
+                            title="Situação retornada pela API do Mercado Livre"
                         >
-                            ${
-                                item.status ===
-                                'active'
-                                    ? 'Ativo'
-                                    : escapeHtml(
-                                        item.status
-                                    )
-                            }
+                            ${escapeHtml(item.status || '')}
                         </span>
 
                     </div>
@@ -4122,27 +4122,26 @@ function montarTabelaGestao(
                 </td>
 
                 <td class="p-4">
+                    <div class="flex flex-col gap-2 min-w-[105px]">
 
-                    <a
-                        href="${escapeHtml(item.permalink)}"
-                        target="_blank"
-                        class="
-                            inline-flex
-                            items-center
-                            gap-1.5
-                            px-3
-                            py-1.5
-                            rounded-lg
-                            bg-slate-800
-                            hover:bg-slate-700
-                            text-blue-400
-                            text-[10px]
-                            font-bold
-                        "
-                    >
-                        Ver anúncio ↗
-                    </a>
+                        <button
+                            type="button"
+                            onclick="salvarEdicaoAnuncio(${index})"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-[10px] font-black"
+                        >
+                            Salvar
+                        </button>
 
+                        <a
+                            href="${escapeHtml(item.permalink)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 text-[10px] font-bold"
+                        >
+                            Ver anúncio ↗
+                        </a>
+
+                    </div>
                 </td>
                 `;
 
@@ -4151,6 +4150,76 @@ function montarTabelaGestao(
             );
         }
     );
+}
+
+
+async function salvarEdicaoAnuncio(index) {
+    const token = obterToken();
+
+    if (!token) {
+        solicitarToken();
+        return;
+    }
+
+    const item = cacheItens[index];
+
+    if (!item) {
+        alert('Anúncio não encontrado no painel.');
+        return;
+    }
+
+    const inputTitulo = document.getElementById(`titulo_gestao_${index}`);
+    const inputSku = document.getElementById(`sku_gestao_${index}`);
+
+    const title = inputTitulo?.value.trim() || '';
+    const sku = inputSku?.value.trim() || '';
+
+    if (!title) {
+        alert('O título do anúncio não pode ficar vazio.');
+        inputTitulo?.focus();
+        return;
+    }
+
+    mostrarLoading('Salvando título e SKU no Mercado Livre...');
+
+    try {
+        const response = await fetch(`${RENDER_URL}/api/atualizar-anuncio`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: token
+            },
+            body: JSON.stringify({
+                id: item.id,
+                title,
+                sku
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.sucesso) {
+            alert(data.erro || 'Erro ao atualizar o anúncio.');
+            return;
+        }
+
+        item.title = data.item?.title ?? title;
+        item.sku = data.item?.sku ?? (sku || 'Sem SKU');
+
+        if (data.item?.status !== undefined) {
+            item.status = data.item.status;
+        }
+
+        executarBusca();
+        atualizarCards(cacheItens);
+        alert('Anúncio atualizado com sucesso.');
+
+    } catch (error) {
+        console.error(error);
+        alert('Erro de comunicação ao atualizar o anúncio.');
+    } finally {
+        esconderLoading();
+    }
 }
 
 
