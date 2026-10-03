@@ -1961,6 +1961,15 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
         </div>
 
+        <div id="gestao-paginacao" class="px-5 py-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div id="gestao-paginacao-info" class="text-[11px] text-slate-500">Página 1</div>
+            <div class="flex items-center gap-2">
+                <button id="gestao-anterior" onclick="gestaoIrPagina(-1)" class="text-[10px] bg-slate-800 hover:bg-slate-700 disabled:opacity-40 px-3 py-2 rounded-lg text-slate-300 font-bold">← Anterior</button>
+                <span id="gestao-pagina-atual" class="text-xs font-bold text-white px-2">1 / 1</span>
+                <button id="gestao-proxima" onclick="gestaoIrPagina(1)" class="text-[10px] bg-slate-800 hover:bg-slate-700 disabled:opacity-40 px-3 py-2 rounded-lg text-slate-300 font-bold">Próxima →</button>
+            </div>
+        </div>
+
     </div>
 
 </section>
@@ -7279,34 +7288,108 @@ async function consultarCompeticao(){const id=document.getElementById('catalogo-
 
 <script id="mlhub-scale90k">
 let mlScaleJobId=null, mlScaleTimer=null;
+let gestaoPagina=1, gestaoPaginas=1, gestaoTotalFiltro=0, gestaoBusca='', gestaoCarregando=false;
+
 async function verificarModoEscala(){
   try{const r=await fetch(`${RENDER_URL}/api/scale/status`),d=await r.json();return !!d.database}catch(e){return false}
 }
-async function iniciarSincronizacao90k(){
-  const token=obterToken();if(!token)return solicitarToken();
+
+function normalizarItemEscala(i){
+  return {
+    id:i.id||'', title:i.title||'', sku:i.sku||'Sem SKU',
+    price:Number(i.price||0), sale_fee:Number(i.sale_fee||0),
+    shipping_cost:Number(i.shipping_cost||0), net_received:Number(i.net_received ?? i.price ?? 0),
+    available_quantity:Number(i.available_quantity||0), sold_quantity:Number(i.sold_quantity||0),
+    status:i.status||'', listing_type_id:i.listing_type_id||'',
+    category_id:i.category_id||'', thumbnail:i.thumbnail||'', permalink:i.permalink||'',
+    last_updated:i.last_updated||null
+  };
+}
+
+async function carregarGestaoEscala(page=1,{silencioso=false}={}){
+  if(gestaoCarregando)return;
+  const token=obterToken(); if(!token){solicitarToken();return}
+  gestaoCarregando=true;
+  if(!silencioso)mostrarLoading('Carregando anúncios do banco...');
   try{
+    const p=new URLSearchParams({page:String(Math.max(1,page)),limit:'50'});
+    if(gestaoBusca)p.set('q',gestaoBusca);
+    const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${p}`,{headers:{Authorization:token}});
+    const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Erro ao consultar anúncios.');
+    gestaoPagina=Number(d.pagina||1); gestaoPaginas=Number(d.paginas||1); gestaoTotalFiltro=Number(d.total||0);
+    cacheItens=(d.itens||[]).map(normalizarItemEscala); // somente a página atual; nunca 90 mil no navegador
+    montarTabelaGestao(cacheItens);
+    const tl=document.getElementById('total-listado'),ta=document.getElementById('total-ativos'),to=document.getElementById('total-outros');
+    if(tl)tl.innerText=Number(d.total_conta||0).toLocaleString('pt-BR');
+    if(ta)ta.innerText=Number(d.ativos||0).toLocaleString('pt-BR');
+    if(to)to.innerText=Number(d.outros||0).toLocaleString('pt-BR');
+    atualizarPaginacaoGestao();
+  }catch(e){alert(e.message)}finally{gestaoCarregando=false;if(!silencioso)esconderLoading()}
+}
+
+function atualizarPaginacaoGestao(){
+  const info=document.getElementById('gestao-paginacao-info'),pag=document.getElementById('gestao-pagina-atual');
+  const ant=document.getElementById('gestao-anterior'),prox=document.getElementById('gestao-proxima');
+  if(info)info.textContent=`${gestaoTotalFiltro.toLocaleString('pt-BR')} resultado(s) · 50 por página`;
+  if(pag)pag.textContent=`${gestaoPagina.toLocaleString('pt-BR')} / ${gestaoPaginas.toLocaleString('pt-BR')}`;
+  if(ant)ant.disabled=gestaoPagina<=1;if(prox)prox.disabled=gestaoPagina>=gestaoPaginas;
+}
+function gestaoIrPagina(delta){
+  const p=gestaoPagina+delta;if(p<1||p>gestaoPaginas)return;
+  carregarGestaoEscala(p);window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function iniciarSincronizacao90k(){
+  const token=obterToken();if(!token){solicitarToken();return}
+  try{
+    mostrarLoading('Colocando sincronização completa na fila...');
     const r=await fetch(`${RENDER_URL}/api/scale/sync`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:'{}'});
     const d=await r.json();if(!r.ok)throw new Error(d.erro||'Falha ao iniciar sincronização.');
-    mlScaleJobId=d.job?.id; alert(d.mensagem||'Sincronização iniciada.');
-    if(mlScaleJobId) acompanharSync90k();
-  }catch(e){alert(e.message)}
+    mlScaleJobId=d.job?.id;
+    alert((d.mensagem||'Sincronização iniciada.')+'\n\nEla continuará no servidor mesmo se você fechar esta página.');
+    if(mlScaleJobId)acompanharSync90k();
+  }catch(e){alert(e.message)}finally{esconderLoading()}
 }
 async function acompanharSync90k(){
-  if(!mlScaleJobId)return;
-  clearTimeout(mlScaleTimer);
+  if(!mlScaleJobId)return;clearTimeout(mlScaleTimer);
   try{
     const r=await fetch(`${RENDER_URL}/api/scale/jobs/${mlScaleJobId}`),d=await r.json(),j=d.job;
-    const status=document.getElementById('status-carregamento');
-    if(status&&j)status.innerText=`${j.message||'Sincronizando...'} · erros: ${j.errors||0}`;
-    if(j&&['queued','running'].includes(j.status))mlScaleTimer=setTimeout(acompanharSync90k,2500);
-  }catch(e){}
+    if(j&&['queued','running'].includes(j.status)){mlScaleTimer=setTimeout(acompanharSync90k,2500);return}
+    if(j?.status==='completed'){await carregarGestaoEscala(1,{silencioso:true});alert(j.message||'Sincronização concluída.')}
+    else if(j?.status==='failed')alert('A sincronização falhou: '+(j.message||'erro desconhecido'));
+  }catch(e){mlScaleTimer=setTimeout(acompanharSync90k,5000)}
 }
-async function carregarAnuncios90k(page=1,q='',status=''){
-  const token=obterToken();if(!token)return null;
-  const p=new URLSearchParams({page:String(page),limit:'50',q,status});
-  const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${p}`,{headers:{Authorization:token}});
-  if(!r.ok)return null;return r.json();
+
+// Gestão V6: busca e paginação acontecem no PostgreSQL.
+async function executarBusca(){
+  const termo=document.getElementById('input-busca')?.value?.trim()||'';
+  if(abaAtualAtiva==='gestao'){gestaoBusca=termo;gestaoPagina=1;return carregarGestaoEscala(1)}
+  const lower=termo.toLowerCase();
+  const filtrados=!lower?cacheItens:cacheItens.filter(item=>String(item.id).toLowerCase().includes(lower)||String(item.sku).toLowerCase().includes(lower)||String(item.title).toLowerCase().includes(lower));
+  if(abaAtualAtiva==='simulacao')montarTabelaSimulacao(filtrados);
+  else if(abaAtualAtiva==='atualizacao')montarTabelaAtualizacao(filtrados);
 }
+async function limparBusca(){
+  const c=document.getElementById('input-busca');if(c)c.value='';
+  if(abaAtualAtiva==='gestao'){gestaoBusca='';return carregarGestaoEscala(1)}
+  return executarBusca();
+}
+
+// Botão principal e "Puxar anúncios" agora iniciam job no servidor; não baixam 90 mil itens no browser.
+async function carregarDados(){
+  mudarAba('gestao');
+  const modo=await verificarModoEscala();
+  if(!modo){alert('O PostgreSQL de escala não está disponível.');return}
+  await carregarGestaoEscala(1);
+}
+async function puxarNovosAnuncios(){return iniciarSincronizacao90k();}
+
+// Ao entrar em Gestão, consulta apenas 50 registros.
+const _mudarAbaV6=mudarAba;
+mudarAba=function(aba){
+  _mudarAbaV6(aba);
+  if(aba==='gestao')setTimeout(()=>carregarGestaoEscala(gestaoPagina,{silencioso:true}),0);
+};
 </script>
 
 </body>
