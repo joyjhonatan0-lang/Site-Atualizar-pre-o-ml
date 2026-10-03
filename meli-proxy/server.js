@@ -1,14 +1,71 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
+const fetch = (...args) =>
+    import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+const ML_API = 'https://api.mercadolibre.com';
 
 app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
 });
+
+/* =========================================================
+   FUNÇÕES AUXILIARES
+========================================================= */
+
+function obterToken(req) {
+    let token = req.headers['authorization'];
+
+    if (!token) {
+        return null;
+    }
+
+    return token.replace(/^Bearer\s+/i, '').trim();
+}
+
+function respostaErro(res, status, mensagem) {
+    return res.status(status).json({
+        sucesso: false,
+        erro: mensagem
+    });
+}
+
+async function mlFetch(url, token, options = {}) {
+    const headers = {
+        ...(options.headers || {}),
+        Authorization: 'Bearer ' + token
+    };
+
+    return fetch(url, {
+        ...options,
+        headers
+    });
+}
+
+async function jsonSeguro(response) {
+    try {
+        return await response.json();
+    } catch {
+        return {};
+    }
+}
+
+function formatarErroMercadoLivre(data) {
+    return (
+        data?.message ||
+        data?.error ||
+        data?.cause?.[0]?.message ||
+        data?.cause?.[0]?.code ||
+        JSON.stringify(data)
+    );
+}
 
 // Função auxiliar centralizada para calcular o frete exato do Mercado Livre
 async function calcularFreteExato(itemObj, token) {
@@ -19,52 +76,96 @@ async function calcularFreteExato(itemObj, token) {
 
     if (freeShipping) {
         try {
-            const saleFeeRes = await fetch(`https://api.mercadolibre.com/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
+            const saleFeeRes = await mlFetch(
+                `${ML_API}/items/${itemObj.id}/sale_fee?price=${itemObj.price || 0}&listing_type_id=${itemObj.listing_type_id || 'gold_special'}`,
+                token
+            );
+
             if (saleFeeRes.ok) {
-                const saleFeeData = await saleFeeRes.json();
-                if (saleFeeData.sale_fee_details && saleFeeData.sale_fee_details.shipping_fee) {
+                const saleFeeData = await jsonSeguro(saleFeeRes);
+
+                if (
+                    saleFeeData.sale_fee_details &&
+                    saleFeeData.sale_fee_details.shipping_fee
+                ) {
                     return saleFeeData.sale_fee_details.shipping_fee;
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            // fallback
+        }
 
-        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-            let cObj = shipping.costs.find(c => c.cost !== undefined);
-            if (cObj) return cObj.cost;
+        if (
+            shipping.costs &&
+            Array.isArray(shipping.costs) &&
+            shipping.costs.length > 0
+        ) {
+            const cObj = shipping.costs.find(
+                c => c.cost !== undefined
+            );
+
+            if (cObj) {
+                return cObj.cost;
+            }
         }
 
         custoEnvio = 12.95;
     } else {
-        if (shipping.costs && Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-            let cObj = shipping.costs.find(c => c.cost !== undefined);
-            if (cObj) custoEnvio = cObj.cost;
+        if (
+            shipping.costs &&
+            Array.isArray(shipping.costs) &&
+            shipping.costs.length > 0
+        ) {
+            const cObj = shipping.costs.find(
+                c => c.cost !== undefined
+            );
+
+            if (cObj) {
+                custoEnvio = cObj.cost;
+            }
         }
     }
 
     return custoEnvio;
 }
 
-// 1. Rota para puxar TODOS os anúncios
-app.get('/api/anuncios', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+/* =========================================================
+   1. ROTA ORIGINAL - TODOS OS ANÚNCIOS
+   NÃO ALTERADA NA LÓGICA
+========================================================= */
 
-    token = token.replace('Bearer ', '').trim();
+app.get('/api/anuncios', async (req, res) => {
+    let token = obterToken(req);
+
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
+    }
 
     const existingIdsParam = req.query.existingIds;
-    const existingIdsSet = new Set(existingIdsParam ? existingIdsParam.split(',') : []);
-    const isAppendMode = existingIdsSet.size > 0;
+
+    const existingIdsSet = new Set(
+        existingIdsParam
+            ? existingIdsParam.split(',')
+            : []
+    );
+
+    const isAppendMode =
+        existingIdsSet.size > 0;
 
     try {
-        const userRes = await fetch("https://api.mercadolibre.com/users/me", {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const userData = await userRes.json();
+        const userRes = await mlFetch(
+            `${ML_API}/users/me`,
+            token
+        );
+
+        const userData = await jsonSeguro(userRes);
 
         if (!userData.id) {
-            return res.status(401).json({ erro: "Token inválido ou expirado." });
+            return res.status(401).json({
+                erro: "Token inválido ou expirado."
+            });
         }
 
         let allIds = [];
@@ -72,505 +173,1452 @@ app.get('/api/anuncios', async (req, res) => {
         let hasMore = true;
 
         while (hasMore) {
-            let url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=50`;
-            if (scrollId) url += `&scroll_id=${scrollId}`;
+            let url =
+                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=50`;
 
-            const searchRes = await fetch(url, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const searchData = await searchRes.json();
+            if (scrollId) {
+                url += `&scroll_id=${encodeURIComponent(scrollId)}`;
+            }
 
-            const results = searchData.results || [];
-            if (results.length > 0) allIds = allIds.concat(results);
+            const searchRes = await mlFetch(
+                url,
+                token
+            );
 
-            scrollId = searchData.scroll_id;
-            if (results.length === 0 || !scrollId) hasMore = false;
+            const searchData =
+                await jsonSeguro(searchRes);
+
+            const results =
+                searchData.results || [];
+
+            if (results.length > 0) {
+                allIds =
+                    allIds.concat(results);
+            }
+
+            scrollId =
+                searchData.scroll_id;
+
+            if (
+                results.length === 0 ||
+                !scrollId
+            ) {
+                hasMore = false;
+            }
         }
 
-        if (allIds.length === 0) return res.json({ itens: [] });
+        if (allIds.length === 0) {
+            return res.json({
+                itens: []
+            });
+        }
 
         let targetIds = allIds;
+
         if (isAppendMode) {
-            targetIds = allIds.filter(id => !existingIdsSet.has(id));
+            targetIds =
+                allIds.filter(
+                    id => !existingIdsSet.has(id)
+                );
+
             if (targetIds.length === 0) {
-                return res.json({ itens: [], mensagem: "Nenhum anúncio novo encontrado." });
+                return res.json({
+                    itens: [],
+                    mensagem:
+                        "Nenhum anúncio novo encontrado."
+                });
             }
         }
 
         let listaFinal = [];
 
-        for (let i = 0; i < targetIds.length; i += 20) {
-            const chunk = targetIds.slice(i, i + 20);
+        for (
+            let i = 0;
+            i < targetIds.length;
+            i += 20
+        ) {
+            const chunk =
+                targetIds.slice(
+                    i,
+                    i + 20
+                );
 
             try {
-                const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(",")}`, {
-                    headers: { "Authorization": "Bearer " + token }
-                });
-                const multiData = await multiRes.json();
-                const itensArray = Array.isArray(multiData) ? multiData : [];
+                const multiRes =
+                    await mlFetch(
+                        `${ML_API}/items?ids=${chunk.join(",")}`,
+                        token
+                    );
 
-                for (let itemObj of itensArray) {
-                    if (itemObj && itemObj.code === 200 && itemObj.body) {
-                        const body = itemObj.body;
-                        const idItem = body.id;
-                        const preco = body.price || 0;
-                        const listingType = body.listing_type_id || 'gold_special';
-                        const availableQty = body.available_quantity || 0;
-                        const title = body.title || 'Sem Título';
-                        const permalink = body.permalink || '#';
-                        const thumbnail = body.thumbnail || '';
+                const multiData =
+                    await jsonSeguro(multiRes);
 
-                        let sku = 'Sem SKU';
+                const itensArray =
+                    Array.isArray(multiData)
+                        ? multiData
+                        : [];
+
+                for (
+                    let itemObj
+                    of itensArray
+                ) {
+                    if (
+                        itemObj &&
+                        itemObj.code === 200 &&
+                        itemObj.body
+                    ) {
+                        const body =
+                            itemObj.body;
+
+                        const idItem =
+                            body.id;
+
+                        const preco =
+                            body.price || 0;
+
+                        const listingType =
+                            body.listing_type_id ||
+                            'gold_special';
+
+                        const availableQty =
+                            body.available_quantity ||
+                            0;
+
+                        const title =
+                            body.title ||
+                            'Sem Título';
+
+                        const permalink =
+                            body.permalink ||
+                            '#';
+
+                        const thumbnail =
+                            body.thumbnail ||
+                            '';
+
+                        let sku =
+                            'Sem SKU';
+
                         if (body.attributes) {
-                            const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
-                            if (attrSku && attrSku.value_name) sku = attrSku.value_name;
+                            const attrSku =
+                                body.attributes.find(
+                                    a =>
+                                        a.id ===
+                                        'SELLER_SKU'
+                                );
+
+                            if (
+                                attrSku &&
+                                attrSku.value_name
+                            ) {
+                                sku =
+                                    attrSku.value_name;
+                            }
                         }
-                        const status = body.status || 'active';
 
-                        let comissao = body.sale_fee || (listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11);
-                        let shipping = body.shipping || {};
-                        let freeShipping = shipping.free_shipping || false;
-                        let custoEnvio = await calcularFreteExato(body, token);
+                        const status =
+                            body.status ||
+                            'active';
 
-                        let liquido = preco - comissao - (freeShipping ? custoEnvio : 0);
-                        if (liquido < 0) liquido = 0;
+                        let comissao =
+                            body.sale_fee ||
+                            (
+                                listingType ===
+                                'gold_pro'
+                                    ? preco * 0.16
+                                    : preco * 0.11
+                            );
+
+                        const shipping =
+                            body.shipping || {};
+
+                        const freeShipping =
+                            shipping.free_shipping ||
+                            false;
+
+                        const custoEnvio =
+                            await calcularFreteExato(
+                                body,
+                                token
+                            );
+
+                        let liquido =
+                            preco -
+                            comissao -
+                            (
+                                freeShipping
+                                    ? custoEnvio
+                                    : 0
+                            );
+
+                        if (liquido < 0) {
+                            liquido = 0;
+                        }
 
                         listaFinal.push({
                             id: idItem,
-                            title: title,
+                            title,
                             price: preco,
-                            status: status,
-                            listing_type_id: listingType,
-                            available_quantity: availableQty,
-                            sku: sku,
-                            permalink: permalink,
-                            thumbnail: thumbnail,
-                            sale_fee: comissao,
-                            shipping_cost: custoEnvio,
-                            free_shipping: freeShipping,
-                            net_received: liquido
+                            status,
+                            listing_type_id:
+                                listingType,
+                            available_quantity:
+                                availableQty,
+                            sku,
+                            permalink,
+                            thumbnail,
+                            sale_fee:
+                                comissao,
+                            shipping_cost:
+                                custoEnvio,
+                            free_shipping:
+                                freeShipping,
+                            net_received:
+                                liquido
                         });
                     }
                 }
             } catch (chunkErr) {
-                console.error("Erro ao buscar lote de IDs:", chunkErr);
+                console.error(
+                    "Erro ao buscar lote de IDs:",
+                    chunkErr
+                );
             }
         }
 
-        res.json({ itens: listaFinal });
+        res.json({
+            itens: listaFinal
+        });
+
     } catch (e) {
-        res.status(500).json({ erro: "Erro ao processar dados da API: " + e.message });
+        res.status(500).json({
+            erro:
+                "Erro ao processar dados da API: " +
+                e.message
+        });
     }
 });
 
-// 2. ROTA: Sincronizar PREÇOS
-app.post('/api/sincronizar-precos', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+/* =========================================================
+   2. ROTA ORIGINAL - SINCRONIZAR PREÇOS
+========================================================= */
 
-    token = token.replace('Bearer ', '').trim();
+app.post('/api/sincronizar-precos', async (req, res) => {
+    let token = obterToken(req);
+
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
+    }
+
     const { ids } = req.body;
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ erro: "Lista de IDs inválida." });
+    if (
+        !ids ||
+        !Array.isArray(ids) ||
+        ids.length === 0
+    ) {
+        return res.status(400).json({
+            erro:
+                "Lista de IDs inválida."
+        });
     }
 
     let precosMap = {};
 
     try {
-        for (let i = 0; i < ids.length; i += 20) {
-            const blocoIds = ids.slice(i, i + 20).join(',');
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const multiData = await multiRes.json();
+        for (
+            let i = 0;
+            i < ids.length;
+            i += 20
+        ) {
+            const blocoIds =
+                ids
+                    .slice(i, i + 20)
+                    .join(',');
+
+            const multiRes =
+                await mlFetch(
+                    `${ML_API}/items?ids=${blocoIds}`,
+                    token
+                );
+
+            const multiData =
+                await jsonSeguro(multiRes);
 
             if (Array.isArray(multiData)) {
-                multiData.forEach(itemObj => {
-                    if (itemObj.code === 200 && itemObj.body) {
-                        precosMap[itemObj.body.id] = itemObj.body.price;
+                multiData.forEach(
+                    itemObj => {
+                        if (
+                            itemObj.code === 200 &&
+                            itemObj.body
+                        ) {
+                            precosMap[
+                                itemObj.body.id
+                            ] =
+                                itemObj.body.price;
+                        }
                     }
-                });
+                );
             }
         }
-        res.json({ precos: precosMap });
+
+        res.json({
+            precos: precosMap
+        });
+
     } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar preços: " + e.message });
+        res.status(500).json({
+            erro:
+                "Erro ao buscar preços: " +
+                e.message
+        });
     }
 });
 
-// 3. ROTA: Sincronizar FRETES REAIS
-app.post('/api/sincronizar-fretes', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+/* =========================================================
+   3. ROTA ORIGINAL - SINCRONIZAR FRETES
+========================================================= */
 
-    token = token.replace('Bearer ', '').trim();
+app.post('/api/sincronizar-fretes', async (req, res) => {
+    let token = obterToken(req);
+
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
+    }
+
     const { ids } = req.body;
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ erro: "Lista de IDs inválida." });
+    if (
+        !ids ||
+        !Array.isArray(ids) ||
+        ids.length === 0
+    ) {
+        return res.status(400).json({
+            erro:
+                "Lista de IDs inválida."
+        });
     }
 
     let fretesMap = {};
 
     try {
-        for (let i = 0; i < ids.length; i += 20) {
-            const blocoIds = ids.slice(i, i + 20).join(',');
-            const multiRes = await fetch(`https://api.mercadolibre.com/items?ids=${blocoIds}`, {
-                headers: { "Authorization": "Bearer " + token }
-            });
-            const multiData = await multiRes.json();
+        for (
+            let i = 0;
+            i < ids.length;
+            i += 20
+        ) {
+            const blocoIds =
+                ids
+                    .slice(i, i + 20)
+                    .join(',');
+
+            const multiRes =
+                await mlFetch(
+                    `${ML_API}/items?ids=${blocoIds}`,
+                    token
+                );
+
+            const multiData =
+                await jsonSeguro(multiRes);
 
             if (Array.isArray(multiData)) {
-                for (let itemObj of multiData) {
-                    if (itemObj.code === 200 && itemObj.body) {
-                        const body = itemObj.body;
-                        let freeShipping = (body.shipping && body.shipping.free_shipping) || false;
-                        let custoEnvio = await calcularFreteExato(body, token);
+                for (
+                    const itemObj
+                    of multiData
+                ) {
+                    if (
+                        itemObj.code === 200 &&
+                        itemObj.body
+                    ) {
+                        const body =
+                            itemObj.body;
 
-                        fretesMap[body.id] = {
-                            custo: custoEnvio,
-                            shipping_cost: custoEnvio,
-                            gratis: freeShipping,
-                            free_shipping: freeShipping
+                        const freeShipping =
+                            (
+                                body.shipping &&
+                                body.shipping.free_shipping
+                            ) || false;
+
+                        const custoEnvio =
+                            await calcularFreteExato(
+                                body,
+                                token
+                            );
+
+                        fretesMap[
+                            body.id
+                        ] = {
+                            custo:
+                                custoEnvio,
+                            shipping_cost:
+                                custoEnvio,
+                            gratis:
+                                freeShipping,
+                            free_shipping:
+                                freeShipping
                         };
                     }
                 }
             }
         }
-        res.json({ fretes: fretesMap });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar fretes: " + e.message });
-    }
-});
 
-// 4. Rota de atualização de preço individual
-app.post('/api/atualizar-preco', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-
-    token = token.replace('Bearer ', '').trim();
-    const { id, price } = req.body;
-
-    if (!id || price === undefined) {
-        return res.status(400).json({ erro: "ID ou preço não informados." });
-    }
-
-    try {
-        const mlRes = await fetch(`https://api.mercadolibre.com/items/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ price: Number(price) })
+        res.json({
+            fretes: fretesMap
         });
 
-        const mlData = await mlRes.json();
-
-        if (mlRes.ok) {
-            res.json({ sucesso: true, resultado: mlData });
-        } else {
-            let mensagemErro = mlData.message || (mlData.cause?.[0]?.message) || JSON.stringify(mlData);
-            res.status(400).json({ erro: mensagemErro });
-        }
     } catch (e) {
-        res.status(500).json({ erro: "Erro de conexão ao atualizar preço: " + e.message });
+        res.status(500).json({
+            erro:
+                "Erro ao buscar fretes: " +
+                e.message
+        });
     }
 });
 
-// 5. Rota de atualização em lote simultâneo
-app.post('/api/atualizar-precos', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
+/* =========================================================
+   4. ROTA ORIGINAL - ATUALIZAR PREÇO
+========================================================= */
 
-    token = token.replace('Bearer ', '').trim();
-    const { itens } = req.body;
+app.post('/api/atualizar-preco', async (req, res) => {
+    let token = obterToken(req);
 
-    if (!itens || !Array.isArray(itens) || itens.length === 0) {
-        return res.status(400).json({ erro: "Nenhum item informado para atualização em lote." });
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
+    }
+
+    const {
+        id,
+        price
+    } = req.body;
+
+    if (
+        !id ||
+        price === undefined
+    ) {
+        return res.status(400).json({
+            erro:
+                "ID ou preço não informados."
+        });
     }
 
     try {
-        const promises = itens.map(async (item) => {
-            try {
-                const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.id}`, {
+        const mlRes =
+            await mlFetch(
+                `${ML_API}/items/${id}`,
+                token,
+                {
                     method: 'PUT',
                     headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Content-Type': 'application/json'
+                        'Content-Type':
+                            'application/json'
                     },
-                    body: JSON.stringify({ price: Number(item.price) })
-                });
-
-                const mlData = await mlRes.json();
-
-                if (mlRes.ok) {
-                    return { id: item.id, sucesso: true };
-                } else {
-                    let mensagemErro = mlData.message || 
-                                       (mlData.cause && mlData.cause[0] && mlData.cause[0].message) || 
-                                       JSON.stringify(mlData);
-                    return { id: item.id, sucesso: false, erro: mensagemErro };
+                    body:
+                        JSON.stringify({
+                            price:
+                                Number(price)
+                        })
                 }
-            } catch (err) {
-                return { id: item.id, sucesso: false, erro: "Erro de conexão: " + err.message };
-            }
-        });
+            );
 
-        const resultados = await Promise.all(promises);
-        res.json({ resultados });
+        const mlData =
+            await jsonSeguro(mlRes);
+
+        if (mlRes.ok) {
+            res.json({
+                sucesso: true,
+                resultado:
+                    mlData
+            });
+        } else {
+            const mensagemErro =
+                formatarErroMercadoLivre(
+                    mlData
+                );
+
+            res.status(400).json({
+                erro:
+                    mensagemErro
+            });
+        }
+
     } catch (e) {
-        res.status(500).json({ erro: "Erro no servidor ao processar lote: " + e.message });
+        res.status(500).json({
+            erro:
+                "Erro de conexão ao atualizar preço: " +
+                e.message
+        });
     }
 });
 
-/* ============================================================
-   NOVAS FUNÇÕES — adicionadas sem alterar as 5 rotas existentes
-   ============================================================ */
+/* =========================================================
+   5. ROTA ORIGINAL - ATUALIZAÇÃO EM LOTE
+========================================================= */
 
-async function getUserByToken(token) {
-    const response = await fetch("https://api.mercadolibre.com/users/me", {
-        headers: { "Authorization": "Bearer " + token }
-    });
-    const data = await response.json();
-    if (!response.ok || !data.id) {
-        const err = new Error(data.message || "Token inválido ou expirado.");
-        err.status = response.status || 401;
-        throw err;
-    }
-    return data;
-}
+app.post('/api/atualizar-precos', async (req, res) => {
+    let token = obterToken(req);
 
-async function getSellerOrders(token, sellerId, period = '30') {
-    const params = new URLSearchParams({
-        seller: String(sellerId),
-        'order.status': 'paid',
-        sort: 'date_desc',
-        limit: '50',
-        offset: '0'
-    });
-
-    const now = new Date();
-    if (period !== 'all') {
-        const days = Math.max(1, Math.min(365, Number(period) || 30));
-        const from = new Date(now.getTime() - days * 86400000);
-        params.set('order.date_created.from', from.toISOString());
+    if (!token) {
+        return res.status(401).json({
+            erro: "Token não fornecido"
+        });
     }
 
-    const all = [];
+    const { itens } = req.body;
+
+    if (
+        !itens ||
+        !Array.isArray(itens) ||
+        itens.length === 0
+    ) {
+        return res.status(400).json({
+            erro:
+                "Nenhum item informado para atualização em lote."
+        });
+    }
+
+    try {
+        const promises =
+            itens.map(
+                async item => {
+                    try {
+                        const mlRes =
+                            await mlFetch(
+                                `${ML_API}/items/${item.id}`,
+                                token,
+                                {
+                                    method:
+                                        'PUT',
+                                    headers: {
+                                        'Content-Type':
+                                            'application/json'
+                                    },
+                                    body:
+                                        JSON.stringify({
+                                            price:
+                                                Number(
+                                                    item.price
+                                                )
+                                        })
+                                }
+                            );
+
+                        const mlData =
+                            await jsonSeguro(
+                                mlRes
+                            );
+
+                        if (mlRes.ok) {
+                            return {
+                                id:
+                                    item.id,
+                                sucesso:
+                                    true
+                            };
+                        }
+
+                        return {
+                            id:
+                                item.id,
+                            sucesso:
+                                false,
+                            erro:
+                                formatarErroMercadoLivre(
+                                    mlData
+                                )
+                        };
+
+                    } catch (err) {
+                        return {
+                            id:
+                                item.id,
+                            sucesso:
+                                false,
+                            erro:
+                                "Erro de conexão: " +
+                                err.message
+                        };
+                    }
+                }
+            );
+
+        const resultados =
+            await Promise.all(
+                promises
+            );
+
+        res.json({
+            resultados
+        });
+
+    } catch (e) {
+        res.status(500).json({
+            erro:
+                "Erro no servidor ao processar lote: " +
+                e.message
+        });
+    }
+});
+
+/* =========================================================
+   NOVAS FUNÇÕES
+   DASHBOARD / INDICADORES / VENDAS / TOP 10
+========================================================= */
+
+/**
+ * Busca todos os pedidos disponíveis no período
+ * permitido pela API.
+ *
+ * A API do Mercado Livre mantém pedidos por até 12 meses.
+ */
+async function buscarPedidosDoVendedor(
+    token,
+    sellerId
+) {
+    const agora =
+        new Date();
+
+    const inicio =
+        new Date(agora);
+
+    inicio.setFullYear(
+        inicio.getFullYear() - 1
+    );
+
+    let pedidos = [];
     let offset = 0;
-    const maxPages = period === 'all' ? 200 : 100;
+    const limit = 50;
 
-    for (let page = 0; page < maxPages; page++) {
-        params.set('offset', String(offset));
-        const response = await fetch(`https://api.mercadolibre.com/orders/search?${params.toString()}`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const data = await response.json();
+    while (true) {
+        const params =
+            new URLSearchParams({
+                seller:
+                    String(sellerId),
+                'order.date_created.from':
+                    inicio.toISOString(),
+                'order.date_created.to':
+                    agora.toISOString(),
+                sort:
+                    'date_desc',
+                offset:
+                    String(offset),
+                limit:
+                    String(limit)
+            });
+
+        const response =
+            await mlFetch(
+                `${ML_API}/orders/search?${params.toString()}`,
+                token
+            );
+
+        const data =
+            await jsonSeguro(
+                response
+            );
 
         if (!response.ok) {
-            throw new Error(data.message || "Erro ao consultar vendas.");
+            throw new Error(
+                formatarErroMercadoLivre(
+                    data
+                )
+            );
         }
 
-        const results = Array.isArray(data.results) ? data.results : [];
-        all.push(...results);
+        const resultados =
+            data.results || [];
 
-        const total = Number(data.paging?.total || 0);
-        offset += results.length;
+        pedidos =
+            pedidos.concat(
+                resultados
+            );
 
-        if (!results.length || offset >= total || results.length < 50) break;
-    }
+        const total =
+            Number(
+                data.paging?.total || 0
+            );
 
-    return all;
-}
+        offset +=
+            resultados.length;
 
-function resumirVendas(orders) {
-    let totalVendido = 0;
-    let pedidosPagos = 0;
-    let unidades = 0;
-    const ranking = new Map();
+        if (
+            resultados.length === 0 ||
+            offset >= total
+        ) {
+            break;
+        }
 
-    for (const order of orders) {
-        if (order.status !== 'paid') continue;
-
-        pedidosPagos++;
-        totalVendido += Number(order.total_amount || order.paid_amount || 0);
-
-        for (const line of (order.order_items || [])) {
-            const itemId = line.item?.id || 'Sem ID';
-            const title = line.item?.title || 'Anúncio';
-            const quantity = Number(line.quantity || 0);
-            unidades += quantity;
-
-            if (!ranking.has(itemId)) {
-                ranking.set(itemId, {
-                    id: itemId,
-                    title,
-                    quantity: 0,
-                    revenue: 0,
-                    orders: 0
-                });
-            }
-
-            const row = ranking.get(itemId);
-            row.quantity += quantity;
-            row.revenue += Number(line.unit_price || 0) * quantity;
-            row.orders += 1;
+        // Proteção
+        if (offset > 50000) {
+            break;
         }
     }
 
-    const top10 = [...ranking.values()]
-        .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue)
-        .slice(0, 10)
-        .map((item, index) => ({ rank: index + 1, ...item }));
-
-    return { totalVendido, pedidosPagos, unidades, top10 };
+    return pedidos;
 }
 
-// 6. Painel: 4 indicadores + vendas reais + top 10
-app.get('/api/painel', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-    token = token.replace('Bearer ', '').trim();
+/**
+ * Busca títulos e informações dos anúncios
+ * usados no ranking.
+ */
+async function buscarItensBulk(
+    token,
+    ids
+) {
+    const mapa = {};
+
+    const idsUnicos =
+        [...new Set(
+            ids.filter(Boolean)
+        )];
+
+    for (
+        let i = 0;
+        i < idsUnicos.length;
+        i += 20
+    ) {
+        const bloco =
+            idsUnicos.slice(
+                i,
+                i + 20
+            );
+
+        if (bloco.length === 0) {
+            continue;
+        }
+
+        const response =
+            await mlFetch(
+                `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
+                token
+            );
+
+        const data =
+            await jsonSeguro(
+                response
+            );
+
+        if (!response.ok) {
+            continue;
+        }
+
+        if (Array.isArray(data)) {
+            data.forEach(
+                registro => {
+                    const body =
+                        registro.body;
+
+                    const id =
+                        registro.id ||
+                        body?.id;
+
+                    if (
+                        id &&
+                        body
+                    ) {
+                        mapa[id] =
+                            body;
+                    }
+                }
+            );
+        }
+    }
+
+    return mapa;
+}
+
+/**
+ * GET /api/dashboard
+ *
+ * Retorna:
+ * - dados da conta
+ * - 4 indicadores
+ * - vendas reais
+ * - top 10 anúncios
+ */
+app.get('/api/dashboard', async (req, res) => {
+    const token =
+        obterToken(req);
+
+    if (!token) {
+        return respostaErro(
+            res,
+            401,
+            'Token não fornecido.'
+        );
+    }
 
     try {
-        const user = await getUserByToken(token);
-        const period = ['30', '60', '90', 'all'].includes(String(req.query.period))
-            ? String(req.query.period)
-            : '30';
+        const userResponse =
+            await mlFetch(
+                `${ML_API}/users/me`,
+                token
+            );
 
-        const reputation = user.seller_reputation || {};
-        const metrics = reputation.metrics || {};
-        const sales = await getSellerOrders(token, user.id, period);
-        const resumo = resumirVendas(sales);
+        const user =
+            await jsonSeguro(
+                userResponse
+            );
+
+        if (
+            !userResponse.ok ||
+            !user.id
+        ) {
+            return respostaErro(
+                res,
+                401,
+                'Token inválido ou expirado.'
+            );
+        }
+
+        const sellerId =
+            user.id;
+
+        const pedidos =
+            await buscarPedidosDoVendedor(
+                token,
+                sellerId
+            );
+
+        /*
+         * Somente pedidos pagos entram no
+         * cálculo de venda real.
+         */
+        const pedidosPagos =
+            pedidos.filter(
+                pedido =>
+                    pedido.status ===
+                    'paid'
+            );
+
+        let totalVendas =
+            0;
+
+        let totalUnidades =
+            0;
+
+        const vendasPorItem =
+            {};
+
+        pedidosPagos.forEach(
+            pedido => {
+                totalVendas +=
+                    Number(
+                        pedido.paid_amount ||
+                        pedido.total_amount ||
+                        0
+                    );
+
+                const itens =
+                    pedido.order_items ||
+                    [];
+
+                itens.forEach(
+                    orderItem => {
+                        const item =
+                            orderItem.item ||
+                            {};
+
+                        const itemId =
+                            item.id;
+
+                        const quantidade =
+                            Number(
+                                orderItem.quantity ||
+                                0
+                            );
+
+                        const unitPrice =
+                            Number(
+                                orderItem.unit_price ||
+                                0
+                            );
+
+                        if (!itemId) {
+                            return;
+                        }
+
+                        totalUnidades +=
+                            quantidade;
+
+                        if (
+                            !vendasPorItem[
+                                itemId
+                            ]
+                        ) {
+                            vendasPorItem[
+                                itemId
+                            ] = {
+                                item_id:
+                                    itemId,
+                                titulo:
+                                    item.title ||
+                                    itemId,
+                                unidades:
+                                    0,
+                                faturamento:
+                                    0
+                            };
+                        }
+
+                        vendasPorItem[
+                            itemId
+                        ].unidades +=
+                            quantidade;
+
+                        vendasPorItem[
+                            itemId
+                        ].faturamento +=
+                            quantidade *
+                            unitPrice;
+                    }
+                );
+            }
+        );
+
+        const topIds =
+            Object.values(
+                vendasPorItem
+            )
+                .sort(
+                    (a, b) =>
+                        b.unidades -
+                        a.unidades
+                )
+                .slice(0, 10)
+                .map(
+                    item =>
+                        item.item_id
+                );
+
+        const itensDetalhes =
+            await buscarItensBulk(
+                token,
+                topIds
+            );
+
+        const top10 =
+            Object.values(
+                vendasPorItem
+            )
+                .sort(
+                    (a, b) =>
+                        b.unidades -
+                        a.unidades
+                )
+                .slice(0, 10)
+                .map(
+                    item => {
+                        const detalhe =
+                            itensDetalhes[
+                                item.item_id
+                            ];
+
+                        return {
+                            ...item,
+                            titulo:
+                                detalhe?.title ||
+                                item.titulo,
+                            preco_atual:
+                                detalhe?.price ||
+                                0,
+                            thumbnail:
+                                detalhe?.thumbnail ||
+                                '',
+                            permalink:
+                                detalhe?.permalink ||
+                                '#'
+                        };
+                    }
+                );
+
+        /*
+         * Busca os dados completos do vendedor.
+         * seller_reputation.metrics contém:
+         * sales
+         * claims
+         * delayed_handling_time
+         * cancellations
+         */
+        const sellerResponse =
+            await mlFetch(
+                `${ML_API}/users/${sellerId}?attributes=seller_reputation`,
+                token
+            );
+
+        const sellerData =
+            await jsonSeguro(
+                sellerResponse
+            );
+
+        const reputation =
+            sellerData.seller_reputation ||
+            {};
+
+        const metrics =
+            reputation.metrics ||
+            {};
+
+        const salesMetric =
+            metrics.sales ||
+            {};
+
+        const claimsMetric =
+            metrics.claims ||
+            {};
+
+        const delayedMetric =
+            metrics.delayed_handling_time ||
+            {};
+
+        const cancellationsMetric =
+            metrics.cancellations ||
+            {};
 
         res.json({
-            usuario: {
-                id: user.id,
-                nickname: user.nickname,
-                first_name: user.first_name,
-                site_id: user.site_id,
-                permalink: user.permalink
+            sucesso: true,
+
+            periodo_vendas: {
+                inicio:
+                    inicioISO12Meses(),
+                fim:
+                    new Date().toISOString(),
+                observacao:
+                    'A API de pedidos do Mercado Livre disponibiliza pedidos por até 12 meses.'
             },
-            reputacao: {
-                level_id: reputation.level_id || null,
-                power_seller_status: reputation.power_seller_status || null,
-                transactions: reputation.transactions || null,
-                metrics: {
-                    sales: metrics.sales || null,
-                    claims: metrics.claims || null,
-                    delayed_handling_time: metrics.delayed_handling_time || null,
-                    cancellations: metrics.cancellations || null
+
+            conta: {
+                id:
+                    sellerData.id ||
+                    sellerId,
+                nickname:
+                    sellerData.nickname ||
+                    user.nickname ||
+                    '',
+                permalink:
+                    sellerData.permalink ||
+                    ''
+            },
+
+            indicadores: {
+                vendas: {
+                    nome:
+                        'Vendas',
+                    valor:
+                        salesMetric.completed ??
+                        salesMetric.value ??
+                        null,
+                    periodo:
+                        salesMetric.period ??
+                        null
+                },
+
+                reclamacoes: {
+                    nome:
+                        'Reclamações',
+                    taxa:
+                        claimsMetric.rate ??
+                        null,
+                    valor:
+                        claimsMetric.value ??
+                        null,
+                    periodo:
+                        claimsMetric.period ??
+                        null
+                },
+
+                atrasos: {
+                    nome:
+                        'Atrasos',
+                    taxa:
+                        delayedMetric.rate ??
+                        null,
+                    valor:
+                        delayedMetric.value ??
+                        null,
+                    periodo:
+                        delayedMetric.period ??
+                        null
+                },
+
+                cancelamentos: {
+                    nome:
+                        'Cancelamentos',
+                    taxa:
+                        cancellationsMetric.rate ??
+                        null,
+                    valor:
+                        cancellationsMetric.value ??
+                        null,
+                    periodo:
+                        cancellationsMetric.period ??
+                        null
                 }
             },
-            periodo: period,
-            vendas: resumo,
-            observacao: "A API de Orders mantém pedidos criados por até 12 meses. O período 'Todos' considera o histórico disponível pela API."
+
+            vendas_reais: {
+                pedidos_pagos:
+                    pedidosPagos.length,
+                unidades:
+                    totalUnidades,
+                valor_total:
+                    Number(
+                        totalVendas.toFixed(2)
+                    ),
+                moeda:
+                    'BRL'
+            },
+
+            top10
         });
-    } catch (e) {
-        res.status(e.status || 500).json({ erro: e.message || "Erro ao montar painel." });
+
+    } catch (error) {
+        console.error(
+            'Erro dashboard:',
+            error
+        );
+
+        return respostaErro(
+            res,
+            500,
+            'Erro ao carregar o dashboard: ' +
+            error.message
+        );
     }
 });
 
-// 7. Perguntas recebidas
+function inicioISO12Meses() {
+    const data =
+        new Date();
+
+    data.setFullYear(
+        data.getFullYear() - 1
+    );
+
+    return data.toISOString();
+}
+
+/* =========================================================
+   PERGUNTAS E RESPOSTAS
+========================================================= */
+
+/**
+ * GET /api/perguntas
+ *
+ * Busca perguntas recebidas pelo vendedor.
+ */
 app.get('/api/perguntas', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-    token = token.replace('Bearer ', '').trim();
+    const token =
+        obterToken(req);
+
+    if (!token) {
+        return respostaErro(
+            res,
+            401,
+            'Token não fornecido.'
+        );
+    }
 
     try {
-        const user = await getUserByToken(token);
-        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 50));
-        const offset = Math.max(0, Number(req.query.offset) || 0);
-        const status = req.query.status || 'all';
+        const userResponse =
+            await mlFetch(
+                `${ML_API}/users/me`,
+                token
+            );
 
-        const params = new URLSearchParams({
-            seller_id: String(user.id),
-            api_version: '4',
-            limit: String(limit),
-            offset: String(offset),
-            sort_fields: 'date_created',
-            sort_types: 'DESC'
-        });
+        const user =
+            await jsonSeguro(
+                userResponse
+            );
 
-        if (status !== 'all') params.set('status', status);
-
-        const response = await fetch(`https://api.mercadolibre.com/questions/search?${params.toString()}`, {
-            headers: { "Authorization": "Bearer " + token }
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Erro ao buscar perguntas.");
+        if (
+            !userResponse.ok ||
+            !user.id
+        ) {
+            return respostaErro(
+                res,
+                401,
+                'Token inválido ou expirado.'
+            );
         }
 
-        const questions = (data.questions || []).map(q => ({
-            id: q.id,
-            item_id: q.item_id,
-            seller_id: q.seller_id,
-            status: q.status,
-            text: q.text || '',
-            date_created: q.date_created,
-            answer: q.answer || null,
-            from: q.from || null,
-            hold: q.hold || false,
-            deleted_from_listing: q.deleted_from_listing || false
-        }));
+        const sellerId =
+            user.id;
+
+        const limit =
+            Math.min(
+                Number(
+                    req.query.limit || 50
+                ),
+                100
+            );
+
+        const offset =
+            Math.max(
+                Number(
+                    req.query.offset || 0
+                ),
+                0
+            );
+
+        const status =
+            req.query.status || '';
+
+        const params =
+            new URLSearchParams({
+                seller_id:
+                    String(sellerId),
+                api_version:
+                    '4',
+                limit:
+                    String(limit),
+                offset:
+                    String(offset),
+                sort_fields:
+                    'date_created',
+                sort_types:
+                    'DESC'
+            });
+
+        if (status) {
+            params.set(
+                'status',
+                status
+            );
+        }
+
+        const response =
+            await mlFetch(
+                `${ML_API}/questions/search?${params.toString()}`,
+                token
+            );
+
+        const data =
+            await jsonSeguro(
+                response
+            );
+
+        if (!response.ok) {
+            return respostaErro(
+                res,
+                response.status,
+                formatarErroMercadoLivre(
+                    data
+                )
+            );
+        }
+
+        const perguntas =
+            data.questions ||
+            [];
+
+        const ids =
+            perguntas.map(
+                p => p.item_id
+            );
+
+        const itens =
+            await buscarItensBulk(
+                token,
+                ids
+            );
+
+        const resultado =
+            perguntas.map(
+                pergunta => {
+                    const item =
+                        itens[
+                            pergunta.item_id
+                        ];
+
+                    return {
+                        id:
+                            pergunta.id,
+                        item_id:
+                            pergunta.item_id,
+                        titulo:
+                            item?.title ||
+                            pergunta.item_id,
+                        thumbnail:
+                            item?.thumbnail ||
+                            '',
+                        permalink:
+                            item?.permalink ||
+                            '#',
+                        pergunta:
+                            pergunta.text ||
+                            '',
+                        status:
+                            pergunta.status ||
+                            '',
+                        respondida:
+                            pergunta.status ===
+                            'ANSWERED' ||
+                            Boolean(
+                                pergunta.answer
+                            ),
+                        resposta:
+                            pergunta.answer?.text ||
+                            '',
+                        data:
+                            pergunta.date_created ||
+                            null
+                    };
+                }
+            );
 
         res.json({
-            total: data.total || questions.length,
+            sucesso: true,
+            total:
+                data.total ||
+                resultado.length,
             limit,
             offset,
-            questions
+            perguntas:
+                resultado
         });
-    } catch (e) {
-        res.status(e.status || 500).json({ erro: e.message || "Erro ao buscar perguntas." });
+
+    } catch (error) {
+        console.error(
+            'Erro perguntas:',
+            error
+        );
+
+        return respostaErro(
+            res,
+            500,
+            'Erro ao carregar perguntas: ' +
+            error.message
+        );
     }
 });
 
-// 8. Responder uma pergunta diretamente no Mercado Livre
-app.post('/api/perguntas/responder', async (req, res) => {
-    let token = req.headers['authorization'];
-    if (!token) return res.status(401).json({ erro: "Token não fornecido" });
-    token = token.replace('Bearer ', '').trim();
+/**
+ * POST /api/responder-pergunta
+ */
+app.post('/api/responder-pergunta', async (req, res) => {
+    const token =
+        obterToken(req);
 
-    const questionId = Number(req.body.question_id);
-    const text = String(req.body.text || '').trim();
-
-    if (!questionId || !text) {
-        return res.status(400).json({ erro: "Informe question_id e texto da resposta." });
+    if (!token) {
+        return respostaErro(
+            res,
+            401,
+            'Token não fornecido.'
+        );
     }
 
-    if (text.length > 2000) {
-        return res.status(400).json({ erro: "A resposta pode ter no máximo 2.000 caracteres." });
+    const {
+        question_id,
+        text
+    } = req.body;
+
+    if (!question_id) {
+        return respostaErro(
+            res,
+            400,
+            'ID da pergunta não informado.'
+        );
+    }
+
+    if (
+        !text ||
+        !String(text).trim()
+    ) {
+        return respostaErro(
+            res,
+            400,
+            'Digite uma resposta.'
+        );
+    }
+
+    const resposta =
+        String(text).trim();
+
+    if (resposta.length > 2000) {
+        return respostaErro(
+            res,
+            400,
+            'A resposta não pode ultrapassar 2.000 caracteres.'
+        );
     }
 
     try {
-        const response = await fetch("https://api.mercadolibre.com/answers", {
-            method: 'POST',
-            headers: {
-                "Authorization": "Bearer " + token,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                question_id: questionId,
-                text
-            })
-        });
+        const response =
+            await mlFetch(
+                `${ML_API}/answers`,
+                token,
+                {
+                    method:
+                        'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+                    body:
+                        JSON.stringify({
+                            question_id:
+                                Number(
+                                    question_id
+                                ),
+                            text:
+                                resposta
+                        })
+                }
+            );
 
-        const data = await response.json();
+        const data =
+            await jsonSeguro(
+                response
+            );
 
         if (!response.ok) {
-            const message = data.message || data.cause?.[0]?.message || "O Mercado Livre recusou a resposta.";
-            return res.status(response.status).json({ erro: message, detalhe: data });
+            return respostaErro(
+                res,
+                response.status,
+                formatarErroMercadoLivre(
+                    data
+                )
+            );
         }
 
-        res.json({ sucesso: true, resultado: data });
-    } catch (e) {
-        res.status(500).json({ erro: "Erro de conexão ao responder pergunta: " + e.message });
+        res.json({
+            sucesso: true,
+            mensagem:
+                'Resposta enviada ao Mercado Livre.',
+            resultado:
+                data
+        });
+
+    } catch (error) {
+        console.error(
+            'Erro resposta:',
+            error
+        );
+
+        return respostaErro(
+            res,
+            500,
+            'Erro ao enviar resposta: ' +
+            error.message
+        );
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+/* =========================================================
+   SERVIDOR
+========================================================= */
+
+app.listen(
+    PORT,
+    () => {
+        console.log(
+            `Servidor rodando na porta ${PORT}`
+        );
+    }
+);
