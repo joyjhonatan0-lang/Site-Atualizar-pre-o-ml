@@ -4040,14 +4040,23 @@ function montarTabelaGestao(
 
                         <div class="min-w-0 flex-1 space-y-2">
 
-                            <input
-                                id="titulo_gestao_${index}"
-                                type="text"
-                                value="${escapeHtml(item.title)}"
-                                maxlength="200"
-                                class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg outline-none focus:border-yellow-400/60"
-                                title="Editar título do anúncio"
-                            >
+                            <div class="relative">
+                                <input
+                                    id="titulo_gestao_${index}"
+                                    type="text"
+                                    value="${escapeHtml(item.title)}"
+                                    maxlength="200"
+                                    oninput="atualizarContadorTituloGestao(${index})"
+                                    class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 pr-14 rounded-lg outline-none focus:border-yellow-400/60"
+                                    title="Editar título do anúncio - limite de 60 caracteres"
+                                >
+                                <span
+                                    id="contador_titulo_gestao_${index}"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold ${String(item.title || '').length > 60 ? 'text-red-500' : 'text-slate-500'}"
+                                >
+                                    ${String(item.title || '').length}/60
+                                </span>
+                            </div>
 
                             <div class="flex items-center gap-2">
                                 <span class="text-[10px] text-slate-500 shrink-0">
@@ -4166,6 +4175,24 @@ function montarTabelaGestao(
 }
 
 
+function atualizarContadorTituloGestao(index) {
+    const input = document.getElementById(`titulo_gestao_${index}`);
+    const contador = document.getElementById(`contador_titulo_gestao_${index}`);
+
+    if (!input || !contador) return;
+
+    const quantidade = input.value.length;
+    contador.textContent = `${quantidade}/60`;
+
+    const ultrapassou = quantidade > 60;
+    input.classList.toggle('text-red-500', ultrapassou);
+    input.classList.toggle('border-red-500', ultrapassou);
+    input.classList.toggle('text-white', !ultrapassou);
+    contador.classList.toggle('text-red-500', ultrapassou);
+    contador.classList.toggle('text-slate-500', !ultrapassou);
+}
+
+
 async function salvarEdicaoAnuncio(index) {
     const token = obterToken();
 
@@ -4189,6 +4216,13 @@ async function salvarEdicaoAnuncio(index) {
 
     if (!title) {
         alert('O título do anúncio não pode ficar vazio.');
+        inputTitulo?.focus();
+        return;
+    }
+
+    if (title.length > 60) {
+        atualizarContadorTituloGestao(index);
+        alert(`O título está com ${title.length} caracteres. O limite é 60 caracteres.`);
         inputTitulo?.focus();
         return;
     }
