@@ -3488,6 +3488,12 @@ function atualizarStatusTokenHome() {
 ========================================================= */
 
 function mudarAba(aba) {
+    try {
+        localStorage.setItem('mlHubPro_abaAtual_v1', String(aba));
+    } catch (erro) {
+        console.warn('Não foi possível salvar a aba atual:', erro);
+    }
+
 
     abaAtualAtiva =
         aba;
@@ -6556,6 +6562,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof atualizarTabelaSimulacao === 'function') atualizarTabelaSimulacao();
     } catch (erro) {
         console.warn('Os anúncios foram recuperados do navegador, mas alguma tela ainda não estava pronta:', erro);
+    }
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const abaSalva = localStorage.getItem('mlHubPro_abaAtual_v1');
+        const abasValidas = ['inicio', 'gestao', 'dashboard', 'simulacao', 'atualizacao', 'perguntas'];
+
+        if (abaSalva && abasValidas.includes(abaSalva) && typeof mudarAba === 'function') {
+            setTimeout(() => mudarAba(abaSalva), 0);
+        }
+    } catch (erro) {
+        console.warn('Não foi possível restaurar a última aba aberta:', erro);
     }
 });
 </script>
