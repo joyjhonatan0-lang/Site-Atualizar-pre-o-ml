@@ -648,6 +648,13 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                         ↻ Atualização
                     </button>
 
+                    <button onclick="mudarAba('central')" id="btn-central" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">◈ Central</button>
+                    <button onclick="mudarAba('operacao')" id="btn-operacao" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚡ Escala</button>
+                    <button onclick="mudarAba('atendimento')" id="btn-atendimento" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✦ IA</button>
+                    <button onclick="mudarAba('reclamacoes')" id="btn-reclamacoes" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⚠ Pós-venda</button>
+                    <button onclick="mudarAba('integracoes')" id="btn-integracoes" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">⌁ Integrações</button>
+                    <button onclick="mudarAba('oportunidades')" id="btn-oportunidades" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">↗ Crescimento</button>
+
                     <button
                         onclick="mudarAba('perguntas')"
                         id="btn-perguntas"
@@ -2304,6 +2311,75 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
     <div id="v2-alertas-lista" class="space-y-3"><div class="panel rounded-2xl p-10 text-center text-xs text-slate-600">Clique em Verificar agora.</div></div>
 </section>
 
+
+<!-- =====================================================
+     CENTRAL EXECUTIVA
+===================================================== -->
+<section id="secao-central" class="hidden space-y-6">
+  <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Cockpit</div><h1 class="text-2xl font-black text-white mt-1">Central Executiva</h1><p class="text-xs text-slate-500 mt-1">Uma fila única do que exige atenção na operação.</p></div>
+  <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 font-bold uppercase">Reclamações abertas</div><div id="central-claims" class="text-2xl font-black text-red-400 mt-2">—</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 font-bold uppercase">Alertas anúncios</div><div id="central-alertas" class="text-2xl font-black text-yellow-400 mt-2">—</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 font-bold uppercase">Sem SKU</div><div id="central-sku" class="text-2xl font-black text-white mt-2">—</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 font-bold uppercase">Estoque crítico</div><div id="central-estoque" class="text-2xl font-black text-white mt-2">—</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 font-bold uppercase">Integrações</div><div id="central-integracoes" class="text-sm font-black text-emerald-400 mt-3">Verificar</div></div>
+  </div>
+  <div class="flex flex-wrap gap-2"><button onclick="carregarCentralPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Atualizar cockpit</button><button onclick="mudarAba('atendimento')" class="bg-slate-800 text-white px-5 py-3 rounded-xl text-xs font-bold">Abrir Assistente IA</button></div>
+  <div id="central-fila" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+</section>
+
+<!-- =====================================================
+     ATENDIMENTO + IA
+===================================================== -->
+<section id="secao-atendimento" class="hidden space-y-6">
+  <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Assistente operacional</div><h1 class="text-2xl font-black text-white mt-1">Central de Atendimento com IA</h1><p class="text-xs text-slate-500 mt-1">Ajuda a redigir respostas, analisar problemas e sugerir ações. A resposta final continua sob sua revisão.</p></div>
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+    <div class="xl:col-span-2 panel rounded-2xl p-5">
+      <div id="ia-chat" class="min-h-[320px] max-h-[520px] overflow-y-auto space-y-3"><div class="p-4 rounded-xl bg-slate-950 text-xs text-slate-400">Pergunte sobre atendimento, anúncio, reclamação, estoque, margem, título ou operação.</div></div>
+      <div class="mt-4 flex gap-2"><textarea id="ia-pergunta" rows="3" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white" placeholder="Ex.: Crie uma resposta profissional para um cliente que recebeu o produto com atraso..."></textarea><button onclick="perguntarIA()" class="self-stretch bg-yellow-400 text-slate-950 px-5 rounded-xl text-xs font-black">Enviar</button></div>
+    </div>
+    <div class="space-y-3">
+      <button onclick="atalhoIA('Analise os principais riscos da minha operação e me dê prioridades objetivas.')" class="panel panel-hover rounded-2xl p-4 text-left w-full"><div class="font-bold text-white text-xs">Diagnóstico da operação</div><div class="text-[10px] text-slate-500 mt-1">Prioridades e riscos.</div></button>
+      <button onclick="atalhoIA('Crie um modelo profissional e empático para responder uma reclamação de cliente no Mercado Livre.')" class="panel panel-hover rounded-2xl p-4 text-left w-full"><div class="font-bold text-white text-xs">Resposta para reclamação</div><div class="text-[10px] text-slate-500 mt-1">Texto para revisar e enviar.</div></button>
+      <button onclick="atalhoIA('Me dê um checklist para melhorar título, atributos, imagens, conversão e vendas de um anúncio do Mercado Livre.')" class="panel panel-hover rounded-2xl p-4 text-left w-full"><div class="font-bold text-white text-xs">Otimizar anúncio</div><div class="text-[10px] text-slate-500 mt-1">SEO e conversão.</div></button>
+      <div class="panel rounded-2xl p-4"><div class="text-xs font-bold text-white">Configuração da IA</div><div id="ia-status" class="text-[10px] text-slate-500 mt-2">Verificando servidor...</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     RECLAMAÇÕES / DEVOLUÇÕES / DENÚNCIAS
+===================================================== -->
+<section id="secao-reclamacoes" class="hidden space-y-6">
+  <div class="flex items-center justify-between gap-4"><div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Pós-venda e risco</div><h1 class="text-2xl font-black text-white mt-1">Reclamações & Proteção</h1><p class="text-xs text-slate-500 mt-1">Reclamações abertas, impacto na reputação e consulta de casos de Brand Protection.</p></div><button onclick="carregarReclamacoesPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Atualizar</button></div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Abertas</div><div id="claims-abertas" class="text-2xl font-black text-red-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Em disputa</div><div id="claims-disputas" class="text-2xl font-black text-yellow-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Prazo próximo</div><div id="claims-prazo" class="text-2xl font-black text-white mt-2">—</div></div></div>
+  <div id="claims-lista" class="space-y-3"><div class="panel rounded-2xl p-10 text-center text-xs text-slate-600">Clique em Atualizar.</div></div>
+  <div class="panel rounded-2xl p-5"><h2 class="text-sm font-black text-white">Consultar denúncia / Brand Protection</h2><p class="text-[11px] text-slate-500 mt-1">Informe o ID do caso. Algumas funções de denúncia dependem de participação no Brand Protection Program.</p><div class="flex gap-2 mt-4"><input id="bpp-case-id" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="ID do caso"><button onclick="consultarCasoBPP()" class="bg-slate-800 text-white px-5 rounded-xl text-xs font-bold">Consultar caso</button></div><pre id="bpp-resultado" class="hidden mt-4 whitespace-pre-wrap text-[11px] text-slate-300 bg-slate-950 rounded-xl p-4 overflow-auto"></pre></div>
+</section>
+
+<!-- =====================================================
+     INTEGRAÇÕES
+===================================================== -->
+<section id="secao-integracoes" class="hidden space-y-6">
+  <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Ecossistema</div><h1 class="text-2xl font-black text-white mt-1">Integrações</h1><p class="text-xs text-slate-500 mt-1">Conectores para ERP, IA, webhooks e automação.</p></div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="panel rounded-2xl p-5"><div class="flex justify-between"><div><div class="font-black text-white">Bling ERP</div><div class="text-[11px] text-slate-500 mt-1">Produtos, pedidos, estoque, NF-e e webhooks.</div></div><span id="bling-status" class="text-xs text-slate-500">Verificando...</span></div><button id="bling-conectar" onclick="conectarBling()" class="mt-4 bg-yellow-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Conectar Bling</button></div>
+    <div class="panel rounded-2xl p-5"><div class="flex justify-between"><div><div class="font-black text-white">OpenAI</div><div class="text-[11px] text-slate-500 mt-1">Assistente de atendimento e operação.</div></div><span id="openai-status" class="text-xs text-slate-500">Verificando...</span></div><div class="text-[10px] text-slate-600 mt-4">A chave fica somente nas variáveis de ambiente do Render.</div></div>
+    <div class="panel rounded-2xl p-5"><div class="font-black text-white">Mercado Livre Webhooks</div><div class="text-[11px] text-slate-500 mt-1">Recebe eventos de itens, pedidos, perguntas e reclamações.</div><code class="block text-[10px] text-emerald-400 bg-slate-950 rounded-xl p-3 mt-4">/api/notifications</code></div>
+    <div class="panel rounded-2xl p-5"><div class="font-black text-white">Bling Webhooks</div><div class="text-[11px] text-slate-500 mt-1">Preparado para eventos de pedido, produto, estoque e nota fiscal.</div><code class="block text-[10px] text-emerald-400 bg-slate-950 rounded-xl p-3 mt-4">/api/bling/webhook</code></div>
+  </div>
+</section>
+
+<!-- =====================================================
+     CRESCIMENTO / ADS / AUDITORIA
+===================================================== -->
+<section id="secao-oportunidades" class="hidden space-y-6">
+  <div class="flex items-center justify-between"><div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Performance</div><h1 class="text-2xl font-black text-white mt-1">Crescimento & Oportunidades</h1><p class="text-xs text-slate-500 mt-1">Auditoria de catálogo, vendas, estoque e preparação para Mercado Ads.</p></div><button onclick="carregarOportunidades()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Analisar conta</button></div>
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4"><div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 uppercase font-bold">Sem venda</div><div id="op-sem-venda" class="text-2xl font-black text-white mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 uppercase font-bold">Sem SKU</div><div id="op-sem-sku" class="text-2xl font-black text-yellow-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 uppercase font-bold">Estoque crítico</div><div id="op-estoque" class="text-2xl font-black text-red-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] text-slate-500 uppercase font-bold">Score amostra</div><div id="op-score" class="text-2xl font-black text-emerald-400 mt-2">—</div></div></div>
+  <div id="op-lista" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+  <div class="panel rounded-2xl p-5"><div class="font-black text-white">Mercado Ads</div><div class="text-[11px] text-slate-500 mt-1">Área preparada para ROAS, campanhas e Ad Groups. A API atual de Product Ads usa o novo fluxo de agrupamento por produto/família; endpoints legados foram removidos em 2026.</div></div>
+</section>
+
 <!-- =====================================================
      PERFIL
 ===================================================== -->
@@ -3509,6 +3585,13 @@ function mudarAba(aba) {
         'inicio',
         'gestao',
         'dashboard',
+        'operacao',
+        'alertas',
+        'central',
+        'atendimento',
+        'reclamacoes',
+        'integracoes',
+        'oportunidades',
         'perfil',
         'configuracoes',
         'simulacao',
@@ -3565,6 +3648,14 @@ function mudarAba(aba) {
             'hidden'
         );
     }
+    // Carregamento automático dos módulos profissionais.
+    if (aba === 'central' && typeof carregarCentralPro === 'function') carregarCentralPro();
+    if (aba === 'reclamacoes' && typeof carregarReclamacoesPro === 'function') carregarReclamacoesPro();
+    if (aba === 'integracoes' && typeof carregarIntegracoesPro === 'function') carregarIntegracoesPro();
+    if (aba === 'oportunidades' && typeof carregarOportunidades === 'function') carregarOportunidades();
+    if (aba === 'operacao' && typeof carregarOperacaoV2 === 'function') carregarOperacaoV2(1);
+    if (aba === 'alertas' && typeof carregarAlertasV2 === 'function') carregarAlertasV2();
+
 
     const botaoAtivo =
         document.getElementById(
@@ -7035,6 +7126,55 @@ async function carregarAlertasV2() {
         lista.innerHTML=(d.alertas||[]).map(a=>`<div class="panel rounded-2xl p-4 flex items-center justify-between gap-4"><div><div class="text-xs font-black text-white">${escapeHtml(a.titulo||a.item_id)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(a.mensagem)}</div></div><div class="text-[10px] uppercase font-black ${a.nivel==='alto'?'text-red-400':a.nivel==='medio'?'text-yellow-400':'text-blue-400'}">${escapeHtml(a.nivel)}</div></div>`).join('') || '<div class="panel rounded-2xl p-10 text-center text-xs text-emerald-400">Nenhum alerta encontrado na amostra analisada.</div>';
     } catch(e){lista.innerHTML=`<div class="panel rounded-2xl p-10 text-center text-xs text-red-300">${escapeHtml(e.message)}</div>`;}
 }
+</script>
+
+
+<script id="mlhub-pro-suite">
+async function apiPro(path, options={}) {
+  const token=obterToken();
+  const headers={...(options.headers||{}),Authorization:token};
+  if(options.body && !headers['Content-Type']) headers['Content-Type']='application/json';
+  const r=await fetch(`${RENDER_URL}${path}`,{...options,headers});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.erro||d.message||`HTTP ${r.status}`);
+  return d;
+}
+async function carregarCentralPro(){
+  const fila=document.getElementById('central-fila'); fila.innerHTML='<div class="panel rounded-2xl p-6 text-xs text-yellow-400">Analisando operação...</div>';
+  try{
+    const [a,c,s]=await Promise.allSettled([apiPro('/api/v2/alertas'),apiPro('/api/v3/claims?status=opened'),fetch(`${RENDER_URL}/api/v3/integracoes/status`).then(r=>r.json())]);
+    const alertas=a.status==='fulfilled'?(a.value.alertas||[]):[]; const claims=c.status==='fulfilled'?(c.value.reclamacoes||[]):[];
+    document.getElementById('central-alertas').innerText=alertas.length;
+    document.getElementById('central-claims').innerText=claims.length;
+    document.getElementById('central-sku').innerText=alertas.filter(x=>x.tipo==='sem_sku').length;
+    document.getElementById('central-estoque').innerText=alertas.filter(x=>String(x.tipo).includes('estoque')).length;
+    if(s.status==='fulfilled') document.getElementById('central-integracoes').innerText=`ML ✓ · Bling ${s.value.bling?.configurado?'✓':'—'} · IA ${s.value.openai?.configurado?'✓':'—'}`;
+    const cards=[
+      ...claims.slice(0,5).map(x=>({t:`Reclamação #${x.id}`,d:`${x.stage||''} · ${x.status||''}`,n:'ALTA'})),
+      ...alertas.slice(0,5).map(x=>({t:x.titulo||x.item_id,d:x.mensagem,n:String(x.nivel||'').toUpperCase()}))
+    ];
+    fila.innerHTML=cards.map(x=>`<div class="panel rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-xs font-black text-white">${escapeHtml(x.t)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(x.d)}</div></div><span class="text-[10px] font-black text-yellow-400">${escapeHtml(x.n)}</span></div></div>`).join('')||'<div class="panel rounded-2xl p-8 text-xs text-emerald-400">Nenhuma prioridade crítica encontrada na consulta atual.</div>';
+  }catch(e){fila.innerHTML=`<div class="panel rounded-2xl p-6 text-xs text-red-300">${escapeHtml(e.message)}</div>`}
+}
+function atalhoIA(t){document.getElementById('ia-pergunta').value=t; perguntarIA();}
+async function perguntarIA(){
+  const inp=document.getElementById('ia-pergunta'),chat=document.getElementById('ia-chat'),texto=inp.value.trim(); if(!texto)return;
+  chat.innerHTML+=`<div class="ml-auto max-w-[85%] p-4 rounded-xl bg-yellow-400 text-slate-950 text-xs font-semibold">${escapeHtml(texto)}</div>`; inp.value='';
+  const load=document.createElement('div');load.className='max-w-[85%] p-4 rounded-xl bg-slate-950 text-xs text-slate-400';load.innerText='Analisando...';chat.appendChild(load);chat.scrollTop=chat.scrollHeight;
+  try{const d=await apiPro('/api/v3/ia',{method:'POST',body:JSON.stringify({mensagem:texto})});load.className='max-w-[90%] p-4 rounded-xl bg-slate-950 text-xs text-slate-300 whitespace-pre-wrap';load.innerText=d.resposta||'Sem resposta.';}catch(e){load.className='p-4 rounded-xl bg-red-500/10 text-xs text-red-300';load.innerText=e.message;}
+  chat.scrollTop=chat.scrollHeight;
+}
+async function carregarReclamacoesPro(){
+  const box=document.getElementById('claims-lista');box.innerHTML='<div class="panel rounded-2xl p-8 text-xs text-yellow-400">Buscando reclamações...</div>';
+  try{const d=await apiPro('/api/v3/claims?status=opened');const arr=d.reclamacoes||[];document.getElementById('claims-abertas').innerText=arr.length;document.getElementById('claims-disputas').innerText=arr.filter(x=>x.stage==='dispute').length;document.getElementById('claims-prazo').innerText=arr.filter(x=>x.due_date).length;
+  box.innerHTML=arr.map(x=>`<div class="panel rounded-2xl p-4"><div class="flex justify-between gap-4"><div><div class="text-xs font-black text-white">Reclamação #${escapeHtml(String(x.id))}</div><div class="text-[11px] text-slate-500 mt-1">Pedido/recurso: ${escapeHtml(String(x.resource_id||'—'))} · ${escapeHtml(x.stage||'')} · ${escapeHtml(x.type||'')}</div></div><button onclick="verImpactoClaim('${String(x.id)}')" class="bg-slate-800 px-3 py-2 rounded-lg text-[10px] font-bold text-white">Impacto reputação</button></div><div id="impacto-${String(x.id)}" class="text-[10px] text-slate-500 mt-2"></div></div>`).join('')||'<div class="panel rounded-2xl p-8 text-xs text-emerald-400">Nenhuma reclamação aberta encontrada.</div>';}catch(e){box.innerHTML=`<div class="panel rounded-2xl p-8 text-xs text-red-300">${escapeHtml(e.message)}</div>`}
+}
+async function verImpactoClaim(id){const el=document.getElementById(`impacto-${id}`);el.innerText='Consultando...';try{const d=await apiPro(`/api/v3/claims/${encodeURIComponent(id)}/impacto`);el.innerText=`Impacto: ${d.affects_reputation||'—'}${d.due_date?' · Prazo: '+d.due_date:''}`;}catch(e){el.innerText=e.message}}
+async function consultarCasoBPP(){const id=document.getElementById('bpp-case-id').value.trim(),out=document.getElementById('bpp-resultado');if(!id)return;out.classList.remove('hidden');out.innerText='Consultando...';try{out.innerText=JSON.stringify(await apiPro(`/api/v3/bpp/case/${encodeURIComponent(id)}`),null,2)}catch(e){out.innerText=e.message}}
+async function carregarIntegracoesPro(){try{const d=await fetch(`${RENDER_URL}/api/v3/integracoes/status`).then(r=>r.json());document.getElementById('bling-status').innerText=d.bling?.conectado?'● Conectado':d.bling?.configurado?'● Pronto para conectar':'○ Falta configurar Render';document.getElementById('openai-status').innerText=d.openai?.configurado?'● IA configurada':'○ Adicione OPENAI_API_KEY no Render';document.getElementById('ia-status').innerText=d.openai?.configurado?'IA disponível no servidor.':'Para ativar IA, configure OPENAI_API_KEY no Render.';}catch(e){}}
+async function conectarBling(){try{const d=await fetch(`${RENDER_URL}/api/bling/authorize`).then(r=>r.json());if(!d.authorization_url)throw new Error(d.erro||'Bling não configurado.');location.href=d.authorization_url;}catch(e){alert(e.message)}}
+async function carregarOportunidades(){const box=document.getElementById('op-lista');box.innerHTML='<div class="panel rounded-2xl p-6 text-xs text-yellow-400">Auditando amostra recente...</div>';try{const d=await apiPro('/api/v3/auditoria');document.getElementById('op-sem-venda').innerText=d.metricas.sem_venda;document.getElementById('op-sem-sku').innerText=d.metricas.sem_sku;document.getElementById('op-estoque').innerText=d.metricas.estoque_critico;document.getElementById('op-score').innerText=d.metricas.score+'%';box.innerHTML=(d.oportunidades||[]).map(x=>`<div class="panel rounded-2xl p-4"><div class="text-xs font-black text-white">${escapeHtml(x.titulo)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(x.mensagem)}</div></div>`).join('')||'<div class="panel rounded-2xl p-6 text-xs text-emerald-400">Nenhuma oportunidade crítica na amostra.</div>';}catch(e){box.innerHTML=`<div class="panel rounded-2xl p-6 text-xs text-red-300">${escapeHtml(e.message)}</div>`}}
+document.addEventListener('DOMContentLoaded',carregarIntegracoesPro);
 </script>
 
 </body>
