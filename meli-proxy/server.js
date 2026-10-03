@@ -251,6 +251,16 @@ app.get('/api/oauth/status', async (req, res) => {
     }
 });
 
+app.get('/api/version', (req, res) => {
+    res.json({
+        ok: true,
+        service: 'ML Hub Pro',
+        version: 'manual-token-refresh-v1',
+        oauth_callback: '/auth/callback',
+        manual_credentials: '/api/oauth/manual-credentials'
+    });
+});
+
 app.post('/api/oauth/configure', async (req, res) => {
     const { client_id, client_secret, redirect_uri, access_token, frontend_url } = req.body || {};
     if (!client_id || !client_secret || !redirect_uri) {
@@ -373,6 +383,86 @@ app.get('/auth/callback', async (req, res) => {
     } catch (erroInterno) {
         console.error('Erro no callback OAuth:', erroInterno);
         return res.status(500).send('Erro interno ao concluir OAuth: ' + erroInterno.message);
+    }
+});
+
+
+app.post('/api/oauth/manual-credentials', async (req, res) => {
+    const clientId = String(req.body?.client_id || '').trim();
+    const clientSecret = String(req.body?.client_secret || '').trim();
+    const redirectUri = String(req.body?.redirect_uri || '').trim();
+    const accessToken = String(req.body?.access_token || '').trim();
+    const refreshToken = String(req.body?.refresh_token || '').trim();
+    const frontendUrl = String(req.body?.frontend_url || DEFAULT_FRONTEND_URL).trim();
+
+    if (!clientId || !clientSecret || !redirectUri || !accessToken) {
+        return respostaErro(res, 400, 'Informe Client ID, Client Secret, URL de retorno e Access Token.');
+    }
+
+    try {
+        const callback = new URL(redirectUri);
+        if (callback.protocol !== 'https:') {
+            return respostaErro(res, 400, 'A URL de retorno precisa usar HTTPS.');
+        }
+    } catch {
+        return respostaErro(res, 400, 'URL de retorno inválida.');
+    }
+
+    try {
+        // Confirma que o APP_USR informado realmente funciona antes de liberar o painel.
+        const meRes = await fetch(`${ML_API}/users/me`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+            }
+        });
+        const me = await jsonSeguro(meRes);
+
+        if (!meRes.ok || !me?.id) {
+            return respostaErro(
+                res,
+                meRes.status || 401,
+                'Access Token inválido ou expirado: ' + (formatarErroMercadoLivre(me) || 'não foi possível consultar /users/me')
+            );
+        }
+
+        const anterior = lerOAuthStore();
+        const novo = {
+            ...anterior,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: redirectUri,
+            frontend_url: frontendUrl,
+            access_token: accessToken,
+            user_id: me.id,
+            nickname: me.nickname || null,
+            updated_at: new Date().toISOString()
+        };
+
+        if (refreshToken) {
+            novo.refresh_token = refreshToken;
+            // O token do ML normalmente é válido por 6 horas. Com refresh informado,
+            // o servidor passa a controlar a renovação automática.
+            novo.expires_in = 21600;
+            novo.expires_at = Date.now() + 21600 * 1000;
+        } else {
+            // Sem refresh token não inventamos uma expiração nem prometemos renovação.
+            delete novo.refresh_token;
+            novo.expires_at = null;
+        }
+
+        salvarOAuthStore(novo);
+
+        return res.json({
+            sucesso: true,
+            connected: true,
+            renewable: Boolean(refreshToken),
+            user_id: me.id,
+            nickname: me.nickname || null,
+            token_preview: `${accessToken.slice(0, 12)}••••••••${accessToken.slice(-6)}`
+        });
+    } catch (erro) {
+        return respostaErro(res, 500, 'Erro ao validar/salvar as credenciais: ' + erro.message);
     }
 });
 
