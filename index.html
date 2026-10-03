@@ -1225,7 +1225,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
         <div class="px-5 py-4 border-b border-slate-800">
             <h2 class="text-sm font-bold text-white">🏆 Top 10 anúncios mais vendidos</h2>
             <p class="text-[11px] text-slate-500 mt-1">
-                Ranking calculado pelas unidades vendidas nos pedidos pagos.
+                Ranking dos anúncios com maior quantidade vendida na conta.
             </p>
         </div>
         <div id="top10-home" class="p-5">
@@ -5661,7 +5661,7 @@ function montarTop10(lista) {
 
     const vazia = `
         <div class="text-center py-12 text-xs text-slate-600">
-            Nenhuma venda encontrada no período.
+            Nenhum anúncio com vendas foi encontrado na conta.
         </div>
     `;
 
@@ -5898,15 +5898,6 @@ async function carregarPerguntas() {
             'Erro de comunicação ao buscar perguntas.'
         );
     }
-    if (containerHome && container) {
-        containerHome.innerHTML = container.innerHTML;
-        try {
-            localStorage.setItem('mlHubPro_top10Home_v1', containerHome.innerHTML);
-        } catch (erro) {
-            console.warn('Não foi possível salvar o Top 10 da página inicial:', erro);
-        }
-    }
-
 }
 
 
@@ -6584,7 +6575,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const homeTop10 = document.getElementById('top10-home');
     if (homeTop10) {
         try {
-            const cache = localStorage.getItem('mlHubPro_top10Home_v1');
+            const cache = localStorage.getItem('mlHubPro_top10Home_v2');
             if (cache) homeTop10.innerHTML = cache;
         } catch(e) {}
     }
