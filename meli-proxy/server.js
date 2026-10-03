@@ -1611,6 +1611,97 @@ app.post('/api/responder-pergunta', async (req, res) => {
 });
 
 /* =========================================================
+   ATUALIZAR TÍTULO E SKU DO ANÚNCIO
+========================================================= */
+
+app.put('/api/atualizar-anuncio', async (req, res) => {
+    const token = obterToken(req);
+
+    if (!token) {
+        return respostaErro(res, 401, 'Token não fornecido.');
+    }
+
+    const { id, title, sku } = req.body || {};
+
+    if (!id) {
+        return respostaErro(res, 400, 'ID do anúncio não informado.');
+    }
+
+    const tituloLimpo = String(title || '').trim();
+    const skuLimpo = String(sku || '').trim();
+
+    if (!tituloLimpo) {
+        return respostaErro(res, 400, 'O título do anúncio não pode ficar vazio.');
+    }
+
+    try {
+        const bodyAtualizacao = {
+            title: tituloLimpo,
+            attributes: [
+                {
+                    id: 'SELLER_SKU',
+                    value_name: skuLimpo
+                }
+            ]
+        };
+
+        const mlRes = await mlFetch(
+            `${ML_API}/items/${encodeURIComponent(id)}`,
+            token,
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bodyAtualizacao)
+            }
+        );
+
+        const mlData = await jsonSeguro(mlRes);
+
+        if (!mlRes.ok) {
+            return respostaErro(
+                res,
+                mlRes.status || 400,
+                formatarErroMercadoLivre(mlData) || 'Erro ao atualizar anúncio.'
+            );
+        }
+
+        let skuRetornado = skuLimpo || 'Sem SKU';
+
+        if (Array.isArray(mlData.attributes)) {
+            const attrSku = mlData.attributes.find(
+                atributo => atributo.id === 'SELLER_SKU'
+            );
+
+            if (attrSku?.value_name) {
+                skuRetornado = attrSku.value_name;
+            }
+        }
+
+        return res.json({
+            sucesso: true,
+            item: {
+                id: mlData.id || id,
+                title: mlData.title || tituloLimpo,
+                sku: skuRetornado,
+                status: mlData.status
+            }
+        });
+
+    } catch (error) {
+        console.error('Erro ao atualizar título/SKU:', error);
+
+        return respostaErro(
+            res,
+            500,
+            'Erro de conexão ao atualizar anúncio: ' + error.message
+        );
+    }
+});
+
+
+/* =========================================================
    SERVIDOR
 ========================================================= */
 
