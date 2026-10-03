@@ -3947,127 +3947,87 @@ async function sincronizarPrecosApi() {
 
 async function sincronizarFretesApi() {
 
-    const token =
-        obterToken();
+    const token = obterToken();
 
     if (!token) {
-
         solicitarToken();
-
         return;
     }
 
-    if (
-        !cacheItens ||
-        cacheItens.length === 0
-    ) {
-
-        alert(
-            "Nenhum anúncio carregado."
-        );
-
+    if (!cacheItens || cacheItens.length === 0) {
+        alert("Nenhum anúncio carregado.");
         return;
     }
 
-    mostrarLoading(
-        "Puxando custos de frete..."
-    );
+    const mlbs = cacheItens.map(item => item.id).filter(Boolean);
+    const tamanhoLote = 10;
+    let atualizados = 0;
+    let falhas = 0;
+
+    mostrarLoading(`Puxando custos de frete... 0/${mlbs.length}`);
 
     try {
+        for (let i = 0; i < mlbs.length; i += tamanhoLote) {
+            const lote = mlbs.slice(i, i + tamanhoLote);
 
-        const mlbs =
-            cacheItens.map(
-                item => item.id
-            );
+            // Atualiza a mensagem sem alterar o restante do layout.
+            const textoLoading = document.querySelector('#loading-overlay p, #loadingOverlay p, [id*="loading"] p');
+            if (textoLoading) {
+                textoLoading.textContent = `Puxando custos de frete... ${Math.min(i, mlbs.length)}/${mlbs.length}`;
+            }
 
-        const response =
-            await fetch(
-                `${RENDER_URL}/api/sincronizar-fretes`,
-                {
-                    method:
-                        'POST',
+            const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: token
+                },
+                body: JSON.stringify({ ids: lote })
+            });
 
-                    headers: {
-                        'Content-Type':
-                            'application/json',
+            const data = await response.json();
 
-                        Authorization:
-                            token
-                    },
+            if (!response.ok || !data.fretes) {
+                falhas += lote.length;
+                console.error('Erro no lote de fretes:', data.erro || data);
+                continue;
+            }
 
-                    body:
-                        JSON.stringify({
-                            ids:
-                                mlbs
-                        })
-                }
-            );
+            cacheItens.forEach(item => {
+                const frete = data.fretes[item.id];
+                if (!frete) return;
 
-        const data =
-            await response.json();
+                item.shipping_cost = Number(frete.custo || 0);
+                item.free_shipping = Boolean(frete.gratis);
+                item.net_received = Math.max(
+                    0,
+                    Number(item.price || 0) -
+                    Number(item.sale_fee || 0) -
+                    Number(item.shipping_cost || 0)
+                );
+                atualizados++;
+            });
 
-        if (
-            response.ok &&
-            data.fretes
-        ) {
-
-            cacheItens.forEach(
-                item => {
-
-                    const frete =
-                        data.fretes[
-                            item.id
-                        ];
-
-                    if (frete) {
-
-                        item.shipping_cost =
-                            frete.custo;
-
-                        item.free_shipping =
-                            frete.gratis;
-
-                        item.net_received =
-                            Math.max(
-                                0,
-                                Number(item.price || 0) -
-                                Number(item.sale_fee || 0) -
-                                Number(item.shipping_cost || 0)
-                            );
-                    }
-                }
-            );
-
-            atualizarCards(
-                cacheItens
-            );
-
+            // Atualiza a tabela a cada lote, então o usuário vê o resultado chegando.
             executarBusca();
+        }
 
-            alert(
-                'Fretes sincronizados com sucesso.'
-            );
+        atualizarCards(cacheItens);
+        executarBusca();
 
+        if (falhas > 0) {
+            alert(`Fretes atualizados: ${atualizados}. Não foi possível consultar ${falhas} anúncio(s).`);
         } else {
-
-            alert(
-                data.erro ||
-                'Erro ao sincronizar fretes.'
-            );
+            alert(`Fretes sincronizados com sucesso: ${atualizados} anúncio(s).`);
         }
 
     } catch (error) {
-
-        alert(
-            'Erro de comunicação.'
-        );
-
+        console.error('Erro ao sincronizar fretes:', error);
+        alert('Erro ao sincronizar fretes: ' + error.message);
     } finally {
-
         esconderLoading();
     }
 }
-
 
 function atualizarCards(
     itens
