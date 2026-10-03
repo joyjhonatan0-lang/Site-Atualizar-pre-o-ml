@@ -1,1 +1,6869 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
 
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>ML Hub Pro | Gestão Mercado Livre</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            400: '#facc15',
+                            500: '#eab308',
+                            600: '#ca8a04'
+                        }
+                    },
+                    boxShadow: {
+                        soft:
+                            '0 10px 40px rgba(0,0,0,.20)',
+                        card:
+                            '0 8px 30px rgba(15,23,42,.08)'
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color:
+                #334155
+                #0f172a;
+        }
+
+        *::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 999px;
+        }
+
+        body {
+            background:
+                radial-gradient(
+                    circle at 10% 0%,
+                    rgba(250, 204, 21, .07),
+                    transparent 28%
+                ),
+                radial-gradient(
+                    circle at 90% 10%,
+                    rgba(59, 130, 246, .06),
+                    transparent 25%
+                ),
+                #070b14;
+        }
+
+        .glass {
+            background:
+                rgba(15, 23, 42, .82);
+
+            backdrop-filter:
+                blur(18px);
+
+            -webkit-backdrop-filter:
+                blur(18px);
+        }
+
+        .panel {
+            background:
+                #0f172a;
+
+            border:
+                1px solid #1e293b;
+
+            box-shadow:
+                0 10px 35px rgba(0,0,0,.18);
+        }
+
+        .panel-hover {
+            transition:
+                all .2s ease;
+        }
+
+        .panel-hover:hover {
+            border-color:
+                #334155;
+
+            transform:
+                translateY(-1px);
+        }
+
+        .nav-button {
+            transition:
+                all .2s ease;
+        }
+
+        .nav-button.active {
+            background:
+                linear-gradient(
+                    135deg,
+                    #facc15,
+                    #eab308
+                );
+
+            color:
+                #111827;
+
+            box-shadow:
+                0 4px 14px
+                rgba(250,204,21,.18);
+        }
+
+        .stat-card {
+            position:
+                relative;
+
+            overflow:
+                hidden;
+        }
+
+        .stat-card::after {
+            content:
+                "";
+
+            position:
+                absolute;
+
+            width:
+                100px;
+
+            height:
+                100px;
+
+            right:
+                -40px;
+
+            top:
+                -40px;
+
+            border-radius:
+                999px;
+
+            background:
+                rgba(255,255,255,.025);
+        }
+
+        .btn-action {
+            transition:
+                all .18s ease;
+        }
+
+        .btn-action:hover {
+            transform:
+                translateY(-1px);
+        }
+
+        .input-simulacao {
+            background:
+                #f8fafc;
+
+            border:
+                1px solid #cbd5e1;
+
+            color:
+                #0f172a;
+
+            text-align:
+                center;
+
+            border-radius:
+                7px;
+
+            padding:
+                6px 7px;
+
+            font-size:
+                12px;
+
+            font-weight:
+                600;
+        }
+
+        .input-simulacao:focus {
+            outline:
+                none;
+
+            border-color:
+                #eab308;
+
+            box-shadow:
+                0 0 0 3px
+                rgba(234,179,8,.12);
+        }
+
+        .futuristic-table th {
+            background:
+                #111827;
+
+            color:
+                #94a3b8;
+
+            font-size:
+                10px;
+
+            letter-spacing:
+                .08em;
+
+            text-transform:
+                uppercase;
+
+            font-weight:
+                700;
+
+            white-space:
+                nowrap;
+        }
+
+        .futuristic-table tbody tr {
+            transition:
+                background .15s ease;
+        }
+
+        .futuristic-table tbody tr:hover {
+            background:
+                rgba(30,41,59,.65);
+        }
+
+        .status-dot {
+            width:
+                7px;
+
+            height:
+                7px;
+
+            border-radius:
+                999px;
+
+            display:
+                inline-block;
+        }
+
+        .line-clamp-1 {
+            display:
+                -webkit-box;
+
+            -webkit-line-clamp:
+                1;
+
+            -webkit-box-orient:
+                vertical;
+
+            overflow:
+                hidden;
+        }
+
+        .loading-ring {
+            border:
+                3px solid
+                rgba(250,204,21,.15);
+
+            border-top-color:
+                #facc15;
+        }
+
+        .hero-grid {
+            background-image:
+                linear-gradient(
+                    rgba(255,255,255,.025) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,.025) 1px,
+                    transparent 1px
+                );
+
+            background-size:
+                32px 32px;
+        }
+
+        .metric-card {
+            min-height:
+                150px;
+        }
+
+        @media(max-width: 900px) {
+            .top-actions {
+                overflow-x:
+                    auto;
+
+                padding-bottom:
+                    4px;
+            }
+
+            .top-actions button {
+                white-space:
+                    nowrap;
+            }
+        }
+    </style>
+
+<style id="separacao-pagina-inicial">
+/* Página inicial independente do painel interno */
+body.pagina-inicial-ativa header nav,
+body.pagina-inicial-ativa header [onclick*="gestao"],
+body.pagina-inicial-ativa header [onclick*="dashboard"],
+body.pagina-inicial-ativa header [onclick*="simulacao"],
+body.pagina-inicial-ativa header [onclick*="atualizacao"],
+body.pagina-inicial-ativa header [onclick*="perguntas"] {
+    display: none !important;
+}
+
+/* Dentro do painel, a aba Início não aparece como uma ferramenta do painel.
+   O retorno ao início continua disponível pelo logotipo/fluxo já existente. */
+body.painel-interno-ativo header nav [onclick*="'inicio'"],
+body.painel-interno-ativo header nav [onclick*='"inicio"'] {
+    display: none !important;
+}
+</style>
+
+<style id="botao-voltar-inicio">
+body.pagina-inicial-ativa button[title="Voltar para a página inicial"]{display:none!important}
+body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:inline-flex!important}
+</style>
+
+</head>
+
+<body
+    class="min-h-screen font-sans text-slate-100"
+>
+
+<div id="oauth-login-gate" class="hidden fixed inset-0 z-[10000] bg-slate-950 overflow-y-auto">
+    <div class="min-h-screen flex items-center justify-center px-4 py-10">
+        <div class="w-full max-w-2xl panel rounded-3xl border border-slate-800 p-6 md:p-8 shadow-2xl">
+            <div class="flex items-center gap-3 mb-7">
+                <div class="w-12 h-12 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center text-xl font-black">M</div>
+                <div>
+                    <div class="text-xl font-black text-white">ML Hub <span class="text-yellow-400">Pro</span></div>
+                    <div class="text-[10px] uppercase tracking-[.16em] text-slate-500 font-bold">Conectar aplicação Mercado Livre</div>
+                </div>
+            </div>
+
+            <h1 class="text-2xl md:text-3xl font-black text-white">Entrar no painel</h1>
+            <p class="text-sm text-slate-400 mt-2 leading-6">
+                Informe as credenciais da sua aplicação. A URL deve ser exatamente uma URI cadastrada no DevCenter. O Mercado Livre abrirá a autorização oficial uma única vez para conceder o acesso.
+                O servidor guardará o Refresh Token e renovará o Access Token automaticamente.
+            </p>
+
+            <div id="oauth-login-status" class="hidden mt-4 p-3 rounded-xl text-xs font-bold"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div>
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
+                    <input id="oauth-client-id-login" type="text" autocomplete="off"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="Client ID">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
+                    <input id="oauth-client-secret-login" type="password" autocomplete="new-password"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="Client Secret">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no DevCenter</label>
+                    <input id="oauth-redirect-uri-login" type="url" autocomplete="off"
+                        value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
+                    <input id="oauth-access-token-login" type="password" autocomplete="off"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="APP_USR-...">
+                </div>
+            </div>
+
+            <button onclick="iniciarOAuthML('login')" class="mt-6 w-full bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm px-5 py-3.5 rounded-xl">
+                Gerar acesso renovável e entrar
+            </button>
+
+            <div class="mt-5">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Token gerado</label>
+                <input id="oauth-token-gerado-login" type="text" readonly
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-emerald-300 px-4 py-3 rounded-xl text-xs"
+                    placeholder="Será preenchido após a autorização do Mercado Livre">
+                <p class="text-[10px] text-slate-600 mt-2">
+                    Por segurança, o token completo permanece no servidor. O painel usa esse acesso automaticamente e o renova com Refresh Token.
+                </p>
+            </div>
+
+            <p class="text-[10px] text-slate-600 mt-4 leading-5">
+                O Client Secret é enviado diretamente ao seu servidor Render e não é salvo no localStorage do navegador.
+            </p>
+        </div>
+    </div>
+</div>
+
+
+<!-- =====================================================
+     HEADER
+===================================================== -->
+
+<header
+    class="
+        glass
+        sticky
+        top-0
+        z-50
+        border-b
+        border-slate-800/80
+    "
+>
+    <div
+        class="
+            max-w-[1800px]
+            mx-auto
+            px-4
+            lg:px-6
+        "
+    >
+
+        <div
+            class="
+                min-h-[72px]
+                flex
+                flex-col
+                xl:flex-row
+                xl:items-center
+                xl:justify-between
+                gap-4
+                py-3
+            "
+        >
+
+            <div
+                class="
+                    flex
+                    flex-col
+                    md:flex-row
+                    md:items-center
+                    gap-4
+                "
+            >
+
+                <!-- LOGO / PERFIL -->
+
+                <div
+                    onclick="mudarAba('perfil')"
+                    title="Abrir perfil"
+                    class="
+                        flex
+                        items-center
+                        gap-3
+                        shrink-0
+                        cursor-pointer
+                    "
+                >
+
+                    <div
+                        class="
+                            relative
+                            flex
+                            items-center
+                            justify-center
+                            w-10
+                            h-10
+                            rounded-xl
+                            bg-gradient-to-br
+                            from-yellow-300
+                            to-yellow-500
+                            shadow-lg
+                            shadow-yellow-500/10
+                        "
+                    >
+                        <span
+                            class="
+                                text-slate-950
+                                font-black
+                                text-lg
+                            "
+                        >
+                            M
+                        </span>
+
+                        <span
+                            class="
+                                absolute
+                                -right-1
+                                -top-1
+                                w-2.5
+                                h-2.5
+                                bg-emerald-400
+                                border-2
+                                border-slate-950
+                                rounded-full
+                            "
+                        ></span>
+                    </div>
+
+                    <div>
+                        <div
+                            class="
+                                text-sm
+                                font-black
+                                tracking-tight
+                                text-white
+                            "
+                        >
+                            ML Hub
+                            <span
+                                class="
+                                    text-yellow-400
+                                "
+                            >
+                                Pro
+                            </span>
+                        </div>
+
+                        <div
+                            class="
+                                text-[10px]
+                                uppercase
+                                tracking-[.16em]
+                                text-slate-500
+                                font-semibold
+                            "
+                        >
+                            Gestão Mercado Livre
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- MENU -->
+
+                <nav
+                    class="
+                        flex
+                        items-center
+                        gap-1
+                        p-1
+                        bg-slate-950/80
+                        border
+                        border-slate-800
+                        rounded-xl
+                        w-fit
+                        overflow-x-auto
+                    "
+                >
+
+                    <button
+                        onclick="mudarTela('gestao')"
+                        id="btn-inicio"
+                        class="
+                            nav-button
+                            active
+                            px-3
+                            py-2
+                            rounded-lg
+                            text-xs
+                            font-bold
+                            whitespace-nowrap
+                        "
+                    >
+                        🏠 Início
+                    </button>
+
+                    <button
+                        onclick="mudarAba('gestao')"
+                        id="btn-gestao"
+                        class="
+                            nav-button
+                            px-3
+                            py-2
+                            rounded-lg
+                            text-xs
+                            font-semibold
+                            text-slate-400
+                            whitespace-nowrap
+                        "
+                    >
+                        ▦ Gestão
+                    </button>
+
+                    
+
+                    <button
+                        onclick="mudarAba('simulacao')"
+                        id="btn-simulacao"
+                        class="
+                            nav-button
+                            px-3
+                            py-2
+                            rounded-lg
+                            text-xs
+                            font-semibold
+                            text-slate-400
+                            whitespace-nowrap
+                        "
+                    >
+                        ◈ Simulação
+                    </button>
+
+                    <button
+                        onclick="mudarAba('atualizacao')"
+                        id="btn-atualizacao"
+                        class="
+                            nav-button
+                            px-3
+                            py-2
+                            rounded-lg
+                            text-xs
+                            font-semibold
+                            text-slate-400
+                            whitespace-nowrap
+                        "
+                    >
+                        ↻ Atualização
+                    </button>
+
+                    <button
+                        onclick="mudarAba('perguntas')"
+                        id="btn-perguntas"
+                        class="
+                            nav-button
+                            px-3
+                            py-2
+                            rounded-lg
+                            text-xs
+                            font-semibold
+                            text-slate-400
+                            whitespace-nowrap
+                        "
+                    >
+                        💬 Perguntas
+                    </button>
+
+                </nav>
+
+            </div>
+
+            <!-- AÇÕES -->
+
+            <div
+                class="
+                    top-actions
+                    flex
+                    items-center
+                    gap-2
+                "
+            >
+
+                <button
+                    type="button"
+                    onclick="mudarAba('inicio')"
+                    class="btn-dark px-4 py-2.5 rounded-xl text-xs font-black"
+                    title="Voltar para a página inicial"
+                >
+                    ← Início
+                </button>
+
+                <button
+                    onclick="carregarDados()"
+                    class="
+                        btn-action
+                        bg-yellow-400
+                        hover:bg-yellow-300
+                        text-slate-950
+                        px-3.5
+                        py-2.5
+                        rounded-xl
+                        text-xs
+                        font-bold
+                    "
+                >
+                    ↓ Anúncios
+                </button>
+
+                <button
+                    onclick="carregarDashboard()"
+                    class="
+                        btn-action
+                        bg-slate-900
+                        hover:bg-slate-800
+                        text-blue-400
+                        px-3.5
+                        py-2.5
+                        rounded-xl
+                        text-xs
+                        font-bold
+                        border
+                        border-slate-700
+                    "
+                >
+                    📊 Atualizar painel
+                </button>
+
+                <button
+                    onclick="mudarAba('configuracoes'); atualizarStatusOAuthML()"
+                    class="
+                        btn-action
+                        bg-slate-900
+                        hover:bg-slate-800
+                        text-slate-300
+                        px-3.5
+                        py-2.5
+                        rounded-xl
+                        text-xs
+                        font-bold
+                        border
+                        border-slate-700
+                    "
+                >
+                    ⚿ Token
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+</header>
+
+
+<main
+    class="
+        max-w-[1800px]
+        mx-auto
+        px-4
+        lg:px-6
+        py-6
+    "
+>
+
+<!-- =====================================================
+     TOKEN
+===================================================== -->
+
+<div
+    id="aviso-token"
+    class="
+        hidden
+        mb-6
+        rounded-2xl
+        border
+        border-yellow-500/20
+        bg-yellow-500/[.06]
+        overflow-hidden
+    "
+>
+
+    <div
+        class="
+            p-5
+            md:p-6
+            flex
+            flex-col
+            lg:flex-row
+            lg:items-center
+            justify-between
+            gap-5
+        "
+    >
+
+        <div
+            class="
+                flex
+                items-start
+                gap-4
+            "
+        >
+
+            <div
+                class="
+                    w-11
+                    h-11
+                    rounded-xl
+                    bg-yellow-400/10
+                    border
+                    border-yellow-400/20
+                    flex
+                    items-center
+                    justify-center
+                    text-yellow-400
+                    text-lg
+                "
+            >
+                ⚿
+            </div>
+
+            <div>
+
+                <h3
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                    "
+                >
+                    Token do Mercado Livre
+                </h3>
+
+                <p
+                    class="
+                        text-xs
+                        text-slate-400
+                        mt-1
+                    "
+                >
+                    Cole seu Access Token para conectar
+                    o painel à sua conta.
+                </p>
+
+            </div>
+
+        </div>
+
+        <div
+            class="
+                flex
+                flex-col
+                sm:flex-row
+                gap-2
+                w-full
+                lg:w-auto
+            "
+        >
+
+            <input
+                type="password"
+                id="input-token-manual"
+                placeholder="APP_USR-..."
+                class="
+                    bg-slate-950
+                    border
+                    border-slate-700
+                    text-white
+                    text-xs
+                    px-4
+                    py-3
+                    rounded-xl
+                    w-full
+                    lg:w-[420px]
+                    outline-none
+                    focus:border-yellow-400/60
+                "
+            >
+
+            <button
+                onclick="salvarTokenManual()"
+                class="
+                    bg-yellow-400
+                    text-slate-950
+                    font-bold
+                    text-xs
+                    px-5
+                    py-3
+                    rounded-xl
+                    hover:bg-yellow-300
+                "
+            >
+                Salvar token
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     LOADING
+===================================================== -->
+
+<div
+    id="loading"
+    class="
+        hidden
+        fixed
+        inset-0
+        z-[100]
+        bg-slate-950/80
+        backdrop-blur-sm
+        items-center
+        justify-center
+    "
+>
+
+    <div
+        class="
+            panel
+            rounded-3xl
+            p-8
+            w-[90%]
+            max-w-md
+            text-center
+            shadow-2xl
+        "
+    >
+
+        <div
+            class="
+                mx-auto
+                w-14
+                h-14
+                rounded-2xl
+                bg-yellow-400/10
+                border
+                border-yellow-400/20
+                flex
+                items-center
+                justify-center
+            "
+        >
+            <div
+                class="
+                    loading-ring
+                    animate-spin
+                    rounded-full
+                    h-8
+                    w-8
+                "
+            ></div>
+        </div>
+
+        <h3
+            class="
+                text-sm
+                font-bold
+                text-white
+                mt-5
+            "
+        >
+            Processando dados
+        </h3>
+
+        <p
+            id="loading-text"
+            class="
+                mt-2
+                text-xs
+                text-slate-400
+            "
+        >
+            Conectando ao Mercado Livre...
+        </p>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     INÍCIO
+===================================================== -->
+
+<section
+    id="secao-inicio"
+    class="space-y-6"
+>
+
+    <div
+        class="
+            hero-grid
+            relative
+            overflow-hidden
+            rounded-3xl
+            border
+            border-slate-800
+            bg-slate-900/80
+            p-7
+            md:p-10
+        "
+    >
+
+        <div
+            class="
+                absolute
+                w-72
+                h-72
+                rounded-full
+                bg-yellow-400/10
+                blur-3xl
+                -right-20
+                -top-20
+            "
+        ></div>
+
+        <div
+            class="
+                relative
+                max-w-4xl
+            "
+        >
+
+            <span
+                class="
+                    inline-flex
+                    items-center
+                    gap-2
+                    px-3
+                    py-1.5
+                    rounded-full
+                    bg-yellow-400/10
+                    border
+                    border-yellow-400/20
+                    text-yellow-400
+                    text-[10px]
+                    font-bold
+                    uppercase
+                    tracking-[.16em]
+                "
+            >
+                <span
+                    class="
+                        w-1.5
+                        h-1.5
+                        bg-yellow-400
+                        rounded-full
+                    "
+                ></span>
+
+                ML Hub Pro
+            </span>
+
+            <h1
+                class="
+                    text-3xl
+                    md:text-5xl
+                    font-black
+                    tracking-tight
+                    text-white
+                    mt-5
+                "
+            >
+                Controle sua operação
+                <span
+                    class="text-yellow-400"
+                >
+                    no Mercado Livre.
+                </span>
+            </h1>
+
+            <p
+                class="
+                    text-sm
+                    md:text-base
+                    text-slate-400
+                    mt-4
+                    max-w-2xl
+                    leading-7
+                "
+            >
+                Gerencie anúncios, simule preços,
+                atualize valores em lote, acompanhe
+                suas vendas, visualize indicadores
+                e responda seus clientes em um único painel.
+            </p>
+
+            <div
+                class="
+                    flex
+                    flex-wrap
+                    gap-3
+                    mt-7
+                "
+            >
+
+                <button
+                    onclick="mudarAba('gestao')"
+                    class="
+                        bg-yellow-400
+                        hover:bg-yellow-300
+                        text-slate-950
+                        px-5
+                        py-3
+                        rounded-xl
+                        text-xs
+                        font-black
+                    "
+                >
+                    Abrir painel
+                </button>
+
+                <button
+                    onclick="mudarAba('gestao')"
+                    class="
+                        bg-slate-800
+                        hover:bg-slate-700
+                        text-white
+                        px-5
+                        py-3
+                        rounded-xl
+                        text-xs
+                        font-bold
+                        border
+                        border-slate-700
+                    "
+                >
+                    Gerenciar anúncios
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Conexão removida da Home: agora fica em Configurações -->
+
+    <!-- RESUMO DE VENDAS NA PÁGINA INICIAL -->
+    <div class="mt-1 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Vendas</div>
+                <h2 class="text-lg font-black text-white mt-1">Resumo da conta</h2>
+                <p id="home-dashboard-periodo" class="text-xs text-slate-500 mt-1">Aguardando atualização dos dados.</p>
+            </div>
+            <div id="home-tempo-real-status" class="text-[10px] text-emerald-400 font-bold">● Atualização automática ativa</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Faturamento</div>
+                <div id="home-dashboard-vendas" class="text-3xl font-black text-emerald-400 mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Valor dos pedidos pagos</div>
+            </div>
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Pedidos pagos</div>
+                <div id="home-dashboard-pedidos" class="text-3xl font-black text-white mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Pedidos considerados</div>
+            </div>
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Unidades vendidas</div>
+                <div id="home-dashboard-unidades" class="text-3xl font-black text-yellow-400 mt-3">—</div>
+                <div class="text-[10px] text-slate-500 mt-2">Quantidade total</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INDICADORES DO MERCADO LIVRE NA PÁGINA INICIAL -->
+    <div class="mt-1">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">
+                    Indicadores
+                </div>
+                <h2 class="text-lg font-black text-white mt-1">
+                    Indicadores do Mercado Livre
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">
+                    Dados da reputação da conta.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-emerald-400 text-lg">✓</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Vendas</div>
+                <div id="home-metric-vendas" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-vendas-periodo" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-red-400 text-lg">!</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Reclamações</div>
+                <div id="home-metric-reclamacoes" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-reclamacoes-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-orange-400 text-lg">⏱</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Atrasos</div>
+                <div id="home-metric-atrasos" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-atrasos-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-purple-400 text-lg">×</div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold mt-4">Cancelamentos</div>
+                <div id="home-metric-cancelamentos" class="text-2xl font-black text-white mt-2">—</div>
+                <div id="home-metric-cancelamentos-extra" class="text-[10px] text-slate-500 mt-2">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FUNCIONALIDADES -->
+
+
+    <!-- TOP 10 MAIS VENDIDOS - PÁGINA INICIAL -->
+    <div class="panel rounded-2xl overflow-hidden mt-6">
+        <div class="px-5 py-4 border-b border-slate-800">
+            <h2 class="text-sm font-bold text-white">🏆 Top 10 anúncios mais vendidos</h2>
+            <p class="text-[11px] text-slate-500 mt-1">
+                Ranking calculado pelas unidades vendidas nos pedidos pagos.
+            </p>
+        </div>
+        <div id="top10-home" class="p-5">
+            <div class="text-center py-10 text-xs text-slate-600">
+                Os dados aparecerão aqui após atualizar o painel de vendas.
+            </div>
+        </div>
+    </div>
+
+    <div
+        class="
+            grid
+            grid-cols-1
+            md:grid-cols-2
+            xl:grid-cols-4
+            gap-4
+        "
+    >
+
+        <div
+            onclick="mudarAba('gestao')"
+            class="
+                panel
+                panel-hover
+                rounded-2xl
+                p-5
+                cursor-pointer
+            "
+        >
+
+<!-- TOP 10 NA PÁGINA INICIAL -->
+<div class="flex items-center gap-2 flex-wrap justify-end">
+
+                <button
+                    onclick="puxarNovosAnuncios()"
+                    class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
+                    title="Busca somente anúncios novos que ainda não estão carregados no painel"
+                >
+                    ↓ Puxar anúncios
+                </button>
+
+                <button
+                    onclick="sincronizarPrecosApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o preço atual dos MLBs carregados"
+                >
+                    R$ Puxar preços
+                </button>
+
+                <button
+                    onclick="sincronizarFretesApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o frete atual dos MLBs carregados"
+                >
+                    🚚 Puxar fretes
+                </button>
+
+            </div>
+
+            <div
+                class="
+                    w-11
+                    h-11
+                    rounded-xl
+                    bg-blue-400/10
+                    text-blue-400
+                    flex
+                    items-center
+                    justify-center
+                    text-lg
+                "
+            >
+                ▦
+            </div>
+
+            <h3
+                class="
+                    text-sm
+                    font-bold
+                    text-white
+                    mt-4
+                "
+            >
+                Gestão de anúncios
+            </h3>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-2
+                    leading-5
+                "
+            >
+                Visualize preço, comissão,
+                frete, estoque e status.
+            </p>
+        </div>
+
+
+        <div
+            onclick="mudarAba('simulacao')"
+            class="
+                panel
+                panel-hover
+                rounded-2xl
+                p-5
+                cursor-pointer
+            "
+        >
+            <div
+                class="
+                    w-11
+                    h-11
+                    rounded-xl
+                    bg-yellow-400/10
+                    text-yellow-400
+                    flex
+                    items-center
+                    justify-center
+                    text-lg
+                "
+            >
+                ◈
+            </div>
+
+            <h3
+                class="
+                    text-sm
+                    font-bold
+                    text-white
+                    mt-4
+                "
+            >
+                Simulação de preço
+            </h3>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-2
+                    leading-5
+                "
+            >
+                Calcule preço, lucro e margem
+                de acordo com seus custos.
+            </p>
+        </div>
+
+
+        <div
+            onclick="mudarAba('dashboard'); carregarDashboard()"
+            class="
+                panel
+                panel-hover
+                rounded-2xl
+                p-5
+                cursor-pointer
+            "
+        >
+            <div
+                class="
+                    w-11
+                    h-11
+                    rounded-xl
+                    bg-emerald-400/10
+                    text-emerald-400
+                    flex
+                    items-center
+                    justify-center
+                    text-lg
+                "
+            >
+                📊
+            </div>
+
+            <h3
+                class="
+                    text-sm
+                    font-bold
+                    text-white
+                    mt-4
+                "
+            >
+                Vendas e indicadores
+            </h3>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-2
+                    leading-5
+                "
+            >
+                Acompanhe vendas reais,
+                indicadores e Top 10.
+            </p>
+        </div>
+
+
+        <div
+            onclick="mudarAba('perguntas'); carregarPerguntas()"
+            class="
+                panel
+                panel-hover
+                rounded-2xl
+                p-5
+                cursor-pointer
+            "
+        >
+            <div
+                class="
+                    w-11
+                    h-11
+                    rounded-xl
+                    bg-purple-400/10
+                    text-purple-400
+                    flex
+                    items-center
+                    justify-center
+                    text-lg
+                "
+            >
+                💬
+            </div>
+
+            <h3
+                class="
+                    text-sm
+                    font-bold
+                    text-white
+                    mt-4
+                "
+            >
+                Perguntas dos clientes
+            </h3>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-2
+                    leading-5
+                "
+            >
+                Veja dúvidas e responda
+                diretamente pelo painel.
+            </p>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     GESTÃO
+===================================================== -->
+
+<section
+    id="secao-gestao"
+    class="hidden space-y-6"
+>
+
+    <form
+        onsubmit="
+            event.preventDefault();
+            executarBusca();
+        "
+    >
+
+        <div
+            class="
+                panel
+                rounded-2xl
+                p-2
+                flex
+                items-center
+            "
+        >
+
+            <div
+                class="
+                    w-10
+                    h-10
+                    rounded-xl
+                    bg-slate-800
+                    flex
+                    items-center
+                    justify-center
+                    text-slate-400
+                "
+            >
+                ⌕
+            </div>
+
+            <input
+                type="text"
+                id="input-busca"
+                placeholder="Buscar por MLB, SKU ou título..."
+                class="
+                    bg-transparent
+                    border-none
+                    text-white
+                    text-sm
+                    w-full
+                    outline-none
+                    placeholder-slate-600
+                    px-3
+                "
+            >
+
+            <button
+                type="submit"
+                class="
+                    hidden
+                    sm:block
+                    bg-slate-800
+                    hover:bg-slate-700
+                    text-slate-300
+                    text-xs
+                    font-bold
+                    px-4
+                    py-2.5
+                    rounded-xl
+                "
+            >
+                Buscar
+            </button>
+
+            <button
+                type="button"
+                onclick="limparBusca()"
+                class="
+                    text-xs
+                    text-slate-500
+                    hover:text-white
+                    px-3
+                    py-2.5
+                "
+            >
+                Limpar
+            </button>
+
+        </div>
+
+    </form>
+
+
+    <div
+        class="
+            flex
+            flex-col
+            md:flex-row
+            md:items-end
+            md:justify-between
+            gap-3
+        "
+    >
+
+        <div>
+
+            <div
+                class="
+                    flex
+                    items-center
+                    gap-2
+                    mb-2
+                "
+            >
+                <span
+                    class="
+                        w-2
+                        h-2
+                        bg-yellow-400
+                        rounded-full
+                    "
+                ></span>
+
+                <span
+                    class="
+                        text-[10px]
+                        uppercase
+                        tracking-[.18em]
+                        text-yellow-400
+                        font-bold
+                    "
+                >
+                    Dashboard
+                </span>
+            </div>
+
+            <h1
+                class="
+                    text-xl
+                    md:text-2xl
+                    font-black
+                    text-white
+                "
+            >
+                Gestão de anúncios
+            </h1>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-1
+                "
+            >
+                Seus anúncios, preços, fretes,
+                comissão, estoque e status.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="
+            grid
+            grid-cols-1
+            sm:grid-cols-3
+            gap-4
+        "
+    >
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    text-slate-500
+                    uppercase
+                    tracking-[.14em]
+                    font-bold
+                "
+            >
+                Total listado
+            </span>
+
+            <h2
+                id="total-listado"
+                class="
+                    text-3xl
+                    font-black
+                    text-white
+                    mt-2
+                "
+            >
+                0
+            </h2>
+
+            <div
+                class="
+                    mt-4
+                    text-[10px]
+                    text-slate-500
+                "
+            >
+                Anúncios encontrados
+            </div>
+        </div>
+
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    text-slate-500
+                    uppercase
+                    tracking-[.14em]
+                    font-bold
+                "
+            >
+                Anúncios ativos
+            </span>
+
+            <h2
+                id="total-ativos"
+                class="
+                    text-3xl
+                    font-black
+                    text-emerald-400
+                    mt-2
+                "
+            >
+                0
+            </h2>
+
+            <div
+                class="
+                    mt-4
+                    text-[10px]
+                    text-emerald-400/70
+                "
+            >
+                Publicados atualmente
+            </div>
+        </div>
+
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    text-slate-500
+                    uppercase
+                    tracking-[.14em]
+                    font-bold
+                "
+            >
+                Outros status
+            </span>
+
+            <h2
+                id="total-outros"
+                class="
+                    text-3xl
+                    font-black
+                    text-slate-300
+                    mt-2
+                "
+            >
+                0
+            </h2>
+
+            <div
+                class="
+                    mt-4
+                    text-[10px]
+                    text-slate-500
+                "
+            >
+                Demais situações
+            </div>
+        </div>
+
+    </div>
+
+
+    <div
+        class="
+            panel
+            rounded-2xl
+            overflow-hidden
+        "
+    >
+
+        <div
+            class="
+                px-5
+                py-4
+                border-b
+                border-slate-800
+                flex
+                items-center
+                justify-between
+            "
+        >
+
+            <div>
+
+                <h2
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                    "
+                >
+                    Seus anúncios
+                </h2>
+
+                <p
+                    class="
+                        text-[11px]
+                        text-slate-500
+                        mt-0.5
+                    "
+                >
+                    Dados puxados diretamente da API.
+                </p>
+
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+
+                <button
+                    onclick="puxarNovosAnuncios()"
+                    class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
+                    title="Busca somente anúncios novos que ainda não estão carregados no painel"
+                >
+                    ↓ Puxar anúncios
+                </button>
+
+                <button
+                    onclick="sincronizarPrecosApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o preço atual dos MLBs carregados"
+                >
+                    R$ Puxar preços
+                </button>
+
+                <button
+                    onclick="sincronizarFretesApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o frete atual dos MLBs carregados"
+                >
+                    🚚 Puxar fretes
+                </button>
+
+            </div>
+
+        </div>
+
+        <div
+            class="overflow-x-auto"
+        >
+
+            <table
+                class="
+                    w-full
+                    text-left
+                    border-collapse
+                    futuristic-table
+                "
+            >
+
+                <thead>
+
+                    <tr>
+
+                        <th class="p-4">
+                            Anúncio
+                        </th>
+
+                        <th class="p-4">
+                            Preço
+                        </th>
+
+                        <th class="p-4">
+                            Comissão / Frete
+                        </th>
+
+                        <th class="p-4">
+                            Você recebe
+                        </th>
+
+                        <th class="p-4">
+                            Estoque
+                        </th>
+
+                        <th class="p-4">
+                            Vendas
+                        </th>
+
+                        <th class="p-4">
+                            Status
+                        </th>
+
+                        <th class="p-4">
+                            Ações
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody
+                    id="tabela-gestao"
+                    class="
+                        divide-y
+                        divide-slate-800/80
+                        text-xs
+                    "
+                ></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     DASHBOARD
+===================================================== -->
+
+<section
+    id="secao-dashboard"
+    class="hidden space-y-6"
+>
+
+    <div
+        class="
+            flex
+            flex-col
+            md:flex-row
+            md:items-end
+            md:justify-between
+            gap-3
+        "
+    >
+
+        <div>
+
+            <div
+                class="
+                    text-[10px]
+                    uppercase
+                    tracking-[.18em]
+                    text-blue-400
+                    font-bold
+                "
+            >
+                Analytics
+            </div>
+
+            <h1
+                class="
+                    text-xl
+                    md:text-2xl
+                    font-black
+                    text-white
+                    mt-2
+                "
+            >
+                Indicadores e vendas
+            </h1>
+
+            <p
+                id="dashboard-periodo"
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-1
+                "
+            >
+                Carregue os dados para visualizar.
+            </p>
+
+        </div>
+
+        <button
+            onclick="carregarDashboard()"
+            class="
+                bg-blue-500
+                hover:bg-blue-400
+                text-white
+                px-4
+                py-2.5
+                rounded-xl
+                text-xs
+                font-bold
+            "
+        >
+            Atualizar painel
+        </button>
+
+    </div>
+
+
+    <!-- VENDAS -->
+
+    <div
+        class="
+            grid
+            grid-cols-1
+            sm:grid-cols-3
+            gap-4
+        "
+    >
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    uppercase
+                    tracking-[.14em]
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Vendas reais
+            </span>
+
+            <div
+                id="dashboard-vendas"
+                class="
+                    text-3xl
+                    font-black
+                    text-emerald-400
+                    mt-3
+                "
+            >
+                R$ 0,00
+            </div>
+
+            <div
+                class="
+                    text-[10px]
+                    text-slate-500
+                    mt-3
+                "
+            >
+                Valor dos pedidos pagos
+            </div>
+        </div>
+
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    uppercase
+                    tracking-[.14em]
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Pedidos pagos
+            </span>
+
+            <div
+                id="dashboard-pedidos"
+                class="
+                    text-3xl
+                    font-black
+                    text-white
+                    mt-3
+                "
+            >
+                0
+            </div>
+
+            <div
+                class="
+                    text-[10px]
+                    text-slate-500
+                    mt-3
+                "
+            >
+                Pedidos considerados
+            </div>
+        </div>
+
+
+        <div
+            class="
+                panel
+                stat-card
+                rounded-2xl
+                p-5
+            "
+        >
+            <span
+                class="
+                    text-[10px]
+                    uppercase
+                    tracking-[.14em]
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Unidades vendidas
+            </span>
+
+            <div
+                id="dashboard-unidades"
+                class="
+                    text-3xl
+                    font-black
+                    text-yellow-400
+                    mt-3
+                "
+            >
+                0
+            </div>
+
+            <div
+                class="
+                    text-[10px]
+                    text-slate-500
+                    mt-3
+                "
+            >
+                Quantidade total
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- TOP 10 -->
+
+    <div
+        class="
+            panel
+            rounded-2xl
+            overflow-hidden
+        "
+    >
+
+        <div
+            class="
+                px-5
+                py-4
+                border-b
+                border-slate-800
+            "
+        >
+
+            <h2
+                class="
+                    text-sm
+                    font-bold
+                    text-white
+                "
+            >
+                🏆 Top 10 anúncios mais vendidos
+            </h2>
+
+            <p
+                class="
+                    text-[11px]
+                    text-slate-500
+                    mt-1
+                "
+            >
+                Ranking calculado pelas unidades
+                vendidas nos pedidos pagos.
+            </p>
+
+        </div>
+
+        <div
+            id="top10-container"
+            class="p-5"
+        >
+
+            <div
+                class="
+                    text-center
+                    py-12
+                    text-xs
+                    text-slate-600
+                "
+            >
+                Carregue o painel.
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+     PERFIL
+===================================================== -->
+<section id="secao-perfil" class="hidden space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Conta</div>
+            <h1 class="text-2xl font-black text-white mt-1">Perfil</h1>
+            <p class="text-xs text-slate-500 mt-1">Informações da conta conectada ao ML Hub Pro.</p>
+        </div>
+        <button onclick="mudarAba('inicio')" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl">
+            ← Voltar ao início
+        </button>
+    </div>
+
+    <div class="panel rounded-2xl p-6">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center text-xl font-black">M</div>
+            <div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Nome da conta</div>
+                <div id="perfil-nome-conta" class="text-xl font-black text-white mt-1">Mercado Livre</div>
+                <div id="perfil-status-conta" class="text-xs text-emerald-400 mt-2">● Conta conectada</div>
+            </div>
+        </div>
+        <div class="mt-6 pt-5 border-t border-slate-800 text-xs text-slate-500">
+            Este espaço já está preparado para receber as próximas informações do perfil que você quiser adicionar.
+        </div>
+    </div>
+</section>
+
+<!-- =====================================================
+     CONFIGURAÇÕES
+===================================================== -->
+<section id="secao-configuracoes" class="hidden space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Preferências</div>
+            <h1 class="text-2xl font-black text-white mt-1">Configurações</h1>
+            <p class="text-xs text-slate-500 mt-1">Personalize a aparência do ML Hub Pro.</p>
+        </div>
+        <button onclick="mudarAba('inicio')" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl">
+            ← Voltar ao início
+        </button>
+    </div>
+
+
+    <div class="panel rounded-2xl p-6">
+        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+            <div>
+                <h2 class="text-sm font-black text-white">Conta Mercado Livre</h2>
+                <p class="text-xs text-slate-500 mt-1">
+                    A autorização e a renovação do Access Token são feitas pelo servidor.
+                    O Client Secret não é gravado no navegador.
+                </p>
+                <div id="oauth-status-config" class="text-xs text-yellow-400 font-bold mt-3">
+                    Verificando conexão...
+                </div>
+            </div>
+            <button onclick="desconectarOAuthML()" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold px-4 py-2.5 rounded-xl">
+                Desconectar
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+            <div>
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
+                <input id="oauth-client-id-config" type="text" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="Ex.: 1234567890123456">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
+                <input id="oauth-client-secret-config" type="password" autocomplete="new-password"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="Secret Key da aplicação">
+            </div>
+            <div class="md:col-span-2">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no Mercado Livre</label>
+                <input id="oauth-redirect-uri-config"value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"  type="url" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="https://site-atualizar-pre-o-ml.onrender.com/auth/callback">
+            </div>
+            <div class="md:col-span-2">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
+                <input id="oauth-access-token-config" type="password" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="APP_USR-...">
+                <p class="text-[10px] text-slate-600 mt-2">
+                    O token atual pode ser usado temporariamente. Para renovação automática, conclua a autorização OAuth.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 mt-5">
+            <button onclick="iniciarOAuthML('config')" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">
+                Gerar acesso renovável
+            </button>
+            <button onclick="salvarTokenTemporarioConfig()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl border border-slate-700">
+                Usar token atual
+            </button>
+        </div>
+        <div class="mt-5">
+            <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Acesso gerenciado</label>
+            <input id="oauth-token-gerado-config" type="text" readonly
+                class="mt-2 w-full bg-slate-950 border border-slate-700 text-emerald-300 px-4 py-3 rounded-xl text-xs"
+                placeholder="Ainda não conectado">
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl p-6">
+        <h2 class="text-sm font-black text-white">Tema</h2>
+        <p class="text-xs text-slate-500 mt-1">Escolha o tema do painel. A preferência fica salva neste navegador.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            <button onclick="aplicarTema('claro')" data-theme-option="claro"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-300 bg-white"></div>
+                <div class="font-bold mt-3">Tema claro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Fundo claro e cartões suaves.</div>
+            </button>
+
+            <button onclick="aplicarTema('escuro')" data-theme-option="escuro"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-700 bg-black"></div>
+                <div class="font-bold mt-3">Tema escuro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Visual preto e alto contraste.</div>
+            </button>
+
+            <button onclick="aplicarTema('azul')" data-theme-option="azul"
+                class="theme-option text-left border border-slate-700 rounded-2xl p-4 hover:border-yellow-400">
+                <div class="h-20 rounded-xl border border-slate-700 bg-slate-900"></div>
+                <div class="font-bold mt-3">Azul escuro</div>
+                <div class="text-[11px] text-slate-500 mt-1">Tema padrão atual do painel.</div>
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- =====================================================
+     SIMULAÇÃO
+===================================================== -->
+
+<section
+    id="secao-simulacao"
+    class="hidden space-y-5"
+>
+
+    <div>
+
+        <div
+            class="
+                text-[10px]
+                uppercase
+                tracking-[.18em]
+                text-blue-400
+                font-bold
+            "
+        >
+            Financeiro
+        </div>
+
+        <h1
+            class="
+                text-xl
+                md:text-2xl
+                font-black
+                text-white
+                mt-2
+            "
+        >
+            Simulação de preços
+        </h1>
+
+        <p
+            class="
+                text-xs
+                text-slate-500
+                mt-1
+            "
+        >
+            Sua função original de simulação foi mantida.
+        </p>
+
+    </div>
+
+
+    <div
+        class="
+            panel
+            rounded-2xl
+            p-5
+        "
+    >
+
+        <div
+            class="
+                flex
+                flex-col
+                xl:flex-row
+                xl:items-center
+                xl:justify-between
+                gap-5
+            "
+        >
+
+            <div>
+
+                <h2
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                    "
+                >
+                    Preenchimento em massa
+                </h2>
+
+                <p
+                    class="
+                        text-[11px]
+                        text-slate-500
+                        mt-1
+                    "
+                >
+                    Aplique os valores nos anúncios.
+                </p>
+
+            </div>
+
+            <div
+                class="
+                    flex
+                    flex-wrap
+                    items-center
+                    gap-2
+                "
+            >
+
+                <input
+                    type="number"
+                    step="0.01"
+                    id="massa-custo"
+                    placeholder="Custo R$"
+                    class="
+                        input-simulacao
+                        w-24
+                    "
+                >
+
+                <input
+                    type="number"
+                    step="0.1"
+                    id="massa-taxa"
+                    placeholder="Taxa %"
+                    class="
+                        input-simulacao
+                        w-20
+                    "
+                >
+
+                <input
+                    type="number"
+                    step="0.1"
+                    id="massa-imposto"
+                    placeholder="Imposto %"
+                    class="
+                        input-simulacao
+                        w-24
+                    "
+                >
+
+                <input
+                    type="number"
+                    step="0.1"
+                    id="massa-lucro"
+                    placeholder="Lucro %"
+                    class="
+                        input-simulacao
+                        w-20
+                    "
+                >
+
+                <button
+                    onclick="aplicarEmMassa()"
+                    class="
+                        bg-yellow-400
+                        hover:bg-yellow-300
+                        text-slate-950
+                        font-bold
+                        text-xs
+                        px-4
+                        py-2
+                        rounded-lg
+                    "
+                >
+                    Aplicar
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="
+            rounded-2xl
+            overflow-hidden
+            bg-white
+            text-slate-900
+            shadow-card
+        "
+    >
+
+        <div
+            class="
+                px-5
+                py-4
+                border-b
+                border-slate-200
+            "
+        >
+
+            <h2
+                class="
+                    text-sm
+                    font-bold
+                "
+            >
+                Produtos e indicadores
+            </h2>
+
+        </div>
+
+        <div
+            class="overflow-x-auto"
+        >
+
+            <table
+                class="
+                    w-full
+                    text-left
+                    border-collapse
+                    text-xs
+                "
+            >
+
+                <thead>
+
+                    <tr
+                        class="
+                            bg-slate-50
+                            text-slate-600
+                            uppercase
+                            font-bold
+                            border-b
+                            border-slate-200
+                        "
+                    >
+
+                        <th class="p-3">
+                            MLB
+                        </th>
+
+                        <th class="p-3">
+                            SKU
+                        </th>
+
+                        <th class="p-3">
+                            Título
+                        </th>
+
+                        <th class="p-3">
+                            Preço Atual
+                        </th>
+
+                        <th class="p-3">
+                            Frete
+                        </th>
+
+                        <th class="p-3">
+                            Referência
+                        </th>
+
+                        <th class="p-3">
+                            Tipo
+                        </th>
+
+                        <th class="p-3">
+                            Taxa %
+                        </th>
+
+                        <th class="p-3">
+                            Custo
+                        </th>
+
+                        <th class="p-3">
+                            Imposto %
+                        </th>
+
+                        <th class="p-3">
+                            Lucro %
+                        </th>
+
+                        <th class="p-3">
+                            Novo preço
+                        </th>
+
+                        <th class="p-3">
+                            Lucro
+                        </th>
+
+                        <th class="p-3">
+                            Margem
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody
+                    id="tabela-simulacao"
+                    class="
+                        divide-y
+                        divide-slate-200
+                    "
+                ></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     ATUALIZAÇÃO
+===================================================== -->
+
+<section
+    id="secao-atualizacao"
+    class="hidden space-y-5"
+>
+
+    <div>
+
+        <div
+            class="
+                text-[10px]
+                uppercase
+                tracking-[.18em]
+                text-emerald-400
+                font-bold
+            "
+        >
+            Automação
+        </div>
+
+        <h1
+            class="
+                text-xl
+                md:text-2xl
+                font-black
+                text-white
+                mt-2
+            "
+        >
+            Atualização de preços
+        </h1>
+
+        <p
+            class="
+                text-xs
+                text-slate-500
+                mt-1
+            "
+        >
+            Sua função original de atualização em lote
+            foi mantida.
+        </p>
+
+    </div>
+
+
+    <div
+        class="
+            panel
+            rounded-2xl
+            p-5
+        "
+    >
+
+        <div
+            class="
+                flex
+                flex-col
+                lg:flex-row
+                lg:items-center
+                lg:justify-between
+                gap-5
+            "
+        >
+
+            <div>
+
+                <h2
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                    "
+                >
+                    Atualização em massa
+                </h2>
+
+                <p
+                    class="
+                        text-[11px]
+                        text-slate-500
+                        mt-1
+                    "
+                >
+                    Envio simultâneo para o Mercado Livre.
+                </p>
+
+            </div>
+
+            <div
+                class="
+                    flex
+                    items-center
+                    gap-3
+                "
+            >
+
+                <div
+                    class="
+                        bg-slate-950
+                        border
+                        border-slate-800
+                        rounded-xl
+                        px-4
+                        py-2.5
+                    "
+                >
+
+                    <div
+                        class="
+                            text-[9px]
+                            uppercase
+                            text-slate-500
+                            font-bold
+                        "
+                    >
+                        Para atualizar
+                    </div>
+
+                    <div
+                        id="contador-atualizacao"
+                        class="
+                            font-black
+                            text-amber-400
+                            text-lg
+                        "
+                    >
+                        0
+                    </div>
+
+                </div>
+
+                <button
+                    onclick="atualizarPrecosMassaApi()"
+                    class="
+                        bg-emerald-500
+                        hover:bg-emerald-400
+                        text-slate-950
+                        font-black
+                        text-xs
+                        px-5
+                        py-3
+                        rounded-xl
+                    "
+                >
+                    ↗ Atualizar preços
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="
+            panel
+            rounded-2xl
+            overflow-hidden
+        "
+    >
+
+        <div
+            class="
+                px-5
+                py-4
+                border-b
+                border-slate-800
+                flex
+                items-center
+                justify-between
+            "
+        >
+
+            <div>
+
+                <h2
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                    "
+                >
+                    Anúncios fora da margem
+                </h2>
+
+                <p
+                    class="
+                        text-[11px]
+                        text-slate-500
+                        mt-1
+                    "
+                >
+                    Selecione os anúncios.
+                </p>
+
+            </div>
+
+            <input
+                type="checkbox"
+                id="selecionar-todos"
+                onclick="alternarTodos(this)"
+                class="
+                    accent-yellow-400
+                    w-4
+                    h-4
+                "
+            >
+
+        </div>
+
+        <div
+            class="overflow-x-auto"
+        >
+
+            <table
+                class="
+                    w-full
+                    text-left
+                    border-collapse
+                    futuristic-table
+                "
+            >
+
+                <thead>
+
+                    <tr>
+
+                        <th class="p-4">
+                            ✓
+                        </th>
+
+                        <th class="p-4">
+                            Anúncio
+                        </th>
+
+                        <th class="p-4">
+                            Preço atual
+                        </th>
+
+                        <th class="p-4">
+                            Novo preço
+                        </th>
+
+                        <th class="p-4">
+                            Situação
+                        </th>
+
+                        <th class="p-4">
+                            Status API
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody
+                    id="tabela-atualizacao"
+                    class="
+                        divide-y
+                        divide-slate-800/80
+                        text-xs
+                    "
+                ></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     PERGUNTAS
+===================================================== -->
+
+<section
+    id="secao-perguntas"
+    class="hidden space-y-5"
+>
+
+    <div
+        class="
+            flex
+            flex-col
+            md:flex-row
+            md:items-end
+            md:justify-between
+            gap-4
+        "
+    >
+
+        <div>
+
+            <div
+                class="
+                    text-[10px]
+                    uppercase
+                    tracking-[.18em]
+                    text-purple-400
+                    font-bold
+                "
+            >
+                Atendimento
+            </div>
+
+            <h1
+                class="
+                    text-xl
+                    md:text-2xl
+                    font-black
+                    text-white
+                    mt-2
+                "
+            >
+                Perguntas dos clientes
+            </h1>
+
+            <p
+                class="
+                    text-xs
+                    text-slate-500
+                    mt-1
+                "
+            >
+                Consulte e responda diretamente pelo Mercado Livre.
+            </p>
+
+        </div>
+
+        <button
+            onclick="carregarPerguntas()"
+            class="
+                bg-purple-500
+                hover:bg-purple-400
+                text-white
+                px-4
+                py-2.5
+                rounded-xl
+                text-xs
+                font-bold
+            "
+        >
+            Atualizar perguntas
+        </button>
+
+    </div>
+
+
+    <div
+        class="
+            grid
+            grid-cols-1
+            sm:grid-cols-3
+            gap-4
+        "
+    >
+
+        <div
+            class="
+                panel
+                rounded-2xl
+                p-5
+            "
+        >
+
+            <div
+                class="
+                    text-[10px]
+                    uppercase
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Total
+            </div>
+
+            <div
+                id="perguntas-total"
+                class="
+                    text-3xl
+                    font-black
+                    text-white
+                    mt-2
+                "
+            >
+                0
+            </div>
+
+        </div>
+
+
+        <div
+            class="
+                panel
+                rounded-2xl
+                p-5
+            "
+        >
+
+            <div
+                class="
+                    text-[10px]
+                    uppercase
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Pendentes
+            </div>
+
+            <div
+                id="perguntas-pendentes"
+                class="
+                    text-3xl
+                    font-black
+                    text-yellow-400
+                    mt-2
+                "
+            >
+                0
+            </div>
+
+        </div>
+
+
+        <div
+            class="
+                panel
+                rounded-2xl
+                p-5
+            "
+        >
+
+            <div
+                class="
+                    text-[10px]
+                    uppercase
+                    text-slate-500
+                    font-bold
+                "
+            >
+                Respondidas
+            </div>
+
+            <div
+                id="perguntas-respondidas"
+                class="
+                    text-3xl
+                    font-black
+                    text-emerald-400
+                    mt-2
+                "
+            >
+                0
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div
+        id="lista-perguntas"
+        class="space-y-4"
+    >
+
+        <div
+            class="
+                panel
+                rounded-2xl
+                p-10
+                text-center
+                text-xs
+                text-slate-600
+            "
+        >
+            Clique em "Atualizar perguntas".
+        </div>
+
+    </div>
+
+</section>
+
+</main>
+
+
+<footer
+    class="
+        max-w-[1800px]
+        mx-auto
+        px-4
+        lg:px-6
+        pb-6
+    "
+>
+
+    <div
+        class="
+            border-t
+            border-slate-900
+            pt-5
+            flex
+            flex-col
+            sm:flex-row
+            justify-between
+            gap-2
+            text-[10px]
+            text-slate-600
+        "
+    >
+
+        <span>
+            ML Hub Pro
+        </span>
+
+        <span>
+            Mercado Livre API
+        </span>
+
+    </div>
+
+</footer>
+
+
+<script>
+
+/* =========================================================
+   CONFIGURAÇÃO
+========================================================= */
+
+const RENDER_URL =
+    "https://site-atualizar-pre-o-ml.onrender.com";
+
+let cacheItens = [];
+
+const ML_HUB_CACHE_KEY = 'mlHubPro_cacheItens_v1';
+
+function salvarCacheItensLocal() {
+    try {
+        localStorage.setItem(ML_HUB_CACHE_KEY, JSON.stringify(cacheItens || []));
+    } catch (erro) {
+        console.warn('Não foi possível salvar os anúncios localmente:', erro);
+    }
+}
+
+function carregarCacheItensLocal() {
+    try {
+        const bruto = localStorage.getItem(ML_HUB_CACHE_KEY);
+        if (!bruto) return false;
+
+        const dados = JSON.parse(bruto);
+        if (!Array.isArray(dados) || !dados.length) return false;
+
+        cacheItens = dados;
+        return true;
+    } catch (erro) {
+        console.warn('Não foi possível recuperar os anúncios salvos:', erro);
+        return false;
+    }
+}
+
+
+let novosPrecosCalculados = {};
+
+let abaAtualAtiva =
+    'inicio';
+
+let dashboardCache =
+    null;
+
+
+/* =========================================================
+   UTILITÁRIOS
+========================================================= */
+
+function escapeHtml(value) {
+
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+
+function moeda(valor) {
+
+    return Number(
+        valor || 0
+    ).toLocaleString(
+        'pt-BR',
+        {
+            style:
+                'currency',
+            currency:
+                'BRL'
+        }
+    );
+}
+
+
+function mostrarLoading(texto) {
+
+    document.getElementById(
+        'loading-text'
+    ).innerText =
+        texto;
+
+    document.getElementById(
+        'loading'
+    ).classList.remove(
+        'hidden'
+    );
+
+    document.getElementById(
+        'loading'
+    ).classList.add(
+        'flex'
+    );
+}
+
+
+function esconderLoading() {
+
+    document.getElementById(
+        'loading'
+    ).classList.add(
+        'hidden'
+    );
+
+    document.getElementById(
+        'loading'
+    ).classList.remove(
+        'flex'
+    );
+}
+
+
+function obterToken() {
+    // Mantém compatibilidade com as funções existentes.
+    // Quando OAuth está conectado, o backend usa e renova o token automaticamente.
+    const legado = localStorage.getItem('ml_access_token');
+    if (legado) return legado;
+    if (localStorage.getItem('ml_oauth_connected') === '1') return 'AUTO';
+    return '';
+}
+
+
+/* =========================================================
+   TOKEN
+========================================================= */
+
+function solicitarToken() {
+    if (localStorage.getItem('ml_oauth_connected') === '1') {
+        mudarAba('configuracoes');
+        atualizarStatusOAuthML();
+    } else {
+        const gate = document.getElementById('oauth-login-gate');
+        if (gate) gate.classList.remove('hidden');
+    }
+}
+
+
+function salvarTokenManual() {
+
+    const token =
+        document
+            .getElementById(
+                'input-token-manual'
+            )
+            .value
+            .trim();
+
+    if (!token) {
+
+        alert(
+            'Digite um token válido.'
+        );
+
+        return;
+    }
+
+    localStorage.setItem(
+        'ml_access_token',
+        token
+    );
+
+    document.getElementById(
+        'aviso-token'
+    ).classList.add(
+        'hidden'
+    );
+
+    atualizarStatusTokenHome();
+
+    alert(
+        'Token salvo neste navegador.'
+    );
+}
+
+
+function salvarTokenHome() {
+
+    const token =
+        document
+            .getElementById(
+                'input-token-home'
+            )
+            .value
+            .trim();
+
+    if (!token) {
+
+        alert(
+            'Digite um token válido.'
+        );
+
+        return;
+    }
+
+    localStorage.setItem(
+        'ml_access_token',
+        token
+    );
+
+    atualizarStatusTokenHome();
+
+    alert(
+        'Token salvo com sucesso.'
+    );
+
+    carregarDashboard();
+}
+
+
+function atualizarStatusTokenHome() {
+
+    const status =
+        document.getElementById(
+            'status-token-home'
+        );
+
+    if (!status) {
+        return;
+    }
+
+    const token =
+        obterToken();
+
+    if (token) {
+
+        status.innerHTML =
+            `
+            <span class="text-emerald-400 font-bold">
+                ● Token configurado
+            </span>
+            <span class="text-slate-600 ml-2">
+                Pronto para conectar ao Mercado Livre.
+            </span>
+            `;
+
+    } else {
+
+        status.innerHTML =
+            `
+            <span class="text-yellow-400 font-bold">
+                ● Token ainda não configurado
+            </span>
+            `;
+    }
+}
+
+
+/* =========================================================
+   NAVEGAÇÃO
+========================================================= */
+
+function mudarAba(aba) {
+    document.body.classList.toggle('pagina-inicial-ativa', String(aba) === 'inicio');
+    document.body.classList.toggle('painel-interno-ativo', String(aba) !== 'inicio');
+
+    try {
+        localStorage.setItem('mlHubPro_abaAtual_v1', String(aba));
+    } catch (erro) {
+        console.warn('Não foi possível salvar a aba atual:', erro);
+    }
+
+
+    abaAtualAtiva =
+        aba;
+
+    const secoes = [
+        'inicio',
+        'gestao',
+        'dashboard',
+        'perfil',
+        'configuracoes',
+        'simulacao',
+        'atualizacao',
+        'perguntas'
+    ];
+
+    secoes.forEach(
+        nome => {
+
+            const secao =
+                document.getElementById(
+                    `secao-${nome}`
+                );
+
+            if (secao) {
+                secao.classList.add(
+                    'hidden'
+                );
+            }
+
+            const botao =
+                document.getElementById(
+                    `btn-${nome}`
+                );
+
+            if (botao) {
+
+                botao.classList.remove(
+                    'active'
+                );
+
+                botao.classList.remove(
+                    'font-bold'
+                );
+
+                botao.classList.add(
+                    'font-semibold'
+                );
+
+            }
+
+        }
+    );
+
+    const secaoAtiva =
+        document.getElementById(
+            `secao-${aba}`
+        );
+
+    if (secaoAtiva) {
+
+        secaoAtiva.classList.remove(
+            'hidden'
+        );
+    }
+
+    const botaoAtivo =
+        document.getElementById(
+            `btn-${aba}`
+        );
+
+    if (botaoAtivo) {
+
+        botaoAtivo.classList.add(
+            'active'
+        );
+
+        botaoAtivo.classList.remove(
+            'font-semibold'
+        );
+
+        botaoAtivo.classList.add(
+            'font-bold'
+        );
+    }
+
+    if (
+        aba === 'dashboard' &&
+        !dashboardCache
+    ) {
+        carregarDashboard();
+    }
+
+    if (
+        aba === 'perguntas'
+    ) {
+        carregarPerguntas();
+    }
+
+    if (
+        aba === 'gestao' ||
+        aba === 'simulacao' ||
+        aba === 'atualizacao'
+    ) {
+        executarBusca();
+    }
+}
+
+
+/* =========================================================
+   GESTÃO - FUNÇÕES ORIGINAIS
+========================================================= */
+
+function executarBusca() {
+
+    const termo =
+        document
+            .getElementById(
+                'input-busca'
+            )
+            ?.value
+            .toLowerCase()
+            .trim() ||
+        '';
+
+    let itensFiltrados =
+        cacheItens;
+
+    if (termo !== '') {
+
+        itensFiltrados =
+            cacheItens.filter(
+                item =>
+                    String(
+                        item.id
+                    )
+                        .toLowerCase()
+                        .includes(
+                            termo
+                        ) ||
+
+                    String(
+                        item.sku
+                    )
+                        .toLowerCase()
+                        .includes(
+                            termo
+                        ) ||
+
+                    String(
+                        item.title
+                    )
+                        .toLowerCase()
+                        .includes(
+                            termo
+                        )
+            );
+    }
+
+    if (
+        abaAtualAtiva ===
+        'gestao'
+    ) {
+
+        montarTabelaGestao(
+            itensFiltrados
+        );
+
+    } else if (
+        abaAtualAtiva ===
+        'simulacao'
+    ) {
+
+        montarTabelaSimulacao(
+            itensFiltrados
+        );
+
+    } else if (
+        abaAtualAtiva ===
+        'atualizacao'
+    ) {
+
+        montarTabelaAtualizacao(
+            itensFiltrados
+        );
+    }
+}
+
+
+function limparBusca() {
+
+    const campo =
+        document.getElementById(
+            'input-busca'
+        );
+
+    if (campo) {
+        campo.value = '';
+    }
+
+    executarBusca();
+}
+
+
+async function carregarDados() {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    mostrarLoading(
+        'Buscando todos os seus anúncios na API do Mercado Livre...'
+    );
+
+    try {
+
+        const response =
+            await fetch(
+                `${RENDER_URL}/api/anuncios`,
+                {
+                    headers: {
+                        Authorization:
+                            token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            response.ok &&
+            data.itens
+        ) {
+
+            cacheItens =
+                data.itens;
+        salvarCacheItensLocal();
+
+            atualizarCards(
+                cacheItens
+            );
+
+            executarBusca();
+
+            mudarAba(
+                'gestao'
+            );
+
+            alert(
+                `Sucesso! ${cacheItens.length} anúncios carregados.`
+            );
+
+        } else {
+
+            alert(
+                data.erro ||
+                'Erro ao carregar anúncios.'
+            );
+
+        }
+
+    } catch (error) {
+
+        alert(
+            'Erro de comunicação com o servidor.'
+        );
+
+    } finally {
+
+        esconderLoading();
+    }
+}
+
+
+async function puxarNovosAnuncios() {
+
+    const token = obterToken();
+
+    if (!token) {
+        solicitarToken();
+        return;
+    }
+
+    mostrarLoading(
+        'Buscando somente anúncios novos no Mercado Livre...'
+    );
+
+    try {
+
+        const idsExistentes = (cacheItens || [])
+            .map(item => item.id)
+            .filter(Boolean);
+
+        const params = new URLSearchParams();
+
+        if (idsExistentes.length > 0) {
+            params.set('existingIds', idsExistentes.join(','));
+        }
+
+        const url =
+            `${RENDER_URL}/api/anuncios` +
+            (params.toString() ? `?${params.toString()}` : '');
+
+        const response = await fetch(
+            url,
+            {
+                headers: {
+                    Authorization: token
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.erro || 'Erro ao buscar anúncios novos.');
+            return;
+        }
+
+        const novos = Array.isArray(data.itens)
+            ? data.itens
+            : [];
+
+        if (novos.length === 0) {
+            alert(data.mensagem || 'Nenhum anúncio novo encontrado.');
+            return;
+        }
+
+        const idsJaCarregados = new Set(
+            (cacheItens || []).map(item => item.id)
+        );
+
+        const realmenteNovos = novos.filter(
+            item => !idsJaCarregados.has(item.id)
+        );
+
+        cacheItens = [
+            ...realmenteNovos,
+            ...(cacheItens || [])
+        ];
+
+        // Mantém os novos anúncios salvos mesmo após F5.
+        salvarCacheItensLocal();
+
+        atualizarCards(cacheItens);
+        executarBusca();
+
+        alert(
+            `${realmenteNovos.length} anúncio(s) novo(s) adicionado(s).`
+        );
+
+    } catch (error) {
+        console.error('Erro ao puxar anúncios novos:', error);
+        alert('Erro de comunicação com o servidor.');
+    } finally {
+        esconderLoading();
+    }
+}
+
+
+async function sincronizarPrecosApi() {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    if (
+        !cacheItens ||
+        cacheItens.length === 0
+    ) {
+
+        alert(
+            "Nenhum anúncio carregado."
+        );
+
+        return;
+    }
+
+    mostrarLoading(
+        "Puxando preços atuais..."
+    );
+
+    try {
+
+        const mlbs =
+            cacheItens.map(
+                item => item.id
+            );
+
+        const response =
+            await fetch(
+                `${RENDER_URL}/api/sincronizar-precos`,
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+
+                        Authorization:
+                            token
+                    },
+
+                    body:
+                        JSON.stringify({
+                            ids:
+                                mlbs
+                        })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            response.ok &&
+            data.precos
+        ) {
+
+            cacheItens.forEach(
+                item => {
+
+                    if (
+                        data.precos[
+                            item.id
+                        ] !==
+                        undefined
+                    ) {
+
+                        item.price =
+                            data.precos[
+                                item.id
+                            ];
+
+                        item.net_received =
+                            Math.max(
+                                0,
+                                Number(item.price || 0) -
+                                Number(item.sale_fee || 0) -
+                                Number(item.shipping_cost || 0)
+                            );
+                    }
+
+                }
+            );
+
+            // Salva os preços atualizados. Eles só mudam novamente
+            // quando o usuário clicar em Puxar preços.
+            salvarCacheItensLocal();
+
+            atualizarCards(
+                cacheItens
+            );
+
+            executarBusca();
+
+            alert(
+                'Preços sincronizados com sucesso.'
+            );
+
+        } else {
+
+            alert(
+                data.erro ||
+                'Erro ao sincronizar preços.'
+            );
+        }
+
+    } catch (error) {
+
+        alert(
+            'Erro de comunicação.'
+        );
+
+    } finally {
+
+        esconderLoading();
+    }
+}
+
+
+async function sincronizarFretesApi() {
+
+    const token = obterToken();
+
+    if (!token) {
+        solicitarToken();
+        return;
+    }
+
+    if (!cacheItens || cacheItens.length === 0) {
+        alert("Nenhum anúncio carregado.");
+        return;
+    }
+
+    const mlbs = cacheItens.map(item => item.id).filter(Boolean);
+    const tamanhoLote = 1000;
+    let atualizados = 0;
+    let falhas = 0;
+
+    mostrarLoading(`Puxando custos de frete... 0/${mlbs.length}`);
+
+    try {
+        for (let i = 0; i < mlbs.length; i += tamanhoLote) {
+            const lote = mlbs.slice(i, i + tamanhoLote);
+
+            // Atualiza a mensagem sem alterar o restante do layout.
+            const textoLoading = document.querySelector('#loading-overlay p, #loadingOverlay p, [id*="loading"] p');
+            if (textoLoading) {
+                textoLoading.textContent = `Puxando custos de frete... ${Math.min(i, mlbs.length)}/${mlbs.length}`;
+            }
+
+            const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: token
+                },
+                body: JSON.stringify({ ids: lote })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.fretes) {
+                falhas += lote.length;
+                console.error('Erro no lote de fretes:', data.erro || data);
+                continue;
+            }
+
+            cacheItens.forEach(item => {
+                const frete = data.fretes[item.id];
+                if (!frete) return;
+
+                item.shipping_cost = Number(frete.custo || 0);
+                item.free_shipping = Boolean(frete.gratis);
+                item.net_received = Math.max(
+                    0,
+                    Number(item.price || 0) -
+                    Number(item.sale_fee || 0) -
+                    Number(item.shipping_cost || 0)
+                );
+                atualizados++;
+            });
+
+            // Salva cada lote concluído. Assim, mesmo que a página seja
+            // recarregada durante a sincronização, os fretes já obtidos permanecem.
+            salvarCacheItensLocal();
+
+            // Atualiza a tabela a cada lote, então o usuário vê o resultado chegando.
+            executarBusca();
+        }
+
+        // Confirma no armazenamento local o estado final dos fretes.
+        salvarCacheItensLocal();
+
+        atualizarCards(cacheItens);
+        executarBusca();
+
+        if (falhas > 0) {
+            alert(`Fretes atualizados: ${atualizados}. Não foi possível consultar ${falhas} anúncio(s).`);
+        } else {
+            alert(`Fretes sincronizados com sucesso: ${atualizados} anúncio(s).`);
+        }
+
+    } catch (error) {
+        console.error('Erro ao sincronizar fretes:', error);
+        alert('Erro ao sincronizar fretes: ' + error.message);
+    } finally {
+        esconderLoading();
+    }
+}
+
+function atualizarCards(
+    itens
+) {
+
+    const ativos =
+        itens.filter(
+            item =>
+                item.status ===
+                'active'
+        ).length;
+
+    document.getElementById(
+        'total-listado'
+    ).innerText =
+        itens.length;
+
+    document.getElementById(
+        'total-ativos'
+    ).innerText =
+        ativos;
+
+    document.getElementById(
+        'total-outros'
+    ).innerText =
+        itens.length -
+        ativos;
+}
+
+
+function montarTabelaGestao(
+    itens
+) {
+
+    const tbody =
+        document.getElementById(
+            'tabela-gestao'
+        );
+
+    if (!tbody) {
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    itens.forEach(
+        item => {
+
+            const index =
+                cacheItens.findIndex(
+                    i => i.id === item.id
+                );
+
+            const tr =
+                document.createElement(
+                    'tr'
+                );
+
+            tr.innerHTML =
+                `
+                <td class="p-4">
+                    <div class="flex items-center gap-3 min-w-[360px]">
+
+                        <img
+                            src="${escapeHtml(item.thumbnail)}"
+                            class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800 shrink-0"
+                        >
+
+                        <div class="min-w-0 flex-1 space-y-2">
+
+                            <div class="relative">
+                                <input
+                                    id="titulo_gestao_${index}"
+                                    type="text"
+                                    value="${escapeHtml(item.title)}"
+                                    maxlength="200"
+                                    oninput="atualizarContadorTituloGestao(${index})"
+                                    class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 pr-14 rounded-lg outline-none focus:border-yellow-400/60"
+                                    title="Editar título do anúncio - limite de 60 caracteres"
+                                >
+                                <span
+                                    id="contador_titulo_gestao_${index}"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold ${String(item.title || '').length > 60 ? 'text-red-500' : 'text-slate-500'}"
+                                >
+                                    ${String(item.title || '').length}/60
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-slate-500 shrink-0">
+                                    ${escapeHtml(item.id)}
+                                </span>
+
+                                <span class="text-[10px] text-slate-600">•</span>
+
+                                <span class="text-[10px] text-slate-500 shrink-0">SKU:</span>
+
+                                <input
+                                    id="sku_gestao_${index}"
+                                    type="text"
+                                    value="${escapeHtml(item.sku === 'Sem SKU' ? '' : item.sku)}"
+                                    class="min-w-[120px] flex-1 bg-slate-950 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-1.5 rounded-lg outline-none focus:border-yellow-400/60"
+                                    placeholder="Sem SKU"
+                                    title="Editar SKU do anúncio"
+                                >
+                            </div>
+
+                        </div>
+
+                    </div>
+                </td>
+
+                <td class="p-4">
+                    <span class="font-black text-white">
+                        ${moeda(item.price)}
+                    </span>
+                </td>
+
+                <td class="p-4 text-slate-400">
+                    Comissão:
+                    <span class="text-slate-300">
+                        ${moeda(item.sale_fee)}
+                    </span>
+
+                    <br>
+
+                    Frete:
+                    <span class="text-slate-300">
+                        ${moeda(item.shipping_cost)}
+                    </span>
+                </td>
+
+                <td class="p-4">
+                    <span class="font-black text-emerald-400">
+                        ${moeda(item.net_received)}
+                    </span>
+                </td>
+
+                <td class="p-4">
+                    <div class="flex items-center gap-1.5 min-w-[90px]">
+                        <input
+                            id="estoque_gestao_${index}"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value="${Number(item.available_quantity || 0)}"
+                            class="w-20 bg-slate-950 border border-slate-700 text-white text-xs px-2.5 py-2 rounded-lg outline-none focus:border-yellow-400/60"
+                            title="Editar quantidade disponível no Mercado Livre"
+                        >
+                        <span class="text-slate-600">un.</span>
+                    </div>
+                </td>
+
+                <td class="p-4">
+                    <span class="font-black text-white">
+                        ${Number(item.sold_quantity || 0)}
+                    </span>
+                    <span class="text-slate-600">
+                        un.
+                    </span>
+                </td>
+
+                <td class="p-4">
+
+                    <div class="flex items-center gap-2">
+
+                        <span
+                            class="status-dot ${item.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}"
+                        ></span>
+
+                        <span
+                            class="text-[11px] font-bold ${item.status === 'active' ? 'text-emerald-400' : 'text-slate-400'}"
+                            title="Situação retornada pela API do Mercado Livre"
+                        >
+                            ${escapeHtml(item.status || '')}
+                        </span>
+
+                    </div>
+
+                </td>
+
+                <td class="p-4">
+                    <div class="flex flex-col gap-2 min-w-[105px]">
+
+                        <button
+                            type="button"
+                            onclick="salvarEdicaoAnuncio(${index})"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-[10px] font-black"
+                        >
+                            Salvar
+                        </button>
+
+                        ${(item.status === 'active' || item.status === 'paused') ? `
+                        <button
+                            type="button"
+                            onclick="alternarStatusAnuncio(${index})"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg ${item.status === 'active' ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} text-[10px] font-black"
+                        >
+                            ${item.status === 'active' ? 'Pausar' : 'Ativar'}
+                        </button>
+                        ` : ''}
+
+                        <a
+                            href="${escapeHtml(item.permalink)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 text-[10px] font-bold"
+                        >
+                            Ver anúncio ↗
+                        </a>
+
+                    </div>
+                </td>
+                `;
+
+            tbody.appendChild(
+                tr
+            );
+        }
+    );
+}
+
+
+function atualizarContadorTituloGestao(index) {
+    const input = document.getElementById(`titulo_gestao_${index}`);
+    const contador = document.getElementById(`contador_titulo_gestao_${index}`);
+
+    if (!input || !contador) return;
+
+    const quantidade = input.value.length;
+    contador.textContent = `${quantidade}/60`;
+
+    const ultrapassou = quantidade > 60;
+    input.classList.toggle('text-red-500', ultrapassou);
+    input.classList.toggle('border-red-500', ultrapassou);
+    input.classList.toggle('text-white', !ultrapassou);
+    contador.classList.toggle('text-red-500', ultrapassou);
+    contador.classList.toggle('text-slate-500', !ultrapassou);
+}
+
+
+async function salvarEdicaoAnuncio(index) {
+    const token = obterToken();
+
+    if (!token) {
+        solicitarToken();
+        return;
+    }
+
+    const item = cacheItens[index];
+
+    if (!item) {
+        alert('Anúncio não encontrado no painel.');
+        return;
+    }
+
+    const inputTitulo = document.getElementById(`titulo_gestao_${index}`);
+    const inputSku = document.getElementById(`sku_gestao_${index}`);
+    const inputEstoque = document.getElementById(`estoque_gestao_${index}`);
+
+    const title = inputTitulo?.value.trim() || '';
+    const sku = inputSku?.value.trim() || '';
+    const available_quantity = Number(inputEstoque?.value);
+
+    if (!Number.isInteger(available_quantity) || available_quantity < 0) {
+        alert('Informe uma quantidade de estoque válida, usando um número inteiro igual ou maior que zero.');
+        inputEstoque?.focus();
+        return;
+    }
+
+    if (!title) {
+        alert('O título do anúncio não pode ficar vazio.');
+        inputTitulo?.focus();
+        return;
+    }
+
+    if (title.length > 60) {
+        atualizarContadorTituloGestao(index);
+        alert(`O título está com ${title.length} caracteres. O limite é 60 caracteres.`);
+        inputTitulo?.focus();
+        return;
+    }
+
+    mostrarLoading('Salvando título e SKU no Mercado Livre...');
+
+    try {
+        const response = await fetch(`${RENDER_URL}/api/atualizar-anuncio`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: token
+            },
+            body: JSON.stringify({
+                id: item.id,
+                title,
+                sku,
+                available_quantity
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.sucesso) {
+            // Se o SKU foi salvo, mas o título não pôde ser alterado (por
+            // exemplo, anúncio que já possui vendas), atualiza o painel com
+            // o resultado parcial real antes de mostrar a mensagem da API.
+            if (data.parcial && data.item) {
+                item.title = data.item.title ?? item.title;
+                item.sku = data.item.sku ?? item.sku;
+                if (data.item.status !== undefined) item.status = data.item.status;
+                if (data.item.sold_quantity !== undefined) item.sold_quantity = Number(data.item.sold_quantity || 0);
+                if (data.item.available_quantity !== undefined) item.available_quantity = Number(data.item.available_quantity || 0);
+                executarBusca();
+                atualizarCards(cacheItens);
+            }
+            alert(data.erro || 'Erro ao atualizar o anúncio.');
+            return;
+        }
+
+        item.title = data.item?.title ?? title;
+        item.sku = data.item?.sku ?? (sku || 'Sem SKU');
+
+        if (data.item?.status !== undefined) {
+            item.status = data.item.status;
+        }
+
+        if (data.item?.sold_quantity !== undefined) {
+            item.sold_quantity = Number(data.item.sold_quantity || 0);
+        }
+
+        if (data.item?.available_quantity !== undefined) {
+            item.available_quantity = Number(data.item.available_quantity || 0);
+        }
+
+        salvarCacheItensLocal();
+        executarBusca();
+        atualizarCards(cacheItens);
+        alert('Anúncio atualizado com sucesso.');
+
+    } catch (error) {
+        console.error(error);
+        alert('Erro de comunicação ao atualizar o anúncio.');
+    } finally {
+        esconderLoading();
+    }
+}
+
+
+async function alternarStatusAnuncio(index) {
+    const token = obterToken();
+    if (!token) { solicitarToken(); return; }
+
+    const item = cacheItens[index];
+    if (!item) { alert('Anúncio não encontrado no painel.'); return; }
+
+    const novoStatus = item.status === 'active' ? 'paused' : 'active';
+    const acao = novoStatus === 'paused' ? 'pausar' : 'ativar';
+
+    mostrarLoading(`${novoStatus === 'paused' ? 'Pausando' : 'Ativando'} anúncio no Mercado Livre...`);
+    try {
+        const response = await fetch(`${RENDER_URL}/api/alterar-status-anuncio`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: token },
+            body: JSON.stringify({ id: item.id, status: novoStatus })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) {
+            alert(data.erro || `Não foi possível ${acao} o anúncio.`);
+            return;
+        }
+        item.status = data.item?.status || novoStatus;
+        if (data.item?.available_quantity !== undefined) {
+            item.available_quantity = Number(data.item.available_quantity || 0);
+        }
+        salvarCacheItensLocal();
+        executarBusca();
+        atualizarCards(cacheItens);
+        alert(`Anúncio ${item.status === 'active' ? 'ativado' : 'pausado'} com sucesso.`);
+    } catch (error) {
+        console.error(error);
+        alert(`Erro de comunicação ao ${acao} o anúncio.`);
+    } finally {
+        esconderLoading();
+    }
+}
+
+
+/* =========================================================
+   SIMULAÇÃO ORIGINAL
+========================================================= */
+
+function montarTabelaSimulacao(
+    itens
+) {
+
+    const tbody =
+        document.getElementById(
+            'tabela-simulacao'
+        );
+
+    if (!tbody) {
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    itens.forEach(
+        item => {
+
+            const index =
+                cacheItens.findIndex(
+                    i =>
+                        i.id ===
+                        item.id
+                );
+
+            const tipoNome =
+                item.listing_type_id ===
+                'gold_pro'
+                    ? 'Premium'
+                    : 'Clássico';
+
+            const comissaoPadrao =
+                item.listing_type_id ===
+                'gold_pro'
+                    ? 17
+                    : 12;
+
+            const tr =
+                document.createElement(
+                    'tr'
+                );
+
+            tr.innerHTML =
+                `
+                <td class="p-3 font-mono">
+                    ${escapeHtml(item.id)}
+                </td>
+
+                <td class="p-3 font-mono">
+                    ${escapeHtml(item.sku)}
+                </td>
+
+                <td class="p-3 max-w-[220px] truncate">
+                    ${escapeHtml(item.title)}
+                </td>
+
+                <td class="p-3 font-bold">
+                    ${moeda(item.price)}
+                </td>
+
+                <td class="p-3">
+                    ${moeda(item.shipping_cost)}
+                </td>
+
+                <td class="p-3 font-black text-blue-700 bg-blue-50">
+                    R$ 78,90
+                </td>
+
+                <td class="p-3">
+                    ${tipoNome}
+                </td>
+
+                <td class="p-3 bg-yellow-50/60">
+
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="taxa_${index}"
+                        value="${comissaoPadrao}"
+                        oninput="
+                            recalcular(
+                                ${index},
+                                ${item.shipping_cost},
+                                ${item.free_shipping}
+                            )
+                        "
+                        class="input-simulacao w-16"
+                    >
+
+                </td>
+
+                <td class="p-3 bg-yellow-50/60">
+
+                    <input
+                        type="number"
+                        step="0.01"
+                        id="custo_${index}"
+                        value="10.00"
+                        oninput="
+                            recalcular(
+                                ${index},
+                                ${item.shipping_cost},
+                                ${item.free_shipping}
+                            )
+                        "
+                        class="input-simulacao w-20"
+                    >
+
+                </td>
+
+                <td class="p-3 bg-yellow-50/60">
+
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="imposto_${index}"
+                        value="0"
+                        oninput="
+                            recalcular(
+                                ${index},
+                                ${item.shipping_cost},
+                                ${item.free_shipping}
+                            )
+                        "
+                        class="input-simulacao w-16"
+                    >
+
+                </td>
+
+                <td class="p-3 bg-yellow-50/60">
+
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="lucro_${index}"
+                        value="12"
+                        oninput="
+                            recalcular(
+                                ${index},
+                                ${item.shipping_cost},
+                                ${item.free_shipping}
+                            )
+                        "
+                        class="input-simulacao w-16"
+                    >
+
+                </td>
+
+                <td
+                    class="
+                        p-3
+                        bg-emerald-50
+                        font-black
+                        text-emerald-800
+                    "
+                    id="novo_preco_${index}"
+                >
+                    R$ 0,00
+                </td>
+
+                <td
+                    class="
+                        p-3
+                        bg-emerald-50
+                        font-bold
+                        text-emerald-700
+                    "
+                    id="lucro_sim_${index}"
+                >
+                    R$ 0,00
+                </td>
+
+                <td
+                    class="
+                        p-3
+                        bg-emerald-50
+                        font-bold
+                        text-emerald-900
+                    "
+                    id="margem_real_${index}"
+                >
+                    0,00%
+                </td>
+                `;
+
+            tbody.appendChild(
+                tr
+            );
+
+            recalcular(
+                index,
+                item.shipping_cost,
+                item.free_shipping
+            );
+        }
+    );
+}
+
+
+function recalcular(
+    index,
+    custoFrete,
+    freteGratis
+) {
+
+    const taxaPercent =
+        parseFloat(
+            document.getElementById(
+                `taxa_${index}`
+            )?.value
+        ) || 0;
+
+    const custo =
+        parseFloat(
+            document.getElementById(
+                `custo_${index}`
+            )?.value
+        ) || 0;
+
+    const impostoPercent =
+        parseFloat(
+            document.getElementById(
+                `imposto_${index}`
+            )?.value
+        ) || 0;
+
+    const lucroDesejadoPercent =
+        parseFloat(
+            document.getElementById(
+                `lucro_${index}`
+            )?.value
+        ) || 0;
+
+    const PRECO_REFERENCIA = 78.90;
+    const FRETE_REFERENCIA = 10.00;
+
+    const itemAtual = cacheItens[index] || {};
+    const precoAtual = Number(itemAtual.price || 0);
+    const freteAtual = Number(custoFrete || 0);
+
+    const somaPercentual =
+        taxaPercent +
+        impostoPercent +
+        lucroDesejadoPercent;
+
+    const divisor =
+        1 -
+        (
+            somaPercentual /
+            100
+        );
+
+    /*
+       REGRA R$ 78,90:
+       - Só é testada quando o anúncio atual está acima de R$ 78,90.
+       - Primeiro simulamos R$ 78,90 com frete fixo de R$ 10,00.
+       - Se essa combinação já entrega a margem desejada (ou mais),
+         o cenário de frete R$ 10,00 passa a ser usado e R$ 78,90
+         funciona como preço mínimo de referência.
+       - Caso contrário, permanece o frete atual do anúncio e o novo
+         preço não pode cair para R$ 78,90 ou menos.
+    */
+
+    const taxaReferencia =
+        PRECO_REFERENCIA *
+        (taxaPercent / 100);
+
+    const impostoReferencia =
+        PRECO_REFERENCIA *
+        (impostoPercent / 100);
+
+    const lucroReferencia =
+        PRECO_REFERENCIA -
+        custo -
+        taxaReferencia -
+        impostoReferencia -
+        FRETE_REFERENCIA;
+
+    const margemReferencia =
+        PRECO_REFERENCIA > 0
+            ? (lucroReferencia / PRECO_REFERENCIA) * 100
+            : 0;
+
+    const podeUsarReferencia =
+        precoAtual > PRECO_REFERENCIA &&
+        margemReferencia + 0.0001 >= lucroDesejadoPercent;
+
+    const freteAplicado =
+        podeUsarReferencia
+            ? FRETE_REFERENCIA
+            : freteAtual;
+
+    let novoPreco =
+        divisor > 0
+            ? (
+                custo +
+                freteAplicado
+            ) / divisor
+            : custo * 1.5;
+
+    if (precoAtual > PRECO_REFERENCIA && !podeUsarReferencia) {
+        // Se R$ 78,90 com frete de R$ 10,00 NÃO alcançar a margem
+        // desejada, mantém a regra anterior: usa o frete real e não
+        // deixa o preço calculado cair para R$ 78,90 ou menos.
+        novoPreco = Math.max(
+            PRECO_REFERENCIA + 0.01,
+            novoPreco
+        );
+    }
+
+    // Quando R$ 78,90 + frete fixo de R$ 10,00 já alcança ou supera
+    // a margem desejada, NÃO travamos o novo preço em R$ 78,90.
+    // A fórmula acima calcula diretamente o preço necessário para
+    // chegar à margem escolhida usando o frete fixo de R$ 10,00.
+
+    const valorTaxa =
+        novoPreco *
+        (
+            taxaPercent /
+            100
+        );
+
+    const valorImposto =
+        novoPreco *
+        (
+            impostoPercent /
+            100
+        );
+
+    const lucroLiquidoReal =
+        novoPreco -
+        custo -
+        valorTaxa -
+        valorImposto -
+        freteAplicado;
+
+    const margemRealPercent =
+        novoPreco > 0
+            ? (
+                lucroLiquidoReal /
+                novoPreco
+            ) * 100
+            : 0;
+
+    const elNovoPreco =
+        document.getElementById(
+            `novo_preco_${index}`
+        );
+
+    const elLucroSim =
+        document.getElementById(
+            `lucro_sim_${index}`
+        );
+
+    const elMargemReal =
+        document.getElementById(
+            `margem_real_${index}`
+        );
+
+    if (elNovoPreco)
+        elNovoPreco.innerText =
+            moeda(
+                novoPreco
+            );
+
+    if (elLucroSim)
+        elLucroSim.innerText =
+            moeda(
+                lucroLiquidoReal
+            );
+
+    if (elMargemReal)
+        elMargemReal.innerText =
+            margemRealPercent.toFixed(
+                2
+            ) + '%';
+
+    novosPrecosCalculados[
+        index
+    ] = {
+
+        preco:
+            novoPreco,
+
+        freteSimulado:
+            freteAplicado,
+
+        usouReferencia7890:
+            podeUsarReferencia,
+
+        foraDaMargem:
+            Math.abs(
+                novoPreco -
+                cacheItens[index].price
+            ) > 0.05
+    };
+}
+
+function aplicarEmMassa() {
+
+    const custoMassa =
+        document.getElementById(
+            'massa-custo'
+        ).value;
+
+    const taxaMassa =
+        document.getElementById(
+            'massa-taxa'
+        ).value;
+
+    const impostoMassa =
+        document.getElementById(
+            'massa-imposto'
+        ).value;
+
+    const lucroMassa =
+        document.getElementById(
+            'massa-lucro'
+        ).value;
+
+    cacheItens.forEach(
+        (
+            item,
+            index
+        ) => {
+
+            if (
+                custoMassa !== ''
+            ) {
+
+                const el =
+                    document.getElementById(
+                        `custo_${index}`
+                    );
+
+                if (el)
+                    el.value =
+                        custoMassa;
+            }
+
+            if (
+                taxaMassa !== ''
+            ) {
+
+                const el =
+                    document.getElementById(
+                        `taxa_${index}`
+                    );
+
+                if (el)
+                    el.value =
+                        taxaMassa;
+            }
+
+            if (
+                impostoMassa !== ''
+            ) {
+
+                const el =
+                    document.getElementById(
+                        `imposto_${index}`
+                    );
+
+                if (el)
+                    el.value =
+                        impostoMassa;
+            }
+
+            if (
+                lucroMassa !== ''
+            ) {
+
+                const el =
+                    document.getElementById(
+                        `lucro_${index}`
+                    );
+
+                if (el)
+                    el.value =
+                        lucroMassa;
+            }
+
+            recalcular(
+                index,
+                item.shipping_cost,
+                item.free_shipping
+            );
+        }
+    );
+}
+
+
+/* =========================================================
+   ATUALIZAÇÃO ORIGINAL
+========================================================= */
+
+function montarTabelaAtualizacao(
+    itens
+) {
+
+    const tbody =
+        document.getElementById(
+            'tabela-atualizacao'
+        );
+
+    if (!tbody) {
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    let contador =
+        0;
+
+    itens.forEach(
+        item => {
+
+            const index =
+                cacheItens.findIndex(
+                    i =>
+                        i.id ===
+                        item.id
+                );
+
+            const dadosSim =
+                novosPrecosCalculados[
+                    index
+                ] || {
+                    preco:
+                        item.price,
+                    foraDaMargem:
+                        true
+                };
+
+            if (
+                !dadosSim.foraDaMargem
+            ) {
+                return;
+            }
+
+            contador++;
+
+            const tr =
+                document.createElement(
+                    'tr'
+                );
+
+            tr.innerHTML =
+                `
+                <td class="p-4">
+
+                    <input
+                        type="checkbox"
+                        value="${index}"
+                        checked
+                        class="
+                            check-item
+                            accent-yellow-400
+                            w-4
+                            h-4
+                        "
+                    >
+
+                </td>
+
+                <td class="p-4">
+
+                    <div
+                        class="
+                            flex
+                            items-center
+                            gap-3
+                            min-w-[280px]
+                        "
+                    >
+
+                        <img
+                            src="${escapeHtml(item.thumbnail)}"
+                            class="
+                                w-11
+                                h-11
+                                object-cover
+                                rounded-xl
+                                border
+                                border-slate-700
+                            "
+                        >
+
+                        <div>
+
+                            <span
+                                class="
+                                    font-semibold
+                                    text-white
+                                    block
+                                "
+                            >
+                                ${escapeHtml(item.title)}
+                            </span>
+
+                            <span
+                                class="
+                                    text-[10px]
+                                    text-slate-500
+                                "
+                            >
+                                ${escapeHtml(item.id)}
+                                •
+                                SKU:
+                                ${escapeHtml(item.sku)}
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </td>
+
+                <td
+                    class="
+                        p-4
+                        font-bold
+                        text-white
+                    "
+                >
+                    ${moeda(item.price)}
+                </td>
+
+                <td
+                    class="
+                        p-4
+                        font-black
+                        text-emerald-400
+                    "
+                >
+                    ${moeda(dadosSim.preco)}
+                </td>
+
+                <td class="p-4">
+
+                    <span
+                        class="
+                            px-2.5
+                            py-1
+                            rounded-lg
+                            bg-amber-400/10
+                            text-amber-400
+                            font-bold
+                            text-[10px]
+                        "
+                    >
+                        Fora da margem
+                    </span>
+
+                </td>
+
+                <td
+                    id="status_api_${index}"
+                    class="p-4"
+                >
+                    <span
+                        class="
+                            text-slate-500
+                            text-[10px]
+                        "
+                    >
+                        Pendente
+                    </span>
+                </td>
+                `;
+
+            tbody.appendChild(
+                tr
+            );
+        }
+    );
+
+    document.getElementById(
+        'contador-atualizacao'
+    ).innerText =
+        contador;
+}
+
+
+function alternarTodos(
+    master
+) {
+
+    document
+        .querySelectorAll(
+            '.check-item'
+        )
+        .forEach(
+            checkbox => {
+                checkbox.checked =
+                    master.checked;
+            }
+        );
+}
+
+
+async function atualizarPrecosMassaApi() {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    const checkboxes =
+        document.querySelectorAll(
+            '.check-item:checked'
+        );
+
+    if (
+        checkboxes.length === 0
+    ) {
+
+        alert(
+            'Nenhum anúncio selecionado.'
+        );
+
+        return;
+    }
+
+    if (
+        !confirm(
+            `Deseja atualizar ${checkboxes.length} anúncio(s)?`
+        )
+    ) {
+        return;
+    }
+
+    let itensParaAtualizar =
+        [];
+
+    checkboxes.forEach(
+        checkbox => {
+
+            const index =
+                checkbox.value;
+
+            const item =
+                cacheItens[index];
+
+            const dadosSim =
+                novosPrecosCalculados[
+                    index
+                ];
+
+            const novoPreco =
+                dadosSim
+                    ? dadosSim.preco
+                    : item.price;
+
+            itensParaAtualizar.push({
+
+                index,
+
+                id:
+                    item.id,
+
+                price:
+                    parseFloat(
+                        novoPreco.toFixed(
+                            2
+                        )
+                    )
+            });
+        }
+    );
+
+    const tamanhoLote =
+        20;
+
+    for (
+        let i = 0;
+        i < itensParaAtualizar.length;
+        i += tamanhoLote
+    ) {
+
+        const lote =
+            itensParaAtualizar.slice(
+                i,
+                i + tamanhoLote
+            );
+
+        lote.forEach(
+            item => {
+
+                const status =
+                    document.getElementById(
+                        `status_api_${item.index}`
+                    );
+
+                if (status) {
+
+                    status.innerHTML =
+                        `
+                        <span
+                            class="
+                                text-blue-400
+                                font-bold
+                                text-[10px]
+                            "
+                        >
+                            Atualizando...
+                        </span>
+                        `;
+                }
+            }
+        );
+
+        try {
+
+            const response =
+                await fetch(
+                    `${RENDER_URL}/api/atualizar-precos`,
+                    {
+                        method:
+                            'POST',
+
+                        headers: {
+                            'Content-Type':
+                                'application/json',
+
+                            Authorization:
+                                token
+                        },
+
+                        body:
+                            JSON.stringify({
+                                itens:
+                                    lote.map(
+                                        item => ({
+                                            id:
+                                                item.id,
+                                            price:
+                                                item.price
+                                        })
+                                    )
+                            })
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            lote.forEach(
+                (
+                    item,
+                    pos
+                ) => {
+
+                    const resultado =
+                        data.resultados?.[
+                            pos
+                        ];
+
+                    const status =
+                        document.getElementById(
+                            `status_api_${item.index}`
+                        );
+
+                    if (
+                        response.ok &&
+                        resultado?.sucesso
+                    ) {
+
+                        if (status) {
+
+                            status.innerHTML =
+                                `
+                                <span
+                                    class="
+                                        text-emerald-400
+                                        font-bold
+                                        text-[10px]
+                                    "
+                                >
+                                    ✓ Atualizado
+                                </span>
+                                `;
+                        }
+
+                        cacheItens[
+                            item.index
+                        ].price =
+                            item.price;
+
+                    } else {
+
+                        const erro =
+                            resultado?.erro ||
+                            data.erro ||
+                            'Falha na API';
+
+                        if (status) {
+
+                            status.innerHTML =
+                                `
+                                <span
+                                    class="
+                                        text-red-400
+                                        font-bold
+                                        text-[10px]
+                                    "
+                                >
+                                    ✗
+                                    ${escapeHtml(
+                                        erro
+                                    )}
+                                </span>
+                                `;
+                        }
+                    }
+                }
+            );
+
+        } catch (error) {
+
+            lote.forEach(
+                item => {
+
+                    const status =
+                        document.getElementById(
+                            `status_api_${item.index}`
+                        );
+
+                    if (status) {
+
+                        status.innerHTML =
+                            `
+                            <span
+                                class="
+                                    text-red-400
+                                    font-bold
+                                    text-[10px]
+                                "
+                            >
+                                Erro de rede
+                            </span>
+                            `;
+                    }
+                }
+            );
+        }
+
+        if (
+            i +
+            tamanhoLote <
+            itensParaAtualizar.length
+        ) {
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        1000
+                    )
+            );
+        }
+    }
+
+    alert(
+        'Processo finalizado!'
+    );
+
+    atualizarCards(
+        cacheItens
+    );
+
+    executarBusca();
+}
+
+
+/* =========================================================
+   DASHBOARD NOVO
+========================================================= */
+
+function formatarIndicador(
+    taxa
+) {
+
+    if (
+        taxa === null ||
+        taxa === undefined
+    ) {
+        return '—';
+    }
+
+    const numero =
+        Number(taxa);
+
+    if (
+        Number.isNaN(numero)
+    ) {
+        return String(taxa);
+    }
+
+    return (
+        numero <= 1
+            ? numero * 100
+            : numero
+    ).toFixed(2) + '%';
+}
+
+
+function preencherDashboard(
+    data
+) {
+
+    dashboardCache =
+        data;
+
+    const vendas =
+        data.vendas_reais ||
+        {};
+
+    document.getElementById(
+        'dashboard-vendas'
+    ).innerText =
+        moeda(
+            vendas.valor_total
+        );
+
+    document.getElementById(
+        'dashboard-pedidos'
+    ).innerText =
+        Number(
+            vendas.pedidos_pagos || 0
+        ).toLocaleString(
+            'pt-BR'
+        );
+
+    document.getElementById(
+        'dashboard-unidades'
+    ).innerText =
+        Number(
+            vendas.unidades || 0
+        ).toLocaleString(
+            'pt-BR'
+        );
+
+
+    // Espelha o resumo de vendas também na página inicial.
+    const homeVendas = document.getElementById('home-dashboard-vendas');
+    const homePedidos = document.getElementById('home-dashboard-pedidos');
+    const homeUnidades = document.getElementById('home-dashboard-unidades');
+
+    if (homeVendas) homeVendas.innerText = moeda(vendas.valor_total);
+    if (homePedidos) homePedidos.innerText = Number(vendas.pedidos_pagos || 0).toLocaleString('pt-BR');
+    if (homeUnidades) homeUnidades.innerText = Number(vendas.unidades || 0).toLocaleString('pt-BR');
+
+    try {
+        localStorage.setItem('mlHubPro_resumoHome_v1', JSON.stringify({
+            vendas: homeVendas ? homeVendas.innerText : '',
+            pedidos: homePedidos ? homePedidos.innerText : '',
+            unidades: homeUnidades ? homeUnidades.innerText : ''
+        }));
+    } catch (erro) {
+        console.warn('Não foi possível salvar o resumo da Home:', erro);
+    }
+
+
+    const periodo =
+        data.periodo_vendas;
+
+    document.getElementById(
+        'dashboard-periodo'
+    ).innerText =
+        periodo
+            ? `Período consultado: ${formatarData(periodo.inicio)} até ${formatarData(periodo.fim)}. ${periodo.observacao || ''}`
+            : 'Dados atualizados.';
+
+
+    const homePeriodo = document.getElementById('home-dashboard-periodo');
+    if (homePeriodo) {
+        homePeriodo.innerText = document.getElementById('dashboard-periodo').innerText;
+        try { localStorage.setItem('mlHubPro_periodoHome_v1', homePeriodo.innerText); } catch (erro) {}
+    }
+
+
+    const indicadores =
+        data.indicadores ||
+        {};
+
+
+    const vendasMetric =
+        indicadores.vendas ||
+        {};
+
+    document.getElementById(
+        'metric-vendas'
+    ).innerText =
+        vendasMetric.valor ??
+        '—';
+
+    document.getElementById(
+        'metric-vendas-periodo'
+    ).innerText =
+        vendasMetric.periodo ||
+        'Período da API';
+
+
+    const reclamacoes =
+        indicadores.reclamacoes ||
+        {};
+
+    document.getElementById(
+        'metric-reclamacoes'
+    ).innerText =
+        formatarIndicador(
+            reclamacoes.taxa
+        );
+
+    document.getElementById(
+        'metric-reclamacoes-extra'
+    ).innerText =
+        reclamacoes.valor !== null &&
+        reclamacoes.valor !== undefined
+            ? `Valor: ${reclamacoes.valor}`
+            : 'Dados da API';
+
+
+    const atrasos =
+        indicadores.atrasos ||
+        {};
+
+    document.getElementById(
+        'metric-atrasos'
+    ).innerText =
+        formatarIndicador(
+            atrasos.taxa
+        );
+
+    document.getElementById(
+        'metric-atrasos-extra'
+    ).innerText =
+        atrasos.valor !== null &&
+        atrasos.valor !== undefined
+            ? `Valor: ${atrasos.valor}`
+            : 'Dados da API';
+
+
+    const cancelamentos =
+        indicadores.cancelamentos ||
+        {};
+
+    document.getElementById(
+        'metric-cancelamentos'
+    ).innerText =
+        formatarIndicador(
+            cancelamentos.taxa
+        );
+
+    document.getElementById(
+        'metric-cancelamentos-extra'
+    ).innerText =
+        cancelamentos.valor !== null &&
+        cancelamentos.valor !== undefined
+            ? `Valor: ${cancelamentos.valor}`
+            : 'Dados da API';
+
+
+    montarTop10(
+        data.top10 ||
+        []
+    );
+
+    // Mantém os mesmos indicadores também na página inicial.
+    if (document.getElementById('home-metric-vendas') && document.getElementById('metric-vendas')) {
+        document.getElementById('home-metric-vendas').innerText =
+            document.getElementById('metric-vendas').innerText;
+    }
+    if (document.getElementById('home-metric-vendas-periodo') && document.getElementById('metric-vendas-periodo')) {
+        document.getElementById('home-metric-vendas-periodo').innerText =
+            document.getElementById('metric-vendas-periodo').innerText;
+    }
+    if (document.getElementById('home-metric-reclamacoes') && document.getElementById('metric-reclamacoes')) {
+        document.getElementById('home-metric-reclamacoes').innerText =
+            document.getElementById('metric-reclamacoes').innerText;
+    }
+    if (document.getElementById('home-metric-reclamacoes-extra') && document.getElementById('metric-reclamacoes-extra')) {
+        document.getElementById('home-metric-reclamacoes-extra').innerText =
+            document.getElementById('metric-reclamacoes-extra').innerText;
+    }
+    if (document.getElementById('home-metric-atrasos') && document.getElementById('metric-atrasos')) {
+        document.getElementById('home-metric-atrasos').innerText =
+            document.getElementById('metric-atrasos').innerText;
+    }
+    if (document.getElementById('home-metric-atrasos-extra') && document.getElementById('metric-atrasos-extra')) {
+        document.getElementById('home-metric-atrasos-extra').innerText =
+            document.getElementById('metric-atrasos-extra').innerText;
+    }
+    if (document.getElementById('home-metric-cancelamentos') && document.getElementById('metric-cancelamentos')) {
+        document.getElementById('home-metric-cancelamentos').innerText =
+            document.getElementById('metric-cancelamentos').innerText;
+    }
+    if (document.getElementById('home-metric-cancelamentos-extra') && document.getElementById('metric-cancelamentos-extra')) {
+        document.getElementById('home-metric-cancelamentos-extra').innerText =
+            document.getElementById('metric-cancelamentos-extra').innerText;
+    }
+
+    try {
+        const indicadoresHomeCache = {};
+        [
+            'home-metric-vendas',
+            'home-metric-vendas-periodo',
+            'home-metric-reclamacoes',
+            'home-metric-reclamacoes-extra',
+            'home-metric-atrasos',
+            'home-metric-atrasos-extra',
+            'home-metric-cancelamentos',
+            'home-metric-cancelamentos-extra'
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) indicadoresHomeCache[id] = el.innerText;
+        });
+        localStorage.setItem('mlHubPro_indicadoresHome_v1', JSON.stringify(indicadoresHomeCache));
+    } catch (erro) {
+        console.warn('Não foi possível salvar os indicadores da página inicial:', erro);
+    }
+
+}
+
+
+function formatarData(
+    valor
+) {
+
+    if (!valor) {
+        return '-';
+    }
+
+    const data =
+        new Date(
+            valor
+        );
+
+    if (
+        Number.isNaN(
+            data.getTime()
+        )
+    ) {
+        return valor;
+    }
+
+    return data.toLocaleDateString(
+        'pt-BR'
+    );
+}
+
+
+function montarTop10(lista) {
+
+    const container = document.getElementById('top10-container');
+    const containerHome = document.getElementById('top10-home');
+
+    const vazia = `
+        <div class="text-center py-12 text-xs text-slate-600">
+            Nenhuma venda encontrada no período.
+        </div>
+    `;
+
+    let html = vazia;
+
+    if (Array.isArray(lista) && lista.length > 0) {
+        html = `
+            <div class="space-y-3">
+                ${lista.slice(0, 10).map((item, index) => `
+                    <div class="flex items-center gap-4 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div class="w-9 h-9 rounded-lg bg-yellow-400/10 text-yellow-400 flex items-center justify-center font-black">
+                            ${index + 1}
+                        </div>
+
+                        <img
+                            src="${escapeHtml(item.thumbnail || '')}"
+                            class="w-14 h-14 rounded-xl object-cover bg-slate-800"
+                            onerror="this.style.visibility='hidden'"
+                        >
+
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-white text-sm truncate">
+                                ${escapeHtml(item.titulo || '')}
+                            </div>
+                            <div class="text-[10px] text-slate-500 mt-1">
+                                ${escapeHtml(item.item_id || '')}
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <div class="text-lg font-black text-emerald-400">
+                                ${Number(item.unidades || 0).toLocaleString('pt-BR')}
+                            </div>
+                            <div class="text-[10px] text-slate-500">unidades</div>
+                        </div>
+
+                        <div class="hidden md:block text-right w-28">
+                            <div class="text-xs font-bold text-white">
+                                ${moeda(item.faturamento)}
+                            </div>
+                            <div class="text-[10px] text-slate-600 mt-1">faturamento</div>
+                        </div>
+
+                        <a
+                            href="${escapeHtml(item.permalink || '#')}"
+                            target="_blank"
+                            class="hidden lg:flex px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 text-[10px] font-bold"
+                        >Ver</a>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    if (container) container.innerHTML = html;
+    if (containerHome) containerHome.innerHTML = html;
+
+    try {
+        localStorage.setItem('mlHubPro_top10Home_v2', html);
+    } catch (erro) {
+        console.warn('Não foi possível salvar o Top 10:', erro);
+    }
+}
+
+
+async function carregarDashboard() {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    mostrarLoading(
+        'Buscando vendas, indicadores e Top 10...'
+    );
+
+    try {
+
+        const response =
+            await fetch(
+                `${RENDER_URL}/api/dashboard`,
+                {
+                    headers: {
+                        Authorization:
+                            token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            !response.ok ||
+            !data.sucesso
+        ) {
+
+            alert(
+                data.erro ||
+                'Erro ao carregar painel.'
+            );
+
+            return;
+        }
+
+        preencherDashboard(
+            data
+        );
+
+        mudarAba(
+            'dashboard'
+        );
+
+    } catch (error) {
+
+        console.error(
+            error
+        );
+
+        alert(
+            'Erro de comunicação ao carregar o dashboard.'
+        );
+
+    } finally {
+
+        esconderLoading();
+    }
+}
+
+
+/* =========================================================
+   PERGUNTAS
+========================================================= */
+
+async function carregarPerguntas() {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    const container =
+        document.getElementById(
+            'lista-perguntas'
+        );
+
+    if (container) {
+
+        container.innerHTML =
+            `
+            <div
+                class="
+                    panel
+                    rounded-2xl
+                    p-10
+                    text-center
+                "
+            >
+                <div
+                    class="
+                        loading-ring
+                        animate-spin
+                        rounded-full
+                        h-8
+                        w-8
+                        mx-auto
+                    "
+                ></div>
+
+                <div
+                    class="
+                        text-xs
+                        text-slate-500
+                        mt-4
+                    "
+                >
+                    Buscando perguntas...
+                </div>
+            </div>
+            `;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                `${RENDER_URL}/api/perguntas?limit=100`,
+                {
+                    headers: {
+                        Authorization:
+                            token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            !response.ok ||
+            !data.sucesso
+        ) {
+
+            alert(
+                data.erro ||
+                'Erro ao buscar perguntas.'
+            );
+
+            return;
+        }
+
+        renderizarPerguntas(
+            data.perguntas ||
+            []
+        );
+
+    } catch (error) {
+
+        console.error(
+            error
+        );
+
+        alert(
+            'Erro de comunicação ao buscar perguntas.'
+        );
+    }
+    if (containerHome && container) {
+        containerHome.innerHTML = container.innerHTML;
+        try {
+            localStorage.setItem('mlHubPro_top10Home_v1', containerHome.innerHTML);
+        } catch (erro) {
+            console.warn('Não foi possível salvar o Top 10 da página inicial:', erro);
+        }
+    }
+
+}
+
+
+function renderizarPerguntas(
+    perguntas
+) {
+
+    const container =
+        document.getElementById(
+            'lista-perguntas'
+        );
+
+    const total =
+        perguntas.length;
+
+    const pendentes =
+        perguntas.filter(
+            pergunta =>
+                !pergunta.respondida
+        ).length;
+
+    const respondidas =
+        total -
+        pendentes;
+
+    document.getElementById(
+        'perguntas-total'
+    ).innerText =
+        total;
+
+    document.getElementById(
+        'perguntas-pendentes'
+    ).innerText =
+        pendentes;
+
+    document.getElementById(
+        'perguntas-respondidas'
+    ).innerText =
+        respondidas;
+
+    if (
+        !perguntas.length
+    ) {
+
+        container.innerHTML =
+            `
+            <div
+                class="
+                    panel
+                    rounded-2xl
+                    p-10
+                    text-center
+                "
+            >
+
+                <div
+                    class="
+                        text-3xl
+                    "
+                >
+                    ✓
+                </div>
+
+                <div
+                    class="
+                        text-sm
+                        font-bold
+                        text-white
+                        mt-3
+                    "
+                >
+                    Nenhuma pergunta encontrada.
+                </div>
+
+                <div
+                    class="
+                        text-xs
+                        text-slate-500
+                        mt-2
+                    "
+                >
+                    Sua caixa de perguntas está vazia.
+                </div>
+
+            </div>
+            `;
+
+        return;
+    }
+
+    container.innerHTML =
+        perguntas.map(
+            pergunta => {
+
+                const respondida =
+                    pergunta.respondida;
+
+                return `
+                <div
+                    class="
+                        panel
+                        rounded-2xl
+                        overflow-hidden
+                    "
+                >
+
+                    <div
+                        class="
+                            p-5
+                            border-b
+                            border-slate-800
+                        "
+                    >
+
+                        <div
+                            class="
+                                flex
+                                flex-col
+                                md:flex-row
+                                md:items-center
+                                md:justify-between
+                                gap-3
+                            "
+                        >
+
+                            <div
+                                class="
+                                    flex
+                                    items-center
+                                    gap-3
+                                "
+                            >
+
+                                ${
+                                    pergunta.thumbnail
+                                        ? `
+                                        <img
+                                            src="${escapeHtml(
+                                                pergunta.thumbnail
+                                            )}"
+                                            class="
+                                                w-12
+                                                h-12
+                                                rounded-xl
+                                                object-cover
+                                                bg-slate-800
+                                            "
+                                        >
+                                        `
+                                        : ''
+                                }
+
+                                <div>
+
+                                    <div
+                                        class="
+                                            text-sm
+                                            font-bold
+                                            text-white
+                                        "
+                                    >
+                                        ${escapeHtml(
+                                            pergunta.titulo
+                                        )}
+                                    </div>
+
+                                    <div
+                                        class="
+                                            text-[10px]
+                                            text-slate-500
+                                            mt-1
+                                        "
+                                    >
+                                        ${escapeHtml(
+                                            pergunta.item_id
+                                        )}
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div>
+
+                                <span
+                                    class="
+                                        inline-flex
+                                        px-2.5
+                                        py-1
+                                        rounded-lg
+                                        text-[10px]
+                                        font-bold
+                                        ${
+                                            respondida
+                                                ? 'bg-emerald-400/10 text-emerald-400'
+                                                : 'bg-yellow-400/10 text-yellow-400'
+                                        }
+                                    "
+                                >
+                                    ${
+                                        respondida
+                                            ? 'Respondida'
+                                            : 'Aguardando resposta'
+                                    }
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="
+                            p-5
+                            space-y-4
+                        "
+                    >
+
+                        <div>
+
+                            <div
+                                class="
+                                    text-[10px]
+                                    uppercase
+                                    tracking-wider
+                                    text-slate-600
+                                    font-bold
+                                    mb-2
+                                "
+                            >
+                                Pergunta
+                            </div>
+
+                            <div
+                                class="
+                                    rounded-xl
+                                    bg-slate-950
+                                    border
+                                    border-slate-800
+                                    p-4
+                                    text-sm
+                                    text-slate-200
+                                    leading-6
+                                "
+                            >
+                                ${escapeHtml(
+                                    pergunta.pergunta
+                                )}
+                            </div>
+
+                        </div>
+
+
+                        ${
+                            respondida
+                                ? `
+                                <div>
+
+                                    <div
+                                        class="
+                                            text-[10px]
+                                            uppercase
+                                            tracking-wider
+                                            text-emerald-500
+                                            font-bold
+                                            mb-2
+                                        "
+                                    >
+                                        Sua resposta
+                                    </div>
+
+                                    <div
+                                        class="
+                                            rounded-xl
+                                            bg-emerald-400/5
+                                            border
+                                            border-emerald-400/10
+                                            p-4
+                                            text-sm
+                                            text-slate-300
+                                        "
+                                    >
+                                        ${escapeHtml(
+                                            pergunta.resposta
+                                        )}
+                                    </div>
+
+                                </div>
+                                `
+                                : `
+                                <div>
+
+                                    <div
+                                        class="
+                                            text-[10px]
+                                            uppercase
+                                            tracking-wider
+                                            text-yellow-400
+                                            font-bold
+                                            mb-2
+                                        "
+                                    >
+                                        Responder
+                                    </div>
+
+                                    <textarea
+                                        id="resposta_${pergunta.id}"
+                                        maxlength="2000"
+                                        rows="4"
+                                        placeholder="Digite sua resposta..."
+                                        class="
+                                            w-full
+                                            bg-slate-950
+                                            border
+                                            border-slate-800
+                                            rounded-xl
+                                            p-4
+                                            text-sm
+                                            text-white
+                                            outline-none
+                                            focus:border-yellow-400/50
+                                            resize-y
+                                        "
+                                    ></textarea>
+
+                                    <div
+                                        class="
+                                            flex
+                                            flex-col
+                                            sm:flex-row
+                                            sm:items-center
+                                            sm:justify-between
+                                            gap-3
+                                            mt-3
+                                        "
+                                    >
+
+                                        <span
+                                            class="
+                                                text-[10px]
+                                                text-slate-600
+                                            "
+                                        >
+                                            Máximo de 2.000 caracteres.
+                                        </span>
+
+                                        <button
+                                            onclick="
+                                                responderPergunta(
+                                                    '${pergunta.id}'
+                                                )
+                                            "
+                                            class="
+                                                bg-yellow-400
+                                                hover:bg-yellow-300
+                                                text-slate-950
+                                                px-5
+                                                py-2.5
+                                                rounded-xl
+                                                text-xs
+                                                font-black
+                                            "
+                                        >
+                                            Enviar resposta
+                                        </button>
+
+                                    </div>
+
+                                </div>
+                                `
+                        }
+
+                    </div>
+
+                </div>
+                `;
+            }
+        ).join('');
+}
+
+
+async function responderPergunta(
+    questionId
+) {
+
+    const token =
+        obterToken();
+
+    if (!token) {
+
+        solicitarToken();
+
+        return;
+    }
+
+    const textarea =
+        document.getElementById(
+            `resposta_${questionId}`
+        );
+
+    if (!textarea) {
+        return;
+    }
+
+    const texto =
+        textarea.value.trim();
+
+    if (!texto) {
+
+        alert(
+            'Digite uma resposta.'
+        );
+
+        return;
+    }
+
+    if (
+        texto.length >
+        2000
+    ) {
+
+        alert(
+            'A resposta não pode ultrapassar 2.000 caracteres.'
+        );
+
+        return;
+    }
+
+    textarea.disabled =
+        true;
+
+    try {
+
+        const response =
+            await fetch(
+                `${RENDER_URL}/api/responder-pergunta`,
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+
+                        Authorization:
+                            token
+                    },
+
+                    body:
+                        JSON.stringify({
+                            question_id:
+                                questionId,
+                            text:
+                                texto
+                        })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            !response.ok ||
+            !data.sucesso
+        ) {
+
+            alert(
+                data.erro ||
+                'Erro ao enviar resposta.'
+            );
+
+            textarea.disabled =
+                false;
+
+            return;
+        }
+
+        alert(
+            'Resposta enviada para o Mercado Livre.'
+        );
+
+        carregarPerguntas();
+
+    } catch (error) {
+
+        console.error(
+            error
+        );
+
+        textarea.disabled =
+            false;
+
+        alert(
+            'Erro de comunicação ao enviar resposta.'
+        );
+    }
+}
+
+
+/* =========================================================
+   INICIALIZAÇÃO
+========================================================= */
+
+document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+
+        atualizarStatusTokenHome();
+
+        const token =
+            obterToken();
+
+        if (token) {
+
+            const input =
+                document.getElementById(
+                    'input-token-home'
+                );
+
+            if (input) {
+                input.value =
+                    token;
+            }
+        }
+
+        const abaSalva =
+            localStorage.getItem('mlHubPro_abaAtual_v1');
+
+        const abasValidas = [
+            'inicio',
+            'gestao',
+            'dashboard',
+            'simulacao',
+            'atualizacao',
+            'perguntas'
+        ];
+
+        mudarAba(
+            abaSalva && abasValidas.includes(abaSalva)
+                ? abaSalva
+                : 'inicio'
+        );
+    }
+);
+
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (!carregarCacheItensLocal()) return;
+
+    try {
+        if (typeof atualizarCards === 'function') atualizarCards(cacheItens);
+        if (typeof montarTabelaGestao === 'function') montarTabelaGestao(cacheItens);
+        if (typeof renderizarTabelaSimulacao === 'function') renderizarTabelaSimulacao(cacheItens);
+        if (typeof atualizarTabelaSimulacao === 'function') atualizarTabelaSimulacao();
+    } catch (erro) {
+        console.warn('Os anúncios foram recuperados do navegador, mas alguma tela ainda não estava pronta:', erro);
+    }
+});
+</script>
+
+
+
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const bruto = localStorage.getItem('mlHubPro_indicadoresHome_v1');
+        if (!bruto) return;
+        const dados = JSON.parse(bruto);
+        Object.entries(dados || {}).forEach(([id, valor]) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = valor;
+        });
+    } catch (erro) {
+        console.warn('Não foi possível restaurar os indicadores da página inicial:', erro);
+    }
+});
+</script>
+
+
+<script id="sincronizar-top10-home">
+(function () {
+    function sincronizarTop10Home() {
+        const origem =
+            document.getElementById('top10') ||
+            document.getElementById('top10-lista');
+        const destino =
+            document.getElementById('top10-home') ||
+            document.getElementById('top10-lista-home');
+        if (!origem || !destino) return;
+        destino.innerHTML = origem.innerHTML;
+    }
+
+    window.sincronizarTop10Home = sincronizarTop10Home;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const origem =
+            document.getElementById('top10') ||
+            document.getElementById('top10-lista');
+        if (!origem) return;
+        sincronizarTop10Home();
+        new MutationObserver(sincronizarTop10Home).observe(origem, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    });
+})();
+</script>
+
+
+<style id="mlhub-temas-configuracoes">
+#btn-configuracoes-flutuante{
+    position:fixed; right:22px; bottom:22px; z-index:70;
+    width:48px; height:48px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    background:#facc15; color:#0f172a; font-size:21px; font-weight:900;
+    box-shadow:0 14px 35px rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.12);
+}
+#btn-configuracoes-flutuante:hover{transform:translateY(-2px)}
+.theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
+body.tema-escuro{background:#030712!important}
+body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
+body.tema-escuro .panel{background:#090d16!important}
+
+body.tema-claro{background:#f1f5f9!important;color:#0f172a!important}
+body.tema-claro header, body.tema-claro .glass{background:rgba(255,255,255,.96)!important;border-color:#cbd5e1!important}
+body.tema-claro .panel,
+body.tema-claro section > div[class*="bg-slate-900"]{background:#fff!important;border-color:#cbd5e1!important}
+body.tema-claro .bg-slate-950,
+body.tema-claro .bg-slate-950\/80{background:#e2e8f0!important}
+body.tema-claro .bg-slate-900,
+body.tema-claro .bg-slate-900\/80{background:#fff!important}
+body.tema-claro .bg-slate-800{background:#e2e8f0!important}
+body.tema-claro .text-white,
+body.tema-claro .text-slate-100{color:#0f172a!important}
+body.tema-claro .text-slate-300,
+body.tema-claro .text-slate-400,
+body.tema-claro .text-slate-500{color:#475569!important}
+body.tema-claro .border-slate-800,
+body.tema-claro .border-slate-700{border-color:#cbd5e1!important}
+body.tema-claro input{background:#fff!important;color:#0f172a!important}
+</style>
+
+<button id="btn-configuracoes-flutuante"
+        onclick="mudarAba('configuracoes')"
+        title="Configurações"
+        aria-label="Configurações">⚙</button>
+
+<script id="mlhub-perfil-temas-top10">
+function aplicarTema(tema) {
+    const valor = ['claro','escuro','azul'].includes(tema) ? tema : 'azul';
+    document.body.classList.remove('tema-claro','tema-escuro','tema-azul');
+    document.body.classList.add(`tema-${valor}`);
+    try { localStorage.setItem('mlHubPro_tema_v1', valor); } catch(e) {}
+
+    document.querySelectorAll('[data-theme-option]').forEach(el => {
+        el.classList.toggle('tema-selecionado', el.dataset.themeOption === valor);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    let tema = 'azul';
+    try { tema = localStorage.getItem('mlHubPro_tema_v1') || 'azul'; } catch(e) {}
+    aplicarTema(tema);
+
+    const homeTop10 = document.getElementById('top10-home');
+    if (homeTop10) {
+        try {
+            const cache = localStorage.getItem('mlHubPro_top10Home_v1');
+            if (cache) homeTop10.innerHTML = cache;
+        } catch(e) {}
+    }
+
+    const token = typeof obterToken === 'function' ? obterToken() : '';
+    const perfilStatus = document.getElementById('perfil-status-conta');
+    if (perfilStatus) {
+        perfilStatus.innerText = token ? '● Conta conectada' : '● Token não configurado';
+        perfilStatus.className = token ? 'text-xs text-emerald-400 mt-2' : 'text-xs text-yellow-400 mt-2';
+    }
+});
+</script>
+
+
+<script id="mlhub-home-tempo-real">
+(function () {
+    let atualizacaoHomeEmAndamento = false;
+
+    function homeEstaVisivel() {
+        const inicio = document.getElementById('secao-inicio');
+        return inicio && !inicio.classList.contains('hidden');
+    }
+
+    async function atualizarHomeTempoReal(forcar = false) {
+        if (atualizacaoHomeEmAndamento) return;
+        if (!forcar && !homeEstaVisivel()) return;
+
+        const token = typeof obterToken === 'function' ? obterToken() : '';
+        if (!token) return;
+
+        atualizacaoHomeEmAndamento = true;
+        const status = document.getElementById('home-tempo-real-status');
+
+        try {
+            if (status) {
+                status.innerText = '● Atualizando dados...';
+                status.className = 'text-[10px] text-yellow-400 font-bold';
+            }
+
+            const response = await fetch(`${RENDER_URL}/api/dashboard`, {
+                headers: { Authorization: token }
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.sucesso) {
+                throw new Error(data.erro || 'Falha ao atualizar os dados da página inicial.');
+            }
+
+            preencherDashboard(data);
+
+            try {
+                localStorage.setItem('mlHubPro_dashboardHome_v1', JSON.stringify(data));
+            } catch (erro) {}
+
+            if (status) {
+                status.innerText = '● Atualizado agora';
+                status.className = 'text-[10px] text-emerald-400 font-bold';
+            }
+        } catch (erro) {
+            console.warn('Atualização automática da Home:', erro);
+            if (status) {
+                status.innerText = '● Mantendo últimos dados salvos';
+                status.className = 'text-[10px] text-slate-500 font-bold';
+            }
+        } finally {
+            atualizacaoHomeEmAndamento = false;
+        }
+    }
+
+    window.atualizarHomeTempoReal = atualizarHomeTempoReal;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Restaura imediatamente os últimos dados, sem deixar a Home vazia.
+        try {
+            const resumo = JSON.parse(localStorage.getItem('mlHubPro_resumoHome_v1') || '{}');
+            if (resumo.vendas && document.getElementById('home-dashboard-vendas'))
+                document.getElementById('home-dashboard-vendas').innerText = resumo.vendas;
+            if (resumo.pedidos && document.getElementById('home-dashboard-pedidos'))
+                document.getElementById('home-dashboard-pedidos').innerText = resumo.pedidos;
+            if (resumo.unidades && document.getElementById('home-dashboard-unidades'))
+                document.getElementById('home-dashboard-unidades').innerText = resumo.unidades;
+
+            const periodo = localStorage.getItem('mlHubPro_periodoHome_v1');
+            if (periodo && document.getElementById('home-dashboard-periodo'))
+                document.getElementById('home-dashboard-periodo').innerText = periodo;
+
+            const top10 = localStorage.getItem('mlHubPro_top10Home_v2');
+            if (top10 && document.getElementById('top10-home'))
+                document.getElementById('top10-home').innerHTML = top10;
+
+            const dashboardSalvo = localStorage.getItem('mlHubPro_dashboardHome_v1');
+            if (dashboardSalvo) preencherDashboard(JSON.parse(dashboardSalvo));
+        } catch (erro) {
+            console.warn('Não foi possível restaurar os dados da Home:', erro);
+        }
+
+        // Atualiza ao entrar e depois consulta novamente a cada 60 segundos
+        // enquanto a página inicial estiver aberta.
+        setTimeout(() => atualizarHomeTempoReal(false), 800);
+        setInterval(() => atualizarHomeTempoReal(false), 60000);
+    });
+
+    // Atualiza também quando a aba do navegador volta a ficar visível.
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) atualizarHomeTempoReal(false);
+    });
+})();
+</script>
+
+
+<script id="mlhub-oauth-renovavel">
+const ML_HUB_FRONTEND_URL = window.location.origin + window.location.pathname;
+
+function mostrarStatusLoginOAuth(mensagem, erro = false) {
+    const el = document.getElementById('oauth-login-status');
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.className = `mt-4 p-3 rounded-xl text-xs font-bold ${erro ? 'bg-red-500/10 text-red-300 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'}`;
+    el.innerText = mensagem;
+}
+
+async function consultarStatusOAuthML() {
+    try {
+        const response = await fetch(`${RENDER_URL}/api/oauth/status`, { cache: 'no-store' });
+        const data = await response.json();
+        if (response.ok && data.connected) {
+            localStorage.setItem('ml_oauth_connected', '1');
+            localStorage.removeItem('ml_access_token');
+
+            const resumoToken = data.token_preview || 'Acesso conectado · renovação automática';
+            const campoLogin = document.getElementById('oauth-token-gerado-login');
+            const campoConfig = document.getElementById('oauth-token-gerado-config');
+            if (campoLogin) campoLogin.value = resumoToken;
+            if (campoConfig) campoConfig.value = resumoToken;
+
+            return data;
+        }
+        localStorage.removeItem('ml_oauth_connected');
+        return data || { connected: false };
+    } catch (erro) {
+        // Se o servidor estiver temporariamente indisponível, não destrói a sessão visual já salva.
+        return { connected: localStorage.getItem('ml_oauth_connected') === '1', offline: true };
+    }
+}
+
+async function atualizarStatusOAuthML() {
+    const data = await consultarStatusOAuthML();
+    const el = document.getElementById('oauth-status-config');
+    if (el) {
+        if (data.connected) {
+            el.className = 'text-xs text-emerald-400 font-bold mt-3';
+            el.innerText = `● Conta conectada${data.user_id ? ' · Usuário ' + data.user_id : ''}${data.expires_at ? ' · renovação automática ativa' : ''}`;
+        } else {
+            el.className = 'text-xs text-yellow-400 font-bold mt-3';
+            el.innerText = '● Conta ainda não conectada por OAuth';
+        }
+    }
+    return data;
+}
+
+function lerCamposOAuth(origem) {
+    const sufixo = origem === 'config' ? 'config' : 'login';
+    return {
+        client_id: document.getElementById(`oauth-client-id-${sufixo}`)?.value.trim() || '',
+        client_secret: document.getElementById(`oauth-client-secret-${sufixo}`)?.value.trim() || '',
+        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || '',
+        access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
+        frontend_url: ML_HUB_FRONTEND_URL
+    };
+}
+
+async function iniciarOAuthML(origem = 'login') {
+    const dados = lerCamposOAuth(origem);
+    if (!dados.client_id || !dados.client_secret || !dados.redirect_uri) {
+        const msg = 'Preencha Client ID, Client Secret e URL de retorno.';
+        if (origem === 'login') mostrarStatusLoginOAuth(msg, true); else alert(msg);
+        return;
+    }
+
+    try {
+        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização no Mercado Livre...');
+        const response = await fetch(`${RENDER_URL}/api/oauth/configure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso || !data.authorization_url) {
+            throw new Error(data.erro || 'Não foi possível iniciar a autorização.');
+        }
+        window.location.href = data.authorization_url;
+    } catch (erro) {
+        if (origem === 'login') mostrarStatusLoginOAuth(erro.message, true); else alert(erro.message);
+    }
+}
+
+async function salvarTokenTemporarioConfig() {
+    const token = document.getElementById('oauth-access-token-config')?.value.trim() || '';
+    if (!token) return alert('Cole o Access Token atual.');
+    try {
+        const response = await fetch(`${RENDER_URL}/api/oauth/manual-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: token })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.erro || 'Não foi possível salvar o token.');
+        localStorage.setItem('ml_oauth_connected', '1');
+        localStorage.removeItem('ml_access_token');
+        await atualizarStatusOAuthML();
+        alert('Token atual salvo no servidor. Para renovação automática, conclua também o OAuth.');
+    } catch (erro) {
+        alert(erro.message);
+    }
+}
+
+async function desconectarOAuthML() {
+    if (!confirm('Desconectar a conta do Mercado Livre deste servidor?')) return;
+    try {
+        await fetch(`${RENDER_URL}/api/oauth/disconnect`, { method: 'POST' });
+    } catch (erro) {}
+    localStorage.removeItem('ml_oauth_connected');
+    localStorage.removeItem('ml_access_token');
+    const gate = document.getElementById('oauth-login-gate');
+    if (gate) gate.classList.remove('hidden');
+    atualizarStatusOAuthML();
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') === 'success') {
+        localStorage.setItem('ml_oauth_connected', '1');
+        history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const status = await consultarStatusOAuthML();
+    const gate = document.getElementById('oauth-login-gate');
+    if (gate) {
+        if (status.connected) gate.classList.add('hidden');
+        else gate.classList.remove('hidden');
+    }
+
+    const perfilNome = document.getElementById('perfil-nome-conta');
+    const perfilStatus = document.getElementById('perfil-status-conta');
+    if (status.connected) {
+        if (perfilNome && status.nickname) perfilNome.innerText = status.nickname;
+        if (perfilStatus) {
+            perfilStatus.innerText = '● Conta conectada · renovação automática';
+            perfilStatus.className = 'text-xs text-emerald-400 mt-2';
+        }
+    }
+
+    atualizarStatusOAuthML();
+});
+</script>
+
+</body>
+</html>
