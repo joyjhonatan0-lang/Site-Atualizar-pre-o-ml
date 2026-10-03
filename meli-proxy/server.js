@@ -1636,6 +1636,10 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
         return respostaErro(res, 400, 'O título do anúncio não pode ficar vazio.');
     }
 
+    if (tituloLimpo.length > 60) {
+        return respostaErro(res, 400, 'O título não pode ultrapassar 60 caracteres.');
+    }
+
     try {
         // Primeiro consulta o anúncio atual. Isso evita reenviar campos que o
         // usuário não alterou. O Mercado Livre pode rejeitar, por exemplo,
@@ -1738,20 +1742,67 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
                 });
             }
 
-            const tituloRes = await mlFetch(
-                `${ML_API}/items/${encodeURIComponent(id)}`,
-                token,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ title: tituloLimpo })
-                }
-            );
+            // Existem hoje dois modelos de publicação no Mercado Livre.
+            // No modelo legado, o título é editado diretamente em /items/{id}.
+            // No novo modelo User Products, o campo title do item é gerado pelo
+            // Mercado Livre e tentar alterá-lo diretamente retorna BODY_INVALID_FIELDS.
+            // Nesse caso alteramos o family_name da família, que é o campo editável
+            // indicado pela API e provoca o recálculo do título dos itens associados.
+            let tituloRes;
+            let tituloData;
 
-            const tituloData = await jsonSeguro(tituloRes);
+            if (atual.user_product_id) {
+                const upRes = await mlFetch(
+                    `${ML_API}/user-products/${encodeURIComponent(atual.user_product_id)}`,
+                    token
+                );
+                const upData = await jsonSeguro(upRes);
+
+                if (!upRes.ok || !upData?.family_id) {
+                    return res.status(upRes.status || 400).json({
+                        sucesso: false,
+                        parcial: alterouSku,
+                        sku_atualizado: alterouSku,
+                        erro: (alterouSku ? 'O SKU foi atualizado, porém não foi possível localizar a família do anúncio: ' : '') +
+                            (formatarErroMercadoLivre(upData) || 'Família do User Product não encontrada.'),
+                        item: {
+                            id: atual.id || id,
+                            title: tituloAtual,
+                            sku: skuLimpo || skuAtual || 'Sem SKU',
+                            status: atual.status,
+                            sold_quantity: Number(atual.sold_quantity || 0)
+                        }
+                    });
+                }
+
+                tituloRes = await mlFetch(
+                    `${ML_API}/user-products-families/${encodeURIComponent(upData.family_id)}`,
+                    token,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ family_name: tituloLimpo })
+                    }
+                );
+                tituloData = await jsonSeguro(tituloRes);
+            } else {
+                tituloRes = await mlFetch(
+                    `${ML_API}/items/${encodeURIComponent(id)}`,
+                    token,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ title: tituloLimpo })
+                    }
+                );
+                tituloData = await jsonSeguro(tituloRes);
+            }
 
             if (!tituloRes.ok) {
                 return res.status(tituloRes.status || 400).json({
@@ -1771,7 +1822,7 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
             }
 
             ultimoRetorno = tituloData;
-            alteracoes.push('título');
+            alteracoes.push(atual.user_product_id ? 'nome da família/título' : 'título');
         }
 
         // Consulta novamente para devolver ao painel exatamente o que ficou
@@ -1793,7 +1844,9 @@ app.put('/api/atualizar-anuncio', async (req, res) => {
             alteracoes,
             item: {
                 id: finalItem.id || id,
-                title: finalItem.title || tituloLimpo,
+                title: atual.user_product_id
+                    ? (finalItem.family_name || tituloLimpo)
+                    : (finalItem.title || tituloLimpo),
                 sku: String(attrSkuFinal?.value_name ?? skuLimpo).trim() || 'Sem SKU',
                 status: finalItem.status ?? atual.status,
                 sold_quantity: Number(finalItem.sold_quantity ?? atual.sold_quantity ?? 0)
