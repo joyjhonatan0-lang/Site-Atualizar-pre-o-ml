@@ -4717,19 +4717,20 @@ function recalcular(
             ) / divisor
             : custo * 1.5;
 
-    if (precoAtual > PRECO_REFERENCIA) {
-        if (podeUsarReferencia) {
-            novoPreco = Math.max(
-                PRECO_REFERENCIA,
-                novoPreco
-            );
-        } else {
-            novoPreco = Math.max(
-                PRECO_REFERENCIA + 0.01,
-                novoPreco
-            );
-        }
+    if (precoAtual > PRECO_REFERENCIA && !podeUsarReferencia) {
+        // Se R$ 78,90 com frete de R$ 10,00 NÃO alcançar a margem
+        // desejada, mantém a regra anterior: usa o frete real e não
+        // deixa o preço calculado cair para R$ 78,90 ou menos.
+        novoPreco = Math.max(
+            PRECO_REFERENCIA + 0.01,
+            novoPreco
+        );
     }
+
+    // Quando R$ 78,90 + frete fixo de R$ 10,00 já alcança ou supera
+    // a margem desejada, NÃO travamos o novo preço em R$ 78,90.
+    // A fórmula acima calcula diretamente o preço necessário para
+    // chegar à margem escolhida usando o frete fixo de R$ 10,00.
 
     const valorTaxa =
         novoPreco *
