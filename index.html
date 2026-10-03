@@ -346,6 +346,64 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
     class="min-h-screen font-sans text-slate-100"
 >
 
+<div id="oauth-login-gate" class="hidden fixed inset-0 z-[10000] bg-slate-950 overflow-y-auto">
+    <div class="min-h-screen flex items-center justify-center px-4 py-10">
+        <div class="w-full max-w-2xl panel rounded-3xl border border-slate-800 p-6 md:p-8 shadow-2xl">
+            <div class="flex items-center gap-3 mb-7">
+                <div class="w-12 h-12 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center text-xl font-black">M</div>
+                <div>
+                    <div class="text-xl font-black text-white">ML Hub <span class="text-yellow-400">Pro</span></div>
+                    <div class="text-[10px] uppercase tracking-[.16em] text-slate-500 font-bold">Conectar aplicação Mercado Livre</div>
+                </div>
+            </div>
+
+            <h1 class="text-2xl md:text-3xl font-black text-white">Entrar no painel</h1>
+            <p class="text-sm text-slate-400 mt-2 leading-6">
+                Informe as credenciais da sua aplicação. Depois, o Mercado Livre abrirá a tela oficial de autorização.
+                O servidor guardará o Refresh Token e renovará o Access Token automaticamente.
+            </p>
+
+            <div id="oauth-login-status" class="hidden mt-4 p-3 rounded-xl text-xs font-bold"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div>
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
+                    <input id="oauth-client-id-login" type="text" autocomplete="off"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="Client ID">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
+                    <input id="oauth-client-secret-login" type="password" autocomplete="new-password"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="Client Secret">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno</label>
+                    <input id="oauth-redirect-uri-login" type="url" autocomplete="off"
+                        value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
+                    <input id="oauth-access-token-login" type="password" autocomplete="off"
+                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                        placeholder="APP_USR-...">
+                </div>
+            </div>
+
+            <button onclick="iniciarOAuthML('login')" class="mt-6 w-full bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm px-5 py-3.5 rounded-xl">
+                Gerar acesso renovável e entrar
+            </button>
+
+            <p class="text-[10px] text-slate-600 mt-4 leading-5">
+                O Client Secret é enviado diretamente ao seu servidor Render e não é salvo no localStorage do navegador.
+            </p>
+        </div>
+    </div>
+</div>
+
+
 <!-- =====================================================
      HEADER
 ===================================================== -->
@@ -646,7 +704,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 </button>
 
                 <button
-                    onclick="solicitarToken()"
+                    onclick="mudarAba('configuracoes'); atualizarStatusOAuthML()"
                     class="
                         btn-action
                         bg-slate-900
@@ -1058,130 +1116,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
     </div>
 
 
-    <!-- TOKEN NA HOME -->
-
-    <div
-        class="
-            panel
-            rounded-2xl
-            p-6
-        "
-    >
-
-        <div
-            class="
-                flex
-                flex-col
-                lg:flex-row
-                lg:items-center
-                justify-between
-                gap-5
-            "
-        >
-
-            <div>
-
-                <div
-                    class="
-                        text-[10px]
-                        uppercase
-                        tracking-[.16em]
-                        text-yellow-400
-                        font-bold
-                    "
-                >
-                    Conexão
-                </div>
-
-                <h2
-                    class="
-                        text-lg
-                        font-black
-                        text-white
-                        mt-1
-                    "
-                >
-                    Conecte sua conta do Mercado Livre
-                </h2>
-
-                <p
-                    class="
-                        text-xs
-                        text-slate-500
-                        mt-1
-                    "
-                >
-                    O token é armazenado apenas no
-                    armazenamento local deste navegador.
-                </p>
-
-            </div>
-
-            <div
-                class="
-                    flex
-                    flex-col
-                    sm:flex-row
-                    gap-2
-                    w-full
-                    lg:w-auto
-                "
-            >
-
-                <input
-                    id="input-token-home"
-                    type="password"
-                    placeholder="Cole seu Access Token"
-                    class="
-                        bg-slate-950
-                        border
-                        border-slate-700
-                        text-white
-                        px-4
-                        py-3
-                        rounded-xl
-                        text-xs
-                        outline-none
-                        w-full
-                        lg:w-[400px]
-                    "
-                >
-
-                <button
-                    onclick="salvarTokenHome()"
-                    class="
-                        bg-yellow-400
-                        hover:bg-yellow-300
-                        text-slate-950
-                        font-black
-                        text-xs
-                        px-5
-                        py-3
-                        rounded-xl
-                    "
-                >
-                    Conectar
-                </button>
-
-            </div>
-
-        </div>
-
-        <div
-            id="status-token-home"
-            class="
-                mt-4
-                text-[11px]
-                text-slate-500
-            "
-        >
-            Verificando conexão...
-        </div>
-
-    </div>
-
-
-
+    <!-- Conexão removida da Home: agora fica em Configurações -->
 
     <!-- RESUMO DE VENDAS NA PÁGINA INICIAL -->
     <div class="mt-1 mb-6">
@@ -2312,6 +2247,64 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
         </button>
     </div>
 
+
+    <div class="panel rounded-2xl p-6">
+        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+            <div>
+                <h2 class="text-sm font-black text-white">Conta Mercado Livre</h2>
+                <p class="text-xs text-slate-500 mt-1">
+                    A autorização e a renovação do Access Token são feitas pelo servidor.
+                    O Client Secret não é gravado no navegador.
+                </p>
+                <div id="oauth-status-config" class="text-xs text-yellow-400 font-bold mt-3">
+                    Verificando conexão...
+                </div>
+            </div>
+            <button onclick="desconectarOAuthML()" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold px-4 py-2.5 rounded-xl">
+                Desconectar
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+            <div>
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
+                <input id="oauth-client-id-config" type="text" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="Ex.: 1234567890123456">
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
+                <input id="oauth-client-secret-config" type="password" autocomplete="new-password"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="Secret Key da aplicação">
+            </div>
+            <div class="md:col-span-2">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no Mercado Livre</label>
+                <input id="oauth-redirect-uri-config" type="url" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="https://site-atualizar-pre-o-ml.onrender.com/auth/callback">
+            </div>
+            <div class="md:col-span-2">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
+                <input id="oauth-access-token-config" type="password" autocomplete="off"
+                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
+                    placeholder="APP_USR-...">
+                <p class="text-[10px] text-slate-600 mt-2">
+                    O token atual pode ser usado temporariamente. Para renovação automática, conclua a autorização OAuth.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 mt-5">
+            <button onclick="iniciarOAuthML('config')" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">
+                Gerar acesso renovável
+            </button>
+            <button onclick="salvarTokenTemporarioConfig()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl border border-slate-700">
+                Usar token atual
+            </button>
+        </div>
+    </div>
+
     <div class="panel rounded-2xl p-6">
         <h2 class="text-sm font-black text-white">Tema</h2>
         <p class="text-xs text-slate-500 mt-1">Escolha o tema do painel. A preferência fica salva neste navegador.</p>
@@ -3288,10 +3281,12 @@ function esconderLoading() {
 
 
 function obterToken() {
-
-    return localStorage.getItem(
-        'ml_access_token'
-    );
+    // Mantém compatibilidade com as funções existentes.
+    // Quando OAuth está conectado, o backend usa e renova o token automaticamente.
+    const legado = localStorage.getItem('ml_access_token');
+    if (legado) return legado;
+    if (localStorage.getItem('ml_oauth_connected') === '1') return 'AUTO';
+    return '';
 }
 
 
@@ -3300,16 +3295,13 @@ function obterToken() {
 ========================================================= */
 
 function solicitarToken() {
-
-    document.getElementById(
-        'aviso-token'
-    ).classList.remove(
-        'hidden'
-    );
-
-    document.getElementById(
-        'input-token-manual'
-    ).focus();
+    if (localStorage.getItem('ml_oauth_connected') === '1') {
+        mudarAba('configuracoes');
+        atualizarStatusOAuthML();
+    } else {
+        const gate = document.getElementById('oauth-login-gate');
+        if (gate) gate.classList.remove('hidden');
+    }
 }
 
 
@@ -6708,6 +6700,146 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!document.hidden) atualizarHomeTempoReal(false);
     });
 })();
+</script>
+
+
+<script id="mlhub-oauth-renovavel">
+const ML_HUB_FRONTEND_URL = window.location.origin + window.location.pathname;
+
+function mostrarStatusLoginOAuth(mensagem, erro = false) {
+    const el = document.getElementById('oauth-login-status');
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.className = `mt-4 p-3 rounded-xl text-xs font-bold ${erro ? 'bg-red-500/10 text-red-300 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'}`;
+    el.innerText = mensagem;
+}
+
+async function consultarStatusOAuthML() {
+    try {
+        const response = await fetch(`${RENDER_URL}/api/oauth/status`, { cache: 'no-store' });
+        const data = await response.json();
+        if (response.ok && data.connected) {
+            localStorage.setItem('ml_oauth_connected', '1');
+            localStorage.removeItem('ml_access_token');
+            return data;
+        }
+        localStorage.removeItem('ml_oauth_connected');
+        return data || { connected: false };
+    } catch (erro) {
+        // Se o servidor estiver temporariamente indisponível, não destrói a sessão visual já salva.
+        return { connected: localStorage.getItem('ml_oauth_connected') === '1', offline: true };
+    }
+}
+
+async function atualizarStatusOAuthML() {
+    const data = await consultarStatusOAuthML();
+    const el = document.getElementById('oauth-status-config');
+    if (el) {
+        if (data.connected) {
+            el.className = 'text-xs text-emerald-400 font-bold mt-3';
+            el.innerText = `● Conta conectada${data.user_id ? ' · Usuário ' + data.user_id : ''}${data.expires_at ? ' · renovação automática ativa' : ''}`;
+        } else {
+            el.className = 'text-xs text-yellow-400 font-bold mt-3';
+            el.innerText = '● Conta ainda não conectada por OAuth';
+        }
+    }
+    return data;
+}
+
+function lerCamposOAuth(origem) {
+    const sufixo = origem === 'config' ? 'config' : 'login';
+    return {
+        client_id: document.getElementById(`oauth-client-id-${sufixo}`)?.value.trim() || '',
+        client_secret: document.getElementById(`oauth-client-secret-${sufixo}`)?.value.trim() || '',
+        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || '',
+        access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
+        frontend_url: ML_HUB_FRONTEND_URL
+    };
+}
+
+async function iniciarOAuthML(origem = 'login') {
+    const dados = lerCamposOAuth(origem);
+    if (!dados.client_id || !dados.client_secret || !dados.redirect_uri) {
+        const msg = 'Preencha Client ID, Client Secret e URL de retorno.';
+        if (origem === 'login') mostrarStatusLoginOAuth(msg, true); else alert(msg);
+        return;
+    }
+
+    try {
+        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização no Mercado Livre...');
+        const response = await fetch(`${RENDER_URL}/api/oauth/configure`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso || !data.authorization_url) {
+            throw new Error(data.erro || 'Não foi possível iniciar a autorização.');
+        }
+        window.location.href = data.authorization_url;
+    } catch (erro) {
+        if (origem === 'login') mostrarStatusLoginOAuth(erro.message, true); else alert(erro.message);
+    }
+}
+
+async function salvarTokenTemporarioConfig() {
+    const token = document.getElementById('oauth-access-token-config')?.value.trim() || '';
+    if (!token) return alert('Cole o Access Token atual.');
+    try {
+        const response = await fetch(`${RENDER_URL}/api/oauth/manual-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: token })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.erro || 'Não foi possível salvar o token.');
+        localStorage.setItem('ml_oauth_connected', '1');
+        localStorage.removeItem('ml_access_token');
+        await atualizarStatusOAuthML();
+        alert('Token atual salvo no servidor. Para renovação automática, conclua também o OAuth.');
+    } catch (erro) {
+        alert(erro.message);
+    }
+}
+
+async function desconectarOAuthML() {
+    if (!confirm('Desconectar a conta do Mercado Livre deste servidor?')) return;
+    try {
+        await fetch(`${RENDER_URL}/api/oauth/disconnect`, { method: 'POST' });
+    } catch (erro) {}
+    localStorage.removeItem('ml_oauth_connected');
+    localStorage.removeItem('ml_access_token');
+    const gate = document.getElementById('oauth-login-gate');
+    if (gate) gate.classList.remove('hidden');
+    atualizarStatusOAuthML();
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') === 'success') {
+        localStorage.setItem('ml_oauth_connected', '1');
+        history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const status = await consultarStatusOAuthML();
+    const gate = document.getElementById('oauth-login-gate');
+    if (gate) {
+        if (status.connected) gate.classList.add('hidden');
+        else gate.classList.remove('hidden');
+    }
+
+    const perfilNome = document.getElementById('perfil-nome-conta');
+    const perfilStatus = document.getElementById('perfil-status-conta');
+    if (status.connected) {
+        if (perfilNome && status.nickname) perfilNome.innerText = status.nickname;
+        if (perfilStatus) {
+            perfilStatus.innerText = '● Conta conectada · renovação automática';
+            perfilStatus.className = 'text-xs text-emerald-400 mt-2';
+        }
+    }
+
+    atualizarStatusOAuthML();
+});
 </script>
 
 </body>
