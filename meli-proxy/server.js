@@ -1277,6 +1277,60 @@ async function buscarItensBulk(
     return mapa;
 }
 
+
+/**
+ * Busca os 10 anúncios com maior quantidade vendida na conta.
+ * Usa a ordenação sold_quantity_desc do endpoint oficial do vendedor
+ * e depois consulta os detalhes dos itens com o token proprietário.
+ */
+async function buscarTop10MaisVendidosDaConta(token, sellerId) {
+    const params = new URLSearchParams({
+        orders: 'sold_quantity_desc',
+        limit: '10',
+        offset: '0'
+    });
+
+    const response = await mlFetch(
+        `${ML_API}/users/${sellerId}/items/search?${params.toString()}`,
+        token
+    );
+
+    const data = await jsonSeguro(response);
+
+    if (!response.ok) {
+        throw new Error(
+            'Erro ao buscar ranking de anúncios: ' +
+            formatarErroMercadoLivre(data)
+        );
+    }
+
+    const ids = Array.isArray(data.results)
+        ? data.results.slice(0, 10)
+        : [];
+
+    if (!ids.length) {
+        return [];
+    }
+
+    const detalhes = await buscarItensBulk(token, ids);
+
+    return ids
+        .map(id => detalhes[id])
+        .filter(Boolean)
+        .map(item => ({
+            item_id: item.id,
+            titulo: item.title || item.id,
+            unidades: Number(item.sold_quantity || 0),
+            faturamento: Number(item.sold_quantity || 0) * Number(item.price || 0),
+            preco_atual: Number(item.price || 0),
+            thumbnail: item.thumbnail || item.secure_thumbnail || '',
+            permalink: item.permalink || '#',
+            status: item.status || ''
+        }))
+        .sort((a, b) => b.unidades - a.unidades)
+        .slice(0, 10);
+}
+
 /**
  * GET /api/dashboard
  *
@@ -1447,40 +1501,34 @@ app.get('/api/dashboard', async (req, res) => {
                 topIds
             );
 
-        const top10 =
-            Object.values(
-                vendasPorItem
-            )
-                .sort(
-                    (a, b) =>
-                        b.unidades -
-                        a.unidades
-                )
-                .slice(0, 10)
-                .map(
-                    item => {
-                        const detalhe =
-                            itensDetalhes[
-                                item.item_id
-                            ];
+        // Top 10 da conta: usa sold_quantity dos anúncios do próprio vendedor.
+        // Se a consulta específica falhar, mantém como fallback o ranking dos pedidos.
+        let top10;
 
-                        return {
-                            ...item,
-                            titulo:
-                                detalhe?.title ||
-                                item.titulo,
-                            preco_atual:
-                                detalhe?.price ||
-                                0,
-                            thumbnail:
-                                detalhe?.thumbnail ||
-                                '',
-                            permalink:
-                                detalhe?.permalink ||
-                                '#'
-                        };
-                    }
-                );
+        try {
+            top10 = await buscarTop10MaisVendidosDaConta(
+                token,
+                sellerId
+            );
+        } catch (erroTop10) {
+            console.warn('Falha no Top 10 por sold_quantity; usando pedidos como fallback:', erroTop10.message);
+
+            top10 = Object.values(vendasPorItem)
+                .sort((a, b) => b.unidades - a.unidades)
+                .slice(0, 10)
+                .map(item => {
+                    const detalhe = itensDetalhes[item.item_id];
+
+                    return {
+                        ...item,
+                        titulo: detalhe?.title || item.titulo,
+                        preco_atual: detalhe?.price || 0,
+                        thumbnail: detalhe?.thumbnail || '',
+                        permalink: detalhe?.permalink || '#'
+                    };
+                });
+        }
+
 
         /*
          * Busca os dados completos do vendedor.
