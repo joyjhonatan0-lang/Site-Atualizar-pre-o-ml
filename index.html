@@ -529,22 +529,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                         ▦ Gestão
                     </button>
 
-                    <button
-                        onclick="mudarAba('dashboard')"
-                        id="btn-dashboard"
-                        class="
-                            nav-button
-                            px-3
-                            py-2
-                            rounded-lg
-                            text-xs
-                            font-semibold
-                            text-slate-400
-                            whitespace-nowrap
-                        "
-                    >
-                        📊 Indicadores
-                    </button>
+                    
 
                     <button
                         onclick="mudarAba('simulacao')"
@@ -1263,6 +1248,36 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 cursor-pointer
             "
         >
+
+<!-- TOP 10 NA PÁGINA INICIAL -->
+<div class="flex items-center gap-2 flex-wrap justify-end">
+
+                <button
+                    onclick="puxarNovosAnuncios()"
+                    class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
+                    title="Busca somente anúncios novos que ainda não estão carregados no painel"
+                >
+                    ↓ Puxar anúncios
+                </button>
+
+                <button
+                    onclick="sincronizarPrecosApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o preço atual dos MLBs carregados"
+                >
+                    R$ Puxar preços
+                </button>
+
+                <button
+                    onclick="sincronizarFretesApi()"
+                    class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
+                    title="Atualiza somente o frete atual dos MLBs carregados"
+                >
+                    🚚 Puxar fretes
+                </button>
+
+            </div>
+
             <div
                 class="
                     w-11
@@ -6457,6 +6472,37 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Não foi possível restaurar os indicadores da página inicial:', erro);
     }
 });
+</script>
+
+
+<script id="sincronizar-top10-home">
+(function () {
+    function sincronizarTop10Home() {
+        const origem =
+            document.getElementById('top10') ||
+            document.getElementById('top10-lista');
+        const destino =
+            document.getElementById('top10-home') ||
+            document.getElementById('top10-lista-home');
+        if (!origem || !destino) return;
+        destino.innerHTML = origem.innerHTML;
+    }
+
+    window.sincronizarTop10Home = sincronizarTop10Home;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const origem =
+            document.getElementById('top10') ||
+            document.getElementById('top10-lista');
+        if (!origem) return;
+        sincronizarTop10Home();
+        new MutationObserver(sincronizarTop10Home).observe(origem, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    });
+})();
 </script>
 
 </body>
