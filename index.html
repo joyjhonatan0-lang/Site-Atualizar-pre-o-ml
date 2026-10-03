@@ -2632,6 +2632,10 @@
                         </th>
 
                         <th class="p-3">
+                            Referência
+                        </th>
+
+                        <th class="p-3">
                             Tipo
                         </th>
 
@@ -4423,6 +4427,10 @@ function montarTabelaSimulacao(
                     ${moeda(item.shipping_cost)}
                 </td>
 
+                <td class="p-3 font-black text-blue-700 bg-blue-50">
+                    R$ 78,90
+                </td>
+
                 <td class="p-3">
                     ${tipoNome}
                 </td>
@@ -4588,10 +4596,12 @@ function recalcular(
             )?.value
         ) || 0;
 
-    const freteAplicado =
-        freteGratis
-            ? custoFrete
-            : 6.85;
+    const PRECO_REFERENCIA = 78.90;
+    const FRETE_REFERENCIA = 10.00;
+
+    const itemAtual = cacheItens[index] || {};
+    const precoAtual = Number(itemAtual.price || 0);
+    const freteAtual = Number(custoFrete || 0);
 
     const somaPercentual =
         taxaPercent +
@@ -4605,6 +4615,46 @@ function recalcular(
             100
         );
 
+    /*
+       REGRA R$ 78,90:
+       - Só é testada quando o anúncio atual está acima de R$ 78,90.
+       - Primeiro simulamos R$ 78,90 com frete fixo de R$ 10,00.
+       - Se essa combinação já entrega a margem desejada (ou mais),
+         o cenário de frete R$ 10,00 passa a ser usado e R$ 78,90
+         funciona como preço mínimo de referência.
+       - Caso contrário, permanece o frete atual do anúncio e o novo
+         preço não pode cair para R$ 78,90 ou menos.
+    */
+
+    const taxaReferencia =
+        PRECO_REFERENCIA *
+        (taxaPercent / 100);
+
+    const impostoReferencia =
+        PRECO_REFERENCIA *
+        (impostoPercent / 100);
+
+    const lucroReferencia =
+        PRECO_REFERENCIA -
+        custo -
+        taxaReferencia -
+        impostoReferencia -
+        FRETE_REFERENCIA;
+
+    const margemReferencia =
+        PRECO_REFERENCIA > 0
+            ? (lucroReferencia / PRECO_REFERENCIA) * 100
+            : 0;
+
+    const podeUsarReferencia =
+        precoAtual > PRECO_REFERENCIA &&
+        margemReferencia + 0.0001 >= lucroDesejadoPercent;
+
+    const freteAplicado =
+        podeUsarReferencia
+            ? FRETE_REFERENCIA
+            : freteAtual;
+
     let novoPreco =
         divisor > 0
             ? (
@@ -4612,6 +4662,20 @@ function recalcular(
                 freteAplicado
             ) / divisor
             : custo * 1.5;
+
+    if (precoAtual > PRECO_REFERENCIA) {
+        if (podeUsarReferencia) {
+            novoPreco = Math.max(
+                PRECO_REFERENCIA,
+                novoPreco
+            );
+        } else {
+            novoPreco = Math.max(
+                PRECO_REFERENCIA + 0.01,
+                novoPreco
+            );
+        }
+    }
 
     const valorTaxa =
         novoPreco *
@@ -4682,6 +4746,12 @@ function recalcular(
         preco:
             novoPreco,
 
+        freteSimulado:
+            freteAplicado,
+
+        usouReferencia7890:
+            podeUsarReferencia,
+
         foraDaMargem:
             Math.abs(
                 novoPreco -
@@ -4689,7 +4759,6 @@ function recalcular(
             ) > 0.05
     };
 }
-
 
 function aplicarEmMassa() {
 
