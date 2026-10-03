@@ -3657,6 +3657,9 @@ async function puxarNovosAnuncios() {
             ...(cacheItens || [])
         ];
 
+        // Mantém os novos anúncios salvos mesmo após F5.
+        salvarCacheItensLocal();
+
         atualizarCards(cacheItens);
         executarBusca();
 
@@ -3766,6 +3769,10 @@ async function sincronizarPrecosApi() {
                 }
             );
 
+            // Salva os preços atualizados. Eles só mudam novamente
+            // quando o usuário clicar em Puxar preços.
+            salvarCacheItensLocal();
+
             atualizarCards(
                 cacheItens
             );
@@ -3860,9 +3867,16 @@ async function sincronizarFretesApi() {
                 atualizados++;
             });
 
+            // Salva cada lote concluído. Assim, mesmo que a página seja
+            // recarregada durante a sincronização, os fretes já obtidos permanecem.
+            salvarCacheItensLocal();
+
             // Atualiza a tabela a cada lote, então o usuário vê o resultado chegando.
             executarBusca();
         }
+
+        // Confirma no armazenamento local o estado final dos fretes.
+        salvarCacheItensLocal();
 
         atualizarCards(cacheItens);
         executarBusca();
