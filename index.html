@@ -404,7 +404,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                     Salvar dados e entrar
                 </button>
                 <button onclick="iniciarOAuthML('login')" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-black text-sm px-5 py-3.5 rounded-xl border border-slate-700">
-                    Gerar Access + Refresh pelo Mercado Livre
+                    Autorizar e gerar Access Token
                 </button>
             </div>
 
@@ -6842,7 +6842,7 @@ async function iniciarOAuthML(origem = 'login') {
     }
 
     try {
-        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização no Mercado Livre...');
+        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização segura...');
         const response = await fetch(`${RENDER_URL}/api/oauth/configure`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
