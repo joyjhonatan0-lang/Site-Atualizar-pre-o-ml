@@ -67,69 +67,52 @@ function formatarErroMercadoLivre(data) {
     );
 }
 
-// Função auxiliar centralizada para calcular o custo de envio do vendedor
-// usando a cotação oficial do Mercado Livre para o próprio anúncio.
+// Função auxiliar centralizada para consultar o custo de envio do anúncio.
+// Mantém o carregamento normal dos anúncios intacto: esta consulta é usada
+// somente quando a rota de sincronização de fretes é acionada.
 async function calcularFreteExato(itemObj, token) {
-    const shipping = itemObj.shipping || {};
+    const shipping = itemObj?.shipping || {};
     const freeShipping = Boolean(shipping.free_shipping);
-    const sellerId = itemObj.seller_id || itemObj.seller?.id;
+    const itemId = itemObj?.id;
+    const sellerId = itemObj?.seller_id;
 
-    // Fonte principal: shipping_options/free. O campo list_cost representa
-    // o custo de envio oferecido/cobrado ao vendedor para o anúncio.
-    if (sellerId && itemObj.id) {
-        try {
-            const params = new URLSearchParams({
-                item_id: String(itemObj.id),
-                free_shipping: freeShipping ? 'true' : 'false',
-                verbose: 'true'
-            });
-
-            // Envia também o contexto disponível do anúncio para evitar
-            // cotações incompletas ou divergentes.
-            if (itemObj.price != null) params.set('item_price', String(itemObj.price));
-            if (itemObj.listing_type_id) params.set('listing_type_id', String(itemObj.listing_type_id));
-            if (shipping.mode) params.set('mode', String(shipping.mode));
-            if (shipping.logistic_type) params.set('logistic_type', String(shipping.logistic_type));
-
-            const freteRes = await mlFetch(
-                `${ML_API}/users/${encodeURIComponent(sellerId)}/shipping_options/free?${params.toString()}`,
-                token
-            );
-
-            if (freteRes.ok) {
-                const freteData = await jsonSeguro(freteRes);
-                const cobertura = freteData?.coverage?.all_country;
-                const listCost = Number(cobertura?.list_cost);
-
-                if (Number.isFinite(listCost) && listCost >= 0) {
-                    return listCost;
-                }
-            }
-        } catch (e) {
-            console.warn(`Falha ao consultar frete oficial do item ${itemObj.id}:`, e.message);
-        }
+    if (!itemId || !sellerId) {
+        return 0;
     }
 
-    // Fallback somente quando a cotação oficial não estiver disponível.
-    // Não usa mais o valor fixo de R$ 12,95.
-    if (Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-        const cObj = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
-        if (cObj) return Number(cObj.cost);
-    }
-
-    // Último fallback: tenta o detalhe de tarifa já usado pela integração.
     try {
-        const saleFeeRes = await mlFetch(
-            `${ML_API}/items/${encodeURIComponent(itemObj.id)}/sale_fee?price=${encodeURIComponent(itemObj.price || 0)}&listing_type_id=${encodeURIComponent(itemObj.listing_type_id || 'gold_special')}`,
+        const params = new URLSearchParams({
+            item_id: String(itemId),
+            free_shipping: freeShipping ? 'true' : 'false',
+            verbose: 'true'
+        });
+
+        const freteRes = await mlFetch(
+            `${ML_API}/users/${sellerId}/shipping_options/free?${params.toString()}`,
             token
         );
-        if (saleFeeRes.ok) {
-            const saleFeeData = await jsonSeguro(saleFeeRes);
-            const shippingFee = Number(saleFeeData?.sale_fee_details?.shipping_fee);
-            if (Number.isFinite(shippingFee) && shippingFee >= 0) return shippingFee;
+
+        const freteData = await jsonSeguro(freteRes);
+
+        if (freteRes.ok) {
+            const valor = Number(
+                freteData?.coverage?.all_country?.list_cost
+            );
+
+            if (Number.isFinite(valor) && valor >= 0) {
+                return valor;
+            }
         }
-    } catch (e) {
-        console.warn(`Falha no fallback de frete do item ${itemObj.id}:`, e.message);
+    } catch (error) {
+        console.error(`Erro ao consultar frete do anúncio ${itemId}:`, error.message);
+    }
+
+    // Fallback somente para um custo realmente retornado no próprio item.
+    // Não usa mais valores fixos (R$ 6,85 / R$ 12,95), pois eles podem
+    // divergir do custo de envio atual exibido pelo Mercado Livre.
+    if (Array.isArray(shipping.costs)) {
+        const custo = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
+        if (custo) return Number(custo.cost);
     }
 
     return 0;
@@ -180,7 +163,7 @@ app.get('/api/anuncios', async (req, res) => {
 
         while (hasMore) {
             let url =
-                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=100`;
+                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=50`;
 
             if (scrollId) {
                 url += `&scroll_id=${encodeURIComponent(scrollId)}`;
@@ -342,16 +325,11 @@ app.get('/api/anuncios', async (req, res) => {
                             shipping.free_shipping ||
                             false;
 
-                        // IMPORTANTE: ao carregar a lista de anúncios, não consulta
-                        // o endpoint de frete anúncio por anúncio. Com milhares de MLBs
-                        // isso fazia /api/anuncios ficar preso por vários minutos.
-                        // O frete exato continua sendo buscado somente pelo botão
-                        // "Puxar fretes" (/api/sincronizar-fretes).
-                        let custoEnvio = 0;
-                        if (Array.isArray(shipping.costs) && shipping.costs.length > 0) {
-                            const custoLocal = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
-                            if (custoLocal) custoEnvio = Number(custoLocal.cost);
-                        }
+                        const custoEnvio =
+                            await calcularFreteExato(
+                                body,
+                                token
+                            );
 
                         // Valor líquido exibido no painel: preço - comissão - custo de envio.
                         // O usuário pediu que o frete seja descontado sempre do campo "Você recebe".
