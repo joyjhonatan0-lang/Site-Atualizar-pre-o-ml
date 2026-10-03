@@ -3,952 +3,981 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercado Livre | ML Hub Pro</title>
+
+    <title>ML Hub Pro | Gestão de Anúncios</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            400: '#facc15',
-                            500: '#eab308',
-                            600: '#ca8a04'
-                        }
-                    },
-                    boxShadow: {
-                        soft: '0 10px 40px rgba(0,0,0,.20)',
-                        card: '0 8px 30px rgba(15,23,42,.08)'
-                    }
-                }
-            }
-        }
-    </script>
-
     <style>
         * {
-            scrollbar-width: thin;
-            scrollbar-color: #334155 #0f172a;
+            box-sizing: border-box;
         }
 
-        *::-webkit-scrollbar {
-            width: 7px;
-            height: 7px;
-        }
-
-        *::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-
-        *::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 999px;
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            background:
-                radial-gradient(circle at 10% 0%, rgba(250, 204, 21, .06), transparent 28%),
-                radial-gradient(circle at 90% 10%, rgba(59, 130, 246, .05), transparent 25%),
-                #070b14;
-        }
-
-        .glass {
-            background: rgba(15, 23, 42, .78);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-        }
-
-        .panel {
-            background: #0f172a;
-            border: 1px solid #1e293b;
-            box-shadow: 0 10px 35px rgba(0, 0, 0, .18);
-        }
-
-        .panel-hover {
-            transition: all .2s ease;
-        }
-
-        .panel-hover:hover {
-            border-color: #334155;
-            transform: translateY(-1px);
+            margin: 0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         .futuristic-table th {
-            background: #111827;
-            color: #94a3b8;
-            font-size: 10px;
-            letter-spacing: .08em;
+            background: #18181b;
+            color: #f4f4f5;
+            font-size: 11px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .futuristic-table tbody tr {
-            transition: background .15s ease;
-        }
-
-        .futuristic-table tbody tr:hover {
-            background: rgba(30, 41, 59, .65);
         }
 
         .input-simulacao {
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            color: #0f172a;
+            background: #fafafa;
+            border: 1px solid #e4e4e7;
             text-align: center;
-            border-radius: 7px;
-            padding: 6px 7px;
-            font-size: 12px;
-            font-weight: 600;
-            transition: all .15s ease;
-        }
-
-        .input-simulacao:hover {
-            border-color: #94a3b8;
+            border-radius: 6px;
+            padding: 5px;
+            font-size: 13px;
+            font-weight: 500;
         }
 
         .input-simulacao:focus {
             outline: none;
-            border-color: #eab308;
+            border-color: #3b82f6;
             background: #fff;
-            box-shadow: 0 0 0 3px rgba(234, 179, 8, .12);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
         }
 
-        .nav-button {
-            position: relative;
-            transition: all .2s ease;
+        .glass {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
         }
 
-        .nav-button.active {
-            background: linear-gradient(135deg, #facc15, #eab308);
-            color: #111827;
-            box-shadow: 0 4px 14px rgba(250, 204, 21, .18);
+        .hero-grid {
+            background-image:
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
 
-        .stat-card {
-            position: relative;
-            overflow: hidden;
+        .glow-yellow {
+            box-shadow:
+                0 0 80px rgba(250, 204, 21, 0.08),
+                0 0 25px rgba(250, 204, 21, 0.05);
         }
 
-        .stat-card::after {
-            content: "";
-            position: absolute;
-            width: 100px;
-            height: 100px;
-            right: -40px;
-            top: -40px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.025);
+        .glow-blue {
+            box-shadow:
+                0 0 80px rgba(59, 130, 246, 0.08),
+                0 0 25px rgba(59, 130, 246, 0.05);
         }
 
-        .btn-action {
-            transition: all .18s ease;
+        .feature-card {
+            transition: transform .25s ease, border-color .25s ease, background .25s ease;
         }
 
-        .btn-action:hover {
-            transform: translateY(-1px);
+        .feature-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(250, 204, 21, 0.25);
+            background: rgba(30, 41, 59, 0.85);
         }
 
-        .btn-action:active {
-            transform: translateY(0);
+        .btn-connect {
+            transition: all .25s ease;
         }
 
-        .table-wrapper {
-            scrollbar-color: #475569 #0f172a;
-        }
-
-        .line-clamp-1 {
-            display: -webkit-box;
-            -webkit-line-clamp: 1;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+        .btn-connect:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(250, 204, 21, 0.16);
         }
 
         .status-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            display: inline-block;
+            box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.08);
         }
 
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
+        .fade-in {
+            animation: fadeIn .45s ease both;
         }
 
-        @keyframes float {
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .float-soft {
+            animation: floatSoft 5s ease-in-out infinite;
+        }
+
+        @keyframes floatSoft {
             0%, 100% {
                 transform: translateY(0);
             }
+
             50% {
-                transform: translateY(-3px);
+                transform: translateY(-8px);
             }
         }
 
-        .loading-ring {
-            border: 3px solid rgba(250, 204, 21, .15);
+        .loader {
+            width: 38px;
+            height: 38px;
+            border: 3px solid rgba(255,255,255,.12);
             border-top-color: #facc15;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
-        @media (max-width: 900px) {
-            .top-actions {
-                overflow-x: auto;
-                padding-bottom: 4px;
-            }
-
-            .top-actions button {
-                white-space: nowrap;
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
             }
         }
     </style>
 </head>
 
-<body class="min-h-screen font-sans text-slate-100">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
 
-    <!-- HEADER -->
-    <header class="glass sticky top-0 z-50 border-b border-slate-800/80">
-        <div class="max-w-[1800px] mx-auto px-4 lg:px-6">
+    <!-- =========================================================
+         TELA INICIAL
+    ========================================================== -->
+    <section id="tela-inicial" class="min-h-screen relative overflow-hidden hero-grid">
 
-            <div class="min-h-[72px] flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 py-3">
+        <div class="absolute inset-0 pointer-events-none">
+            <div class="absolute -top-32 -left-32 w-96 h-96 bg-yellow-400/10 rounded-full blur-3xl"></div>
+            <div class="absolute top-1/3 -right-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 left-1/3 w-96 h-72 bg-purple-500/5 rounded-full blur-3xl"></div>
+        </div>
 
-                <!-- Logo + Navegação -->
-                <div class="flex flex-col md:flex-row md:items-center gap-4">
-
-                    <div class="flex items-center gap-3 shrink-0">
-                        <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-300 to-yellow-500 shadow-lg shadow-yellow-500/10">
-                            <span class="text-slate-950 font-black text-lg">M</span>
-                            <span class="absolute -right-1 -top-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-slate-950 rounded-full"></span>
-                        </div>
-
-                        <div>
-                            <div class="text-sm font-black tracking-tight text-white">
-                                ML Hub <span class="text-yellow-400">Pro</span>
-                            </div>
-                            <div class="text-[10px] uppercase tracking-[.16em] text-slate-500 font-semibold">
-                                Gestão de anúncios
-                            </div>
-                        </div>
-                    </div>
-
-                    <nav class="flex items-center gap-1 p-1 bg-slate-950/80 border border-slate-800 rounded-xl w-fit">
-
-                        <button
-                            onclick="mudarAba('gestao')"
-                            id="btn-gestao"
-                            class="nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
-                        >
-                            <span>▦</span>
-                            Gestão
-                        </button>
-
-                        <button
-                            onclick="mudarAba('simulacao')"
-                            id="btn-simulacao"
-                            class="nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
-                        >
-                            <span>◈</span>
-                            Simulação
-                        </button>
-
-                        <button
-                            onclick="mudarAba('atualizacao')"
-                            id="btn-atualizacao"
-                            class="nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
-                        >
-                            <span>↻</span>
-                            Atualização
-                        </button>
-
-                    </nav>
+        <header class="relative z-10 px-6 lg:px-12 py-6 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center font-black text-lg shadow-lg shadow-yellow-400/10">
+                    ML
                 </div>
 
-                <!-- AÇÕES -->
-                <div class="top-actions flex items-center gap-2">
+                <div>
+                    <div class="font-black text-white tracking-tight">
+                        ML Hub <span class="text-yellow-400">Pro</span>
+                    </div>
 
-                    <button
-                        onclick="carregarDados()"
-                        class="btn-action bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-yellow-500/10"
-                        title="Puxar Anúncios da API"
-                    >
-                        <span>↓</span>
-                        Anúncios
-                    </button>
-
-                    <button
-                        onclick="sincronizarPrecosApi()"
-                        class="btn-action bg-slate-900 hover:bg-slate-800 text-emerald-400 px-3.5 py-2.5 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2"
-                        title="Puxar Preços Reais"
-                    >
-                        <span>R$</span>
-                        Preços
-                    </button>
-
-                    <button
-                        onclick="sincronizarFretesApi()"
-                        class="btn-action bg-slate-900 hover:bg-slate-800 text-blue-400 px-3.5 py-2.5 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2"
-                        title="Puxar Fretes Reais"
-                    >
-                        <span>↗</span>
-                        Fretes
-                    </button>
-
-                    <button
-                        onclick="solicitarToken()"
-                        class="btn-action bg-slate-900 hover:bg-slate-800 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2"
-                    >
-                        <span>⚿</span>
-                        Token
-                    </button>
-
+                    <div class="text-[10px] text-slate-500 uppercase tracking-[0.2em]">
+                        Gestão inteligente
+                    </div>
                 </div>
             </div>
-        </div>
-    </header>
 
+            <div class="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 status-dot"></span>
+                Sistema operacional
+            </div>
+        </header>
 
-    <main class="max-w-[1800px] mx-auto px-4 lg:px-6 py-6">
+        <main class="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 pt-10 pb-16">
 
-        <!-- TOKEN -->
-        <div
-            id="aviso-token"
-            class="hidden mb-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/[.06] overflow-hidden"
-        >
-            <div class="p-5 md:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div class="grid lg:grid-cols-[1.15fr_.85fr] gap-12 items-center">
 
-                <div class="flex items-start gap-4">
-                    <div class="w-11 h-11 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400 text-lg">
-                        ⚿
+                <!-- HERO -->
+                <div class="fade-in">
+
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-yellow-400/20 bg-yellow-400/5 text-yellow-300 text-xs font-semibold mb-6">
+                        <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                        Painel profissional para Mercado Livre
                     </div>
 
-                    <div>
-                        <h3 class="text-sm font-bold text-white">
-                            Token de acesso necessário
-                        </h3>
+                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.02] text-white max-w-3xl">
+                        Controle seus anúncios
+                        <span class="text-yellow-400">em um só lugar.</span>
+                    </h1>
 
-                        <p class="text-xs text-slate-400 mt-1">
-                            Insira seu Bearer Token atualizado do Mercado Livre para acessar seus anúncios.
-                        </p>
+                    <p class="mt-6 text-base sm:text-lg text-slate-400 max-w-2xl leading-relaxed">
+                        Gerencie anúncios, acompanhe preços, simule margens,
+                        analise custos e atualize seus produtos de forma rápida
+                        e centralizada.
+                    </p>
+
+                    <div class="mt-8 flex flex-col sm:flex-row gap-3">
+
+                        <button
+                            onclick="conectarConta()"
+                            class="btn-connect bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-7 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-yellow-400/10"
+                        >
+                            <span class="text-lg">🔗</span>
+                            Conectar conta
+                            <span>→</span>
+                        </button>
+
+                        <button
+                            onclick="mostrarTokenManualInicial()"
+                            class="px-7 py-4 rounded-xl border border-slate-700 hover:border-slate-600 hover:bg-slate-900 text-slate-300 font-semibold text-sm transition"
+                        >
+                            Configurar token manualmente
+                        </button>
+
+                    </div>
+
+                    <div class="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-xs text-slate-500">
+                        <span class="flex items-center gap-2">
+                            <span class="text-emerald-400">✓</span>
+                            Gestão de anúncios
+                        </span>
+
+                        <span class="flex items-center gap-2">
+                            <span class="text-emerald-400">✓</span>
+                            Simulação financeira
+                        </span>
+
+                        <span class="flex items-center gap-2">
+                            <span class="text-emerald-400">✓</span>
+                            Atualização em massa
+                        </span>
                     </div>
                 </div>
 
-                <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                <!-- CARD VISUAL -->
+                <div class="relative fade-in">
+
+                    <div class="absolute inset-0 bg-yellow-400/5 blur-3xl rounded-full"></div>
+
+                    <div class="relative glass border border-slate-800 rounded-3xl p-5 shadow-2xl glow-yellow float-soft">
+
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                            <div>
+                                <p class="text-[10px] uppercase tracking-widest text-slate-500">
+                                    Visão geral
+                                </p>
+
+                                <h3 class="font-bold text-white mt-1">
+                                    Painel de vendas
+                                </h3>
+                            </div>
+
+                            <div class="w-9 h-9 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+                                📊
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mt-4">
+
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500">
+                                    Anúncios
+                                </div>
+
+                                <div class="text-2xl font-black text-white mt-2">
+                                    <span class="text-yellow-400">+</span>
+                                    1.248
+                                </div>
+
+                                <div class="text-[10px] text-emerald-400 mt-1">
+                                    ● sincronizados
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500">
+                                    Ativos
+                                </div>
+
+                                <div class="text-2xl font-black text-emerald-400 mt-2">
+                                    986
+                                </div>
+
+                                <div class="text-[10px] text-slate-500 mt-1">
+                                    anúncios ativos
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="mt-3 bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <div class="text-xs font-bold text-white">
+                                        Desempenho dos anúncios
+                                    </div>
+
+                                    <div class="text-[10px] text-slate-500 mt-1">
+                                        Última sincronização
+                                    </div>
+                                </div>
+
+                                <span class="text-[10px] text-emerald-400 font-bold">
+                                    ONLINE
+                                </span>
+                            </div>
+
+                            <div class="space-y-3">
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-1">
+                                        <span class="text-slate-500">Preço</span>
+                                        <span class="text-slate-300">92%</span>
+                                    </div>
+
+                                    <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                        <div class="h-full bg-yellow-400 rounded-full w-[92%]"></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-1">
+                                        <span class="text-slate-500">Margem</span>
+                                        <span class="text-slate-300">76%</span>
+                                    </div>
+
+                                    <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                        <div class="h-full bg-emerald-400 rounded-full w-[76%]"></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-1">
+                                        <span class="text-slate-500">Estoque</span>
+                                        <span class="text-slate-300">84%</span>
+                                    </div>
+
+                                    <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                        <div class="h-full bg-blue-400 rounded-full w-[84%]"></div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- FEATURES -->
+            <div class="grid md:grid-cols-3 gap-4 mt-16">
+
+                <div class="feature-card bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                    <div class="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/10 flex items-center justify-center mb-4">
+                        📦
+                    </div>
+
+                    <h3 class="font-bold text-white">
+                        Gestão de anúncios
+                    </h3>
+
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Visualize preços, estoque, comissão, frete e status
+                        de todos os seus anúncios.
+                    </p>
+                </div>
+
+                <div class="feature-card bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-400/10 border border-emerald-400/10 flex items-center justify-center mb-4">
+                        💰
+                    </div>
+
+                    <h3 class="font-bold text-white">
+                        Simulação de margem
+                    </h3>
+
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Calcule custos, taxas, impostos, lucro desejado e
+                        preço ideal para seus produtos.
+                    </p>
+                </div>
+
+                <div class="feature-card bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                    <div class="w-10 h-10 rounded-xl bg-blue-400/10 border border-blue-400/10 flex items-center justify-center mb-4">
+                        🚀
+                    </div>
+
+                    <h3 class="font-bold text-white">
+                        Atualização em massa
+                    </h3>
+
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Atualize preços diretamente nos anúncios em lotes
+                        para economizar tempo.
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="text-center mt-10 text-[10px] text-slate-600">
+                ML Hub Pro • Conexão segura com sua conta
+            </div>
+
+        </main>
+    </section>
+
+
+    <!-- =========================================================
+         APLICAÇÃO PRINCIPAL
+    ========================================================== -->
+    <div id="app-principal" class="hidden">
+
+        <!-- Top Bar -->
+        <header class="bg-slate-900 border-b border-slate-800 py-3 px-6 flex justify-between items-center sticky top-0 z-50">
+
+            <div class="flex items-center space-x-6">
+
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+
+                    <span class="text-base font-bold tracking-wide text-white">
+                        ML Hub <span class="text-yellow-400">Pro</span>
+                    </span>
+                </div>
+
+                <nav class="flex space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+
+                    <button
+                        onclick="mudarAba('gestao')"
+                        id="btn-gestao"
+                        class="px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950"
+                    >
+                        Gestão de Anúncios
+                    </button>
+
+                    <button
+                        onclick="mudarAba('simulacao')"
+                        id="btn-simulacao"
+                        class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all"
+                    >
+                        Simulação & Custos
+                    </button>
+
+                    <button
+                        onclick="mudarAba('atualizacao')"
+                        id="btn-atualizacao"
+                        class="px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all"
+                    >
+                        Atualização de Preço
+                    </button>
+
+                </nav>
+            </div>
+
+            <div class="flex items-center space-x-2">
+
+                <button
+                    onclick="carregarDados()"
+                    class="bg-slate-800 hover:bg-slate-700 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold border border-yellow-400/30 transition flex items-center gap-1"
+                    title="Puxar Anúncios da API"
+                >
+                    📦 Puxar Anúncios
+                </button>
+
+                <button
+                    onclick="sincronizarPrecosApi()"
+                    class="bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-2 rounded-lg text-xs font-bold border border-emerald-400/30 transition flex items-center gap-1"
+                    title="Puxar Preços Reais"
+                >
+                    💰 Puxar Preços
+                </button>
+
+                <button
+                    onclick="sincronizarFretesApi()"
+                    class="bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-2 rounded-lg text-xs font-bold border border-blue-400/30 transition flex items-center gap-1"
+                    title="Puxar Fretes Reais"
+                >
+                    🚚 Puxar Fretes
+                </button>
+
+                <button
+                    onclick="solicitarToken()"
+                    class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold border border-slate-700 transition"
+                >
+                    🔑 Token
+                </button>
+
+            </div>
+        </header>
+
+
+        <main class="max-w-[98%] mx-auto py-6">
+
+            <!-- Modal / Aviso de Token -->
+            <div
+                id="aviso-token"
+                class="hidden bg-yellow-500/10 border border-yellow-500/30 p-6 rounded-2xl mb-6 text-center"
+            >
+
+                <h3 class="text-yellow-400 font-bold text-base mb-2">
+                    Token de Acesso Necessário
+                </h3>
+
+                <p class="text-slate-300 text-xs mb-4">
+                    Insira seu Bearer Token atualizado do Mercado Livre:
+                </p>
+
+                <div class="flex justify-center gap-2 max-w-md mx-auto">
+
                     <input
-                        type="text"
+                        type="password"
                         id="input-token-manual"
                         placeholder="Cole seu APP_USR-..."
-                        class="bg-slate-950 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl w-full lg:w-[360px] outline-none focus:border-yellow-400/60 focus:ring-2 focus:ring-yellow-400/10"
+                        class="bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-lg w-full outline-none focus:border-yellow-400"
                     />
 
                     <button
                         onclick="salvarTokenManual()"
-                        class="bg-yellow-400 text-slate-950 font-bold text-xs px-5 py-3 rounded-xl hover:bg-yellow-300 transition"
+                        class="bg-yellow-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg hover:bg-yellow-500 transition"
                     >
-                        Salvar token
+                        Salvar
                     </button>
+
                 </div>
 
             </div>
-        </div>
 
 
-        <!-- BUSCA -->
-        <form
-            onsubmit="event.preventDefault(); executarBusca();"
-            class="mb-6"
-        >
-            <div class="panel rounded-2xl p-2 flex items-center">
+            <!-- Barra de Pesquisa -->
+            <form
+                onsubmit="event.preventDefault(); executarBusca();"
+                class="mb-6 flex items-center bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg"
+            >
 
-                <div class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                    ⌕
-                </div>
+                <button
+                    type="submit"
+                    class="pl-2 pr-3 text-slate-400 text-lg hover:text-yellow-400 transition cursor-pointer"
+                    title="Clique para Buscar"
+                >
+                    🔍
+                </button>
 
                 <input
                     type="text"
                     id="input-busca"
-                    placeholder="Buscar por MLB, SKU ou título..."
-                    class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-600 px-3"
+                    placeholder="Digite ou cole o MLB, SKU ou Título e aperte ENTER..."
+                    class="bg-transparent border-none text-white text-sm w-full outline-none placeholder-slate-500"
                 />
-
-                <button
-                    type="submit"
-                    class="hidden sm:block bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-4 py-2.5 rounded-xl transition"
-                >
-                    Buscar
-                </button>
 
                 <button
                     type="button"
                     onclick="limparBusca()"
-                    class="text-xs text-slate-500 hover:text-white px-3 py-2.5 rounded-xl transition"
+                    class="text-xs text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg transition"
                 >
                     Limpar
                 </button>
 
-            </div>
-        </form>
+            </form>
 
 
-        <!-- LOADING -->
-        <div
-            id="loading"
-            class="hidden fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm items-center justify-center"
-        >
-            <div class="panel rounded-3xl p-8 w-[90%] max-w-md text-center shadow-2xl">
-
-                <div class="mx-auto w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
-                    <div class="loading-ring animate-spin rounded-full h-8 w-8"></div>
-                </div>
-
-                <h3 class="text-sm font-bold text-white mt-5">
-                    Processando dados
-                </h3>
+            <!-- Loading State -->
+            <div
+                id="loading"
+                class="hidden text-center py-24 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl"
+            >
+                <div class="loader mx-auto"></div>
 
                 <p
                     id="loading-text"
-                    class="mt-2 text-xs text-slate-400 leading-relaxed"
+                    class="mt-4 text-sm text-slate-400 font-medium"
                 >
                     Buscando dados na API do Mercado Livre...
                 </p>
-
             </div>
-        </div>
 
 
-        <!-- ==================== GESTÃO ==================== -->
-        <section id="secao-gestao" class="space-y-6">
+            <!-- ABA 1: GESTÃO -->
+            <section id="secao-gestao" class="space-y-6">
 
-            <!-- TÍTULO -->
-            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                <div>
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="w-2 h-2 bg-yellow-400 rounded-full"></span>
-                        <span class="text-[10px] uppercase tracking-[.18em] text-yellow-400 font-bold">
-                            Dashboard
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                            Total Listado
                         </span>
+
+                        <h2
+                            id="total-listado"
+                            class="text-2xl font-black text-white mt-1"
+                        >
+                            0
+                        </h2>
                     </div>
 
-                    <h1 class="text-xl md:text-2xl font-black text-white tracking-tight">
-                        Gestão de anúncios
-                    </h1>
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                            Anúncios Ativos
+                        </span>
 
-                    <p class="text-xs text-slate-500 mt-1">
-                        Visão geral dos seus anúncios e indicadores comerciais.
-                    </p>
-                </div>
-
-                <div class="text-[11px] text-slate-500">
-                    Dados carregados localmente para buscas instantâneas
-                </div>
-
-            </div>
-
-
-            <!-- CARDS -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-                <div class="panel stat-card panel-hover rounded-2xl p-5">
-                    <div class="flex items-start justify-between">
-
-                        <div>
-                            <span class="text-[10px] text-slate-500 uppercase tracking-[.14em] font-bold">
-                                Total listado
-                            </span>
-
-                            <h2
-                                id="total-listado"
-                                class="text-3xl font-black text-white mt-2 tracking-tight"
-                            >
-                                0
-                            </h2>
-                        </div>
-
-                        <div class="w-10 h-10 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center">
-                            ▦
-                        </div>
-
+                        <h2
+                            id="total-ativos"
+                            class="text-2xl font-black text-emerald-400 mt-1"
+                        >
+                            0
+                        </h2>
                     </div>
 
-                    <div class="mt-4 flex items-center gap-2 text-[10px] text-slate-500">
-                        <span class="status-dot bg-slate-500"></span>
-                        Anúncios encontrados
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                            Outros Status
+                        </span>
+
+                        <h2
+                            id="total-outros"
+                            class="text-2xl font-black text-slate-300 mt-1"
+                        >
+                            0
+                        </h2>
                     </div>
+
                 </div>
 
 
-                <div class="panel stat-card panel-hover rounded-2xl p-5">
-                    <div class="flex items-start justify-between">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
 
-                        <div>
-                            <span class="text-[10px] text-slate-500 uppercase tracking-[.14em] font-bold">
-                                Anúncios ativos
-                            </span>
+                    <div class="overflow-x-auto">
 
-                            <h2
-                                id="total-ativos"
-                                class="text-3xl font-black text-emerald-400 mt-2 tracking-tight"
-                            >
-                                0
-                            </h2>
-                        </div>
+                        <table class="w-full text-left border-collapse futuristic-table">
 
-                        <div class="w-10 h-10 rounded-xl bg-emerald-400/10 text-emerald-400 flex items-center justify-center">
-                            ✓
-                        </div>
+                            <thead>
+                                <tr>
+                                    <th class="p-3.5">Anúncio</th>
+                                    <th class="p-3.5">Preço</th>
+                                    <th class="p-3.5">Comissão / Frete</th>
+                                    <th class="p-3.5">Você Recebe</th>
+                                    <th class="p-3.5">Estoque</th>
+                                    <th class="p-3.5">Status</th>
+                                    <th class="p-3.5">Ações</th>
+                                </tr>
+                            </thead>
+
+                            <tbody
+                                id="tabela-gestao"
+                                class="divide-y divide-slate-800 text-xs text-slate-300"
+                            ></tbody>
+
+                        </table>
 
                     </div>
 
-                    <div class="mt-4 flex items-center gap-2 text-[10px] text-emerald-400/70">
-                        <span class="status-dot bg-emerald-400"></span>
-                        Publicados atualmente
-                    </div>
                 </div>
 
-
-                <div class="panel stat-card panel-hover rounded-2xl p-5">
-                    <div class="flex items-start justify-between">
-
-                        <div>
-                            <span class="text-[10px] text-slate-500 uppercase tracking-[.14em] font-bold">
-                                Outros status
-                            </span>
-
-                            <h2
-                                id="total-outros"
-                                class="text-3xl font-black text-slate-300 mt-2 tracking-tight"
-                            >
-                                0
-                            </h2>
-                        </div>
-
-                        <div class="w-10 h-10 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center">
-                            •
-                        </div>
-
-                    </div>
-
-                    <div class="mt-4 flex items-center gap-2 text-[10px] text-slate-500">
-                        <span class="status-dot bg-slate-500"></span>
-                        Demais situações
-                    </div>
-                </div>
-
-            </div>
+            </section>
 
 
-            <!-- TABELA -->
-            <div class="panel rounded-2xl overflow-hidden">
+            <!-- ABA 2: SIMULAÇÃO -->
+            <section id="secao-simulacao" class="hidden space-y-4">
 
-                <div class="px-5 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4">
 
                     <div>
                         <h2 class="text-sm font-bold text-white">
-                            Seus anúncios
+                            Planilha de Simulação e Viabilidade Financeira
                         </h2>
 
-                        <p class="text-[11px] text-slate-500 mt-0.5">
-                            Preços, comissão, frete, estoque e status.
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Fórmula: (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]
                         </p>
                     </div>
 
-                    <div class="flex items-center gap-2 text-[10px] text-slate-500">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                        API conectada
-                    </div>
+                    <div class="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800 flex-wrap">
 
-                </div>
-
-                <div class="overflow-x-auto table-wrapper">
-                    <table class="w-full text-left border-collapse futuristic-table">
-
-                        <thead>
-                            <tr>
-                                <th class="p-4">Anúncio</th>
-                                <th class="p-4">Preço</th>
-                                <th class="p-4">Comissão / Frete</th>
-                                <th class="p-4">Você recebe</th>
-                                <th class="p-4">Estoque</th>
-                                <th class="p-4">Status</th>
-                                <th class="p-4">Ações</th>
-                            </tr>
-                        </thead>
-
-                        <tbody
-                            id="tabela-gestao"
-                            class="divide-y divide-slate-800/80 text-xs text-slate-300"
-                        ></tbody>
-
-                    </table>
-                </div>
-            </div>
-
-        </section>
-
-
-        <!-- ==================== SIMULAÇÃO ==================== -->
-        <section id="secao-simulacao" class="hidden space-y-5">
-
-            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-
-                <div>
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
-                        <span class="text-[10px] uppercase tracking-[.18em] text-blue-400 font-bold">
-                            Financeiro
+                        <span class="text-[11px] font-bold text-yellow-400 uppercase px-2">
+                            Preencher em Massa:
                         </span>
-                    </div>
 
-                    <h1 class="text-xl md:text-2xl font-black text-white tracking-tight">
-                        Simulação de preços
-                    </h1>
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="massa-custo"
+                            placeholder="Custo R$"
+                            class="input-simulacao w-20"
+                        />
 
-                    <p class="text-xs text-slate-500 mt-1">
-                        Simule custos, taxas, impostos, lucro e margem de cada anúncio.
-                    </p>
-                </div>
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="massa-taxa"
+                            placeholder="Taxa %"
+                            class="input-simulacao w-16"
+                        />
 
-            </div>
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="massa-imposto"
+                            placeholder="Imposto %"
+                            class="input-simulacao w-16"
+                        />
 
-
-            <!-- BARRA DE CONFIGURAÇÃO -->
-            <div class="panel rounded-2xl p-5">
-
-                <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
-
-                    <div>
-                        <h2 class="text-sm font-bold text-white">
-                            Planilha de simulação
-                        </h2>
-
-                        <p class="text-[11px] text-slate-500 mt-1">
-                            Fórmula:
-                            <span class="text-slate-400">
-                                (Custo + Frete) / [1 - ((Taxa% + Imposto% + Lucro%) / 100)]
-                            </span>
-                        </p>
-                    </div>
-
-
-                    <div class="flex flex-col lg:flex-row lg:items-center gap-3 bg-slate-950/70 border border-slate-800 rounded-xl p-3">
-
-                        <div class="flex items-center gap-2">
-                            <span class="w-7 h-7 rounded-lg bg-yellow-400/10 text-yellow-400 flex items-center justify-center text-xs">
-                                ⚡
-                            </span>
-
-                            <span class="text-[10px] font-bold text-yellow-400 uppercase tracking-wide">
-                                Preenchimento em massa
-                            </span>
-                        </div>
-
-                        <div class="h-px lg:h-6 lg:w-px bg-slate-800"></div>
-
-                        <div class="flex flex-wrap items-center gap-2">
-
-                            <input
-                                type="number"
-                                step="0.01"
-                                id="massa-custo"
-                                placeholder="Custo R$"
-                                class="input-simulacao w-24"
-                            />
-
-                            <input
-                                type="number"
-                                step="0.1"
-                                id="massa-taxa"
-                                placeholder="Taxa %"
-                                class="input-simulacao w-20"
-                            />
-
-                            <input
-                                type="number"
-                                step="0.1"
-                                id="massa-imposto"
-                                placeholder="Imposto %"
-                                class="input-simulacao w-24"
-                            />
-
-                            <input
-                                type="number"
-                                step="0.1"
-                                id="massa-lucro"
-                                placeholder="Lucro %"
-                                class="input-simulacao w-20"
-                            />
-
-                            <button
-                                onclick="aplicarEmMassa()"
-                                class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition"
-                            >
-                                Aplicar
-                            </button>
-
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-
-            <!-- TABELA SIMULAÇÃO -->
-            <div class="rounded-2xl overflow-hidden bg-white text-slate-900 shadow-card border border-slate-200">
-
-                <div class="px-5 py-4 bg-white border-b border-slate-200">
-                    <h2 class="text-sm font-bold">
-                        Produtos e indicadores
-                    </h2>
-
-                    <p class="text-[11px] text-slate-500 mt-0.5">
-                        Edite os campos amarelos para recalcular automaticamente.
-                    </p>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
-
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-600 uppercase font-bold border-b border-slate-200">
-
-                                <th class="p-3">MLB</th>
-                                <th class="p-3">SKU</th>
-                                <th class="p-3">Título</th>
-                                <th class="p-3">Preço Atual</th>
-                                <th class="p-3">Frete</th>
-                                <th class="p-3">Tipo</th>
-
-                                <th class="p-3 bg-yellow-100/70 text-yellow-900">
-                                    Taxa %
-                                </th>
-
-                                <th class="p-3 bg-yellow-100/70 text-yellow-900">
-                                    Custo
-                                </th>
-
-                                <th class="p-3 bg-yellow-100/70 text-yellow-900">
-                                    Imposto %
-                                </th>
-
-                                <th class="p-3 bg-yellow-100/70 text-yellow-900">
-                                    Lucro %
-                                </th>
-
-                                <th class="p-3 bg-emerald-100/70 text-emerald-900 font-bold">
-                                    Novo preço
-                                </th>
-
-                                <th class="p-3 bg-emerald-100/70 text-emerald-900 font-bold">
-                                    Lucro simulado
-                                </th>
-
-                                <th class="p-3 bg-emerald-100/70 text-emerald-900 font-bold">
-                                    Margem real
-                                </th>
-
-                            </tr>
-                        </thead>
-
-                        <tbody
-                            id="tabela-simulacao"
-                            class="divide-y divide-slate-200"
-                        ></tbody>
-
-                    </table>
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ==================== ATUALIZAÇÃO ==================== -->
-        <section id="secao-atualizacao" class="hidden space-y-5">
-
-            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-
-                <div>
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="w-2 h-2 bg-emerald-400 rounded-full"></span>
-                        <span class="text-[10px] uppercase tracking-[.18em] text-emerald-400 font-bold">
-                            Automação
-                        </span>
-                    </div>
-
-                    <h1 class="text-xl md:text-2xl font-black text-white tracking-tight">
-                        Atualização de preços
-                    </h1>
-
-                    <p class="text-xs text-slate-500 mt-1">
-                        Atualize apenas os anúncios que ficaram fora da margem calculada.
-                    </p>
-                </div>
-
-            </div>
-
-
-            <!-- CONTROLE -->
-            <div class="panel rounded-2xl p-5">
-
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-
-                    <div>
-                        <h2 class="text-sm font-bold text-white">
-                            Atualização em massa
-                        </h2>
-
-                        <p class="text-[11px] text-slate-500 mt-1">
-                            Envio simultâneo em lotes de 20 anúncios.
-                        </p>
-                    </div>
-
-
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-
-                        <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-amber-400/10 text-amber-400 flex items-center justify-center">
-                                !
-                            </div>
-
-                            <div>
-                                <div class="text-[9px] uppercase tracking-wider text-slate-500 font-bold">
-                                    Para atualizar
-                                </div>
-
-                                <div
-                                    id="contador-atualizacao"
-                                    class="font-black text-amber-400 text-lg leading-none mt-0.5"
-                                >
-                                    0
-                                </div>
-                            </div>
-                        </div>
-
+                        <input
+                            type="number"
+                            step="0.1"
+                            id="massa-lucro"
+                            placeholder="Lucro %"
+                            class="input-simulacao w-16"
+                        />
 
                         <button
-                            onclick="atualizarPrecosMassaApi()"
-                            class="btn-action bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2"
+                            onclick="aplicarEmMassa()"
+                            class="bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg transition"
                         >
-                            <span>↗</span>
-                            Iniciar atualização
+                            Aplicar
                         </button>
 
                     </div>
 
                 </div>
 
-            </div>
+
+                <div class="bg-white text-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+
+                    <div class="overflow-x-auto">
+
+                        <table class="w-full text-left border-collapse text-xs">
+
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
+
+                                    <th class="p-3">MLB</th>
+                                    <th class="p-3">SKU</th>
+                                    <th class="p-3">Título</th>
+                                    <th class="p-3">Preço Atual</th>
+                                    <th class="p-3">Frete</th>
+                                    <th class="p-3">Tipo</th>
+
+                                    <th class="p-3 bg-yellow-100/60 text-yellow-900">
+                                        Taxa %
+                                    </th>
+
+                                    <th class="p-3 bg-yellow-100/60 text-yellow-900">
+                                        Custo (R$)
+                                    </th>
+
+                                    <th class="p-3 bg-yellow-100/60 text-yellow-900">
+                                        Imposto %
+                                    </th>
+
+                                    <th class="p-3 bg-yellow-100/60 text-yellow-900">
+                                        Lucro %
+                                    </th>
+
+                                    <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">
+                                        Novo Preço
+                                    </th>
+
+                                    <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">
+                                        Lucro Simulado
+                                    </th>
+
+                                    <th class="p-3 bg-emerald-100/60 text-emerald-900 font-bold">
+                                        Margem Real
+                                    </th>
+
+                                </tr>
+                            </thead>
+
+                            <tbody
+                                id="tabela-simulacao"
+                                class="divide-y divide-slate-200"
+                            ></tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+            </section>
 
 
-            <!-- TABELA -->
-            <div class="panel rounded-2xl overflow-hidden">
+            <!-- ABA 3: ATUALIZAÇÃO -->
+            <section id="secao-atualizacao" class="hidden space-y-4">
 
-                <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col lg:flex-row justify-between items-center gap-4">
 
                     <div>
                         <h2 class="text-sm font-bold text-white">
-                            Anúncios fora da margem
+                            Atualização de Preço
                         </h2>
 
-                        <p class="text-[11px] text-slate-500 mt-0.5">
-                            Selecione os anúncios que deseja enviar para a API.
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Apenas anúncios fora da margem configurada.
                         </p>
                     </div>
 
-                    <div class="text-[10px] text-slate-500">
-                        Lotes de <span class="text-slate-300 font-bold">20</span>
+                    <div class="flex items-center space-x-4">
+
+                        <div class="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-sm flex items-center space-x-2">
+                            <span class="text-slate-400 text-xs">
+                                Para atualizar:
+                            </span>
+
+                            <span
+                                id="contador-atualizacao"
+                                class="font-bold text-amber-400 text-base"
+                            >
+                                0
+                            </span>
+                        </div>
+
+                        <button
+                            onclick="atualizarPrecosMassaApi()"
+                            class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2"
+                        >
+                            🚀 Iniciar Atualização em Lotes
+                        </button>
+
                     </div>
 
                 </div>
 
-                <div class="overflow-x-auto">
 
-                    <table class="w-full text-left border-collapse futuristic-table">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
 
-                        <thead>
+                    <div class="overflow-x-auto">
 
-                            <tr>
+                        <table class="w-full text-left border-collapse futuristic-table">
 
-                                <th class="p-4 w-12">
-                                    <input
-                                        type="checkbox"
-                                        id="selecionar-todos"
-                                        onclick="alternarTodos(this)"
-                                        class="accent-yellow-400 w-4 h-4"
-                                    />
-                                </th>
+                            <thead>
+                                <tr>
 
-                                <th class="p-4">Anúncio</th>
+                                    <th class="p-3.5 w-10">
+                                        <input
+                                            type="checkbox"
+                                            id="selecionar-todos"
+                                            onclick="alternarTodos(this)"
+                                            class="accent-yellow-400"
+                                        />
+                                    </th>
 
-                                <th class="p-4">Preço atual</th>
+                                    <th class="p-3.5">
+                                        Anúncio
+                                    </th>
 
-                                <th class="p-4 text-emerald-400">
-                                    Novo preço
-                                </th>
+                                    <th class="p-3.5">
+                                        Preço Atual
+                                    </th>
 
-                                <th class="p-4">
-                                    Situação / Margem
-                                </th>
+                                    <th class="p-3.5 text-emerald-400">
+                                        Novo Preço
+                                    </th>
 
-                                <th class="p-4">
-                                    Status API
-                                </th>
+                                    <th class="p-3.5">
+                                        Situação / Margem
+                                    </th>
 
-                            </tr>
+                                    <th class="p-3.5">
+                                        Status API
+                                    </th>
 
-                        </thead>
+                                </tr>
+                            </thead>
 
-                        <tbody
-                            id="tabela-atualizacao"
-                            class="divide-y divide-slate-800/80 text-xs text-slate-300"
-                        ></tbody>
+                            <tbody
+                                id="tabela-atualizacao"
+                                class="divide-y divide-slate-800 text-xs text-slate-300"
+                            ></tbody>
 
-                    </table>
+                        </table>
+
+                    </div>
 
                 </div>
 
-            </div>
+            </section>
 
-        </section>
+        </main>
 
-    </main>
-
-
-    <footer class="max-w-[1800px] mx-auto px-4 lg:px-6 pb-6">
-        <div class="border-t border-slate-900 pt-5 flex flex-col sm:flex-row justify-between gap-2 text-[10px] text-slate-600">
-            <span>ML Hub Pro • Painel de gestão</span>
-            <span>Mercado Livre API</span>
-        </div>
-    </footer>
+    </div>
 
 
+    <!-- =========================================================
+         JAVASCRIPT
+    ========================================================== -->
     <script>
+
         const RENDER_URL = "https://site-atualizar-pre-o-ml.onrender.com";
+
         let cacheItens = [];
         let novosPrecosCalculados = {};
         let abaAtualAtiva = 'gestao';
 
-        function solicitarToken() {
-            document.getElementById('aviso-token').classList.remove('hidden');
+
+        /* =========================================================
+           CONEXÃO / TELA INICIAL
+        ========================================================== */
+
+        function obterTokenLocal() {
+            return localStorage.getItem('ml_access_token') || '';
         }
 
+
+        function conectarConta() {
+
+            const token = obterTokenLocal();
+
+            document.getElementById('tela-inicial').classList.add('hidden');
+            document.getElementById('app-principal').classList.remove('hidden');
+
+            if (token) {
+                carregarDados();
+            } else {
+                carregarDados();
+            }
+        }
+
+
+        function mostrarTokenManualInicial() {
+
+            document.getElementById('tela-inicial').classList.add('hidden');
+            document.getElementById('app-principal').classList.remove('hidden');
+
+            solicitarToken();
+        }
+
+
+        function solicitarToken() {
+            document.getElementById('aviso-token').classList.remove('hidden');
+
+            setTimeout(() => {
+                const input = document.getElementById('input-token-manual');
+
+                if (input) {
+                    input.focus();
+                }
+            }, 100);
+        }
+
+
         function salvarTokenManual() {
-            const tokenVal = document.getElementById('input-token-manual').value.trim();
-            if(!tokenVal) {
+
+            const tokenVal =
+                document.getElementById('input-token-manual').value.trim();
+
+            if (!tokenVal) {
                 alert("Digite um token válido.");
                 return;
             }
+
             localStorage.setItem('ml_access_token', tokenVal);
+
+            document.getElementById('input-token-manual').value = '';
             document.getElementById('aviso-token').classList.add('hidden');
+
             carregarDados();
         }
 
+
+        /* =========================================================
+           BUSCA
+        ========================================================== */
+
         function executarBusca() {
-            const termo = document.getElementById('input-busca').value.toLowerCase().trim();
+
+            const termo =
+                document.getElementById('input-busca').value.toLowerCase().trim();
 
             let itensFiltrados = cacheItens;
 
             if (termo !== '') {
+
                 itensFiltrados = cacheItens.filter(item =>
                     String(item.id).toLowerCase().includes(termo) ||
                     String(item.sku).toLowerCase().includes(termo) ||
@@ -957,67 +986,110 @@
             }
 
             if (abaAtualAtiva === 'gestao') {
+
                 montarTabelaGestao(itensFiltrados);
+
             } else if (abaAtualAtiva === 'simulacao') {
+
                 montarTabelaSimulacao(itensFiltrados);
+
             } else if (abaAtualAtiva === 'atualizacao') {
+
                 montarTabelaAtualizacao(itensFiltrados);
             }
         }
 
+
         function limparBusca() {
+
             document.getElementById('input-busca').value = '';
+
             executarBusca();
         }
 
-        async function carregarDados() {
-            const token = localStorage.getItem('ml_access_token');
 
-            if (!token) {
-                solicitarToken();
-                return;
-            }
+        /* =========================================================
+           CARREGAR ANÚNCIOS
+        ========================================================== */
+
+        async function carregarDados() {
+
+            const token = obterTokenLocal();
 
             document.getElementById('loading-text').innerText =
                 "Buscando todos os seus anúncios na API do Mercado Livre...";
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading').classList.add('flex');
-
             document.getElementById('aviso-token').classList.add('hidden');
 
             try {
-                const response = await fetch(`${RENDER_URL}/api/anuncios`, {
-                    headers: { 'Authorization': token }
-                });
+
+                const headers = {};
+
+                if (token) {
+                    headers['Authorization'] = token;
+                }
+
+                const response = await fetch(
+                    `${RENDER_URL}/api/anuncios`,
+                    {
+                        headers
+                    }
+                );
 
                 const data = await response.json();
 
                 if (data.itens) {
+
                     cacheItens = data.itens;
+
                     atualizarCards(cacheItens);
+
                     executarBusca();
 
-                    alert(`Sucesso! ${cacheItens.length} anúncios carregados.`);
+                    if (cacheItens.length > 0) {
+                        alert(
+                            `Sucesso! ${cacheItens.length} anúncios carregados.`
+                        );
+                    } else {
+                        alert("Nenhum anúncio encontrado.");
+                    }
+
                 } else {
+
                     alert(data.erro || "Erro ao carregar anúncios.");
 
-                    if(data.erro && data.erro.includes("Token")) {
+                    if (
+                        data.erro &&
+                        (
+                            data.erro.includes("Token") ||
+                            data.erro.includes("token")
+                        )
+                    ) {
                         solicitarToken();
                     }
                 }
 
             } catch (e) {
-                alert("Erro de comunicação com o servidor no Render.");
+
+                alert(
+                    "Erro de comunicação com o servidor no Render."
+                );
 
             } finally {
+
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('loading').classList.remove('flex');
             }
         }
 
+
+        /* =========================================================
+           SINCRONIZAR PREÇOS
+        ========================================================== */
+
         async function sincronizarPrecosApi() {
-            const token = localStorage.getItem('ml_access_token');
+
+            const token = obterTokenLocal();
 
             if (!token) {
                 solicitarToken();
@@ -1025,7 +1097,11 @@
             }
 
             if (!cacheItens || cacheItens.length === 0) {
-                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+
+                alert(
+                    "Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro."
+                );
+
                 return;
             }
 
@@ -1033,55 +1109,83 @@
                 "Puxando preços atuais das MLBs ativas...";
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading').classList.add('flex');
 
             try {
+
                 const mlbs = cacheItens.map(i => i.id);
 
-                const response = await fetch(`${RENDER_URL}/api/sincronizar-precos`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
-                    },
-                    body: JSON.stringify({ ids: mlbs })
-                });
+                const response = await fetch(
+                    `${RENDER_URL}/api/sincronizar-precos`,
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+
+                        body: JSON.stringify({
+                            ids: mlbs
+                        })
+                    }
+                );
 
                 const data = await response.json();
 
                 if (response.ok && data.precos) {
 
                     cacheItens.forEach(item => {
+
                         if (data.precos[item.id] !== undefined) {
+
                             item.price = data.precos[item.id];
 
                             item.net_received =
                                 item.price -
                                 item.sale_fee -
-                                (item.free_shipping ? item.shipping_cost : 0);
+                                (
+                                    item.free_shipping
+                                        ? item.shipping_cost
+                                        : 0
+                                );
                         }
                     });
 
                     atualizarCards(cacheItens);
                     executarBusca();
 
-                    alert("Preços reais sincronizados com sucesso para as MLBs existentes!");
+                    alert(
+                        "Preços reais sincronizados com sucesso!"
+                    );
 
                 } else {
-                    alert(data.erro || "Erro ao sincronizar preços.");
+
+                    alert(
+                        data.erro ||
+                        "Erro ao sincronizar preços."
+                    );
                 }
 
             } catch (e) {
-                alert("Erro de comunicação com o servidor ao puxar preços.");
+
+                alert(
+                    "Erro de comunicação com o servidor ao puxar preços."
+                );
 
             } finally {
+
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('loading').classList.remove('flex');
             }
         }
 
+
+        /* =========================================================
+           SINCRONIZAR FRETES
+        ========================================================== */
+
         async function sincronizarFretesApi() {
-            const token = localStorage.getItem('ml_access_token');
+
+            const token = obterTokenLocal();
 
             if (!token) {
                 solicitarToken();
@@ -1089,201 +1193,247 @@
             }
 
             if (!cacheItens || cacheItens.length === 0) {
-                alert("Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro.");
+
+                alert(
+                    "Nenhum anúncio carregado na tela. Clique em 'Puxar Anúncios' primeiro."
+                );
+
                 return;
             }
 
             document.getElementById('loading-text').innerText =
-                "Puxando custos de frete atualizados das MLBs ativas...";
+                "Puxando custos de frete atualizados...";
 
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('loading').classList.add('flex');
 
             try {
+
                 const mlbs = cacheItens.map(i => i.id);
 
-                const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
-                    },
-                    body: JSON.stringify({ ids: mlbs })
-                });
+                const response = await fetch(
+                    `${RENDER_URL}/api/sincronizar-fretes`,
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+
+                        body: JSON.stringify({
+                            ids: mlbs
+                        })
+                    }
+                );
 
                 const data = await response.json();
 
                 if (response.ok && data.fretes) {
 
                     cacheItens.forEach(item => {
+
                         if (data.fretes[item.id]) {
 
-                            item.shipping_cost = data.fretes[item.id].custo;
-                            item.free_shipping = data.fretes[item.id].gratis;
+                            item.shipping_cost =
+                                data.fretes[item.id].custo;
+
+                            item.free_shipping =
+                                data.fretes[item.id].gratis;
 
                             item.net_received =
                                 item.price -
                                 item.sale_fee -
-                                (item.free_shipping ? item.shipping_cost : 0);
+                                (
+                                    item.free_shipping
+                                        ? item.shipping_cost
+                                        : 0
+                                );
                         }
                     });
 
                     atualizarCards(cacheItens);
                     executarBusca();
 
-                    alert("Fretes reais sincronizados com sucesso para as MLBs existentes!");
+                    alert(
+                        "Fretes reais sincronizados com sucesso!"
+                    );
 
                 } else {
-                    alert(data.erro || "Erro ao sincronizar fretes.");
+
+                    alert(
+                        data.erro ||
+                        "Erro ao sincronizar fretes."
+                    );
                 }
 
             } catch (e) {
-                alert("Erro de comunicação com o servidor ao puxar fretes.");
+
+                alert(
+                    "Erro de comunicação com o servidor ao puxar fretes."
+                );
 
             } finally {
+
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('loading').classList.remove('flex');
             }
         }
 
+
+        /* =========================================================
+           ABAS
+        ========================================================== */
+
         function mudarAba(aba) {
+
             abaAtualAtiva = aba;
 
-            document.getElementById('secao-gestao').classList.add('hidden');
-            document.getElementById('secao-simulacao').classList.add('hidden');
-            document.getElementById('secao-atualizacao').classList.add('hidden');
+            document
+                .getElementById('secao-gestao')
+                .classList.add('hidden');
+
+            document
+                .getElementById('secao-simulacao')
+                .classList.add('hidden');
+
+            document
+                .getElementById('secao-atualizacao')
+                .classList.add('hidden');
+
 
             document.getElementById('btn-gestao').className =
-                "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+                "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
 
             document.getElementById('btn-simulacao').className =
-                "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+                "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
 
             document.getElementById('btn-atualizacao').className =
-                "nav-button px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white";
+                "px-4 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition-all";
+
 
             if (aba === 'gestao') {
 
-                document.getElementById('secao-gestao').classList.remove('hidden');
+                document
+                    .getElementById('secao-gestao')
+                    .classList.remove('hidden');
 
                 document.getElementById('btn-gestao').className =
-                    "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+                    "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
 
             } else if (aba === 'simulacao') {
 
-                document.getElementById('secao-simulacao').classList.remove('hidden');
+                document
+                    .getElementById('secao-simulacao')
+                    .classList.remove('hidden');
 
                 document.getElementById('btn-simulacao').className =
-                    "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+                    "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
 
             } else if (aba === 'atualizacao') {
 
-                document.getElementById('secao-atualizacao').classList.remove('hidden');
+                document
+                    .getElementById('secao-atualizacao')
+                    .classList.remove('hidden');
 
                 document.getElementById('btn-atualizacao').className =
-                    "nav-button active px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2";
+                    "px-4 py-1.5 rounded-md text-xs font-semibold transition-all bg-yellow-400 text-slate-950";
             }
 
             executarBusca();
         }
 
-        function atualizarCards(itens) {
-            const ativos = itens.filter(i => i.status === 'active').length;
 
-            document.getElementById('total-listado').innerText = itens.length;
-            document.getElementById('total-ativos').innerText = ativos;
-            document.getElementById('total-outros').innerText = itens.length - ativos;
+        /* =========================================================
+           CARDS
+        ========================================================== */
+
+        function atualizarCards(itens) {
+
+            const ativos =
+                itens.filter(i => i.status === 'active').length;
+
+            document.getElementById('total-listado').innerText =
+                itens.length;
+
+            document.getElementById('total-ativos').innerText =
+                ativos;
+
+            document.getElementById('total-outros').innerText =
+                itens.length - ativos;
         }
 
+
+        /* =========================================================
+           TABELA GESTÃO
+        ========================================================== */
+
         function montarTabelaGestao(itens) {
-            const tbody = document.getElementById('tabela-gestao');
+
+            const tbody =
+                document.getElementById('tabela-gestao');
 
             tbody.innerHTML = '';
 
             itens.forEach((item) => {
 
-                const tr = document.createElement('tr');
+                const tr =
+                    document.createElement('tr');
 
-                tr.className = "hover:bg-slate-800/50 transition-colors";
+                tr.className =
+                    "hover:bg-slate-800/50 transition-colors";
 
                 tr.innerHTML = `
-                    <td class="p-4">
-                        <div class="flex items-center gap-3 min-w-[280px]">
+                    <td class="p-3.5">
+                        <div class="flex items-center space-x-3">
                             <img
                                 src="${item.thumbnail}"
-                                class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800"
+                                class="w-9 h-9 object-cover rounded-lg border border-slate-700"
                             />
 
-                            <div class="min-w-0">
-                                <span class="font-semibold text-white block line-clamp-1">
+                            <div>
+                                <span class="font-medium text-white block line-clamp-1">
                                     ${item.title}
                                 </span>
 
-                                <span class="text-[10px] text-slate-500 mt-1 block">
-                                    ${item.id}
-                                    <span class="text-slate-700 mx-1">•</span>
-                                    SKU: ${item.sku}
+                                <span class="text-[10px] text-slate-400">
+                                    ${item.id} | SKU: ${item.sku}
                                 </span>
                             </div>
                         </div>
                     </td>
 
-                    <td class="p-4">
-                        <span class="font-black text-white">
-                            R$ ${item.price.toFixed(2)}
-                        </span>
+                    <td class="p-3.5 font-bold text-white">
+                        R$ ${Number(item.price).toFixed(2)}
                     </td>
 
-                    <td class="p-4 text-slate-400 leading-5">
-                        <div>
-                            Comissão:
-                            <span class="text-slate-300">
-                                R$ ${item.sale_fee.toFixed(2)}
-                            </span>
-                        </div>
-
-                        <div>
-                            Frete:
-                            <span class="text-slate-300">
-                                R$ ${item.shipping_cost.toFixed(2)}
-                            </span>
-                        </div>
+                    <td class="p-3.5 text-slate-400">
+                        Comissão: R$ ${Number(item.sale_fee).toFixed(2)}<br>
+                        Frete: R$ ${Number(item.shipping_cost).toFixed(2)}
                     </td>
 
-                    <td class="p-4">
-                        <span class="font-black text-emerald-400">
-                            R$ ${item.net_received.toFixed(2)}
-                        </span>
+                    <td class="p-3.5 font-bold text-emerald-400">
+                        R$ ${Number(item.net_received).toFixed(2)}
                     </td>
 
-                    <td class="p-4">
-                        <span class="text-slate-300">
-                            ${item.available_quantity}
-                        </span>
-
-                        <span class="text-slate-600 text-[10px]">
-                            un.
-                        </span>
+                    <td class="p-3.5">
+                        ${item.available_quantity} un.
                     </td>
 
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="status-dot ${item.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}"></span>
-
-                            <span class="${item.status === 'active' ? 'text-emerald-400' : 'text-slate-500'} text-[11px] font-bold">
-                                ${item.status === 'active' ? 'Ativo' : item.status}
-                            </span>
-                        </div>
+                    <td class="p-3.5">
+                        <input
+                            type="checkbox"
+                            ${item.status === 'active' ? 'checked' : ''}
+                            disabled
+                            class="accent-emerald-500"
+                        />
                     </td>
 
-                    <td class="p-4">
+                    <td class="p-3.5">
                         <a
                             href="${item.permalink}"
                             target="_blank"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 font-bold text-[10px] transition"
+                            class="text-blue-400 hover:underline font-medium"
                         >
-                            Ver anúncio
-                            <span>↗</span>
+                            Ver
                         </a>
                     </td>
                 `;
@@ -1292,14 +1442,24 @@
             });
         }
 
+
+        /* =========================================================
+           TABELA SIMULAÇÃO
+        ========================================================== */
+
         function montarTabelaSimulacao(itens) {
-            const tbody = document.getElementById('tabela-simulacao');
+
+            const tbody =
+                document.getElementById('tabela-simulacao');
 
             tbody.innerHTML = '';
 
             itens.forEach((item) => {
 
-                const index = cacheItens.findIndex(i => i.id === item.id);
+                const index =
+                    cacheItens.findIndex(
+                        i => i.id === item.id
+                    );
 
                 const tipoNome =
                     item.listing_type_id === 'gold_pro'
@@ -1311,45 +1471,54 @@
                         ? 17
                         : 12;
 
-                const tr = document.createElement('tr');
+                const tr =
+                    document.createElement('tr');
 
-                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.className =
+                    "hover:bg-slate-50 transition-colors";
 
                 tr.innerHTML = `
-                    <td class="p-3 font-mono font-medium text-slate-700 whitespace-nowrap">
+
+                    <td class="p-3 font-mono font-medium text-slate-700">
                         ${item.id}
                     </td>
 
-                    <td class="p-3 font-mono text-slate-600 whitespace-nowrap">
+                    <td class="p-3 font-mono text-slate-600">
                         ${item.sku}
                     </td>
 
                     <td
-                        class="p-3 max-w-[220px] truncate text-slate-800 font-medium"
+                        class="p-3 max-w-[200px] truncate text-slate-800 font-medium"
                         title="${item.title}"
                     >
                         ${item.title}
                     </td>
 
-                    <td class="p-3 font-bold text-slate-900 whitespace-nowrap">
-                        R$ ${item.price.toFixed(2)}
+                    <td class="p-3 font-bold text-slate-900">
+                        R$ ${Number(item.price).toFixed(2)}
                     </td>
 
-                    <td class="p-3 text-slate-600 whitespace-nowrap">
-                        R$ ${item.shipping_cost.toFixed(2)}
+                    <td class="p-3 text-slate-600">
+                        R$ ${Number(item.shipping_cost).toFixed(2)}
                     </td>
 
                     <td class="p-3">
-                        <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                            tipoNome === 'Premium'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
-                        }">
+
+                        <span
+                            class="px-2 py-0.5 rounded text-[10px] font-bold
+                            ${
+                                tipoNome === 'Premium'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-blue-100 text-blue-800'
+                            }"
+                        >
                             ${tipoNome}
                         </span>
+
                     </td>
 
-                    <td class="p-3 bg-yellow-50/60">
+                    <td class="p-3 bg-yellow-50/50">
+
                         <input
                             type="number"
                             step="0.1"
@@ -1358,9 +1527,11 @@
                             oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})"
                             class="input-simulacao w-16"
                         />
+
                     </td>
 
-                    <td class="p-3 bg-yellow-50/60">
+                    <td class="p-3 bg-yellow-50/50">
+
                         <input
                             type="number"
                             step="0.01"
@@ -1369,9 +1540,11 @@
                             oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})"
                             class="input-simulacao w-20"
                         />
+
                     </td>
 
-                    <td class="p-3 bg-yellow-50/60">
+                    <td class="p-3 bg-yellow-50/50">
+
                         <input
                             type="number"
                             step="0.1"
@@ -1380,9 +1553,11 @@
                             oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})"
                             class="input-simulacao w-16"
                         />
+
                     </td>
 
-                    <td class="p-3 bg-yellow-50/60">
+                    <td class="p-3 bg-yellow-50/50">
+
                         <input
                             type="number"
                             step="0.1"
@@ -1391,24 +1566,25 @@
                             oninput="recalcular(${index}, ${item.shipping_cost}, ${item.free_shipping})"
                             class="input-simulacao w-16"
                         />
+
                     </td>
 
                     <td
-                        class="p-3 bg-emerald-50/70 font-black text-emerald-800 whitespace-nowrap"
+                        class="p-3 bg-emerald-50/60 font-black text-emerald-800"
                         id="novo_preco_${index}"
                     >
                         R$ 0.00
                     </td>
 
                     <td
-                        class="p-3 bg-emerald-50/70 font-bold text-emerald-700 whitespace-nowrap"
+                        class="p-3 bg-emerald-50/60 font-bold text-emerald-700"
                         id="lucro_sim_${index}"
                     >
                         R$ 0.00
                     </td>
 
                     <td
-                        class="p-3 bg-emerald-50/70 font-bold text-emerald-900 whitespace-nowrap"
+                        class="p-3 bg-emerald-50/60 font-bold text-emerald-900"
                         id="margem_real_${index}"
                     >
                         0.00%
@@ -1425,46 +1601,65 @@
             });
         }
 
-        function recalcular(index, custoFrete, freteGratis) {
+
+        /* =========================================================
+           RECÁLCULO
+        ========================================================== */
+
+        function recalcular(
+            index,
+            custoFrete,
+            freteGratis
+        ) {
 
             const taxaPercent =
-                parseFloat(document.getElementById(`taxa_${index}`).value) || 0;
+                parseFloat(
+                    document.getElementById(`taxa_${index}`).value
+                ) || 0;
 
             const custo =
-                parseFloat(document.getElementById(`custo_${index}`).value) || 0;
+                parseFloat(
+                    document.getElementById(`custo_${index}`).value
+                ) || 0;
 
             const impostoPercent =
-                parseFloat(document.getElementById(`imposto_${index}`).value) || 0;
+                parseFloat(
+                    document.getElementById(`imposto_${index}`).value
+                ) || 0;
 
             const lucroDesejadoPercent =
-                parseFloat(document.getElementById(`lucro_${index}`).value) || 0;
+                parseFloat(
+                    document.getElementById(`lucro_${index}`).value
+                ) || 0;
+
 
             const freteAplicado =
                 freteGratis
                     ? custoFrete
                     : 6.85;
 
+
             const somaPercentual =
                 taxaPercent +
                 impostoPercent +
                 lucroDesejadoPercent;
 
+
             const divisor =
-                1 -
-                (somaPercentual / 100);
+                1 - (somaPercentual / 100);
+
 
             let novoPreco =
                 divisor > 0
                     ? (custo + freteAplicado) / divisor
                     : custo * 1.5;
 
+
             const valorTaxa =
-                novoPreco *
-                (taxaPercent / 100);
+                novoPreco * (taxaPercent / 100);
 
             const valorImposto =
-                novoPreco *
-                (impostoPercent / 100);
+                novoPreco * (impostoPercent / 100);
 
             const lucroLiquidoReal =
                 novoPreco -
@@ -1473,10 +1668,12 @@
                 valorImposto -
                 freteAplicado;
 
+
             const margemRealPercent =
                 novoPreco > 0
                     ? (lucroLiquidoReal / novoPreco) * 100
                     : 0;
+
 
             const elNovoPreco =
                 document.getElementById(`novo_preco_${index}`);
@@ -1487,20 +1684,27 @@
             const elMargemReal =
                 document.getElementById(`margem_real_${index}`);
 
-            if (elNovoPreco)
+
+            if (elNovoPreco) {
                 elNovoPreco.innerText =
                     `R$ ${novoPreco.toFixed(2)}`;
+            }
 
-            if (elLucroSim)
+            if (elLucroSim) {
                 elLucroSim.innerText =
                     `R$ ${lucroLiquidoReal.toFixed(2)}`;
+            }
 
-            if (elMargemReal)
+            if (elMargemReal) {
                 elMargemReal.innerText =
                     `${margemRealPercent.toFixed(2)}%`;
+            }
+
 
             novosPrecosCalculados[index] = {
+
                 preco: novoPreco,
+
                 foraDaMargem:
                     Math.abs(
                         novoPreco -
@@ -1508,6 +1712,11 @@
                     ) > 0.05
             };
         }
+
+
+        /* =========================================================
+           APLICAÇÃO EM MASSA
+        ========================================================== */
 
         function aplicarEmMassa() {
 
@@ -1523,6 +1732,7 @@
             const lucroMassa =
                 document.getElementById('massa-lucro').value;
 
+
             cacheItens.forEach((item, index) => {
 
                 if (custoMassa !== '') {
@@ -1530,36 +1740,44 @@
                     const elCusto =
                         document.getElementById(`custo_${index}`);
 
-                    if (elCusto)
+                    if (elCusto) {
                         elCusto.value = custoMassa;
+                    }
                 }
+
 
                 if (taxaMassa !== '') {
 
                     const elTaxa =
                         document.getElementById(`taxa_${index}`);
 
-                    if (elTaxa)
+                    if (elTaxa) {
                         elTaxa.value = taxaMassa;
+                    }
                 }
+
 
                 if (impostoMassa !== '') {
 
                     const elImposto =
                         document.getElementById(`imposto_${index}`);
 
-                    if (elImposto)
+                    if (elImposto) {
                         elImposto.value = impostoMassa;
+                    }
                 }
+
 
                 if (lucroMassa !== '') {
 
                     const elLucro =
                         document.getElementById(`lucro_${index}`);
 
-                    if (elLucro)
+                    if (elLucro) {
                         elLucro.value = lucroMassa;
+                    }
                 }
+
 
                 recalcular(
                     index,
@@ -1568,6 +1786,11 @@
                 );
             });
         }
+
+
+        /* =========================================================
+           TABELA ATUALIZAÇÃO
+        ========================================================== */
 
         function montarTabelaAtualizacao(itens) {
 
@@ -1578,10 +1801,13 @@
 
             let contadorForaDaMargem = 0;
 
+
             itens.forEach((item) => {
 
                 const index =
-                    cacheItens.findIndex(i => i.id === item.id);
+                    cacheItens.findIndex(
+                        i => i.id === item.id
+                    );
 
                 const dadosSim =
                     novosPrecosCalculados[index] || {
@@ -1589,13 +1815,18 @@
                         foraDaMargem: true
                     };
 
-                if (!dadosSim.foraDaMargem)
+
+                if (!dadosSim.foraDaMargem) {
                     return;
+                }
+
 
                 contadorForaDaMargem++;
 
+
                 const novoPreco =
                     dadosSim.preco;
+
 
                 const tr =
                     document.createElement('tr');
@@ -1606,115 +1837,153 @@
                 tr.className =
                     "hover:bg-slate-800/50 transition-colors";
 
+
                 tr.innerHTML = `
-                    <td class="p-4">
+
+                    <td class="p-3.5">
+
                         <input
                             type="checkbox"
                             value="${index}"
                             checked
-                            class="check-item accent-yellow-400 w-4 h-4"
+                            class="check-item accent-yellow-400"
                         />
+
                     </td>
 
-                    <td class="p-4">
-                        <div class="flex items-center gap-3 min-w-[280px]">
+
+                    <td class="p-3.5">
+
+                        <div class="flex items-center space-x-3">
 
                             <img
                                 src="${item.thumbnail}"
-                                class="w-11 h-11 object-cover rounded-xl border border-slate-700 bg-slate-800"
+                                class="w-9 h-9 object-cover rounded-lg border border-slate-700"
                             />
 
-                            <div class="min-w-0">
+                            <div>
 
-                                <span class="font-semibold text-white block line-clamp-1">
+                                <span class="font-medium text-white block line-clamp-1">
                                     ${item.title}
                                 </span>
 
-                                <span class="text-[10px] text-slate-500 mt-1 block">
-                                    ${item.id}
-                                    <span class="text-slate-700 mx-1">•</span>
-                                    SKU: ${item.sku}
+                                <span class="text-[10px] text-slate-400">
+                                    ${item.id} | SKU: ${item.sku}
                                 </span>
 
                             </div>
 
                         </div>
+
                     </td>
 
-                    <td class="p-4 font-bold text-white whitespace-nowrap">
-                        R$ ${item.price.toFixed(2)}
+
+                    <td class="p-3.5 font-bold text-white">
+                        R$ ${Number(item.price).toFixed(2)}
                     </td>
 
-                    <td class="p-4 whitespace-nowrap">
-                        <span class="font-black text-emerald-400">
-                            R$ ${novoPreco.toFixed(2)}
+
+                    <td class="p-3.5 font-black text-emerald-400">
+                        R$ ${Number(novoPreco).toFixed(2)}
+                    </td>
+
+
+                    <td class="p-3.5">
+
+                        <span class="text-amber-400 font-bold">
+                            Fora da Margem
                         </span>
+
                     </td>
 
-                    <td class="p-4">
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-400/10 border border-amber-400/10 text-amber-400 font-bold text-[10px]">
-                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                            Fora da margem
-                        </span>
-                    </td>
 
                     <td
-                        class="p-4"
+                        class="p-3.5"
                         id="status_api_${index}"
                     >
-                        <span class="text-slate-500 text-[10px]">
+                        <span class="text-slate-500">
                             Pendente
                         </span>
                     </td>
                 `;
 
+
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('contador-atualizacao').innerText =
+
+            document.getElementById(
+                'contador-atualizacao'
+            ).innerText =
                 contadorForaDaMargem;
         }
+
+
+        /* =========================================================
+           SELECIONAR TODOS
+        ========================================================== */
 
         function alternarTodos(master) {
 
             const checkboxes =
                 document.querySelectorAll('.check-item');
 
-            checkboxes.forEach(cb =>
-                cb.checked = master.checked
+            checkboxes.forEach(
+                cb => cb.checked = master.checked
             );
         }
+
+
+        /* =========================================================
+           ATUALIZAR PREÇOS EM MASSA
+        ========================================================== */
 
         async function atualizarPrecosMassaApi() {
 
             const token =
-                localStorage.getItem('ml_access_token');
+                obterTokenLocal();
 
-            if(!token) {
+            if (!token) {
+
                 solicitarToken();
+
                 return;
             }
+
 
             const checkboxes =
                 document.querySelectorAll('.check-item:checked');
 
-            if(checkboxes.length === 0) {
-                alert("Nenhum anúncio selecionado para atualização.");
+
+            if (checkboxes.length === 0) {
+
+                alert(
+                    "Nenhum anúncio selecionado para atualização."
+                );
+
                 return;
             }
 
-            if(!confirm(
-                `Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`
-            )) {
+
+            if (
+                !confirm(
+                    `Deseja atualizar ${checkboxes.length} anúncio(s) em lotes simultâneos de 20?`
+                )
+            ) {
                 return;
             }
+
 
             let itensParaAtualizar = [];
 
+
             checkboxes.forEach(cb => {
 
-                const index = cb.value;
-                const item = cacheItens[index];
+                const index =
+                    cb.value;
+
+                const item =
+                    cacheItens[index];
 
                 const dadosSim =
                     novosPrecosCalculados[index];
@@ -1724,16 +1993,23 @@
                         ? dadosSim.preco
                         : item.price;
 
+
                 itensParaAtualizar.push({
+
                     index: index,
+
                     id: item.id,
-                    price: parseFloat(
-                        novoPreco.toFixed(2)
-                    )
+
+                    price:
+                        parseFloat(
+                            novoPreco.toFixed(2)
+                        )
                 });
             });
 
+
             const tamanhoLote = 20;
+
 
             for (
                 let i = 0;
@@ -1747,6 +2023,7 @@
                         i + tamanhoLote
                     );
 
+
                 lote.forEach(item => {
 
                     const elStatus =
@@ -1754,16 +2031,16 @@
                             `status_api_${item.index}`
                         );
 
+
                     if (elStatus) {
 
-                        elStatus.innerHTML = `
-                            <span class="inline-flex items-center gap-2 text-blue-400 animate-pulse font-bold text-[10px]">
-                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                        elStatus.innerHTML =
+                            `<span class="text-blue-400 animate-pulse">
                                 Atualizando...
-                            </span>
-                        `;
+                            </span>`;
                     }
                 });
+
 
                 try {
 
@@ -1772,23 +2049,26 @@
                             `${RENDER_URL}/api/atualizar-precos`,
                             {
                                 method: 'POST',
+
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': token
                                 },
+
                                 body: JSON.stringify({
-                                    itens: lote.map(
-                                        i => ({
+                                    itens:
+                                        lote.map(i => ({
                                             id: i.id,
                                             price: i.price
-                                        })
-                                    )
+                                        }))
                                 })
                             }
                         );
 
+
                     const data =
                         await response.json();
+
 
                     lote.forEach(item => {
 
@@ -1797,21 +2077,21 @@
                                 `status_api_${item.index}`
                             );
 
+
                         if (response.ok) {
 
                             if (elStatus) {
 
-                                elStatus.innerHTML = `
-                                    <span class="inline-flex items-center gap-2 text-emerald-400 font-bold text-[10px]">
-                                        <span class="w-5 h-5 rounded-full bg-emerald-400/10 flex items-center justify-center">
-                                            ✓
-                                        </span>
-                                        Atualizado
-                                    </span>
-                                `;
+                                elStatus.innerHTML =
+                                    `<span class="text-emerald-400 font-bold">
+                                        ✓ Atualizado
+                                    </span>`;
                             }
 
-                            cacheItens[item.index].price =
+
+                            cacheItens[
+                                item.index
+                            ].price =
                                 item.price;
 
                         } else {
@@ -1820,19 +2100,17 @@
                                 data.erro ||
                                 "Falha na API";
 
+
                             if (elStatus) {
 
-                                elStatus.innerHTML = `
-                                    <span
-                                        class="text-red-400 font-bold text-[10px]"
-                                        title="${erroMsg}"
-                                    >
+                                elStatus.innerHTML =
+                                    `<span class="text-red-400 font-bold">
                                         ✗ ${erroMsg}
-                                    </span>
-                                `;
+                                    </span>`;
                             }
                         }
                     });
+
 
                 } catch (e) {
 
@@ -1843,21 +2121,23 @@
                                 `status_api_${item.index}`
                             );
 
+
                         if (elStatus) {
 
-                            elStatus.innerHTML = `
-                                <span class="text-red-400 font-bold text-[10px]">
-                                    Erro de rede
-                                </span>
-                            `;
+                            elStatus.innerHTML =
+                                `<span class="text-red-500 font-bold">
+                                    Erro de Rede
+                                </span>`;
                         }
                     });
                 }
+
 
                 if (
                     i + tamanhoLote <
                     itensParaAtualizar.length
                 ) {
+
                     await new Promise(
                         resolve =>
                             setTimeout(resolve, 1000)
@@ -1865,13 +2145,45 @@
                 }
             }
 
+
             alert(
                 "Processo de envio em massa finalizado!"
             );
 
+
             atualizarCards(cacheItens);
+
             executarBusca();
         }
+
+
+        /* =========================================================
+           AUTO-ABERTURA
+        ========================================================== */
+
+        window.addEventListener('DOMContentLoaded', () => {
+
+            const token =
+                obterTokenLocal();
+
+            /*
+             * Se já houver token salvo no navegador,
+             * abre o painel automaticamente.
+             */
+            if (token) {
+
+                document
+                    .getElementById('tela-inicial')
+                    .classList.add('hidden');
+
+                document
+                    .getElementById('app-principal')
+                    .classList.remove('hidden');
+
+                carregarDados();
+            }
+        });
+
     </script>
 
 </body>
