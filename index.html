@@ -335,6 +335,11 @@ body.painel-interno-ativo header nav [onclick*='"inicio"'] {
 }
 </style>
 
+<style id="botao-voltar-inicio">
+body.pagina-inicial-ativa button[title="Voltar para a página inicial"]{display:none!important}
+body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:inline-flex!important}
+</style>
+
 </head>
 
 <body
@@ -606,6 +611,15 @@ body.painel-interno-ativo header nav [onclick*='"inicio"'] {
                     gap-2
                 "
             >
+
+                <button
+                    type="button"
+                    onclick="mudarAba('inicio')"
+                    class="btn-dark px-4 py-2.5 rounded-xl text-xs font-black"
+                    title="Voltar para a página inicial"
+                >
+                    ← Início
+                </button>
 
                 <button
                     onclick="carregarDados()"
@@ -2117,288 +2131,6 @@ body.painel-interno-ativo header nav [onclick*='"inicio"'] {
             >
                 Quantidade total
             </div>
-        </div>
-
-    </div>
-
-
-    <!-- 4 INDICADORES -->
-
-    <div>
-
-        <div
-            class="
-                flex
-                items-center
-                justify-between
-                mb-4
-            "
-        >
-
-            <div>
-
-                <h2
-                    class="
-                        text-sm
-                        font-bold
-                        text-white
-                    "
-                >
-                    Indicadores do Mercado Livre
-                </h2>
-
-                <p
-                    class="
-                        text-[11px]
-                        text-slate-500
-                        mt-1
-                    "
-                >
-                    Dados da reputação da conta.
-                </p>
-
-            </div>
-
-        </div>
-
-
-        <div
-            class="
-                grid
-                grid-cols-1
-                sm:grid-cols-2
-                xl:grid-cols-4
-                gap-4
-            "
-        >
-
-            <div
-                class="
-                    panel
-                    metric-card
-                    rounded-2xl
-                    p-5
-                "
-            >
-
-                <div
-                    class="
-                        text-emerald-400
-                        text-lg
-                    "
-                >
-                    ✓
-                </div>
-
-                <div
-                    class="
-                        text-[10px]
-                        uppercase
-                        tracking-[.14em]
-                        text-slate-500
-                        font-bold
-                        mt-4
-                    "
-                >
-                    Vendas
-                </div>
-
-                <div
-                    id="metric-vendas"
-                    class="
-                        text-2xl
-                        font-black
-                        text-white
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-                <div
-                    id="metric-vendas-periodo"
-                    class="
-                        text-[10px]
-                        text-slate-500
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-            </div>
-
-
-            <div
-                class="
-                    panel
-                    metric-card
-                    rounded-2xl
-                    p-5
-                "
-            >
-
-                <div
-                    class="
-                        text-red-400
-                        text-lg
-                    "
-                >
-                    !
-                </div>
-
-                <div
-                    class="
-                        text-[10px]
-                        uppercase
-                        tracking-[.14em]
-                        text-slate-500
-                        font-bold
-                        mt-4
-                    "
-                >
-                    Reclamações
-                </div>
-
-                <div
-                    id="metric-reclamacoes"
-                    class="
-                        text-2xl
-                        font-black
-                        text-white
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-                <div
-                    id="metric-reclamacoes-extra"
-                    class="
-                        text-[10px]
-                        text-slate-500
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-            </div>
-
-
-            <div
-                class="
-                    panel
-                    metric-card
-                    rounded-2xl
-                    p-5
-                "
-            >
-
-                <div
-                    class="
-                        text-orange-400
-                        text-lg
-                    "
-                >
-                    ⏱
-                </div>
-
-                <div
-                    class="
-                        text-[10px]
-                        uppercase
-                        tracking-[.14em]
-                        text-slate-500
-                        font-bold
-                        mt-4
-                    "
-                >
-                    Atrasos
-                </div>
-
-                <div
-                    id="metric-atrasos"
-                    class="
-                        text-2xl
-                        font-black
-                        text-white
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-                <div
-                    id="metric-atrasos-extra"
-                    class="
-                        text-[10px]
-                        text-slate-500
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-            </div>
-
-
-            <div
-                class="
-                    panel
-                    metric-card
-                    rounded-2xl
-                    p-5
-                "
-            >
-
-                <div
-                    class="
-                        text-purple-400
-                        text-lg
-                    "
-                >
-                    ×
-                </div>
-
-                <div
-                    class="
-                        text-[10px]
-                        uppercase
-                        tracking-[.14em]
-                        text-slate-500
-                        font-bold
-                        mt-4
-                    "
-                >
-                    Cancelamentos
-                </div>
-
-                <div
-                    id="metric-cancelamentos"
-                    class="
-                        text-2xl
-                        font-black
-                        text-white
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-                <div
-                    id="metric-cancelamentos-extra"
-                    class="
-                        text-[10px]
-                        text-slate-500
-                        mt-2
-                    "
-                >
-                    —
-                </div>
-
-            </div>
-
         </div>
 
     </div>
