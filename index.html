@@ -315,6 +315,26 @@
             }
         }
     </style>
+
+<style id="separacao-pagina-inicial">
+/* Página inicial independente do painel interno */
+body.pagina-inicial-ativa header nav,
+body.pagina-inicial-ativa header [onclick*="gestao"],
+body.pagina-inicial-ativa header [onclick*="dashboard"],
+body.pagina-inicial-ativa header [onclick*="simulacao"],
+body.pagina-inicial-ativa header [onclick*="atualizacao"],
+body.pagina-inicial-ativa header [onclick*="perguntas"] {
+    display: none !important;
+}
+
+/* Dentro do painel, a aba Início não aparece como uma ferramenta do painel.
+   O retorno ao início continua disponível pelo logotipo/fluxo já existente. */
+body.painel-interno-ativo header nav [onclick*="'inicio'"],
+body.painel-interno-ativo header nav [onclick*='"inicio"'] {
+    display: none !important;
+}
+</style>
+
 </head>
 
 <body
@@ -3488,6 +3508,9 @@ function atualizarStatusTokenHome() {
 ========================================================= */
 
 function mudarAba(aba) {
+    document.body.classList.toggle('pagina-inicial-ativa', String(aba) === 'inicio');
+    document.body.classList.toggle('painel-interno-ativo', String(aba) !== 'inicio');
+
     try {
         localStorage.setItem('mlHubPro_abaAtual_v1', String(aba));
     } catch (erro) {
@@ -6578,6 +6601,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } catch (erro) {
         console.warn('Não foi possível restaurar a última aba aberta:', erro);
+    }
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const abaSalva = localStorage.getItem('mlHubPro_abaAtual_v1');
+        const destino = abaSalva && abaSalva !== 'inicio' ? abaSalva : 'inicio';
+        if (typeof mudarAba === 'function') {
+            setTimeout(() => mudarAba(destino), 0);
+        } else {
+            document.body.classList.add('pagina-inicial-ativa');
+        }
+    } catch (erro) {
+        document.body.classList.add('pagina-inicial-ativa');
     }
 });
 </script>
