@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,8 +16,7 @@
                     colors: {
                         ml: {
                             yellow: "#FFE600",
-                            blue: "#3483FA",
-                            dark: "#1F2937"
+                            blue: "#3483FA"
                         }
                     }
                 }
@@ -25,12 +25,12 @@
     </script>
 
     <style>
-
         * {
             box-sizing: border-box;
         }
 
         body {
+            margin: 0;
             font-family:
                 Inter,
                 ui-sans-serif,
@@ -39,7 +39,6 @@
                 BlinkMacSystemFont,
                 "Segoe UI",
                 sans-serif;
-            margin: 0;
         }
 
         .hidden-page {
@@ -50,12 +49,12 @@
             background:
                 radial-gradient(
                     circle at 10% 10%,
-                    rgba(255, 230, 0, .22),
+                    rgba(255, 230, 0, .20),
                     transparent 30%
                 ),
                 radial-gradient(
                     circle at 90% 90%,
-                    rgba(52, 131, 250, .18),
+                    rgba(52, 131, 250, .16),
                     transparent 30%
                 ),
                 #f8fafc;
@@ -81,61 +80,56 @@
             color: white !important;
         }
 
-        input:focus,
-        select:focus {
+        input:focus {
             outline: none;
             border-color: #3483fa;
-            box-shadow:
-                0 0 0 3px rgba(52, 131, 250, .12);
+            box-shadow: 0 0 0 3px rgba(52,131,250,.12);
         }
 
         .table-scroll {
             overflow-x: auto;
         }
-
     </style>
 </head>
 
 <body class="bg-slate-100 text-slate-800">
 
-
-<!-- ========================================================= -->
-<!-- PÁGINA INICIAL -->
-<!-- ========================================================= -->
+<!-- =========================================================
+     INÍCIO
+========================================================= -->
 
 <section
     id="pagina-inicial"
     class="min-h-screen gradient-bg"
 >
 
-    <header
-        class="border-b border-slate-200 bg-white/90 backdrop-blur"
-    >
+    <header class="bg-white/90 border-b border-slate-200">
 
         <div
-            class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between"
+            class="max-w-7xl mx-auto px-6 py-4
+                   flex items-center justify-between"
         >
 
             <div class="flex items-center gap-3">
 
                 <div
-                    class="w-11 h-11 rounded-2xl bg-[#FFE600]
-                           flex items-center justify-center shadow"
+                    class="w-11 h-11 rounded-2xl
+                           bg-[#FFE600]
+                           flex items-center justify-center
+                           font-black text-slate-900"
                 >
-                    <span class="font-black text-slate-900 text-xl">
-                        ML
-                    </span>
+                    ML
                 </div>
 
                 <div>
 
-                    <h1 class="font-black text-xl text-slate-900">
+                    <div class="font-black text-xl">
                         ML Hub Pro
-                    </h1>
+                    </div>
 
-                    <p class="text-xs text-slate-500">
+                    <div class="text-xs text-slate-500">
                         Gestão inteligente do Mercado Livre
-                    </p>
+                    </div>
 
                 </div>
 
@@ -143,9 +137,9 @@
 
             <button
                 onclick="abrirLogin()"
-                class="bg-slate-900 hover:bg-slate-800
-                       text-white px-5 py-3 rounded-xl
-                       font-bold transition"
+                class="bg-slate-900 text-white
+                       px-5 py-3 rounded-xl
+                       font-bold hover:bg-slate-800"
             >
                 Entrar
             </button>
@@ -158,200 +152,136 @@
     <main class="max-w-7xl mx-auto px-6 py-16">
 
         <div
-            class="grid lg:grid-cols-2 gap-12 items-center"
+            class="grid lg:grid-cols-2
+                   gap-12 items-center"
         >
 
             <div>
 
-                <span
-                    class="inline-flex items-center gap-2
-                           px-4 py-2 rounded-full
-                           bg-yellow-100 text-yellow-800
-                           text-sm font-bold mb-6"
+                <div
+                    class="inline-flex
+                           px-4 py-2
+                           rounded-full
+                           bg-yellow-100
+                           text-yellow-800
+                           text-sm font-bold"
                 >
-
-                    <span
-                        class="w-2 h-2 rounded-full bg-yellow-500"
-                    ></span>
-
                     Painel profissional
+                </div>
 
-                </span>
 
-
-                <h2
-                    class="text-5xl md:text-6xl font-black
-                           tracking-tight text-slate-900
-                           leading-tight"
+                <h1
+                    class="mt-6 text-5xl
+                           md:text-6xl
+                           font-black
+                           leading-tight
+                           text-slate-900"
                 >
                     Controle seus anúncios do
 
                     <span class="text-[#3483FA]">
                         Mercado Livre
                     </span>
-
-                    em um só lugar.
-                </h2>
+                </h1>
 
 
                 <p
-                    class="mt-6 text-lg text-slate-600
-                           leading-relaxed max-w-xl"
+                    class="mt-6 text-lg
+                           text-slate-600
+                           max-w-xl"
                 >
-                    Consulte seus anúncios, acompanhe custos,
-                    simule preços, sincronize fretes e atualize
-                    seus produtos de forma rápida.
+                    Gerencie anúncios, preços, fretes,
+                    custos e atualizações em um único painel.
                 </p>
 
 
-                <div class="mt-8 flex flex-wrap gap-4">
-
-                    <button
-                        onclick="abrirLogin()"
-                        class="px-7 py-4 rounded-2xl
-                               bg-slate-900 text-white
-                               font-black hover:bg-slate-800
-                               transition shadow-lg"
-                    >
-                        Começar agora
-                    </button>
-
-
-                    <button
-                        onclick="mostrarInformacoes()"
-                        class="px-7 py-4 rounded-2xl
-                               bg-white border border-slate-200
-                               text-slate-700 font-bold
-                               hover:bg-slate-50 transition"
-                    >
-                        Saiba mais
-                    </button>
-
-                </div>
+                <button
+                    onclick="abrirLogin()"
+                    class="mt-8
+                           bg-slate-900
+                           text-white
+                           px-7 py-4
+                           rounded-2xl
+                           font-black
+                           shadow-lg
+                           hover:bg-slate-800"
+                >
+                    Conectar minha conta
+                </button>
 
             </div>
 
 
-            <div class="relative">
+            <div>
 
                 <div
-                    class="absolute -inset-5
-                           bg-gradient-to-r
-                           from-yellow-300/30
-                           to-blue-300/30
-                           blur-3xl rounded-full"
-                ></div>
-
-
-                <div
-                    class="relative bg-white rounded-3xl
-                           shadow-2xl border border-slate-200
-                           p-5"
+                    class="bg-slate-900
+                           rounded-3xl
+                           p-6 shadow-2xl"
                 >
 
                     <div
-                        class="bg-slate-900 rounded-2xl p-5 text-white"
+                        class="flex justify-between
+                               items-center mb-6"
                     >
 
-                        <div
-                            class="flex items-center
-                                   justify-between mb-6"
-                        >
-
-                            <div>
-
-                                <p class="text-xs text-slate-400">
-                                    Painel
-                                </p>
-
-                                <p class="font-black text-lg">
-                                    ML Hub Pro
-                                </p>
-
-                            </div>
-
+                        <div>
 
                             <div
-                                class="w-10 h-10 rounded-xl
-                                       bg-[#FFE600]
-                                       text-slate-900
-                                       flex items-center
-                                       justify-center
-                                       font-black"
+                                class="text-xs
+                                       text-slate-400"
                             >
-                                ML
+                                Painel
+                            </div>
+
+                            <div
+                                class="text-xl
+                                       font-black
+                                       text-white"
+                            >
+                                ML Hub Pro
                             </div>
 
                         </div>
 
 
                         <div
-                            class="grid grid-cols-3 gap-3 mb-5"
+                            class="w-12 h-12
+                                   rounded-xl
+                                   bg-[#FFE600]
+                                   text-slate-900
+                                   flex items-center
+                                   justify-center
+                                   font-black"
+                        >
+                            ML
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="grid grid-cols-3 gap-3"
+                    >
+
+                        <div
+                            class="bg-white/10
+                                   rounded-xl p-4"
                         >
 
                             <div
-                                class="bg-white/10
-                                       rounded-xl p-4"
+                                class="text-xs
+                                       text-slate-400"
                             >
-
-                                <p
-                                    class="text-xs
-                                           text-slate-400"
-                                >
-                                    Total
-                                </p>
-
-                                <p
-                                    class="text-xl
-                                           font-black mt-1"
-                                >
-                                    ---
-                                </p>
-
+                                Anúncios
                             </div>
 
-
                             <div
-                                class="bg-white/10
-                                       rounded-xl p-4"
+                                class="text-2xl
+                                       text-white
+                                       font-black"
                             >
-
-                                <p
-                                    class="text-xs
-                                           text-slate-400"
-                                >
-                                    Ativos
-                                </p>
-
-                                <p
-                                    class="text-xl
-                                           font-black mt-1"
-                                >
-                                    ---
-                                </p>
-
-                            </div>
-
-
-                            <div
-                                class="bg-white/10
-                                       rounded-xl p-4"
-                            >
-
-                                <p
-                                    class="text-xs
-                                           text-slate-400"
-                                >
-                                    Outros
-                                </p>
-
-                                <p
-                                    class="text-xl
-                                           font-black mt-1"
-                                >
-                                    ---
-                                </p>
-
+                                ---
                             </div>
 
                         </div>
@@ -363,19 +293,42 @@
                         >
 
                             <div
-                                class="h-3 bg-white/10
-                                       rounded mb-3 w-3/4"
-                            ></div>
+                                class="text-xs
+                                       text-slate-400"
+                            >
+                                Ativos
+                            </div>
 
                             <div
-                                class="h-3 bg-white/10
-                                       rounded mb-3 w-full"
-                            ></div>
+                                class="text-2xl
+                                       text-white
+                                       font-black"
+                            >
+                                ---
+                            </div>
+
+                        </div>
+
+
+                        <div
+                            class="bg-white/10
+                                   rounded-xl p-4"
+                        >
 
                             <div
-                                class="h-3 bg-white/10
-                                       rounded w-2/3"
-                            ></div>
+                                class="text-xs
+                                       text-slate-400"
+                            >
+                                Status
+                            </div>
+
+                            <div
+                                class="text-lg
+                                       text-green-400
+                                       font-black"
+                            >
+                                ONLINE
+                            </div>
 
                         </div>
 
@@ -389,85 +342,89 @@
 
 
         <div
-            class="grid md:grid-cols-3 gap-5 mt-20"
+            class="grid md:grid-cols-3
+                   gap-5 mt-20"
         >
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       p-6 shadow-sm"
+                class="bg-white p-6
+                       rounded-2xl
+                       border border-slate-200"
             >
 
-                <div
-                    class="w-12 h-12 rounded-xl
-                           bg-blue-50 text-blue-600
-                           flex items-center
-                           justify-center text-xl mb-5"
-                >
+                <div class="text-3xl">
                     📦
                 </div>
 
-                <h3 class="font-black text-lg">
+                <h3
+                    class="font-black
+                           text-lg mt-4"
+                >
                     Gestão de anúncios
                 </h3>
 
-                <p class="text-slate-500 mt-2">
-                    Consulte seus anúncios e informações
-                    de venda em um painel centralizado.
+                <p
+                    class="text-slate-500
+                           mt-2"
+                >
+                    Consulte todos os seus anúncios
+                    diretamente pela API.
                 </p>
 
             </div>
 
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       p-6 shadow-sm"
+                class="bg-white p-6
+                       rounded-2xl
+                       border border-slate-200"
             >
 
-                <div
-                    class="w-12 h-12 rounded-xl
-                           bg-yellow-50 text-yellow-600
-                           flex items-center
-                           justify-center text-xl mb-5"
-                >
+                <div class="text-3xl">
                     💰
                 </div>
 
-                <h3 class="font-black text-lg">
-                    Simulação de custos
+                <h3
+                    class="font-black
+                           text-lg mt-4"
+                >
+                    Custos e preços
                 </h3>
 
-                <p class="text-slate-500 mt-2">
-                    Simule preços, comissão, frete
-                    e valor líquido recebido.
+                <p
+                    class="text-slate-500
+                           mt-2"
+                >
+                    Visualize comissão, frete,
+                    preço e valor líquido.
                 </p>
 
             </div>
 
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       p-6 shadow-sm"
+                class="bg-white p-6
+                       rounded-2xl
+                       border border-slate-200"
             >
 
-                <div
-                    class="w-12 h-12 rounded-xl
-                           bg-green-50 text-green-600
-                           flex items-center
-                           justify-center text-xl mb-5"
-                >
+                <div class="text-3xl">
                     🔄
                 </div>
 
-                <h3 class="font-black text-lg">
-                    Sincronização
+                <h3
+                    class="font-black
+                           text-lg mt-4"
+                >
+                    Renovação automática
                 </h3>
 
-                <p class="text-slate-500 mt-2">
-                    Atualize preços e informações de
-                    frete diretamente pela API.
+                <p
+                    class="text-slate-500
+                           mt-2"
+                >
+                    Depois da autorização OAuth,
+                    o token é renovado automaticamente.
                 </p>
 
             </div>
@@ -479,9 +436,9 @@
 </section>
 
 
-<!-- ========================================================= -->
-<!-- LOGIN -->
-<!-- ========================================================= -->
+<!-- =========================================================
+     LOGIN
+========================================================= -->
 
 <section
     id="pagina-login"
@@ -489,44 +446,35 @@
 >
 
     <header
-        class="border-b border-slate-200
-               bg-white/90 backdrop-blur"
+        class="bg-white
+               border-b border-slate-200"
     >
 
         <div
-            class="max-w-6xl mx-auto px-6 py-4
-                   flex items-center justify-between"
+            class="max-w-6xl mx-auto
+                   px-6 py-4
+                   flex justify-between
+                   items-center"
         >
 
             <button
                 onclick="voltarInicio()"
-                class="font-bold text-slate-600
-                       hover:text-slate-900"
+                class="font-bold
+                       text-slate-600"
             >
                 ← Voltar
             </button>
 
 
-            <div class="flex items-center gap-3">
-
-                <div
-                    class="w-9 h-9 rounded-xl
-                           bg-[#FFE600]
-                           flex items-center
-                           justify-center
-                           font-black text-sm"
-                >
-                    ML
-                </div>
-
-                <span class="font-black">
-                    ML Hub Pro
-                </span>
-
+            <div
+                class="font-black
+                       text-lg"
+            >
+                ML Hub Pro
             </div>
 
 
-            <div class="w-20"></div>
+            <div class="w-16"></div>
 
         </div>
 
@@ -534,53 +482,58 @@
 
 
     <main
-        class="max-w-5xl mx-auto px-6 py-12"
+        class="max-w-5xl mx-auto
+               px-6 py-12"
     >
 
         <div
             class="grid lg:grid-cols-2
-                   gap-10 items-start"
+                   gap-10"
         >
 
             <div class="pt-8">
 
-                <span
-                    class="text-sm font-black
-                           uppercase tracking-wider
-                           text-blue-600"
+                <div
+                    class="text-blue-600
+                           font-black
+                           uppercase
+                           text-sm"
                 >
-                    Configuração
-                </span>
+                    Conexão
+                </div>
 
 
                 <h2
-                    class="text-4xl font-black
-                           text-slate-900 mt-3"
+                    class="text-4xl
+                           font-black
+                           mt-3
+                           text-slate-900"
                 >
                     Conecte sua conta
-                    do Mercado Livre
                 </h2>
 
 
                 <p
-                    class="text-slate-600 mt-5
+                    class="mt-5
+                           text-slate-600
                            leading-relaxed"
                 >
-                    Informe os dados da aplicação
-                    cadastrada no Mercado Livre.
-                    Depois da autorização, o sistema
-                    receberá o refresh token e fará a
-                    renovação automática.
+                    Informe o Client ID e o Client Secret
+                    da sua aplicação no Mercado Livre.
+                    Depois você será enviado ao Mercado Livre
+                    para autorizar a conexão.
                 </p>
 
 
-                <div class="mt-8 space-y-4">
+                <div class="mt-8 space-y-5">
 
                     <div class="flex gap-4">
 
                         <div
-                            class="w-10 h-10 rounded-xl
-                                   bg-blue-50 text-blue-600
+                            class="w-10 h-10
+                                   rounded-xl
+                                   bg-blue-100
+                                   text-blue-600
                                    flex items-center
                                    justify-center
                                    font-black"
@@ -590,14 +543,16 @@
 
                         <div>
 
-                            <p class="font-black">
-                                Informe os dados
-                            </p>
+                            <div class="font-black">
+                                Preencha os dados
+                            </div>
 
-                            <p class="text-sm text-slate-500">
-                                Client ID, Client Secret
-                                e URL de retorno.
-                            </p>
+                            <div
+                                class="text-sm
+                                       text-slate-500"
+                            >
+                                Client ID e Client Secret.
+                            </div>
 
                         </div>
 
@@ -607,8 +562,10 @@
                     <div class="flex gap-4">
 
                         <div
-                            class="w-10 h-10 rounded-xl
-                                   bg-yellow-50 text-yellow-700
+                            class="w-10 h-10
+                                   rounded-xl
+                                   bg-yellow-100
+                                   text-yellow-700
                                    flex items-center
                                    justify-center
                                    font-black"
@@ -618,14 +575,16 @@
 
                         <div>
 
-                            <p class="font-black">
-                                Autorize o Mercado Livre
-                            </p>
+                            <div class="font-black">
+                                Autorize no Mercado Livre
+                            </div>
 
-                            <p class="text-sm text-slate-500">
-                                A autorização acontecerá
-                                diretamente no Mercado Livre.
-                            </p>
+                            <div
+                                class="text-sm
+                                       text-slate-500"
+                            >
+                                Faça login e aceite o acesso.
+                            </div>
 
                         </div>
 
@@ -635,8 +594,10 @@
                     <div class="flex gap-4">
 
                         <div
-                            class="w-10 h-10 rounded-xl
-                                   bg-green-50 text-green-600
+                            class="w-10 h-10
+                                   rounded-xl
+                                   bg-green-100
+                                   text-green-600
                                    flex items-center
                                    justify-center
                                    font-black"
@@ -646,14 +607,17 @@
 
                         <div>
 
-                            <p class="font-black">
-                                Renovação automática
-                            </p>
+                            <div class="font-black">
+                                Pronto
+                            </div>
 
-                            <p class="text-sm text-slate-500">
-                                O sistema guardará o refresh
-                                token e renovará o acesso.
-                            </p>
+                            <div
+                                class="text-sm
+                                       text-slate-500"
+                            >
+                                O sistema guarda o refresh token
+                                para renovação automática.
+                            </div>
 
                         </div>
 
@@ -665,26 +629,29 @@
 
 
             <div
-                class="bg-white rounded-3xl
-                       shadow-xl border
-                       border-slate-200 p-7"
+                class="bg-white
+                       rounded-3xl
+                       border border-slate-200
+                       shadow-xl
+                       p-7"
             >
 
-                <div class="mb-7">
+                <h3
+                    class="text-2xl
+                           font-black"
+                >
+                    Dados da aplicação
+                </h3>
 
-                    <h3
-                        class="text-2xl font-black
-                               text-slate-900"
-                    >
-                        Dados da aplicação
-                    </h3>
 
-                    <p class="text-sm text-slate-500 mt-1">
-                        Use os dados da aplicação criada no
-                        Mercado Livre.
-                    </p>
-
-                </div>
+                <p
+                    class="text-sm
+                           text-slate-500
+                           mt-1 mb-7"
+                >
+                    Esses dados são utilizados para
+                    conectar sua aplicação.
+                </p>
 
 
                 <form
@@ -695,22 +662,25 @@
                     <div>
 
                         <label
-                            class="block text-sm
+                            class="block
+                                   text-sm
                                    font-bold
-                                   text-slate-700 mb-2"
+                                   mb-2"
                         >
                             Client ID
                         </label>
 
                         <input
                             id="client-id"
-                            type="text"
                             required
+                            type="text"
                             autocomplete="off"
-                            placeholder="Digite o Client ID"
-                            class="w-full border
+                            placeholder="Ex.: 123456789"
+                            class="w-full
+                                   border
                                    border-slate-300
-                                   rounded-xl px-4 py-3"
+                                   rounded-xl
+                                   px-4 py-3"
                         >
 
                     </div>
@@ -719,22 +689,25 @@
                     <div>
 
                         <label
-                            class="block text-sm
+                            class="block
+                                   text-sm
                                    font-bold
-                                   text-slate-700 mb-2"
+                                   mb-2"
                         >
                             Client Secret
                         </label>
 
                         <input
                             id="client-secret"
-                            type="password"
                             required
+                            type="password"
                             autocomplete="off"
-                            placeholder="Digite o Client Secret"
-                            class="w-full border
+                            placeholder="Client Secret"
+                            class="w-full
+                                   border
                                    border-slate-300
-                                   rounded-xl px-4 py-3"
+                                   rounded-xl
+                                   px-4 py-3"
                         >
 
                     </div>
@@ -743,28 +716,33 @@
                     <div>
 
                         <label
-                            class="block text-sm
+                            class="block
+                                   text-sm
                                    font-bold
-                                   text-slate-700 mb-2"
+                                   mb-2"
                         >
                             URL de retorno
                         </label>
 
                         <input
                             id="redirect-uri"
-                            type="url"
                             required
-                            class="w-full border
+                            type="url"
+                            class="w-full
+                                   border
                                    border-slate-300
-                                   rounded-xl px-4 py-3"
+                                   rounded-xl
+                                   px-4 py-3"
                         >
 
-                        <p
-                            class="text-xs text-slate-500 mt-2"
+                        <div
+                            class="mt-2
+                                   text-xs
+                                   text-slate-500"
                         >
-                            Use exatamente a mesma URL
+                            Deve ser exatamente a mesma
                             cadastrada no Mercado Livre.
-                        </p>
+                        </div>
 
                     </div>
 
@@ -772,9 +750,10 @@
                     <div>
 
                         <label
-                            class="block text-sm
+                            class="block
+                                   text-sm
                                    font-bold
-                                   text-slate-700 mb-2"
+                                   mb-2"
                         >
                             Access Token atual
                             <span
@@ -789,40 +768,48 @@
                             id="access-token"
                             type="password"
                             autocomplete="off"
-                            placeholder="Deixe vazio para usar OAuth"
-                            class="w-full border
+                            placeholder="Deixe vazio para OAuth"
+                            class="w-full
+                                   border
                                    border-slate-300
-                                   rounded-xl px-4 py-3"
+                                   rounded-xl
+                                   px-4 py-3"
                         >
 
-                        <p
-                            class="text-xs text-slate-500 mt-2"
+                        <div
+                            class="mt-2
+                                   text-xs
+                                   text-slate-500"
                         >
                             Para renovação automática,
-                            recomendamos deixar este campo vazio
-                            e conectar pelo OAuth.
-                        </p>
+                            deixe vazio.
+                        </div>
 
                     </div>
 
 
                     <div
                         id="erro-login"
-                        class="hidden bg-red-50
+                        class="hidden
+                               bg-red-50
                                border border-red-200
-                               text-red-700 rounded-xl
-                               p-4 text-sm"
+                               text-red-700
+                               rounded-xl
+                               p-4
+                               text-sm"
                     ></div>
 
 
                     <button
-                        type="submit"
                         id="btn-conectar"
-                        class="w-full bg-[#FFE600]
+                        type="submit"
+                        class="w-full
+                               bg-[#FFE600]
                                hover:bg-yellow-300
-                               text-slate-900 py-4
-                               rounded-xl font-black
-                               transition shadow"
+                               text-slate-900
+                               py-4
+                               rounded-xl
+                               font-black"
                     >
                         Conectar ao Mercado Livre
                     </button>
@@ -838,31 +825,43 @@
 </section>
 
 
-<!-- ========================================================= -->
-<!-- DASHBOARD -->
-<!-- ========================================================= -->
+<!-- =========================================================
+     DASHBOARD
+========================================================= -->
 
 <section
     id="pagina-dashboard"
-    class="hidden-page min-h-screen bg-slate-100"
+    class="hidden-page min-h-screen"
 >
 
     <header
-        class="bg-slate-900 text-white
-               shadow-lg sticky top-0 z-40"
+        class="bg-slate-900
+               text-white
+               sticky top-0
+               z-40
+               shadow-lg"
     >
 
-        <div class="max-w-7xl mx-auto px-5">
+        <div
+            class="max-w-7xl
+                   mx-auto
+                   px-5"
+        >
 
             <div
-                class="h-16 flex items-center
+                class="h-16
+                       flex items-center
                        justify-between"
             >
 
-                <div class="flex items-center gap-3">
+                <div
+                    class="flex items-center
+                           gap-3"
+                >
 
                     <div
-                        class="w-10 h-10 rounded-xl
+                        class="w-10 h-10
+                               rounded-xl
                                bg-[#FFE600]
                                text-slate-900
                                flex items-center
@@ -872,18 +871,19 @@
                         ML
                     </div>
 
-
                     <div>
 
-                        <div class="font-black leading-none">
+                        <div
+                            class="font-black"
+                        >
                             ML Hub Pro
                         </div>
 
                         <div
                             class="text-[11px]
-                                   text-slate-400 mt-1"
+                                   text-slate-400"
                         >
-                            Gestão Mercado Livre
+                            Mercado Livre
                         </div>
 
                     </div>
@@ -891,11 +891,18 @@
                 </div>
 
 
-                <div class="flex items-center gap-2">
+                <div
+                    class="flex
+                           items-center
+                           gap-2
+                           flex-wrap
+                           justify-end"
+                >
 
                     <button
                         onclick="carregarDados()"
-                        class="px-3 py-2 rounded-lg
+                        class="px-3 py-2
+                               rounded-lg
                                bg-white/10
                                hover:bg-white/20
                                text-sm font-bold"
@@ -906,7 +913,8 @@
 
                     <button
                         onclick="sincronizarPrecosApi()"
-                        class="px-3 py-2 rounded-lg
+                        class="px-3 py-2
+                               rounded-lg
                                bg-white/10
                                hover:bg-white/20
                                text-sm font-bold"
@@ -917,7 +925,8 @@
 
                     <button
                         onclick="sincronizarFretesApi()"
-                        class="px-3 py-2 rounded-lg
+                        class="px-3 py-2
+                               rounded-lg
                                bg-white/10
                                hover:bg-white/20
                                text-sm font-bold"
@@ -927,21 +936,10 @@
 
 
                     <button
-                        onclick="abrirConfiguracao()"
-                        class="px-3 py-2 rounded-lg
-                               bg-white/10
-                               hover:bg-white/20
-                               text-sm font-bold"
-                    >
-                        ⚙ Configuração
-                    </button>
-
-
-                    <button
                         onclick="logout()"
-                        class="px-3 py-2 rounded-lg
+                        class="px-3 py-2
+                               rounded-lg
                                bg-red-500/20
-                               hover:bg-red-500/30
                                text-red-300
                                text-sm font-bold"
                     >
@@ -953,13 +951,18 @@
             </div>
 
 
-            <nav class="flex gap-2 pb-3">
+            <div
+                class="flex gap-2 pb-3"
+            >
 
                 <button
                     id="tab-gestao"
                     onclick="trocarAba('gestao')"
-                    class="tab-active px-4 py-2
-                           rounded-lg text-sm font-bold"
+                    class="tab-active
+                           px-4 py-2
+                           rounded-lg
+                           text-sm
+                           font-bold"
                 >
                     Gestão de Anúncios
                 </button>
@@ -968,10 +971,11 @@
                 <button
                     id="tab-simulacao"
                     onclick="trocarAba('simulacao')"
-                    class="px-4 py-2 rounded-lg
-                           text-sm font-bold
-                           text-slate-300
-                           hover:bg-white/10"
+                    class="px-4 py-2
+                           rounded-lg
+                           text-sm
+                           font-bold
+                           text-slate-300"
                 >
                     Simulação & Custos
                 </button>
@@ -980,15 +984,16 @@
                 <button
                     id="tab-atualizacao"
                     onclick="trocarAba('atualizacao')"
-                    class="px-4 py-2 rounded-lg
-                           text-sm font-bold
-                           text-slate-300
-                           hover:bg-white/10"
+                    class="px-4 py-2
+                           rounded-lg
+                           text-sm
+                           font-bold
+                           text-slate-300"
                 >
                     Atualização de Preço
                 </button>
 
-            </nav>
+            </div>
 
         </div>
 
@@ -996,7 +1001,9 @@
 
 
     <main
-        class="max-w-7xl mx-auto px-5 py-7"
+        class="max-w-7xl
+               mx-auto
+               px-5 py-7"
     >
 
         <!-- GESTÃO -->
@@ -1006,7 +1013,6 @@
             <div
                 class="flex flex-col
                        lg:flex-row
-                       lg:items-end
                        justify-between
                        gap-5 mb-6"
             >
@@ -1014,14 +1020,16 @@
                 <div>
 
                     <h2
-                        class="text-3xl font-black
-                               text-slate-900"
+                        class="text-3xl
+                               font-black"
                     >
                         Gestão de Anúncios
                     </h2>
 
-                    <p class="text-slate-500 mt-1">
-                        Consulte e gerencie seus anúncios.
+                    <p
+                        class="text-slate-500"
+                    >
+                        Seus anúncios do Mercado Livre.
                     </p>
 
                 </div>
@@ -1034,20 +1042,20 @@
 
                     <input
                         id="campo-busca"
-                        type="text"
-                        placeholder="Buscar por título ou SKU..."
-                        class="w-72 border
+                        placeholder="Buscar..."
+                        class="w-72
+                               border
                                border-slate-300
-                               rounded-xl px-4 py-3
-                               bg-white"
+                               rounded-xl
+                               px-4 py-3"
                     >
 
                     <button
-                        type="submit"
                         class="bg-slate-900
-                               text-white px-5
-                               rounded-xl font-bold
-                               hover:bg-slate-800"
+                               text-white
+                               px-5
+                               rounded-xl
+                               font-bold"
                     >
                         Buscar
                     </button>
@@ -1063,64 +1071,83 @@
             >
 
                 <div
-                    class="bg-white rounded-2xl
-                           border border-slate-200
-                           p-5 shadow-sm"
+                    class="bg-white
+                           p-5
+                           rounded-2xl
+                           border
+                           border-slate-200"
                 >
 
-                    <p class="text-sm text-slate-500">
-                        Total de anúncios
-                    </p>
+                    <div
+                        class="text-sm
+                               text-slate-500"
+                    >
+                        Total
+                    </div>
 
-                    <p
+                    <div
                         id="card-total"
-                        class="text-3xl font-black
-                               text-slate-900 mt-2"
+                        class="text-3xl
+                               font-black
+                               mt-2"
                     >
                         0
-                    </p>
+                    </div>
 
                 </div>
 
 
                 <div
-                    class="bg-white rounded-2xl
-                           border border-slate-200
-                           p-5 shadow-sm"
+                    class="bg-white
+                           p-5
+                           rounded-2xl
+                           border
+                           border-slate-200"
                 >
 
-                    <p class="text-sm text-slate-500">
+                    <div
+                        class="text-sm
+                               text-slate-500"
+                    >
                         Ativos
-                    </p>
+                    </div>
 
-                    <p
+                    <div
                         id="card-ativos"
-                        class="text-3xl font-black
-                               text-green-600 mt-2"
+                        class="text-3xl
+                               font-black
+                               text-green-600
+                               mt-2"
                     >
                         0
-                    </p>
+                    </div>
 
                 </div>
 
 
                 <div
-                    class="bg-white rounded-2xl
-                           border border-slate-200
-                           p-5 shadow-sm"
+                    class="bg-white
+                           p-5
+                           rounded-2xl
+                           border
+                           border-slate-200"
                 >
 
-                    <p class="text-sm text-slate-500">
-                        Outros status
-                    </p>
+                    <div
+                        class="text-sm
+                               text-slate-500"
+                    >
+                        Outros
+                    </div>
 
-                    <p
+                    <div
                         id="card-outros"
-                        class="text-3xl font-black
-                               text-slate-700 mt-2"
+                        class="text-3xl
+                               font-black
+                               mt-2"
                     >
                         0
-                    </p>
+                    </div>
 
                 </div>
 
@@ -1128,43 +1155,50 @@
 
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       shadow-sm overflow-hidden"
+                class="bg-white
+                       rounded-2xl
+                       border
+                       border-slate-200
+                       overflow-hidden"
             >
 
                 <div
-                    class="p-5 border-b
+                    class="p-5
+                           border-b
                            border-slate-200
-                           flex items-center
+                           flex
                            justify-between"
                 >
 
                     <div>
 
-                        <h3 class="font-black text-lg">
-                            Seus anúncios
-                        </h3>
-
-                        <p
-                            id="contador-itens"
-                            class="text-sm text-slate-500"
+                        <div
+                            class="font-black
+                                   text-lg"
                         >
-                            Nenhum anúncio carregado
-                        </p>
+                            Anúncios
+                        </div>
+
+                        <div
+                            id="contador-itens"
+                            class="text-sm
+                                   text-slate-500"
+                        >
+                            Nenhum carregado
+                        </div>
 
                     </div>
 
 
                     <button
                         onclick="carregarDados()"
-                        class="px-4 py-2 rounded-lg
-                               bg-blue-600
-                               hover:bg-blue-700
+                        class="bg-blue-600
                                text-white
-                               text-sm font-bold"
+                               px-4 py-2
+                               rounded-lg
+                               font-bold"
                     >
-                        Carregar dados
+                        Carregar
                     </button>
 
                 </div>
@@ -1176,57 +1210,40 @@
 
                         <thead
                             class="bg-slate-50
-                                   border-b
-                                   border-slate-200"
+                                   border-b"
                         >
 
                             <tr>
 
-                                <th
-                                    class="px-4 py-3 text-left"
-                                >
+                                <th class="px-4 py-3 text-left">
                                     ID
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-left"
-                                >
+                                <th class="px-4 py-3 text-left">
                                     Produto
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-left"
-                                >
+                                <th class="px-4 py-3 text-left">
                                     SKU
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-left"
-                                >
+                                <th class="px-4 py-3 text-left">
                                     Status
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-right"
-                                >
+                                <th class="px-4 py-3 text-right">
                                     Preço
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-right"
-                                >
+                                <th class="px-4 py-3 text-right">
                                     Comissão
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-right"
-                                >
+                                <th class="px-4 py-3 text-right">
                                     Frete
                                 </th>
 
-                                <th
-                                    class="px-4 py-3 text-right"
-                                >
+                                <th class="px-4 py-3 text-right">
                                     Líquido
                                 </th>
 
@@ -1241,11 +1258,11 @@
 
                                 <td
                                     colspan="8"
-                                    class="px-4 py-12
-                                           text-center
+                                    class="text-center
+                                           px-4 py-12
                                            text-slate-400"
                                 >
-                                    Nenhum dado carregado.
+                                    Nenhum anúncio carregado.
                                 </td>
 
                             </tr>
@@ -1268,87 +1285,72 @@
             class="hidden"
         >
 
-            <div class="mb-6">
+            <h2
+                class="text-3xl
+                       font-black
+                       mb-2"
+            >
+                Simulação & Custos
+            </h2>
 
-                <h2
-                    class="text-3xl font-black
-                           text-slate-900"
-                >
-                    Simulação & Custos
-                </h2>
-
-                <p class="text-slate-500 mt-1">
-                    Simule alterações de preço.
-                </p>
-
-            </div>
+            <p
+                class="text-slate-500
+                       mb-6"
+            >
+                Simule alterações de preço.
+            </p>
 
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       shadow-sm overflow-hidden"
+                class="bg-white
+                       rounded-2xl
+                       border
+                       border-slate-200
+                       overflow-hidden"
             >
 
                 <div
-                    class="p-5 border-b
-                           border-slate-200
-                           flex flex-col
-                           md:flex-row
-                           md:items-center
-                           justify-between
-                           gap-4"
+                    class="p-5
+                           border-b
+                           flex
+                           flex-wrap
+                           gap-3"
                 >
 
-                    <div>
-
-                        <h3 class="font-black">
-                            Simulação em massa
-                        </h3>
-
-                        <p class="text-sm text-slate-500">
-                            Altere o preço dos anúncios.
-                        </p>
-
-                    </div>
-
-
-                    <div class="flex flex-wrap gap-2">
-
-                        <input
-                            id="sim-percentual"
-                            type="number"
-                            step="0.01"
-                            placeholder="%"
-                            class="w-24 border
-                                   border-slate-300
-                                   rounded-lg px-3 py-2"
-                        >
+                    <input
+                        id="sim-percentual"
+                        type="number"
+                        step="0.01"
+                        placeholder="%"
+                        class="w-28
+                               border
+                               rounded-lg
+                               px-3 py-2"
+                    >
 
 
-                        <input
-                            id="sim-valor"
-                            type="number"
-                            step="0.01"
-                            placeholder="Valor"
-                            class="w-28 border
-                                   border-slate-300
-                                   rounded-lg px-3 py-2"
-                        >
+                    <input
+                        id="sim-valor"
+                        type="number"
+                        step="0.01"
+                        placeholder="Valor"
+                        class="w-28
+                               border
+                               rounded-lg
+                               px-3 py-2"
+                    >
 
 
-                        <button
-                            onclick="calcularSimulacao()"
-                            class="bg-blue-600
-                                   hover:bg-blue-700
-                                   text-white px-4
-                                   py-2 rounded-lg
-                                   font-bold"
-                        >
-                            Calcular
-                        </button>
-
-                    </div>
+                    <button
+                        onclick="calcularSimulacao()"
+                        class="bg-blue-600
+                               text-white
+                               px-4
+                               rounded-lg
+                               font-bold"
+                    >
+                        Calcular
+                    </button>
 
                 </div>
 
@@ -1358,18 +1360,13 @@
                     <table class="w-full text-sm">
 
                         <thead
-                            class="bg-slate-50
-                                   border-b
-                                   border-slate-200"
+                            class="bg-slate-50"
                         >
 
                             <tr>
 
-                                <th class="px-4 py-3 text-left">
-                                    <input
-                                        type="checkbox"
-                                        onchange="selecionarTodosSimulacao(this.checked)"
-                                    >
+                                <th class="px-4 py-3">
+                                    #
                                 </th>
 
                                 <th class="px-4 py-3 text-left">
@@ -1377,11 +1374,11 @@
                                 </th>
 
                                 <th class="px-4 py-3 text-right">
-                                    Preço atual
+                                    Atual
                                 </th>
 
                                 <th class="px-4 py-3 text-right">
-                                    Novo preço
+                                    Novo
                                 </th>
 
                                 <th class="px-4 py-3 text-right">
@@ -1401,7 +1398,9 @@
                         </thead>
 
 
-                        <tbody id="tabela-simulacao"></tbody>
+                        <tbody
+                            id="tabela-simulacao"
+                        ></tbody>
 
                     </table>
 
@@ -1419,82 +1418,65 @@
             class="hidden"
         >
 
-            <div class="mb-6">
+            <div
+                class="flex
+                       justify-between
+                       items-center
+                       mb-6"
+            >
 
-                <h2
-                    class="text-3xl font-black
-                           text-slate-900"
+                <div>
+
+                    <h2
+                        class="text-3xl
+                               font-black"
+                    >
+                        Atualização de Preço
+                    </h2>
+
+                    <p
+                        class="text-slate-500"
+                    >
+                        Atualize os preços selecionados.
+                    </p>
+
+                </div>
+
+
+                <button
+                    onclick="aplicarAtualizacaoEmMassa()"
+                    class="bg-green-600
+                           text-white
+                           px-5 py-3
+                           rounded-xl
+                           font-black"
                 >
-                    Atualização de Preço
-                </h2>
-
-                <p class="text-slate-500 mt-1">
-                    Atualize os preços selecionados.
-                </p>
+                    Aplicar selecionados
+                </button>
 
             </div>
 
 
             <div
-                class="bg-white rounded-2xl
-                       border border-slate-200
-                       shadow-sm overflow-hidden"
+                class="bg-white
+                       rounded-2xl
+                       border
+                       border-slate-200
+                       overflow-hidden"
             >
-
-                <div
-                    class="p-5 border-b
-                           border-slate-200
-                           flex flex-col
-                           md:flex-row
-                           md:items-center
-                           justify-between
-                           gap-4"
-                >
-
-                    <div>
-
-                        <h3 class="font-black">
-                            Atualização em massa
-                        </h3>
-
-                        <p class="text-sm text-slate-500">
-                            Confira os valores antes de aplicar.
-                        </p>
-
-                    </div>
-
-
-                    <button
-                        onclick="aplicarAtualizacaoEmMassa()"
-                        class="bg-green-600
-                               hover:bg-green-700
-                               text-white px-5 py-3
-                               rounded-xl
-                               font-black"
-                    >
-                        Aplicar preços selecionados
-                    </button>
-
-                </div>
-
 
                 <div class="table-scroll">
 
                     <table class="w-full text-sm">
 
                         <thead
-                            class="bg-slate-50
-                                   border-b
-                                   border-slate-200"
+                            class="bg-slate-50"
                         >
 
                             <tr>
 
-                                <th class="px-4 py-3 text-left">
-                                    <input
-                                        type="checkbox"
-                                        onchange="selecionarTodosAtualizacao(this.checked)"
-                                    >
+                                <th class="px-4 py-3">
+                                    #
                                 </th>
 
                                 <th class="px-4 py-3 text-left">
@@ -1502,15 +1484,11 @@
                                 </th>
 
                                 <th class="px-4 py-3 text-right">
-                                    Preço atual
+                                    Atual
                                 </th>
 
                                 <th class="px-4 py-3 text-right">
-                                    Novo preço
-                                </th>
-
-                                <th class="px-4 py-3 text-left">
-                                    Status
+                                    Novo
                                 </th>
 
                             </tr>
@@ -1537,111 +1515,32 @@
 
     <div
         id="loading"
-        class="hidden fixed inset-0
-               bg-slate-900/50 z-50
-               flex items-center
+        class="hidden
+               fixed inset-0
+               bg-black/50
+               z-50
+               items-center
                justify-center"
     >
 
         <div
-            class="bg-white rounded-2xl
-                   p-8 shadow-2xl text-center"
+            class="bg-white
+                   rounded-2xl
+                   p-8
+                   text-center"
         >
 
             <div
-                class="loading-spinner mx-auto"
+                class="loading-spinner
+                       mx-auto"
             ></div>
 
-            <p
+            <div
                 id="loading-text"
                 class="font-bold
-                       text-slate-700 mt-5"
+                       mt-4"
             >
                 Carregando...
-            </p>
-
-        </div>
-
-    </div>
-
-
-    <!-- CONFIGURAÇÃO -->
-
-    <div
-        id="modal-config"
-        class="hidden fixed inset-0
-               bg-slate-900/60 z-50
-               flex items-center
-               justify-center p-5"
-    >
-
-        <div
-            class="bg-white rounded-3xl
-                   shadow-2xl w-full
-                   max-w-lg p-7"
-        >
-
-            <div
-                class="flex items-center
-                       justify-between mb-6"
-            >
-
-                <div>
-
-                    <h3 class="text-2xl font-black">
-                        Configuração
-                    </h3>
-
-                    <p class="text-sm text-slate-500">
-                        Status da conexão.
-                    </p>
-
-                </div>
-
-
-                <button
-                    onclick="fecharConfiguracao()"
-                    class="w-10 h-10 rounded-xl
-                           bg-slate-100
-                           hover:bg-slate-200
-                           font-bold"
-                >
-                    ×
-                </button>
-
-            </div>
-
-
-            <div
-                id="status-config"
-                class="space-y-3"
-            ></div>
-
-
-            <div
-                class="mt-7 flex
-                       justify-end gap-3"
-            >
-
-                <button
-                    onclick="fecharConfiguracao()"
-                    class="px-5 py-3 rounded-xl
-                           border border-slate-200
-                           font-bold"
-                >
-                    Fechar
-                </button>
-
-
-                <button
-                    onclick="desconectarConta()"
-                    class="px-5 py-3 rounded-xl
-                           bg-red-600
-                           text-white font-bold"
-                >
-                    Desconectar
-                </button>
-
             </div>
 
         </div>
@@ -1654,46 +1553,30 @@
 <script>
 
 /* =========================================================
-   CONFIGURAÇÃO
-   ========================================================= */
+   CONFIG
+========================================================= */
 
-const API_BASE =
-    window.location.protocol === "file:"
-        ? "https://site-atualizar-pre-o-ml.onrender.com"
-        : "";
+const SITE =
+    window.location.origin;
 
 
-const DEFAULT_REDIRECT_URI =
-    "https://site-atualizar-pre-o-ml.onrender.com/auth/callback";
+const CALLBACK =
+    SITE +
+    "/auth/callback";
 
 
 let anuncios = [];
 
 let anunciosFiltrados = [];
 
-let usuarioLogado = false;
-
 
 /* =========================================================
    HELPERS
-   ========================================================= */
+========================================================= */
 
-function apiUrl(path) {
+function escapeHtml(value) {
 
-    if (
-        path.startsWith("http://") ||
-        path.startsWith("https://")
-    ) {
-        return path;
-    }
-
-    return API_BASE + path;
-}
-
-
-function escapeHtml(valor) {
-
-    return String(valor ?? "")
+    return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -1702,9 +1585,21 @@ function escapeHtml(valor) {
 }
 
 
-/* =========================================================
-   NAVEGAÇÃO
-   ========================================================= */
+function moeda(value) {
+
+    const n =
+        Number(value) || 0;
+
+
+    return n.toLocaleString(
+        "pt-BR",
+        {
+            style: "currency",
+            currency: "BRL"
+        }
+    );
+}
+
 
 function mostrarPagina(id) {
 
@@ -1713,25 +1608,24 @@ function mostrarPagina(id) {
             "#pagina-inicial, #pagina-login, #pagina-dashboard"
         )
         .forEach(
-            elemento =>
-                elemento.classList.add(
+            el =>
+                el.classList.add(
                     "hidden-page"
                 )
         );
 
 
-    const pagina =
-        document.getElementById(id);
-
-
-    if (pagina) {
-
-        pagina.classList.remove(
+    document
+        .getElementById(id)
+        .classList.remove(
             "hidden-page"
         );
-    }
 }
 
+
+/* =========================================================
+   NAVEGAÇÃO
+========================================================= */
 
 function abrirLogin() {
 
@@ -1739,7 +1633,26 @@ function abrirLogin() {
         "pagina-login"
     );
 
-    carregarConfiguracaoLocal();
+
+    document.getElementById(
+        "redirect-uri"
+    ).value =
+        CALLBACK;
+
+
+    const clientId =
+        localStorage.getItem(
+            "ml_client_id"
+        );
+
+
+    if (clientId) {
+
+        document.getElementById(
+            "client-id"
+        ).value =
+            clientId;
+    }
 }
 
 
@@ -1751,60 +1664,9 @@ function voltarInicio() {
 }
 
 
-function mostrarInformacoes() {
-
-    alert(
-        "ML Hub Pro\n\n" +
-        "Sistema de gestão de anúncios " +
-        "do Mercado Livre.\n\n" +
-        "A conexão OAuth permite que o sistema " +
-        "renove o acesso automaticamente."
-    );
-}
-
-
 /* =========================================================
-   CONFIGURAÇÃO LOCAL
-   ========================================================= */
-
-function carregarConfiguracaoLocal() {
-
-    const clientId =
-        localStorage.getItem(
-            "ml_client_id"
-        );
-
-
-    let redirectUri =
-        localStorage.getItem(
-            "ml_redirect_uri"
-        );
-
-
-    if (!redirectUri) {
-
-        redirectUri =
-            DEFAULT_REDIRECT_URI;
-    }
-
-
-    if (clientId) {
-
-        document.getElementById(
-            "client-id"
-        ).value = clientId;
-    }
-
-
-    document.getElementById(
-        "redirect-uri"
-    ).value = redirectUri;
-}
-
-
-/* =========================================================
-   OAUTH
-   ========================================================= */
+   INICIAR OAUTH
+========================================================= */
 
 async function iniciarOAuth(event) {
 
@@ -1852,9 +1714,6 @@ async function iniciarOAuth(event) {
     );
 
 
-    erro.textContent = "";
-
-
     if (
         !clientId ||
         !clientSecret ||
@@ -1862,13 +1721,28 @@ async function iniciarOAuth(event) {
     ) {
 
         erro.textContent =
-            "Preencha Client ID, Client Secret e URL de retorno.";
-
+            "Preencha todos os campos obrigatórios.";
 
         erro.classList.remove(
             "hidden"
         );
 
+        return;
+    }
+
+
+    if (
+        redirectUri !==
+        CALLBACK
+    ) {
+
+        erro.textContent =
+            "A URL de retorno deve ser exatamente: " +
+            CALLBACK;
+
+        erro.classList.remove(
+            "hidden"
+        );
 
         return;
     }
@@ -1880,12 +1754,6 @@ async function iniciarOAuth(event) {
     );
 
 
-    localStorage.setItem(
-        "ml_redirect_uri",
-        redirectUri
-    );
-
-
     botao.disabled = true;
 
     botao.textContent =
@@ -1894,11 +1762,16 @@ async function iniciarOAuth(event) {
 
     try {
 
+        /*
+         * POST somente para o nosso backend.
+         *
+         * O Client Secret não vai para o Mercado Livre
+         * pelo navegador. O backend monta a URL OAuth.
+         */
+
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/auth/start"
-                ),
+                "/api/auth/start",
                 {
                     method: "POST",
 
@@ -1906,8 +1779,6 @@ async function iniciarOAuth(event) {
                         "Content-Type":
                             "application/json"
                     },
-
-                    credentials: "include",
 
                     body:
                         JSON.stringify({
@@ -1937,11 +1808,9 @@ async function iniciarOAuth(event) {
         try {
 
             dados =
-                texto
-                    ? JSON.parse(texto)
-                    : {};
+                JSON.parse(texto);
 
-        } catch (erroJson) {
+        } catch {
 
             dados = {
                 erro:
@@ -1951,11 +1820,13 @@ async function iniciarOAuth(event) {
         }
 
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
             throw new Error(
                 dados.erro ||
-                "O servidor recusou a conexão."
+                "Erro iniciando conexão."
             );
         }
 
@@ -1963,6 +1834,12 @@ async function iniciarOAuth(event) {
         if (
             dados.auth_url
         ) {
+
+            /*
+             * Navegação normal, sem fetch.
+             * Isso também evita problemas de CORS
+             * durante a ida ao Mercado Livre.
+             */
 
             window.location.href =
                 dados.auth_url;
@@ -1972,59 +1849,33 @@ async function iniciarOAuth(event) {
 
 
         if (
-            dados.sucesso &&
-            dados.autenticado
+            dados.sucesso
         ) {
-
-            usuarioLogado =
-                true;
-
 
             mostrarPagina(
                 "pagina-dashboard"
             );
 
-
             carregarDados();
-
 
             return;
         }
 
 
         throw new Error(
-            "O servidor não retornou uma URL de autorização."
+            "O servidor não retornou a autorização do Mercado Livre."
         );
 
     } catch (erroInterno) {
 
         console.error(
-            "Falha na conexão:",
             erroInterno
         );
 
 
-        let mensagem =
-            erroInterno.message ||
-            "Falha ao conectar.";
-
-
-        if (
-            mensagem ===
-            "Failed to fetch"
-        ) {
-
-            mensagem =
-                "Não foi possível acessar o servidor. " +
-                "Confirme se o serviço do Render está online " +
-                "e se o index.html está sendo servido pelo mesmo endereço.";
-
-        }
-
-
         erro.textContent =
-            mensagem;
-
+            erroInterno.message ||
+            "Não foi possível iniciar a conexão.";
 
         erro.classList.remove(
             "hidden"
@@ -2042,8 +1893,8 @@ async function iniciarOAuth(event) {
 
 
 /* =========================================================
-   VERIFICAR LOGIN
-   ========================================================= */
+   STATUS
+========================================================= */
 
 async function verificarLogin() {
 
@@ -2051,20 +1902,8 @@ async function verificarLogin() {
 
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/auth/status"
-                ),
-                {
-                    credentials:
-                        "include"
-                }
+                "/api/auth/status"
             );
-
-
-        if (!resposta.ok) {
-
-            return;
-        }
 
 
         const dados =
@@ -2074,10 +1913,6 @@ async function verificarLogin() {
         if (
             dados.autenticado
         ) {
-
-            usuarioLogado =
-                true;
-
 
             mostrarPagina(
                 "pagina-dashboard"
@@ -2093,13 +1928,7 @@ async function verificarLogin() {
             );
         }
 
-    } catch (erro) {
-
-        console.error(
-            "Erro verificando autenticação:",
-            erro
-        );
-
+    } catch {
 
         mostrarPagina(
             "pagina-inicial"
@@ -2110,43 +1939,25 @@ async function verificarLogin() {
 
 /* =========================================================
    LOGOUT
-   ========================================================= */
+========================================================= */
 
 async function logout() {
 
     try {
 
         await fetch(
-            apiUrl(
-                "/api/auth/logout"
-            ),
+            "/api/auth/logout",
             {
-                method: "POST",
-
-                credentials:
-                    "include"
+                method:
+                    "POST"
             }
         );
 
-    } catch (erro) {
+    } catch {}
 
-        console.error(
-            erro
-        );
-    }
+    anuncios = [];
 
-
-    usuarioLogado =
-        false;
-
-
-    anuncios =
-        [];
-
-
-    anunciosFiltrados =
-        [];
-
+    anunciosFiltrados = [];
 
     mostrarPagina(
         "pagina-inicial"
@@ -2155,12 +1966,60 @@ async function logout() {
 
 
 /* =========================================================
-   CARREGAR DADOS
-   ========================================================= */
+   LOADING
+========================================================= */
+
+function loading(texto) {
+
+    document.getElementById(
+        "loading-text"
+    ).textContent =
+        texto;
+
+
+    const el =
+        document.getElementById(
+            "loading"
+        );
+
+
+    el.classList.remove(
+        "hidden"
+    );
+
+
+    el.classList.add(
+        "flex"
+    );
+}
+
+
+function stopLoading() {
+
+    const el =
+        document.getElementById(
+            "loading"
+        );
+
+
+    el.classList.add(
+        "hidden"
+    );
+
+
+    el.classList.remove(
+        "flex"
+    );
+}
+
+
+/* =========================================================
+   ANÚNCIOS
+========================================================= */
 
 async function carregarDados() {
 
-    mostrarLoading(
+    loading(
         "Carregando anúncios..."
     );
 
@@ -2169,37 +2028,12 @@ async function carregarDados() {
 
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/anuncios"
-                ),
-                {
-                    credentials:
-                        "include"
-                }
+                "/api/anuncios"
             );
 
 
-        const texto =
-            await resposta.text();
-
-
-        let dados = {};
-
-
-        try {
-
-            dados =
-                texto
-                    ? JSON.parse(texto)
-                    : {};
-
-        } catch (erroJson) {
-
-            throw new Error(
-                texto ||
-                "Resposta inválida do servidor."
-            );
-        }
+        const dados =
+            await resposta.json();
 
 
         if (
@@ -2211,19 +2045,20 @@ async function carregarDados() {
                 "pagina-login"
             );
 
-
             throw new Error(
                 dados.erro ||
-                "Sua conexão precisa ser autorizada novamente."
+                "Faça a conexão novamente."
             );
         }
 
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
             throw new Error(
                 dados.erro ||
-                "Erro ao carregar anúncios."
+                "Erro carregando anúncios."
             );
         }
 
@@ -2240,7 +2075,7 @@ async function carregarDados() {
             [...anuncios];
 
 
-        renderizarTudo();
+        renderizar();
 
     } catch (erro) {
 
@@ -2250,20 +2085,171 @@ async function carregarDados() {
 
 
         alert(
-            erro.message ||
-            "Erro ao carregar os anúncios."
+            erro.message
         );
 
     } finally {
 
-        esconderLoading();
+        stopLoading();
     }
 }
 
 
 /* =========================================================
+   RENDER
+========================================================= */
+
+function renderizar() {
+
+    document.getElementById(
+        "card-total"
+    ).textContent =
+        anuncios.length;
+
+
+    document.getElementById(
+        "card-ativos"
+    ).textContent =
+        anuncios.filter(
+            item =>
+                String(
+                    item.status
+                ).toLowerCase() ===
+                "active"
+        ).length;
+
+
+    document.getElementById(
+        "card-outros"
+    ).textContent =
+        anuncios.filter(
+            item =>
+                String(
+                    item.status
+                ).toLowerCase() !==
+                "active"
+        ).length;
+
+
+    document.getElementById(
+        "contador-itens"
+    ).textContent =
+        anunciosFiltrados.length +
+        " anúncio(s)";
+
+
+    renderizarAnuncios();
+
+    renderizarSimulacao();
+
+    renderizarAtualizacao();
+}
+
+
+function renderizarAnuncios() {
+
+    const tbody =
+        document.getElementById(
+            "tabela-anuncios"
+        );
+
+
+    if (
+        !anunciosFiltrados.length
+    ) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td
+                    colspan="8"
+                    class="text-center
+                           px-4 py-12
+                           text-slate-400"
+                >
+                    Nenhum anúncio encontrado.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    tbody.innerHTML =
+        anunciosFiltrados
+            .map(
+                item => {
+
+                    const status =
+                        String(
+                            item.status ||
+                            "—"
+                        );
+
+
+                    return `
+                        <tr
+                            class="border-b
+                                   border-slate-100
+                                   hover:bg-slate-50"
+                        >
+
+                            <td class="px-4 py-4 font-mono text-xs">
+                                ${escapeHtml(item.id)}
+                            </td>
+
+                            <td class="px-4 py-4 font-bold">
+                                ${escapeHtml(item.titulo)}
+                            </td>
+
+                            <td class="px-4 py-4 font-mono text-xs">
+                                ${escapeHtml(item.sku || "—")}
+                            </td>
+
+                            <td class="px-4 py-4">
+                                <span
+                                    class="px-2 py-1
+                                           rounded-full
+                                           bg-slate-100
+                                           text-xs
+                                           font-bold"
+                                >
+                                    ${escapeHtml(status)}
+                                </span>
+                            </td>
+
+                            <td class="px-4 py-4 text-right font-bold">
+                                ${moeda(item.preco)}
+                            </td>
+
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(item.comissao)}
+                            </td>
+
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(item.frete)}
+                            </td>
+
+                            <td
+                                class="px-4 py-4
+                                       text-right
+                                       font-black
+                                       text-green-600"
+                            >
+                                ${moeda(item.liquido)}
+                            </td>
+
+                        </tr>
+                    `;
+                }
+            )
+            .join("");
+}
+
+
+/* =========================================================
    BUSCA
-   ========================================================= */
+========================================================= */
 
 function executarBusca(event) {
 
@@ -2292,19 +2278,22 @@ function executarBusca(event) {
 
                     const titulo =
                         String(
-                            item.titulo || ""
+                            item.titulo ||
+                            ""
                         ).toLowerCase();
 
 
                     const sku =
                         String(
-                            item.sku || ""
+                            item.sku ||
+                            ""
                         ).toLowerCase();
 
 
                     const id =
                         String(
-                            item.id || ""
+                            item.id ||
+                            ""
                         ).toLowerCase();
 
 
@@ -2318,279 +2307,15 @@ function executarBusca(event) {
     }
 
 
-    renderizarTudo();
-}
-
-
-/* =========================================================
-   RENDERIZAÇÃO
-   ========================================================= */
-
-function renderizarTudo() {
-
-    atualizarCards();
-
-    renderizarTabelaAnuncios();
-
-    renderizarTabelaSimulacao();
-
-    renderizarTabelaAtualizacao();
-}
-
-
-function atualizarCards() {
-
-    const total =
-        anuncios.length;
-
-
-    const ativos =
-        anuncios.filter(
-            item =>
-                String(
-                    item.status || ""
-                ).toLowerCase() ===
-                "active"
-        ).length;
-
-
-    const outros =
-        total - ativos;
-
-
-    document.getElementById(
-        "card-total"
-    ).textContent =
-        total;
-
-
-    document.getElementById(
-        "card-ativos"
-    ).textContent =
-        ativos;
-
-
-    document.getElementById(
-        "card-outros"
-    ).textContent =
-        outros;
-
-
-    document.getElementById(
-        "contador-itens"
-    ).textContent =
-        anunciosFiltrados.length +
-        " anúncio(s) exibido(s)";
-}
-
-
-function formatarMoeda(valor) {
-
-    const numero =
-        Number(valor);
-
-
-    if (
-        !Number.isFinite(numero)
-    ) {
-
-        return "R$ 0,00";
-    }
-
-
-    return numero.toLocaleString(
-        "pt-BR",
-        {
-            style:
-                "currency",
-
-            currency:
-                "BRL"
-        }
-    );
-}
-
-
-function renderizarTabelaAnuncios() {
-
-    const tbody =
-        document.getElementById(
-            "tabela-anuncios"
-        );
-
-
-    if (
-        !anunciosFiltrados.length
-    ) {
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8"
-                    class="px-4 py-12
-                           text-center
-                           text-slate-400">
-                    Nenhum anúncio encontrado.
-                </td>
-            </tr>
-        `;
-
-        return;
-    }
-
-
-    tbody.innerHTML =
-        anunciosFiltrados
-            .map(
-                item => {
-
-                    const status =
-                        String(
-                            item.status ||
-                            "—"
-                        );
-
-
-                    const statusNormalizado =
-                        status.toLowerCase();
-
-
-                    let statusClass =
-                        "bg-slate-100 text-slate-700";
-
-
-                    if (
-                        statusNormalizado ===
-                        "active"
-                    ) {
-
-                        statusClass =
-                            "bg-green-100 text-green-700";
-
-                    } else if (
-                        statusNormalizado ===
-                        "paused"
-                    ) {
-
-                        statusClass =
-                            "bg-yellow-100 text-yellow-700";
-
-                    } else if (
-                        statusNormalizado ===
-                        "closed"
-                    ) {
-
-                        statusClass =
-                            "bg-red-100 text-red-700";
-                    }
-
-
-                    return `
-                        <tr
-                            class="border-b
-                                   border-slate-100
-                                   hover:bg-slate-50"
-                        >
-
-                            <td class="px-4 py-4
-                                       font-mono text-xs">
-                                ${escapeHtml(item.id || "—")}
-                            </td>
-
-
-                            <td class="px-4 py-4">
-
-                                <div
-                                    class="font-bold
-                                           text-slate-800"
-                                >
-                                    ${escapeHtml(
-                                        item.titulo ||
-                                        "Sem título"
-                                    )}
-                                </div>
-
-                            </td>
-
-
-                            <td
-                                class="px-4 py-4
-                                       font-mono text-xs"
-                            >
-                                ${escapeHtml(
-                                    item.sku || "—"
-                                )}
-                            </td>
-
-
-                            <td class="px-4 py-4">
-
-                                <span
-                                    class="px-2.5 py-1
-                                           rounded-full
-                                           text-xs
-                                           font-bold
-                                           ${statusClass}"
-                                >
-                                    ${escapeHtml(status)}
-                                </span>
-
-                            </td>
-
-
-                            <td
-                                class="px-4 py-4
-                                       text-right font-bold"
-                            >
-                                ${formatarMoeda(
-                                    item.preco
-                                )}
-                            </td>
-
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(
-                                    item.comissao
-                                )}
-                            </td>
-
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(
-                                    item.frete
-                                )}
-                            </td>
-
-
-                            <td
-                                class="px-4 py-4
-                                       text-right
-                                       font-black
-                                       text-green-600"
-                            >
-                                ${formatarMoeda(
-                                    item.liquido
-                                )}
-                            </td>
-
-                        </tr>
-                    `;
-                }
-            )
-            .join("");
+    renderizar();
 }
 
 
 /* =========================================================
    SIMULAÇÃO
-   ========================================================= */
+========================================================= */
 
-function renderizarTabelaSimulacao() {
+function renderizarSimulacao() {
 
     const tbody =
         document.getElementById(
@@ -2598,126 +2323,81 @@ function renderizarTabelaSimulacao() {
         );
 
 
-    if (
-        !anunciosFiltrados.length
-    ) {
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7"
-                    class="px-4 py-12
-                           text-center
-                           text-slate-400">
-                    Nenhum anúncio carregado.
-                </td>
-            </tr>
-        `;
-
-        return;
-    }
-
-
     tbody.innerHTML =
         anunciosFiltrados
             .map(
                 (item, index) => {
 
-                    const preco =
+                    const atual =
                         Number(
                             item.preco
                         ) || 0;
 
 
-                    const novoPreco =
+                    const novo =
                         Number(
-                            item.novoPreco
-                        ) ||
-                        preco;
+                            item.novoPreco ??
+                            atual
+                        );
 
 
                     return `
-                        <tr
-                            class="border-b
-                                   border-slate-100"
-                        >
+                        <tr class="border-b">
 
                             <td class="px-4 py-4">
-
                                 <input
                                     type="checkbox"
                                     class="check-simulacao"
                                     data-index="${index}"
                                 >
-
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       font-bold"
-                            >
-                                ${escapeHtml(
-                                    item.titulo ||
-                                    "Sem título"
-                                )}
+                            <td class="px-4 py-4 font-bold">
+                                ${escapeHtml(item.titulo)}
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(preco)}
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(atual)}
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
+                            <td class="px-4 py-4 text-right">
 
                                 <input
                                     type="number"
                                     step="0.01"
-                                    value="${novoPreco.toFixed(2)}"
-                                    onchange="alterarNovoPreco(${index}, this.value)"
-                                    class="w-32 border
-                                           border-slate-300
-                                           rounded-lg px-3 py-2
+                                    value="${novo.toFixed(2)}"
+                                    onchange="
+                                        alterarNovoPreco(
+                                            ${index},
+                                            this.value
+                                        )
+                                    "
+                                    class="w-32
+                                           border
+                                           rounded-lg
+                                           px-3 py-2
                                            text-right"
                                 >
 
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(
-                                    item.comissao
-                                )}
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(item.comissao)}
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(
-                                    item.frete
-                                )}
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(item.frete)}
                             </td>
-
 
                             <td
                                 class="px-4 py-4
                                        text-right
-                                       font-black
-                                       text-green-600"
+                                       font-black"
                             >
-                                ${formatarMoeda(
-                                    calcularLiquido(item)
+                                ${moeda(
+                                    calcularLiquido(
+                                        item
+                                    )
                                 )}
                             </td>
 
@@ -2734,24 +2414,23 @@ function alterarNovoPreco(
     valor
 ) {
 
-    const numero =
-        Number(valor);
+    anunciosFiltrados[
+        index
+    ].novoPreco =
+        Number(
+            valor
+        ) || 0;
 
 
-    anunciosFiltrados[index]
-        .novoPreco =
-            Number.isFinite(numero)
-                ? numero
-                : anunciosFiltrados[index].preco;
+    renderizarSimulacao();
 
-
-    renderizarTabelaSimulacao();
-
-    renderizarTabelaAtualizacao();
+    renderizarAtualizacao();
 }
 
 
-function calcularLiquido(item) {
+function calcularLiquido(
+    item
+) {
 
     const preco =
         Number(
@@ -2801,31 +2480,30 @@ function calcularSimulacao() {
     anunciosFiltrados.forEach(
         item => {
 
-            let novoPreco =
+            let novo =
                 Number(
                     item.preco
                 ) || 0;
 
 
             if (
-                percentual !== 0
+                percentual
             ) {
 
-                novoPreco =
-                    novoPreco *
-                    (
-                        1 +
-                        percentual /
-                        100
-                    );
+                novo *=
+                    1 +
+                    percentual /
+                    100;
             }
 
 
             if (
-                Number.isFinite(valor)
+                Number.isFinite(
+                    valor
+                )
             ) {
 
-                novoPreco +=
+                novo +=
                     valor;
             }
 
@@ -2833,39 +2511,23 @@ function calcularSimulacao() {
             item.novoPreco =
                 Math.max(
                     0,
-                    novoPreco
+                    novo
                 );
         }
     );
 
 
-    renderizarTabelaSimulacao();
+    renderizarSimulacao();
 
-    renderizarTabelaAtualizacao();
-}
-
-
-function selecionarTodosSimulacao(
-    marcado
-) {
-
-    document
-        .querySelectorAll(
-            ".check-simulacao"
-        )
-        .forEach(
-            check =>
-                check.checked =
-                    marcado
-        );
+    renderizarAtualizacao();
 }
 
 
 /* =========================================================
    ATUALIZAÇÃO
-   ========================================================= */
+========================================================= */
 
-function renderizarTabelaAtualizacao() {
+function renderizarAtualizacao() {
 
     const tbody =
         document.getElementById(
@@ -2873,102 +2535,50 @@ function renderizarTabelaAtualizacao() {
         );
 
 
-    if (
-        !anunciosFiltrados.length
-    ) {
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5"
-                    class="px-4 py-12
-                           text-center
-                           text-slate-400">
-                    Nenhum anúncio carregado.
-                </td>
-            </tr>
-        `;
-
-        return;
-    }
-
-
     tbody.innerHTML =
         anunciosFiltrados
             .map(
                 (item, index) => {
 
-                    const precoAtual =
+                    const atual =
                         Number(
                             item.preco
                         ) || 0;
 
 
-                    const novoPreco =
+                    const novo =
                         Number(
-                            item.novoPreco
-                        ) ||
-                        precoAtual;
+                            item.novoPreco ??
+                            atual
+                        );
 
 
                     return `
-                        <tr
-                            class="border-b
-                                   border-slate-100"
-                        >
+                        <tr class="border-b">
 
                             <td class="px-4 py-4">
-
                                 <input
                                     type="checkbox"
                                     class="check-atualizacao"
                                     data-index="${index}"
                                 >
-
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       font-bold"
-                            >
-                                ${escapeHtml(
-                                    item.titulo ||
-                                    "Sem título"
-                                )}
+                            <td class="px-4 py-4 font-bold">
+                                ${escapeHtml(item.titulo)}
                             </td>
 
-
-                            <td
-                                class="px-4 py-4
-                                       text-right"
-                            >
-                                ${formatarMoeda(
-                                    precoAtual
-                                )}
+                            <td class="px-4 py-4 text-right">
+                                ${moeda(atual)}
                             </td>
-
 
                             <td
                                 class="px-4 py-4
                                        text-right
-                                       font-black"
+                                       font-black
+                                       text-green-600"
                             >
-                                ${formatarMoeda(
-                                    novoPreco
-                                )}
-                            </td>
-
-
-                            <td class="px-4 py-4">
-
-                                <span
-                                    class="text-xs
-                                           font-bold
-                                           text-slate-500"
-                                >
-                                    Aguardando
-                                </span>
-
+                                ${moeda(novo)}
                             </td>
 
                         </tr>
@@ -2979,25 +2589,9 @@ function renderizarTabelaAtualizacao() {
 }
 
 
-function selecionarTodosAtualizacao(
-    marcado
-) {
-
-    document
-        .querySelectorAll(
-            ".check-atualizacao"
-        )
-        .forEach(
-            check =>
-                check.checked =
-                    marcado
-        );
-}
-
-
 async function aplicarAtualizacaoEmMassa() {
 
-    const selecionados = [];
+    const itens = [];
 
 
     document
@@ -3005,11 +2599,11 @@ async function aplicarAtualizacaoEmMassa() {
             ".check-atualizacao:checked"
         )
         .forEach(
-            check => {
+            checkbox => {
 
                 const index =
                     Number(
-                        check.dataset.index
+                        checkbox.dataset.index
                     );
 
 
@@ -3019,46 +2613,38 @@ async function aplicarAtualizacaoEmMassa() {
                     ];
 
 
-                if (!item) {
-                    return;
-                }
-
-
-                const novoPreco =
+                const preco =
                     Number(
-                        item.novoPreco
+                        item.novoPreco ??
+                        item.preco
                     );
 
 
                 if (
-                    !Number.isFinite(
-                        novoPreco
-                    ) ||
-                    novoPreco <= 0
+                    item &&
+                    preco > 0
                 ) {
 
-                    return;
+                    itens.push({
+
+                        id:
+                            item.id,
+
+                        preco:
+                            preco
+
+                    });
                 }
-
-
-                selecionados.push({
-                    id:
-                        item.id,
-
-                    preco:
-                        novoPreco
-                });
-
             }
         );
 
 
     if (
-        !selecionados.length
+        !itens.length
     ) {
 
         alert(
-            "Selecione pelo menos um anúncio com preço válido."
+            "Selecione pelo menos um anúncio."
         );
 
         return;
@@ -3067,8 +2653,8 @@ async function aplicarAtualizacaoEmMassa() {
 
     if (
         !confirm(
-            "Deseja realmente atualizar " +
-            selecionados.length +
+            "Atualizar " +
+            itens.length +
             " anúncio(s)?"
         )
     ) {
@@ -3077,7 +2663,7 @@ async function aplicarAtualizacaoEmMassa() {
     }
 
 
-    mostrarLoading(
+    loading(
         "Atualizando preços..."
     );
 
@@ -3086,15 +2672,11 @@ async function aplicarAtualizacaoEmMassa() {
 
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/atualizar-precos"
-                ),
+                "/api/atualizar-precos",
                 {
+
                     method:
                         "POST",
-
-                    credentials:
-                        "include",
 
                     headers: {
                         "Content-Type":
@@ -3103,9 +2685,9 @@ async function aplicarAtualizacaoEmMassa() {
 
                     body:
                         JSON.stringify({
-                            itens:
-                                selecionados
+                            itens
                         })
+
                 }
             );
 
@@ -3114,43 +2696,32 @@ async function aplicarAtualizacaoEmMassa() {
             await resposta.json();
 
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
             throw new Error(
                 dados.erro ||
-                "Erro ao atualizar preços."
+                "Erro atualizando preços."
             );
         }
 
 
         const resultados =
-            Array.isArray(
-                dados.resultados
-            )
-                ? dados.resultados
-                : [];
+            dados.resultados ||
+            [];
 
 
-        let sucesso = 0;
+        const sucesso =
+            resultados.filter(
+                x =>
+                    x.sucesso
+            ).length;
 
-        let falhas = 0;
 
-
-        resultados.forEach(
-            resultado => {
-
-                if (
-                    resultado.sucesso
-                ) {
-
-                    sucesso++;
-
-                } else {
-
-                    falhas++;
-                }
-            }
-        );
+        const falhas =
+            resultados.length -
+            sucesso;
 
 
         alert(
@@ -3164,28 +2735,22 @@ async function aplicarAtualizacaoEmMassa() {
 
         await carregarDados();
 
-
-        trocarAba(
-            "gestao"
-        );
-
     } catch (erro) {
 
         alert(
-            erro.message ||
-            "Erro ao atualizar preços."
+            erro.message
         );
 
     } finally {
 
-        esconderLoading();
+        stopLoading();
     }
 }
 
 
 /* =========================================================
-   SINCRONIZAR PREÇOS
-   ========================================================= */
+   SINCRONIZAÇÃO
+========================================================= */
 
 async function sincronizarPrecosApi() {
 
@@ -3193,39 +2758,24 @@ async function sincronizarPrecosApi() {
         !anuncios.length
     ) {
 
-        alert(
-            "Carregue os anúncios primeiro."
-        );
-
-        return;
+        await carregarDados();
     }
 
 
-    mostrarLoading(
+    loading(
         "Sincronizando preços..."
     );
 
 
     try {
 
-        const ids =
-            anuncios.map(
-                item =>
-                    item.id
-            );
-
-
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/sincronizar-precos"
-                ),
+                "/api/sincronizar-precos",
                 {
+
                     method:
                         "POST",
-
-                    credentials:
-                        "include",
 
                     headers: {
                         "Content-Type":
@@ -3234,8 +2784,13 @@ async function sincronizarPrecosApi() {
 
                     body:
                         JSON.stringify({
-                            ids
+                            ids:
+                                anuncios.map(
+                                    x =>
+                                        x.id
+                                )
                         })
+
                 }
             );
 
@@ -3244,33 +2799,35 @@ async function sincronizarPrecosApi() {
             await resposta.json();
 
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
             throw new Error(
-                dados.erro ||
-                "Erro ao sincronizar preços."
+                dados.erro
             );
         }
 
 
-        const precos =
+        Object.entries(
             dados.precos ||
-            {};
+            {}
+        ).forEach(
+            ([id, preco]) => {
+
+                const item =
+                    anuncios.find(
+                        x =>
+                            String(x.id) ===
+                            String(id)
+                    );
 
 
-        anuncios.forEach(
-            item => {
-
-                if (
-                    Object.prototype.hasOwnProperty.call(
-                        precos,
-                        item.id
-                    )
-                ) {
+                if (item) {
 
                     item.preco =
                         Number(
-                            precos[item.id]
+                            preco
                         );
                 }
             }
@@ -3281,30 +2838,20 @@ async function sincronizarPrecosApi() {
             [...anuncios];
 
 
-        renderizarTudo();
-
-
-        alert(
-            "Preços sincronizados com sucesso."
-        );
+        renderizar();
 
     } catch (erro) {
 
         alert(
-            erro.message ||
-            "Erro na sincronização."
+            erro.message
         );
 
     } finally {
 
-        esconderLoading();
+        stopLoading();
     }
 }
 
-
-/* =========================================================
-   SINCRONIZAR FRETES
-   ========================================================= */
 
 async function sincronizarFretesApi() {
 
@@ -3312,39 +2859,24 @@ async function sincronizarFretesApi() {
         !anuncios.length
     ) {
 
-        alert(
-            "Carregue os anúncios primeiro."
-        );
-
-        return;
+        await carregarDados();
     }
 
 
-    mostrarLoading(
+    loading(
         "Sincronizando fretes..."
     );
 
 
     try {
 
-        const ids =
-            anuncios.map(
-                item =>
-                    item.id
-            );
-
-
         const resposta =
             await fetch(
-                apiUrl(
-                    "/api/sincronizar-fretes"
-                ),
+                "/api/sincronizar-fretes",
                 {
+
                     method:
                         "POST",
-
-                    credentials:
-                        "include",
 
                     headers: {
                         "Content-Type":
@@ -3353,8 +2885,13 @@ async function sincronizarFretesApi() {
 
                     body:
                         JSON.stringify({
-                            ids
+                            ids:
+                                anuncios.map(
+                                    x =>
+                                        x.id
+                                )
                         })
+
                 }
             );
 
@@ -3363,59 +2900,42 @@ async function sincronizarFretesApi() {
             await resposta.json();
 
 
-        if (!resposta.ok) {
+        if (
+            !resposta.ok
+        ) {
 
             throw new Error(
-                dados.erro ||
-                "Erro ao sincronizar fretes."
+                dados.erro
             );
         }
 
 
-        const fretes =
+        Object.entries(
             dados.fretes ||
-            {};
+            {}
+        ).forEach(
+            ([id, frete]) => {
 
-
-        anuncios.forEach(
-            item => {
-
-                const frete =
-                    fretes[item.id];
-
-
-                if (!frete) {
-                    return;
-                }
+                const item =
+                    anuncios.find(
+                        x =>
+                            String(x.id) ===
+                            String(id)
+                    );
 
 
                 if (
-                    Object.prototype.hasOwnProperty.call(
-                        frete,
-                        "custo"
-                    )
+                    item &&
+                    frete
                 ) {
 
                     item.frete =
                         Number(
-                            frete.custo
+                            frete.custo ||
+                            frete.shipping_cost ||
+                            0
                         );
                 }
-
-
-                if (
-                    Object.prototype.hasOwnProperty.call(
-                        frete,
-                        "shipping_cost"
-                    )
-                ) {
-
-                    item.frete =
-                        Number(
-                            frete.shipping_cost
-                        );
-                }
-
             }
         );
 
@@ -3424,67 +2944,61 @@ async function sincronizarFretesApi() {
             [...anuncios];
 
 
-        renderizarTudo();
-
-
-        alert(
-            "Fretes sincronizados com sucesso."
-        );
+        renderizar();
 
     } catch (erro) {
 
         alert(
-            erro.message ||
-            "Erro na sincronização."
+            erro.message
         );
 
     } finally {
 
-        esconderLoading();
+        stopLoading();
     }
 }
 
 
 /* =========================================================
    ABAS
-   ========================================================= */
+========================================================= */
 
 function trocarAba(
-    aba
+    nome
 ) {
 
-    const abas = [
+    const nomes = [
         "gestao",
         "simulacao",
         "atualizacao"
     ];
 
 
-    abas.forEach(
-        nome => {
+    nomes.forEach(
+        item => {
 
             const secao =
                 document.getElementById(
                     "aba-" +
-                    nome
+                    item
                 );
 
 
             const botao =
                 document.getElementById(
                     "tab-" +
-                    nome
+                    item
                 );
 
 
             if (
-                nome === aba
+                item ===
+                nome
             ) {
 
                 secao.classList.remove(
                     "hidden"
                 );
-
 
                 botao.classList.add(
                     "tab-active"
@@ -3496,269 +3010,70 @@ function trocarAba(
                     "hidden"
                 );
 
-
                 botao.classList.remove(
                     "tab-active"
                 );
             }
-
         }
-    );
-
-
-    if (
-        aba ===
-        "simulacao"
-    ) {
-
-        renderizarTabelaSimulacao();
-    }
-
-
-    if (
-        aba ===
-        "atualizacao"
-    ) {
-
-        renderizarTabelaAtualizacao();
-    }
-}
-
-
-/* =========================================================
-   LOADING
-   ========================================================= */
-
-function mostrarLoading(
-    texto
-) {
-
-    document.getElementById(
-        "loading-text"
-    ).textContent =
-        texto;
-
-
-    document.getElementById(
-        "loading"
-    ).classList.remove(
-        "hidden"
-    );
-}
-
-
-function esconderLoading() {
-
-    document.getElementById(
-        "loading"
-    ).classList.add(
-        "hidden"
     );
 }
 
 
 /* =========================================================
-   CONFIGURAÇÃO
-   ========================================================= */
+   OAUTH RETORNO
+========================================================= */
 
-async function abrirConfiguracao() {
+function verificarRetornoOAuth() {
 
-    const modal =
-        document.getElementById(
-            "modal-config"
+    const params =
+        new URLSearchParams(
+            window.location.search
         );
 
 
-    const status =
-        document.getElementById(
-            "status-config"
+    const sucesso =
+        params.get(
+            "oauth"
         );
 
-
-    status.innerHTML = `
-        <div
-            class="flex items-center
-                   justify-center py-5"
-        >
-            <div
-                class="loading-spinner"
-            ></div>
-        </div>
-    `;
-
-
-    modal.classList.remove(
-        "hidden"
-    );
-
-
-    try {
-
-        const resposta =
-            await fetch(
-                apiUrl(
-                    "/api/auth/status"
-                ),
-                {
-                    credentials:
-                        "include"
-                }
-            );
-
-
-        const dados =
-            await resposta.json();
-
-
-        if (
-            dados.autenticado
-        ) {
-
-            status.innerHTML = `
-                <div
-                    class="bg-green-50
-                           border border-green-200
-                           rounded-xl p-4"
-                >
-
-                    <div
-                        class="font-black
-                               text-green-700"
-                    >
-                        ✓ Mercado Livre conectado
-                    </div>
-
-                    <div
-                        class="text-sm
-                               text-green-600 mt-1"
-                    >
-                        Usuário:
-                        ${escapeHtml(
-                            dados.user_id ||
-                            "Conectado"
-                        )}
-                    </div>
-
-                    <div
-                        class="text-xs
-                               text-green-600 mt-2"
-                    >
-                        Renovação automática ativa.
-                    </div>
-
-                </div>
-            `;
-
-        } else {
-
-            status.innerHTML = `
-                <div
-                    class="bg-yellow-50
-                           border border-yellow-200
-                           rounded-xl p-4"
-                >
-
-                    <div
-                        class="font-black
-                               text-yellow-700"
-                    >
-                        Conta não conectada
-                    </div>
-
-                    <div
-                        class="text-sm
-                               text-yellow-600 mt-1"
-                    >
-                        Faça a conexão novamente.
-                    </div>
-
-                </div>
-            `;
-        }
-
-    } catch (erro) {
-
-        status.innerHTML = `
-            <div
-                class="bg-red-50
-                       border border-red-200
-                       rounded-xl p-4
-                       text-red-700"
-            >
-                Não foi possível consultar o status.
-            </div>
-        `;
-    }
-}
-
-
-function fecharConfiguracao() {
-
-    document.getElementById(
-        "modal-config"
-    ).classList.add(
-        "hidden"
-    );
-}
-
-
-async function desconectarConta() {
 
     if (
-        !confirm(
-            "Deseja realmente desconectar a conta?"
-        )
+        sucesso ===
+        "success"
     ) {
 
-        return;
-    }
-
-
-    try {
-
-        await fetch(
-            apiUrl(
-                "/api/auth/logout"
-            ),
-            {
-                method:
-                    "POST",
-
-                credentials:
-                    "include"
-            }
+        window.history.replaceState(
+            {},
+            document.title,
+            "/"
         );
 
-    } catch (erro) {
 
-        console.error(
-            erro
+        mostrarPagina(
+            "pagina-dashboard"
         );
+
+
+        carregarDados();
     }
-
-
-    usuarioLogado =
-        false;
-
-
-    fecharConfiguracao();
-
-
-    mostrarPagina(
-        "pagina-inicial"
-    );
 }
 
 
 /* =========================================================
    INICIALIZAÇÃO
-   ========================================================= */
+========================================================= */
 
 window.addEventListener(
     "load",
-    function() {
+    () => {
 
-        carregarConfiguracaoLocal();
+        document.getElementById(
+            "redirect-uri"
+        ).value =
+            CALLBACK;
+
+
+        verificarRetornoOAuth();
 
         verificarLogin();
 
