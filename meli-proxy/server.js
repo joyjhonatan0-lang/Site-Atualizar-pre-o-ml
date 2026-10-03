@@ -241,7 +241,10 @@ app.get('/api/oauth/status', async (req, res) => {
             user_id: userId,
             nickname,
             expires_at: atual.expires_at || null,
-            redirect_uri: atual.redirect_uri || null
+            redirect_uri: atual.redirect_uri || null,
+            token_preview: token
+                ? `${String(token).slice(0, 12)}••••••••${String(token).slice(-6)}`
+                : null
         });
     } catch (erro) {
         return respostaErro(res, 500, 'Erro ao consultar conexão OAuth: ' + erro.message);
