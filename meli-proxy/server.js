@@ -2543,6 +2543,113 @@ app.post('/api/notifications', (req, res) => {
 });
 
 
+
+/* =========================================================
+   ML HUB PRO SUITE V3
+   Pós-venda, IA, Bling, auditoria e integrações
+========================================================= */
+const BLING_STORE_FILE = process.env.BLING_STORE_FILE || path.join(__dirname, 'bling-oauth-store.json');
+
+function lerJsonArquivoSeguro(arquivo) {
+    try { return JSON.parse(fs.readFileSync(arquivo,'utf8')); } catch(e) { return {}; }
+}
+function salvarJsonArquivoSeguro(arquivo, dados) {
+    fs.writeFileSync(arquivo, JSON.stringify(dados,null,2), {encoding:'utf8',mode:0o600});
+}
+async function usuarioML(token) {
+    const r=await mlFetch(`${ML_API}/users/me`,token);
+    const d=await jsonSeguro(r);
+    if(!r.ok||!d?.id) throw new Error('Não foi possível identificar a conta Mercado Livre.');
+    return d;
+}
+
+app.get('/api/v3/claims', async (req,res)=>{
+    const token=obterToken(req); if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const status=String(req.query.status||'opened');
+        const params=new URLSearchParams({'players.user_id':String(me.id),'players.role':'respondent','limit':'30','offset':'0','sort':'last_updated:desc'});
+        if(status)params.set('status',status);
+        const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${params}`,token);
+        const d=await jsonSeguro(r); if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));
+        const base=Array.isArray(d.data)?d.data:[];
+        const enriquecidas=await Promise.all(base.slice(0,30).map(async c=>{
+            try{const rd=await mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/detail`,token);const dd=await jsonSeguro(rd);return {...c,due_date:rd.ok?dd.due_date:null,detail_title:rd.ok?dd.title:null};}catch(e){return c}
+        }));
+        res.json({sucesso:true,total:Number(d.paging?.total||base.length),reclamacoes:enriquecidas});
+    }catch(e){respostaErro(res,500,'Erro ao consultar reclamações: '+e.message)}
+});
+app.get('/api/v3/claims/:id/impacto',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/${encodeURIComponent(req.params.id)}/affects-reputation`,token);const d=await jsonSeguro(r);if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));res.json(d)}catch(e){respostaErro(res,500,e.message)}
+});
+app.get('/api/v3/bpp/case/:id',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{const r=await mlFetch(`${ML_API}/moderations/pppi/case/${encodeURIComponent(req.params.id)}`,token);const d=await jsonSeguro(r);if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));res.json(d)}catch(e){respostaErro(res,500,e.message)}
+});
+
+app.get('/api/v3/auditoria',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const busca=await buscarIdsAnunciosPaginados(token,me.id,{offset:0,limit:100,order:'last_updated_desc'});
+        const ids=Array.isArray(busca.results)?busca.results:[];
+        const det=await buscarItensBulk(token,ids);
+        const itens=ids.map(id=>det[id]).filter(Boolean).map(normalizarItemGestao);
+        const semSku=itens.filter(i=>!i.sku), crit=itens.filter(i=>i.status==='active'&&i.estoque<=3), semVenda=itens.filter(i=>i.vendidos<=0);
+        let score=100-Math.min(100,Math.round((semSku.length*0.35+crit.length*0.4+semVenda.length*0.15)));
+        const oportunidades=[];
+        semSku.slice(0,8).forEach(i=>oportunidades.push({tipo:'sku',titulo:i.titulo,mensagem:'Cadastrar SKU para melhorar estoque, ERP e rastreabilidade.'}));
+        crit.slice(0,8).forEach(i=>oportunidades.push({tipo:'estoque',titulo:i.titulo,mensagem:`Estoque crítico (${i.estoque}). Repor ou revisar estratégia para evitar ruptura.`}));
+        semVenda.slice(0,8).forEach(i=>oportunidades.push({tipo:'conversao',titulo:i.titulo,mensagem:'Sem unidades vendidas registradas. Revisar título, atributos, preço, imagens e Ads.'}));
+        res.json({sucesso:true,amostra:itens.length,total_conta:Number(busca.paging?.total||0),metricas:{sem_sku:semSku.length,estoque_critico:crit.length,sem_venda:semVenda.length,score:Math.max(0,score)},oportunidades:oportunidades.slice(0,20)});
+    }catch(e){respostaErro(res,500,'Erro na auditoria: '+e.message)}
+});
+
+app.get('/api/v3/integracoes/status',(req,res)=>{
+    const b=lerJsonArquivoSeguro(BLING_STORE_FILE);
+    res.json({sucesso:true,openai:{configurado:Boolean(process.env.OPENAI_API_KEY)},bling:{configurado:Boolean(process.env.BLING_CLIENT_ID&&process.env.BLING_CLIENT_SECRET),conectado:Boolean(b.access_token)},mercado_livre:{configurado:true}});
+});
+
+app.post('/api/v3/ia',async(req,res)=>{
+    if(!process.env.OPENAI_API_KEY)return respostaErro(res,503,'IA ainda não configurada. Adicione OPENAI_API_KEY nas variáveis de ambiente do Render.');
+    const mensagem=String(req.body?.mensagem||'').trim();if(!mensagem)return respostaErro(res,400,'Digite uma mensagem.');
+    try{
+        const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
+            model:process.env.OPENAI_MODEL||'gpt-5.6-luna',
+            store:false,
+            instructions:'Você é o assistente operacional do ML Hub Pro para vendedores brasileiros do Mercado Livre. Responda em português do Brasil, seja objetivo, profissional e útil. Ajude com atendimento, pós-venda, anúncios, estoque, preço, margem, operação e organização. Não invente dados da conta que não foram fornecidos. Não execute alterações; apenas recomende ou redija textos para revisão humana.',
+            input:mensagem
+        })});
+        const d=await r.json();if(!r.ok)return respostaErro(res,r.status,d.error?.message||'Erro na IA.');
+        const resposta=d.output_text || (d.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n') || 'Sem resposta.';
+        res.json({sucesso:true,resposta});
+    }catch(e){respostaErro(res,500,'Erro ao consultar IA: '+e.message)}
+});
+
+// BLING OAuth 2.0 / JWT
+app.get('/api/bling/authorize',(req,res)=>{
+    const id=process.env.BLING_CLIENT_ID;
+    if(!id||!process.env.BLING_CLIENT_SECRET)return respostaErro(res,503,'Configure BLING_CLIENT_ID e BLING_CLIENT_SECRET no Render.');
+    const state=crypto.randomBytes(24).toString('hex');
+    const s=lerJsonArquivoSeguro(BLING_STORE_FILE);s.state=state;s.state_created_at=Date.now();salvarJsonArquivoSeguro(BLING_STORE_FILE,s);
+    res.json({authorization_url:`https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${encodeURIComponent(id)}&state=${encodeURIComponent(state)}`});
+});
+app.get('/api/bling/callback',async(req,res)=>{
+    try{
+        const code=String(req.query.code||''),state=String(req.query.state||''),s=lerJsonArquivoSeguro(BLING_STORE_FILE);
+        if(!code||!state||state!==s.state)return res.status(400).send('Autorização Bling inválida ou expirada.');
+        const basic=Buffer.from(`${process.env.BLING_CLIENT_ID}:${process.env.BLING_CLIENT_SECRET}`).toString('base64');
+        const body=new URLSearchParams({grant_type:'authorization_code',code});
+        const r=await fetch('https://api.bling.com.br/Api/v3/oauth/token',{method:'POST',headers:{'Authorization':`Basic ${basic}`,'Content-Type':'application/x-www-form-urlencoded','Accept':'1.0','enable-jwt':'1'},body});
+        const d=await r.json();if(!r.ok)throw new Error(d.error_description||d.error||'Falha ao gerar token Bling.');
+        salvarJsonArquivoSeguro(BLING_STORE_FILE,{access_token:d.access_token,refresh_token:d.refresh_token,expires_at:Date.now()+Number(d.expires_in||21600)*1000,scope:d.scope});
+        res.redirect(process.env.FRONTEND_URL||DEFAULT_FRONTEND_URL);
+    }catch(e){res.status(500).send('Erro ao conectar Bling: '+e.message)}
+});
+app.post('/api/bling/webhook',(req,res)=>{res.status(200).json({recebido:true});setImmediate(()=>console.log('[Bling webhook]',req.body?.eventId||req.body?.event||req.body?.type||'evento'));});
+
+
 app.listen(
     PORT,
     () => {
