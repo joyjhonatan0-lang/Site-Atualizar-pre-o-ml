@@ -2275,8 +2275,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             <div>
                 <h2 class="text-sm font-black text-white">Conta Mercado Livre</h2>
                 <p class="text-xs text-slate-500 mt-1">
-                    A autorização e a renovação do Access Token são feitas pelo servidor.
-                    O Client Secret não é gravado no navegador.
+                    A conta já está conectada. O acesso às APIs e a renovação do token são gerenciados automaticamente pelo servidor.
                 </p>
                 <div id="oauth-status-config" class="text-xs text-yellow-400 font-bold mt-3">
                     Verificando conexão...
@@ -2287,49 +2286,14 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-            <div>
-                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
-                <input id="oauth-client-id-config" type="text" autocomplete="off"
-                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                    placeholder="Ex.: 1234567890123456">
-            </div>
-            <div>
-                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
-                <input id="oauth-client-secret-config" type="password" autocomplete="new-password"
-                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                    placeholder="Secret Key da aplicação">
-            </div>
-            <div class="md:col-span-2">
-                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no Mercado Livre</label>
-                <input id="oauth-redirect-uri-config"value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"  type="url" autocomplete="off"
-                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                    placeholder="https://site-atualizar-pre-o-ml.onrender.com/auth/callback">
-            </div>
-            <div class="md:col-span-2">
-                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token atual (opcional)</label>
-                <input id="oauth-access-token-config" type="password" autocomplete="off"
-                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                    placeholder="APP_USR-...">
-                <p class="text-[10px] text-slate-600 mt-2">
-                    O token atual pode ser usado temporariamente. Para renovação automática, conclua a autorização OAuth.
-                </p>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap gap-3 mt-5">
-            <button onclick="iniciarOAuthML('config')" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">
-                Gerar acesso renovável
-            </button>
-            <button onclick="salvarTokenTemporarioConfig()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl border border-slate-700">
-                Usar token atual
-            </button>
-        </div>
         <div class="mt-5">
-            <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Acesso gerenciado</label>
+            <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token gerenciado</label>
             <input id="oauth-token-gerado-config" type="text" readonly
                 class="mt-2 w-full bg-slate-950 border border-slate-700 text-emerald-300 px-4 py-3 rounded-xl text-xs"
-                placeholder="Ainda não conectado">
+                placeholder="APP_USR-...">
+            <p class="text-[10px] text-slate-600 mt-2">
+                Este é o acesso utilizado automaticamente pelo ML Hub Pro nas APIs do Mercado Livre.
+            </p>
         </div>
     </div>
 
