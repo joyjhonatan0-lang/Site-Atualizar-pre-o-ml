@@ -342,11 +342,16 @@ app.get('/api/anuncios', async (req, res) => {
                             shipping.free_shipping ||
                             false;
 
-                        const custoEnvio =
-                            await calcularFreteExato(
-                                body,
-                                token
-                            );
+                        // IMPORTANTE: ao carregar a lista de anúncios, não consulta
+                        // o endpoint de frete anúncio por anúncio. Com milhares de MLBs
+                        // isso fazia /api/anuncios ficar preso por vários minutos.
+                        // O frete exato continua sendo buscado somente pelo botão
+                        // "Puxar fretes" (/api/sincronizar-fretes).
+                        let custoEnvio = 0;
+                        if (Array.isArray(shipping.costs) && shipping.costs.length > 0) {
+                            const custoLocal = shipping.costs.find(c => Number.isFinite(Number(c?.cost)));
+                            if (custoLocal) custoEnvio = Number(custoLocal.cost);
+                        }
 
                         // Valor líquido exibido no painel: preço - comissão - custo de envio.
                         // O usuário pediu que o frete seja descontado sempre do campo "Você recebe".
