@@ -7242,13 +7242,18 @@ function renderListaClaimsV10(){
     const resolvida=claimResolvida(c), marcada=claimsMarcadasV10.has(String(c.id));
     return `<div class="p-4 hover:bg-slate-800/60 transition ${marcada?'bg-yellow-400/5':''}">
       <div class="flex gap-3 items-start">
-        <input type="checkbox" ${marcada?'checked':''} onchange="marcarClaimV10('${claimEsc(c.id)}',this.checked)" class="mt-1 w-4 h-4 accent-yellow-400">
+        <label class="mt-0.5 shrink-0 flex flex-col items-center gap-1 cursor-pointer" title="Selecionar esta reclamação">
+          <input type="checkbox" ${marcada?'checked':''} onchange="marcarClaimV10('${claimEsc(c.id)}',this.checked)" class="w-6 h-6 accent-yellow-400 cursor-pointer">
+          <span class="text-[8px] text-yellow-400 font-black">SELECIONAR</span>
+        </label>
         <button onclick="abrirDossieClaim('${claimEsc(c.id)}')" class="flex-1 text-left">
           <div class="flex justify-between gap-2"><div class="font-black text-white text-xs">Reclamação #${claimEsc(c.id)}</div><span class="text-[9px] px-2 py-1 rounded-full ${resolvida?'bg-emerald-400/10 text-emerald-400':'bg-yellow-400/10 text-yellow-400'}">${resolvida?'Resolvida':claimEsc(c.stage||c.status||'Pendente')}</span></div>
           <div class="text-[10px] text-slate-500 mt-2">${claimEsc(c.detail_title||c.reason_id||'Clique para abrir o dossiê')}</div>
           <div class="text-[9px] text-slate-600 mt-2">Atualizada: ${claimData(c.last_updated||c.date_created)}</div>
         </button>
-      </div></div>`}).join(''):'<div class="p-8 text-center text-xs text-slate-600">Nenhuma reclamação neste filtro.</div>';
+      </div>
+      ${!resolvida?`<button onclick="selecionarEAnalisarClaimV11('${claimEsc(c.id)}')" class="w-full mt-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-3 py-2.5 rounded-xl text-[10px] font-black">✦ Analisar esta reclamação com IA</button>`:''}
+    </div>`}).join(''):'<div class="p-8 text-center text-xs text-slate-600">Nenhuma reclamação neste filtro.</div>';
   ['pendentes','resolvidas','todas'].forEach(f=>{const b=document.getElementById('claim-filtro-'+f);if(b){b.className=(f===claimsFiltroV10?'bg-yellow-400 text-slate-950':'bg-slate-800 text-white')+' px-3 py-2 rounded-lg text-[10px] font-black'}});
   atualizarBotaoClaimsV10();
 }
@@ -7259,7 +7264,7 @@ function atualizarBotaoClaimsV10(){
   const pend=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
   b.disabled=pend.length!==1;b.textContent=pend.length===1?'✦ Analisar reclamação selecionada':pend.length>1?`Selecione somente 1 pendente (${pend.length} marcadas)`:'✦ Analisar reclamação selecionada';
 }
-async function carregarReclamacoesPro(){
+async function carregarReclamacoesProLegacy(){
   const token=obterToken();if(!token)return solicitarToken();
   mostrarLoading('Atualizando reclamações pendentes e resolvidas...');
   try{
@@ -7274,6 +7279,13 @@ async function carregarReclamacoesPro(){
     document.getElementById('claims-prazo').textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length;
     renderListaClaimsV10();
   }catch(e){alert(e.message)}finally{esconderLoading()}
+}
+async function selecionarEAnalisarClaimV11(id){
+  claimsMarcadasV10.clear();
+  claimsMarcadasV10.add(String(id));
+  renderListaClaimsV10();
+  await abrirDossieClaim(id);
+  await analisarClaimIA(id);
 }
 async function analisarClaimsSelecionadas(){
   const ids=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
@@ -7308,7 +7320,7 @@ async function analisarClaimIA(id){
     const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/analisar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:'{}'});
     const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro na análise.');
     const b=document.getElementById('claim-ia-box');b.classList.remove('hidden');
-    b.innerHTML=`<div class="border border-yellow-400/20 bg-yellow-400/5 rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-[10px] uppercase text-yellow-400 font-bold">Análise assistida por IA</div><div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div></div></div><div class="mt-4 text-xs text-slate-300 whitespace-pre-wrap">${claimEsc(d.analise||'')}</div><div class="mt-4"><label class="text-[10px] uppercase text-slate-500 font-bold">Resposta sugerida</label><textarea id="claim-resposta-ia" class="w-full min-h-[150px] mt-2 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white">${claimEsc(d.resposta_sugerida||'')}</textarea></div><div class="flex gap-2 mt-3"><select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 text-xs text-white"><option value="complainant">Comprador</option><option value="mediator">Mediação do Mercado Livre</option></select><button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button></div></div>`;
+    b.innerHTML=`<div class="border border-yellow-400/20 bg-yellow-400/5 rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-[10px] uppercase text-yellow-400 font-bold">Defesa do vendedor — análise da IA</div><div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div></div></div><div class="mt-4 text-xs text-slate-300 whitespace-pre-wrap">${claimEsc(d.analise||'')}</div><div class="mt-4"><label class="text-[10px] uppercase text-slate-500 font-bold">Resposta para enviar ao Mercado Livre</label><textarea id="claim-resposta-ia" class="w-full min-h-[150px] mt-2 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white">${claimEsc(d.resposta_sugerida||'')}</textarea></div><div class="flex gap-2 mt-3"><select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 text-xs text-white"><option value="complainant">Comprador</option><option value="mediator">Mediação do Mercado Livre</option></select><button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button></div></div>`;
   }catch(e){alert(e.message)}finally{esconderLoading()}
 }
 async function enviarRespostaClaim(id){
