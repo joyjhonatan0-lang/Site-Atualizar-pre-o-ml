@@ -7345,13 +7345,79 @@ function abrirAnexoClaim(id,file){
   fetch(url,{headers:{Authorization:token}}).then(r=>r.blob()).then(b=>{const u=URL.createObjectURL(b);document.getElementById('claim-anexo-preview').innerHTML=`<div class="font-black text-white text-xs mb-2">Anexo</div><img src="${u}" class="max-h-[420px] rounded-xl border border-slate-700 object-contain bg-slate-950">`}).catch(()=>alert('Não foi possível abrir o anexo.'));
 }
 async function analisarClaimIA(id){
-  const token=obterToken();mostrarLoading('Gemini analisando contexto e evidências...');
+  const token=obterToken();
+  const b=document.getElementById('claim-ia-box');
+  if(b){
+    b.classList.remove('hidden');
+    b.innerHTML=`<div class="border border-yellow-400/20 bg-yellow-400/5 rounded-2xl p-4">
+      <div class="text-[10px] uppercase text-yellow-400 font-black">Análise com Gemini</div>
+      <div class="text-xs text-slate-300 mt-2">Analisando reclamação, histórico e evidências. Se um modelo estiver ocupado, o sistema tentará outro automaticamente.</div>
+    </div>`;
+  }
+  mostrarLoading('Gemini analisando contexto e evidências...');
   try{
-    const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/analisar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:'{}'});
-    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro na análise.');
-    const b=document.getElementById('claim-ia-box');b.classList.remove('hidden');
-    b.innerHTML=`<div class="border border-yellow-400/20 bg-yellow-400/5 rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-[10px] uppercase text-yellow-400 font-bold">Defesa do vendedor — análise da IA (Gemini)</div><div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div></div></div><div class="mt-4 text-xs text-slate-300 whitespace-pre-wrap">${claimEsc(d.analise||'')}</div><div class="mt-4"><label class="text-[10px] uppercase text-slate-500 font-bold">Resposta para enviar ao Mercado Livre</label><textarea id="claim-resposta-ia" class="w-full min-h-[150px] mt-2 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white">${claimEsc(d.resposta_sugerida||'')}</textarea></div><div class="flex gap-2 mt-3"><select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 text-xs text-white"><option value="complainant">Comprador</option><option value="mediator">Mediação do Mercado Livre</option></select><button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button></div></div>`;
-  }catch(e){alert(e.message)}finally{esconderLoading()}
+    const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/analisar`,{
+      method:'POST',
+      cache:'no-store',
+      headers:{Authorization:token,'Content-Type':'application/json','Accept':'application/json'},
+      body:'{}'
+    });
+    let d={};
+    try{d=await r.json()}catch(_){}
+    if(!r.ok)throw new Error(d.erro||d.error||`Erro HTTP ${r.status} na análise.`);
+
+    if(!b)throw new Error('Área de resultado da IA não encontrada.');
+    const modelo=claimEsc(d.modelo||'Gemini');
+    const imagens=Number(d.imagens_analisadas||0);
+    const fallback=d.fallback_utilizado
+      ? '<span class="text-emerald-400">Fallback automático utilizado ✓</span>'
+      : '<span class="text-slate-500">Modelo principal respondeu normalmente</span>';
+
+    b.innerHTML=`<div id="claim-ia-resultado" class="border border-emerald-400/30 bg-emerald-400/5 rounded-2xl p-4">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <div class="text-[10px] uppercase text-emerald-400 font-black">✓ Análise concluída — Defesa do vendedor</div>
+          <div class="text-[10px] text-slate-500 mt-1">Modelo: ${modelo} · Imagens analisadas: ${imagens} · ${fallback}</div>
+          <div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-slate-950 rounded-xl p-4 border border-slate-800">
+        <div class="text-[10px] uppercase text-yellow-400 font-bold mb-2">Análise da reclamação</div>
+        <div class="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">${claimEsc(d.analise||'Análise concluída sem texto adicional.')}</div>
+      </div>
+
+      <div class="mt-4">
+        <label class="text-[10px] uppercase text-yellow-400 font-bold">Resposta sugerida para revisão</label>
+        <textarea id="claim-resposta-ia" class="w-full min-h-[180px] mt-2 bg-slate-950 border border-slate-700 focus:border-yellow-400 rounded-xl p-3 text-xs text-white">${claimEsc(d.resposta_sugerida||'')}</textarea>
+      </div>
+
+      <div class="flex flex-col md:flex-row gap-2 mt-3">
+        <select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white">
+          <option value="complainant">Comprador</option>
+          <option value="mediator">Mediação do Mercado Livre</option>
+        </select>
+        <button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button>
+      </div>
+    </div>`;
+
+    esconderLoading();
+    setTimeout(()=>{
+      document.getElementById('claim-ia-resultado')?.scrollIntoView({behavior:'smooth',block:'start'});
+    },150);
+  }catch(e){
+    esconderLoading();
+    if(b){
+      b.classList.remove('hidden');
+      b.innerHTML=`<div id="claim-ia-erro" class="border border-amber-400/30 bg-amber-400/5 rounded-2xl p-4">
+        <div class="text-[10px] uppercase text-amber-400 font-black">IA temporariamente indisponível</div>
+        <div class="text-xs text-slate-300 mt-2">${claimEsc(e.message)}</div>
+        <div class="text-[10px] text-slate-500 mt-2">Nenhuma resposta foi enviada ao Mercado Livre.</div>
+        <button type="button" onclick="analisarClaimIA('${claimEsc(id)}')" class="mt-3 bg-yellow-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">↻ Tentar análise novamente</button>
+      </div>`;
+      setTimeout(()=>document.getElementById('claim-ia-erro')?.scrollIntoView({behavior:'smooth',block:'center'}),100);
+    }
+  }
 }
 async function enviarRespostaClaim(id){
   const msg=document.getElementById('claim-resposta-ia')?.value?.trim(),receiver=document.getElementById('claim-destinatario')?.value||'complainant';
