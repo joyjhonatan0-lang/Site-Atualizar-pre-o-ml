@@ -3623,28 +3623,92 @@ async function claimJob() {
 async function processarSyncCompleto(job) {
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token) throw new Error('Token Mercado Livre indisponível para o seller do job.');
-    let scrollId=job.cursor||null, processed=Number(job.processed||0), errors=Number(job.errors||0), ciclos=0;
+
+    let scrollId=job.cursor||null;
+    let processed=Number(job.processed||0);
+    let errors=Number(job.errors||0);
+    let total=Number(job.progress_total||0);
+    let ciclos=0;
+
+    // O Mercado Livre limita a busca a no máximo 100 IDs por chamada.
+    // Agrupamos 50 páginas de 100 como um lote lógico de 5.000 anúncios.
+    const TAMANHO_LOTE_LOGICO=5000;
+
     do {
         const params=new URLSearchParams({search_type:'scan',limit:'100'});
-        if(scrollId) params.set('scroll_id',scrollId);
+        if(scrollId)params.set('scroll_id',scrollId);
+
         const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
         const sd=await jsonSeguro(sr);
-        if(!sr.ok) throw new Error(formatarErroMercadoLivre(sd));
+        if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd));
+
+        if(total<=0){
+            total=Number(sd?.paging?.total||0);
+            if(total>0){
+                await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
+            }
+        }
+
         const ids=Array.isArray(sd.results)?sd.results:[];
         if(!ids.length){scrollId=null;break}
-        const mapa=await buscarItensBulk(token,ids);
-        const itens=ids.map(id=>mapa[id]).filter(Boolean);
-        errors += Math.max(0,ids.length-itens.length);
-        await upsertItensDb(job.seller_id,itens);
-        processed += ids.length;
+
+        // Usa o bulk atual do Mercado Livre em subgrupos e concorrência controlada.
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const itens=ids.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+        errors+=Math.max(0,ids.length-itens.length);
+
+        if(itens.length)await upsertItensDb(job.seller_id,itens);
+
+        processed+=ids.length;
         scrollId=sd.scroll_id||null;
         ciclos++;
-        await dbQuery(`UPDATE ml_jobs SET processed=$2,progress_current=$2,errors=$3,cursor=$4,message=$5,updated_at=NOW() WHERE id=$1`,
-          [job.id,processed,errors,scrollId,`Sincronizados ${processed.toLocaleString('pt-BR')} anúncios`]);
-        // O scroll_id expira rapidamente; o worker segue sem pausas longas.
+
+        const loteAtual=Math.floor(Math.max(0,processed-1)/TAMANHO_LOTE_LOGICO)+1;
+        const dentroDoLote=((processed-1)%TAMANHO_LOTE_LOGICO)+1;
+        const totalExibido=total>0?total:processed;
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            progress_current=$2,
+            progress_total=CASE WHEN $3>0 THEN $3 ELSE progress_total END,
+            errors=$4,
+            cursor=$5,
+            message=$6,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            job.id,
+            processed,
+            total,
+            errors,
+            scrollId,
+            `Anúncios: ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · lote ${loteAtual.toLocaleString('pt-BR')} de até 5.000 (${dentroDoLote.toLocaleString('pt-BR')}/5.000)`
+        ]);
+
+        // scroll_id expira em poucos minutos: segue sem pausa longa.
     } while(scrollId && ciclos<2000);
-    await dbQuery(`UPDATE ml_jobs SET status='completed',progress_current=$2,processed=$2,errors=$3,cursor=NULL,message=$4,finished_at=NOW(),updated_at=NOW() WHERE id=$1`,
-      [job.id,processed,errors,`Sincronização concluída: ${processed.toLocaleString('pt-BR')} anúncios`]);
+
+    const finalTotal=total>0?total:processed;
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        progress_current=$2,
+        progress_total=$3,
+        processed=$2,
+        errors=$4,
+        cursor=NULL,
+        message=$5,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+        job.id,
+        processed,
+        finalTotal,
+        errors,
+        `Anúncios concluídos: ${processed.toLocaleString('pt-BR')} processado(s) em lotes lógicos de até 5.000.`
+    ]);
 }
 
 async function obterTokenPersistenteParaSeller(sellerId) {
@@ -3694,6 +3758,7 @@ async function workerLoop(indice) {
             if(job) {
                 try {
                     if(job.type==='full_sync') await processarSyncCompleto(job);
+                    else if(job.type==='price_sync') await processarPrecosEscala(job);
                     else if(job.type==='freight_sync') await processarFretesEscala(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
@@ -3710,6 +3775,125 @@ async function workerLoop(indice) {
 function jobSleepMs(){return 1200}
 
 
+
+
+async function atualizarPrecosDbLoteV26(sellerId,linhas){
+    if(!linhas.length)return;
+    const params=[sellerId];
+    const values=[];
+    for(const x of linhas){
+        const base=params.length;
+        params.push(String(x.id),Number(x.price||0));
+        values.push(`($${base+1}::text,$${base+2}::numeric)`);
+    }
+    await dbQuery(`
+      UPDATE ml_items AS m SET
+        price=v.price,
+        net_received=GREATEST(0,v.price-m.sale_fee-m.shipping_cost),
+        synced_at=NOW()
+      FROM (VALUES ${values.join(',')}) AS v(item_id,price)
+      WHERE m.seller_id=$1 AND m.item_id=v.item_id
+    `,params);
+}
+
+async function processarPrecosEscala(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para sincronizar preços.');
+
+    let cursor=String(job.cursor||'');
+    let processados=Number(job.processed||0);
+    let erros=Number(job.errors||0);
+    let total=Number(job.progress_total||0);
+
+    if(total<=0){
+        const tr=await dbQuery(`
+          SELECT COUNT(*)::int total
+          FROM ml_items
+          WHERE seller_id=$1 AND status='active'
+        `,[job.seller_id]);
+        total=Number(tr.rows[0]?.total||0);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        progress_total=$2,
+        progress_current=$3,
+        message=$4,
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,total,Math.min(total,processados+erros),
+       `Preços: ${Math.min(total,processados+erros).toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lote de até 1.000`]);
+
+    const LOTE=1000;
+
+    while(true){
+        const rr=await dbQuery(`
+          SELECT item_id
+          FROM ml_items
+          WHERE seller_id=$1
+            AND status='active'
+            AND ($2::text='' OR item_id>$2)
+          ORDER BY item_id
+          LIMIT $3
+        `,[job.seller_id,cursor,LOTE]);
+
+        const ids=rr.rows.map(x=>String(x.item_id));
+        if(!ids.length)break;
+
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const linhas=[];
+        let falhasLote=0;
+
+        for(const id of ids){
+            const item=detalhes.mapa[id];
+            const preco=Number(item?.price);
+            if(item && Number.isFinite(preco)){
+                linhas.push({id,price:preco});
+            }else{
+                falhasLote++;
+            }
+        }
+
+        // Um UPDATE em lote para até 1.000 preços.
+        await atualizarPrecosDbLoteV26(job.seller_id,linhas);
+
+        processados+=linhas.length;
+        erros+=falhasLote;
+        cursor=ids[ids.length-1];
+
+        const atual=Math.min(total,processados+erros);
+        const pct=total?Math.min(100,Math.round((atual/total)*100)):100;
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            errors=$3,
+            progress_current=$4,
+            progress_total=$5,
+            cursor=$6,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,processados,erros,atual,total,cursor,
+           `Preços: ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · lote de até 1.000`]);
+    }
+
+    const atual=Math.min(total,processados+erros);
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        progress_current=$2,
+        progress_total=$3,
+        processed=$4,
+        errors=$5,
+        cursor=NULL,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,atual,total,processados,erros,
+       `Preços concluídos: ${processados.toLocaleString('pt-BR')} atualizado(s)${erros?` · ${erros.toLocaleString('pt-BR')} falha(s)`:''}.`]);
+}
 
 function esperarFrete(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 
@@ -3792,9 +3976,14 @@ async function calcularFreteEscalaRobusto(item,token){
 
     const params=new URLSearchParams({
         item_id:String(itemId),
+        item_price:String(Number(item?.price||0)),
+        listing_type_id:String(item?.listing_type_id||'gold_special'),
+        condition:String(item?.condition||'new'),
+        mode:String(shipping?.mode||'me2'),
         free_shipping:shipping.free_shipping?'true':'false',
         verbose:'true'
     });
+    if(shipping?.logistic_type)params.set('logistic_type',String(shipping.logistic_type));
     const url=`${ML_API}/users/${sellerId}/shipping_options/free?${params.toString()}`;
 
     let ultimo='Não foi possível consultar o frete.';
@@ -3892,35 +4081,33 @@ async function processarFretesEscala(job){
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token)throw new Error('Token Mercado Livre indisponível para sincronizar fretes.');
 
-    job=await adotarProgressoFreteLegado(job);
+    let cursor=String(job.cursor||'');
     let processados=Number(job.processed||0);
     let erros=Number(job.errors||0);
-    const inicioJob=job.created_at||new Date().toISOString();
-
     let total=Number(job.progress_total||0);
+
     if(total<=0){
         const tr=await dbQuery(`
           SELECT COUNT(*)::int total
           FROM ml_items
-          WHERE seller_id=$1 AND status='active' AND freight_synced_at IS NULL
+          WHERE seller_id=$1 AND status='active'
         `,[job.seller_id]);
-        total=Number(tr.rows[0]?.total||0)+processados+erros;
+        total=Number(tr.rows[0]?.total||0);
     }
 
-    total=Math.max(total,processados+erros);
-    await dbQuery(
-      `UPDATE ml_jobs SET progress_total=$2,progress_current=$3,message=$4,updated_at=NOW() WHERE id=$1`,
-      [
-        job.id,
-        total,
-        Math.min(total,processados+erros),
-        `Fretes: ${Math.min(total,processados+erros).toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · retomada rápida`
-      ]
-    );
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        progress_total=$2,
+        progress_current=$3,
+        message=$4,
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,total,Math.min(total,processados+erros),
+       `Fretes: ${Math.min(total,processados+erros).toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lote de até 1.000`]);
 
-    const lote=1000;
-    const microLote=100;
-    const concorrencia=Math.max(8,Math.min(40,Number(process.env.ML_FREIGHT_CONCURRENCY||24)));
+    const LOTE=1000;
+    const MICRO=100;
+    const CONCORRENCIA=Math.max(8,Math.min(40,Number(process.env.ML_FREIGHT_CONCURRENCY||24)));
 
     while(true){
         const rr=await dbQuery(`
@@ -3928,38 +4115,30 @@ async function processarFretesEscala(job){
           FROM ml_items
           WHERE seller_id=$1
             AND status='active'
-            AND freight_synced_at IS NULL
-            AND (freight_last_attempt_at IS NULL OR freight_last_attempt_at < $2::timestamptz)
+            AND ($2::text='' OR item_id>$2)
           ORDER BY item_id
           LIMIT $3
-        `,[job.seller_id,inicioJob,lote]);
+        `,[job.seller_id,cursor,LOTE]);
 
         const ids=rr.rows.map(x=>String(x.item_id));
         if(!ids.length)break;
 
         const detalhes=await buscarItensBulkFreteRapido(token,ids);
-        const itens=ids.map(id=>detalhes.mapa[id]).filter(Boolean);
-        const errosDetalhes=ids
-          .filter(id=>!detalhes.mapa[id])
-          .map(id=>({
-              id,
-              erro:detalhes.falhas.get(id)||'Detalhes do anúncio indisponíveis.'
-          }));
 
-        if(errosDetalhes.length){
-            await marcarErrosFreteDbLote(job.seller_id,errosDetalhes);
-            erros+=errosDetalhes.length;
-        }
-
-        for(let i=0;i<itens.length;i+=microLote){
-            const micro=itens.slice(i,i+microLote);
+        // O lote oficial do usuário é 1.000; dividimos em microblocos só
+        // para heartbeat e para não perder progresso se o Render reiniciar.
+        for(let i=0;i<ids.length;i+=MICRO){
+            const microIds=ids.slice(i,i+MICRO);
+            const itens=microIds.map(id=>detalhes.mapa[id]).filter(Boolean);
             const sucessos=[];
-            const falhas=[];
+            const falhas=microIds
+              .filter(id=>!detalhes.mapa[id])
+              .map(id=>({id,erro:detalhes.falhas.get(id)||'Detalhes do anúncio indisponíveis.'}));
 
-            for(let p=0;p<micro.length;p+=concorrencia){
-                const grupo=micro.slice(p,p+concorrencia);
+            for(let p=0;p<itens.length;p+=CONCORRENCIA){
+                const grupo=itens.slice(p,p+CONCORRENCIA);
                 const resultados=await Promise.allSettled(
-                  grupo.map(item=>calcularFreteEscalaRobusto(item,token))
+                    grupo.map(item=>calcularFreteEscalaRobusto(item,token))
                 );
                 resultados.forEach((r,idx)=>{
                     const item=grupo[idx];
@@ -3973,31 +4152,33 @@ async function processarFretesEscala(job){
 
             await atualizarFretesDbLote(job.seller_id,sucessos);
             await marcarErrosFreteDbLote(job.seller_id,falhas);
+
             processados+=sucessos.length;
             erros+=falhas.length;
+            cursor=microIds[microIds.length-1];
 
-            const concluido=Math.min(total,processados+erros);
-            const pct=total?Math.min(100,Math.round((concluido/total)*100)):100;
+            const atual=Math.min(total,processados+erros);
+            const pct=total?Math.min(100,Math.round((atual/total)*100)):100;
+
             await dbQuery(`
               UPDATE ml_jobs SET
                 processed=$2,
                 errors=$3,
                 progress_current=$4,
                 progress_total=$5,
-                message=$6,
+                cursor=$6,
+                message=$7,
                 updated_at=NOW()
               WHERE id=$1
-            `,[
-                job.id,processados,erros,concluido,total,
-                `Fretes: ${concluido.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${erros.toLocaleString('pt-BR')} falha(s)`
-            ]);
+            `,[job.id,processados,erros,atual,total,cursor,
+               `Fretes: ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · lote de até 1.000${erros?` · ${erros.toLocaleString('pt-BR')} falha(s)`:''}`]);
         }
     }
 
-    const concluido=Math.min(total,processados+erros);
+    const atual=Math.min(total,processados+erros);
     const msg=erros
-      ? `Fretes concluídos: ${processados.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} falha(s). As falhas podem ser tentadas novamente.`
-      : `Fretes sincronizados: ${processados.toLocaleString('pt-BR')} anúncio(s).`;
+      ? `Fretes concluídos: ${processados.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} falha(s). Clique novamente para iniciar uma nova varredura completa.`
+      : `Fretes sincronizados: ${processados.toLocaleString('pt-BR')} anúncio(s). Clique novamente quando quiser rodar tudo de novo.`;
 
     await dbQuery(`
       UPDATE ml_jobs SET
@@ -4006,95 +4187,134 @@ async function processarFretesEscala(job){
         progress_total=$3,
         processed=$4,
         errors=$5,
+        cursor=NULL,
         message=$6,
         finished_at=NOW(),
         updated_at=NOW()
       WHERE id=$1
-    `,[job.id,concluido,total,processados,erros,msg]);
+    `,[job.id,atual,total,processados,erros,msg]);
 }
+
+async function prepararJobEscalaV26(sellerId,type,payload,total,{retomarFalha=true}={}){
+    // Se o Render caiu no meio, devolve o job para a fila.
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='queued',
+        locked_at=NULL,
+        available_at=NOW(),
+        message='Retomando automaticamente do último ponto salvo.',
+        updated_at=NOW()
+      WHERE seller_id=$1
+        AND type=$2
+        AND status='running'
+        AND updated_at<NOW()-INTERVAL '90 seconds'
+    `,[sellerId,type]);
+
+    const ativo=await dbQuery(`
+      SELECT * FROM ml_jobs
+      WHERE seller_id=$1 AND type=$2 AND status IN ('queued','running')
+      ORDER BY id DESC LIMIT 1
+    `,[sellerId,type]);
+    if(ativo.rows.length)return {job:ativo.rows[0],retomado:true};
+
+    if(retomarFalha){
+        const falho=await dbQuery(`
+          SELECT * FROM ml_jobs
+          WHERE seller_id=$1 AND type=$2 AND status='failed'
+            AND (cursor IS NOT NULL OR progress_current>0)
+          ORDER BY id DESC LIMIT 1
+        `,[sellerId,type]);
+
+        if(falho.rows.length){
+            const r=await dbQuery(`
+              UPDATE ml_jobs SET
+                status='queued',
+                attempts=0,
+                available_at=NOW(),
+                locked_at=NULL,
+                finished_at=NULL,
+                message='Retomando do último ponto salvo.',
+                updated_at=NOW()
+              WHERE id=$1
+              RETURNING *
+            `,[falho.rows[0].id]);
+            return {job:r.rows[0],retomado:true};
+        }
+    }
+
+    const job=await criarJob(sellerId,type,payload);
+    const r=await dbQuery(`
+      UPDATE ml_jobs SET
+        progress_total=$2,
+        progress_current=0,
+        processed=0,
+        errors=0,
+        cursor=NULL,
+        message=$3,
+        updated_at=NOW()
+      WHERE id=$1
+      RETURNING *
+    `,[job.id,total,payload?.mensagem_inicial||'Sincronização aguardando processamento.']);
+
+    return {job:r.rows[0],retomado:false};
+}
+
+app.post('/api/scale/precos',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const tr=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1 AND status='active'`,[me.id]);
+        const total=Number(tr.rows[0]?.total||0);
+        const preparado=await prepararJobEscalaV26(
+            me.id,
+            'price_sync',
+            {modo:'full_refresh_v26',batch_size:1000,mensagem_inicial:`Preços: 0/${total.toLocaleString('pt-BR')} · lote de até 1.000`},
+            total,
+            {retomarFalha:true}
+        );
+        return res.status(202).json({
+            sucesso:true,
+            job:preparado.job,
+            retomado:preparado.retomado,
+            batch_size:1000,
+            mensagem:preparado.retomado
+              ? 'Sincronização de preços retomada do último ponto salvo.'
+              : 'Sincronização completa de preços iniciada em lotes de até 1.000.'
+        });
+    }catch(e){
+        console.error('[PREÇOS V26 START]',e);
+        respostaErro(res,500,'Erro ao iniciar preços: '+e.message);
+    }
+});
 
 app.post('/api/scale/fretes',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
     try{
         const me=await usuarioML(token);
+        const tr=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1 AND status='active'`,[me.id]);
+        const total=Number(tr.rows[0]?.total||0);
 
-        await dbQuery(`
-          UPDATE ml_jobs SET
-            status='queued',
-            locked_at=NULL,
-            available_at=NOW(),
-            message='Job retomado automaticamente após ficar sem progresso.',
-            updated_at=NOW()
-          WHERE seller_id=$1
-            AND type='freight_sync'
-            AND status='running'
-            AND updated_at < NOW()-INTERVAL '90 seconds'
-        `,[me.id]);
-
-        const existente=await dbQuery(`
-          SELECT * FROM ml_jobs
-          WHERE seller_id=$1
-            AND type='freight_sync'
-            AND status IN ('queued','running')
-          ORDER BY id DESC
-          LIMIT 1
-        `,[me.id]);
-
-        if(existente.rows.length){
-            return res.status(202).json({
-                sucesso:true,
-                job:existente.rows[0],
-                retomado:true,
-                mensagem:'A sincronização de fretes foi retomada/continua em andamento.'
-            });
-        }
-
-        const pend=await dbQuery(`
-          SELECT COUNT(*)::int total
-          FROM ml_items
-          WHERE seller_id=$1
-            AND status='active'
-            AND freight_synced_at IS NULL
-        `,[me.id]);
-        const pendentes=Number(pend.rows[0]?.total||0);
-
-        const job=await criarJob(me.id,'freight_sync',{modo:'pendentes_v20'});
-
-        if(pendentes===0){
-            const pronto=await dbQuery(`
-              UPDATE ml_jobs SET
-                status='completed',
-                progress_total=0,
-                progress_current=0,
-                message='Nenhum anúncio novo ou alterado precisa atualizar o frete.',
-                finished_at=NOW(),
-                updated_at=NOW()
-              WHERE id=$1
-              RETURNING *
-            `,[job.id]);
-
-            return res.json({
-                sucesso:true,
-                job:pronto.rows[0],
-                sem_pendencias:true,
-                mensagem:pronto.rows[0].message
-            });
-        }
-
-        const jr=await dbQuery(
-          `UPDATE ml_jobs SET progress_total=$2,message=$3 WHERE id=$1 RETURNING *`,
-          [job.id,pendentes,`Fretes novos/alterados: 0/${pendentes.toLocaleString('pt-BR')}`]
+        const preparado=await prepararJobEscalaV26(
+            me.id,
+            'freight_sync',
+            {modo:'full_refresh_v26',batch_size:1000,mensagem_inicial:`Fretes: 0/${total.toLocaleString('pt-BR')} · lote de até 1.000`},
+            total,
+            {retomarFalha:true}
         );
 
         return res.status(202).json({
             sucesso:true,
-            job:jr.rows[0],
-            pendentes,
-            mensagem:`Sincronização iniciada somente para ${pendentes.toLocaleString('pt-BR')} anúncio(s) novo(s) ou alterado(s).`
+            job:preparado.job,
+            retomado:preparado.retomado,
+            batch_size:1000,
+            mensagem:preparado.retomado
+              ? 'Sincronização de fretes retomada do último ponto salvo.'
+              : 'Nova varredura completa de fretes iniciada desde o começo, em lotes de até 1.000.'
         });
     }catch(e){
-        console.error('[FRETES V20 START]',e);
+        console.error('[FRETES V26 START]',e);
         respostaErro(res,500,'Erro ao iniciar fretes: '+e.message);
     }
 });
@@ -4179,13 +4399,95 @@ app.post('/api/scale/sync-new', async (req,res)=>{
 app.post('/api/scale/sync',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
+
     try{
         const me=await usuarioML(token);
-        const existente=await dbQuery(`SELECT id,status FROM ml_jobs WHERE seller_id=$1 AND type='full_sync' AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`,[me.id]);
-        if(existente.rows.length)return res.status(202).json({sucesso:true,job:existente.rows[0],mensagem:'Já existe uma sincronização em andamento.'});
-        const job=await criarJob(me.id,'full_sync',{source:'manual'});
-        res.status(202).json({sucesso:true,job,mensagem:'Sincronização colocada na fila. Pode fechar o navegador.'});
-    }catch(e){respostaErro(res,500,e.message)}
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            status='queued',
+            locked_at=NULL,
+            available_at=NOW(),
+            message='Retomando sincronização de anúncios.',
+            updated_at=NOW()
+          WHERE seller_id=$1
+            AND type='full_sync'
+            AND status='running'
+            AND updated_at<NOW()-INTERVAL '90 seconds'
+        `,[me.id]);
+
+        const ativo=await dbQuery(`
+          SELECT * FROM ml_jobs
+          WHERE seller_id=$1 AND type='full_sync' AND status IN ('queued','running')
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+        if(ativo.rows.length){
+            return res.status(202).json({
+                sucesso:true,
+                job:ativo.rows[0],
+                retomado:true,
+                batch_size:5000,
+                mensagem:'A sincronização de anúncios já está em andamento e continuará do ponto salvo.'
+            });
+        }
+
+        // O scroll_id expira em 5 minutos. Só retomamos falha recente;
+        // falha antiga recomeça do início para não usar cursor expirado.
+        const falhoRecente=await dbQuery(`
+          SELECT * FROM ml_jobs
+          WHERE seller_id=$1 AND type='full_sync' AND status='failed'
+            AND cursor IS NOT NULL
+            AND updated_at>NOW()-INTERVAL '4 minutes'
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+
+        if(falhoRecente.rows.length){
+            const r=await dbQuery(`
+              UPDATE ml_jobs SET
+                status='queued',
+                attempts=0,
+                available_at=NOW(),
+                locked_at=NULL,
+                finished_at=NULL,
+                message='Retomando anúncios do último scroll válido.',
+                updated_at=NOW()
+              WHERE id=$1 RETURNING *
+            `,[falhoRecente.rows[0].id]);
+
+            return res.status(202).json({
+                sucesso:true,
+                job:r.rows[0],
+                retomado:true,
+                batch_size:5000,
+                mensagem:'Sincronização de anúncios retomada do ponto salvo.'
+            });
+        }
+
+        const job=await criarJob(me.id,'full_sync',{
+            source:'manual_v26',
+            batch_size:5000
+        });
+        const jr=await dbQuery(`
+          UPDATE ml_jobs SET
+            message='Anúncios: preparando lote de até 5.000',
+            progress_current=0,
+            processed=0,
+            errors=0,
+            cursor=NULL,
+            updated_at=NOW()
+          WHERE id=$1 RETURNING *
+        `,[job.id]);
+
+        return res.status(202).json({
+            sucesso:true,
+            job:jr.rows[0],
+            retomado:false,
+            batch_size:5000,
+            mensagem:'Sincronização completa de anúncios iniciada em lotes lógicos de até 5.000.'
+        });
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
 });
 
 app.get('/api/scale/jobs/:id',async(req,res)=>{
