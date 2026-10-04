@@ -3248,6 +3248,11 @@ async function inicializarBancoEscala() {
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS free_shipping BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS sale_fee NUMERIC(18,2) NOT NULL DEFAULT 0;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS net_received NUMERIC(18,2) NOT NULL DEFAULT 0;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS freight_synced_at TIMESTAMPTZ NULL;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS freight_last_attempt_at TIMESTAMPTZ NULL;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS freight_last_error TEXT NULL;
+      CREATE INDEX IF NOT EXISTS idx_ml_items_freight_pending
+      ON ml_items(seller_id,status,freight_synced_at,freight_last_attempt_at);
 
       CREATE TABLE IF NOT EXISTS ml_jobs (
         id BIGSERIAL PRIMARY KEY,
@@ -3312,6 +3317,24 @@ async function upsertItensDb(sellerId, itens) {
                 status=EXCLUDED.status,listing_type_id=EXCLUDED.listing_type_id,
                 category_id=EXCLUDED.category_id,thumbnail=EXCLUDED.thumbnail,
                 permalink=EXCLUDED.permalink,ml_updated_at=EXCLUDED.ml_updated_at,
+                freight_synced_at=CASE
+                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
+                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
+                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
+                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
+                  THEN NULL ELSE ml_items.freight_synced_at END,
+                freight_last_attempt_at=CASE
+                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
+                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
+                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
+                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
+                  THEN NULL ELSE ml_items.freight_last_attempt_at END,
+                freight_last_error=CASE
+                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
+                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
+                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
+                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
+                  THEN NULL ELSE ml_items.freight_last_error END,
                 raw=EXCLUDED.raw,synced_at=NOW()
             `,v);
         }
@@ -3433,45 +3456,307 @@ async function workerLoop(indice) {
 function jobSleepMs(){return 1200}
 
 
+
+function esperarFrete(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+
+async function mlFetchFreteComTimeout(url,token,timeoutMs=15000){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+        return await mlFetch(url,token,{signal:controller.signal});
+    }finally{
+        clearTimeout(timer);
+    }
+}
+
+function deveRepetirFrete(status){
+    return status===408||status===429||status===500||status===502||status===503||status===504;
+}
+
+async function buscarItensBulkFreteRapido(token,ids){
+    const unicos=[...new Set((ids||[]).filter(Boolean))];
+    const blocos=[];
+    for(let i=0;i<unicos.length;i+=20)blocos.push(unicos.slice(i,i+20));
+
+    const mapa={};
+    const falhas=new Map();
+    const concorrencia=Math.max(2,Math.min(10,Number(process.env.ML_BULK_CONCURRENCY||6)));
+    let cursor=0;
+
+    async function worker(){
+        while(true){
+            const idx=cursor++;
+            if(idx>=blocos.length)return;
+            const bloco=blocos[idx];
+            let ultimoErro='Falha ao buscar detalhes do anúncio.';
+            for(let tentativa=1;tentativa<=2;tentativa++){
+                try{
+                    const r=await mlFetchFreteComTimeout(
+                      `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
+                      token,
+                      15000
+                    );
+                    const d=await jsonSeguro(r);
+                    if(r.ok && Array.isArray(d)){
+                        for(const reg of d){
+                            const body=reg?.body;
+                            const id=reg?.id||body?.id;
+                            if(id&&body)mapa[String(id)]=body;
+                        }
+                        ultimoErro='';
+                        break;
+                    }
+                    ultimoErro=`Detalhes HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
+                    if(!deveRepetirFrete(r.status))break;
+                }catch(e){
+                    ultimoErro=e?.name==='AbortError'?'Timeout ao buscar detalhes.':e.message;
+                }
+                if(tentativa<2)await esperarFrete(700*tentativa);
+            }
+            if(ultimoErro){
+                for(const id of bloco)if(!mapa[id])falhas.set(String(id),ultimoErro);
+            }else{
+                for(const id of bloco)if(!mapa[id])falhas.set(String(id),'Mercado Livre não retornou os detalhes deste anúncio.');
+            }
+        }
+    }
+
+    await Promise.all(
+      Array.from(
+        {length:Math.min(concorrencia,Math.max(1,blocos.length))},
+        ()=>worker()
+      )
+    );
+    return {mapa,falhas};
+}
+
+async function calcularFreteEscalaRobusto(item,token){
+    const shipping=item?.shipping||{};
+    const itemId=item?.id;
+    const sellerId=item?.seller_id;
+    if(!itemId||!sellerId)throw new Error('Anúncio sem item_id/seller_id para calcular frete.');
+
+    const params=new URLSearchParams({
+        item_id:String(itemId),
+        free_shipping:shipping.free_shipping?'true':'false',
+        verbose:'true'
+    });
+    const url=`${ML_API}/users/${sellerId}/shipping_options/free?${params.toString()}`;
+
+    let ultimo='Não foi possível consultar o frete.';
+    for(let tentativa=1;tentativa<=3;tentativa++){
+        try{
+            const r=await mlFetchFreteComTimeout(url,token,12000);
+            const d=await jsonSeguro(r);
+            if(r.ok){
+                const custo=Number(d?.coverage?.all_country?.list_cost);
+                if(Number.isFinite(custo)&&custo>=0){
+                    return {id:String(itemId),custo,gratis:Boolean(shipping.free_shipping)};
+                }
+                ultimo='Mercado Livre respondeu sem coverage.all_country.list_cost.';
+                break;
+            }
+            ultimo=`Frete HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
+            if(!deveRepetirFrete(r.status))break;
+            const retryAfter=Number(r.headers.get('retry-after')||0);
+            await esperarFrete(retryAfter>0?Math.min(5000,retryAfter*1000):500*tentativa);
+        }catch(e){
+            ultimo=e?.name==='AbortError'?'Timeout na consulta de frete.':e.message;
+            if(tentativa<3)await esperarFrete(500*tentativa);
+        }
+    }
+    throw new Error(ultimo);
+}
+
+async function atualizarFretesDbLote(sellerId,linhas){
+    if(!linhas.length)return;
+    const params=[sellerId];
+    const values=[];
+    for(const x of linhas){
+        const base=params.length;
+        params.push(String(x.id),Number(x.custo||0),Boolean(x.gratis));
+        values.push(`($${base+1}::text,$${base+2}::numeric,$${base+3}::boolean)`);
+    }
+    await dbQuery(`
+      UPDATE ml_items AS m SET
+        shipping_cost=v.shipping_cost,
+        free_shipping=v.free_shipping,
+        net_received=GREATEST(0,m.price-m.sale_fee-v.shipping_cost),
+        freight_synced_at=NOW(),
+        freight_last_attempt_at=NOW(),
+        freight_last_error=NULL,
+        synced_at=NOW()
+      FROM (VALUES ${values.join(',')}) AS v(item_id,shipping_cost,free_shipping)
+      WHERE m.seller_id=$1 AND m.item_id=v.item_id
+    `,params);
+}
+
+async function marcarErrosFreteDbLote(sellerId,linhas){
+    if(!linhas.length)return;
+    const params=[sellerId];
+    const values=[];
+    for(const x of linhas){
+        const base=params.length;
+        params.push(String(x.id),String(x.erro||'Falha ao consultar frete.').slice(0,450));
+        values.push(`($${base+1}::text,$${base+2}::text)`);
+    }
+    await dbQuery(`
+      UPDATE ml_items AS m SET
+        freight_last_attempt_at=NOW(),
+        freight_last_error=v.erro
+      FROM (VALUES ${values.join(',')}) AS v(item_id,erro)
+      WHERE m.seller_id=$1 AND m.item_id=v.item_id
+    `,params);
+}
+
+async function adotarProgressoFreteLegado(job){
+    const offset=Number(job.payload?.offset||0);
+    if(offset<=0||job.payload?.v20_adotado)return job;
+
+    await dbQuery(`
+      UPDATE ml_items SET
+        freight_synced_at=COALESCE(freight_synced_at,synced_at),
+        freight_last_attempt_at=COALESCE(freight_last_attempt_at,synced_at),
+        freight_last_error=NULL
+      WHERE seller_id=$1 AND item_id IN (
+        SELECT item_id FROM ml_items
+        WHERE seller_id=$1
+        ORDER BY item_id
+        LIMIT $2
+      )
+    `,[job.seller_id,offset]);
+
+    const payload={...(job.payload||{}),v20_adotado:true,offset_legado:offset};
+    const r=await dbQuery(
+      `UPDATE ml_jobs SET payload=$2,updated_at=NOW(),message=$3 WHERE id=$1 RETURNING *`,
+      [job.id,payload,`Retomando fretes a partir de ${offset.toLocaleString('pt-BR')} anúncio(s) já concluídos.`]
+    );
+    return r.rows[0]||job;
+}
+
 async function processarFretesEscala(job){
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token)throw new Error('Token Mercado Livre indisponível para sincronizar fretes.');
-    const lote=1000;
-    let offset=Number(job.payload?.offset||0), processados=Number(job.processed||0), erros=Number(job.errors||0);
-    const totalR=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[job.seller_id]);
-    const total=Number(totalR.rows[0]?.total||0);
-    await dbQuery(`UPDATE ml_jobs SET progress_total=$2,message=$3,updated_at=NOW() WHERE id=$1`,
-      [job.id,total,`Preparando fretes: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`]);
 
-    while(offset<total){
-        const rr=await dbQuery(`SELECT item_id FROM ml_items WHERE seller_id=$1 ORDER BY item_id LIMIT $2 OFFSET $3`,[job.seller_id,lote,offset]);
-        const ids=rr.rows.map(x=>x.item_id); if(!ids.length)break;
-        const mapa=await buscarItensBulk(token,ids);
-        const itens=ids.map(id=>mapa[id]).filter(Boolean);
+    job=await adotarProgressoFreteLegado(job);
+    let processados=Number(job.processed||0);
+    let erros=Number(job.errors||0);
+    const inicioJob=job.created_at||new Date().toISOString();
 
-        // Concorrência controlada: rápida, sem disparar milhares de chamadas ao mesmo tempo.
-        const concorrencia=Math.max(5,Math.min(30,Number(process.env.ML_FREIGHT_CONCURRENCY||20)));
-        for(let i=0;i<itens.length;i+=concorrencia){
-            const grupo=itens.slice(i,i+concorrencia);
-            const resultados=await Promise.allSettled(grupo.map(async item=>{
-                const custo=await calcularFreteExato(item,token);
-                return {id:item.id,custo,gratis:Boolean(item.shipping?.free_shipping)};
-            }));
-            for(const r of resultados){
-                if(r.status==='fulfilled'){
-                    const x=r.value;
-                    await dbQuery(`UPDATE ml_items SET shipping_cost=$3,free_shipping=$4,net_received=GREATEST(0,price-sale_fee-$3),synced_at=NOW() WHERE seller_id=$1 AND item_id=$2`,
-                      [job.seller_id,x.id,x.custo,x.gratis]);
-                    processados++;
-                }else erros++;
-            }
-        }
-        offset+=ids.length;
-        await dbQuery(`UPDATE ml_jobs SET processed=$2,progress_current=$2,progress_total=$3,errors=$4,payload=jsonb_set(payload,'{offset}',to_jsonb($5::int)),message=$6,updated_at=NOW() WHERE id=$1`,
-          [job.id,processados,total,erros,offset,`Fretes: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lote de até 1.000`]);
+    let total=Number(job.progress_total||0);
+    if(total<=0){
+        const tr=await dbQuery(`
+          SELECT COUNT(*)::int total
+          FROM ml_items
+          WHERE seller_id=$1 AND status='active' AND freight_synced_at IS NULL
+        `,[job.seller_id]);
+        total=Number(tr.rows[0]?.total||0)+processados+erros;
     }
-    await dbQuery(`UPDATE ml_jobs SET status='completed',progress_current=$2,progress_total=$3,processed=$2,errors=$4,message=$5,finished_at=NOW(),updated_at=NOW() WHERE id=$1`,
-      [job.id,processados,total,erros,`Fretes sincronizados: ${processados.toLocaleString('pt-BR')} anúncio(s).`]);
+
+    total=Math.max(total,processados+erros);
+    await dbQuery(
+      `UPDATE ml_jobs SET progress_total=$2,progress_current=$3,message=$4,updated_at=NOW() WHERE id=$1`,
+      [
+        job.id,
+        total,
+        Math.min(total,processados+erros),
+        `Fretes: ${Math.min(total,processados+erros).toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · retomada rápida`
+      ]
+    );
+
+    const lote=1000;
+    const microLote=100;
+    const concorrencia=Math.max(8,Math.min(40,Number(process.env.ML_FREIGHT_CONCURRENCY||24)));
+
+    while(true){
+        const rr=await dbQuery(`
+          SELECT item_id
+          FROM ml_items
+          WHERE seller_id=$1
+            AND status='active'
+            AND freight_synced_at IS NULL
+            AND (freight_last_attempt_at IS NULL OR freight_last_attempt_at < $2::timestamptz)
+          ORDER BY item_id
+          LIMIT $3
+        `,[job.seller_id,inicioJob,lote]);
+
+        const ids=rr.rows.map(x=>String(x.item_id));
+        if(!ids.length)break;
+
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const itens=ids.map(id=>detalhes.mapa[id]).filter(Boolean);
+        const errosDetalhes=ids
+          .filter(id=>!detalhes.mapa[id])
+          .map(id=>({
+              id,
+              erro:detalhes.falhas.get(id)||'Detalhes do anúncio indisponíveis.'
+          }));
+
+        if(errosDetalhes.length){
+            await marcarErrosFreteDbLote(job.seller_id,errosDetalhes);
+            erros+=errosDetalhes.length;
+        }
+
+        for(let i=0;i<itens.length;i+=microLote){
+            const micro=itens.slice(i,i+microLote);
+            const sucessos=[];
+            const falhas=[];
+
+            for(let p=0;p<micro.length;p+=concorrencia){
+                const grupo=micro.slice(p,p+concorrencia);
+                const resultados=await Promise.allSettled(
+                  grupo.map(item=>calcularFreteEscalaRobusto(item,token))
+                );
+                resultados.forEach((r,idx)=>{
+                    const item=grupo[idx];
+                    if(r.status==='fulfilled')sucessos.push(r.value);
+                    else falhas.push({
+                        id:String(item?.id||''),
+                        erro:r.reason?.message||'Falha no frete.'
+                    });
+                });
+            }
+
+            await atualizarFretesDbLote(job.seller_id,sucessos);
+            await marcarErrosFreteDbLote(job.seller_id,falhas);
+            processados+=sucessos.length;
+            erros+=falhas.length;
+
+            const concluido=Math.min(total,processados+erros);
+            const pct=total?Math.min(100,Math.round((concluido/total)*100)):100;
+            await dbQuery(`
+              UPDATE ml_jobs SET
+                processed=$2,
+                errors=$3,
+                progress_current=$4,
+                progress_total=$5,
+                message=$6,
+                updated_at=NOW()
+              WHERE id=$1
+            `,[
+                job.id,processados,erros,concluido,total,
+                `Fretes: ${concluido.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${erros.toLocaleString('pt-BR')} falha(s)`
+            ]);
+        }
+    }
+
+    const concluido=Math.min(total,processados+erros);
+    const msg=erros
+      ? `Fretes concluídos: ${processados.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} falha(s). As falhas podem ser tentadas novamente.`
+      : `Fretes sincronizados: ${processados.toLocaleString('pt-BR')} anúncio(s).`;
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        progress_current=$2,
+        progress_total=$3,
+        processed=$4,
+        errors=$5,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,concluido,total,processados,erros,msg]);
 }
 
 app.post('/api/scale/fretes',async(req,res)=>{
@@ -3479,13 +3764,85 @@ app.post('/api/scale/fretes',async(req,res)=>{
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
     try{
         const me=await usuarioML(token);
-        const total=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[me.id]);
-        const existente=await dbQuery(`SELECT * FROM ml_jobs WHERE seller_id=$1 AND type='freight_sync' AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`,[me.id]);
-        if(existente.rows.length)return res.status(202).json({sucesso:true,job:existente.rows[0],mensagem:'A sincronização de fretes já está em andamento.'});
-        const job=await criarJob(me.id,'freight_sync',{offset:0});
-        await dbQuery(`UPDATE ml_jobs SET progress_total=$2 WHERE id=$1`,[job.id,Number(total.rows[0]?.total||0)]);
-        res.status(202).json({sucesso:true,job:{...job,progress_total:Number(total.rows[0]?.total||0)},mensagem:'Fretes colocados na fila em lotes de até 1.000 anúncios.'});
-    }catch(e){respostaErro(res,500,'Erro ao iniciar fretes: '+e.message)}
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            status='queued',
+            locked_at=NULL,
+            available_at=NOW(),
+            message='Job retomado automaticamente após ficar sem progresso.',
+            updated_at=NOW()
+          WHERE seller_id=$1
+            AND type='freight_sync'
+            AND status='running'
+            AND updated_at < NOW()-INTERVAL '90 seconds'
+        `,[me.id]);
+
+        const existente=await dbQuery(`
+          SELECT * FROM ml_jobs
+          WHERE seller_id=$1
+            AND type='freight_sync'
+            AND status IN ('queued','running')
+          ORDER BY id DESC
+          LIMIT 1
+        `,[me.id]);
+
+        if(existente.rows.length){
+            return res.status(202).json({
+                sucesso:true,
+                job:existente.rows[0],
+                retomado:true,
+                mensagem:'A sincronização de fretes foi retomada/continua em andamento.'
+            });
+        }
+
+        const pend=await dbQuery(`
+          SELECT COUNT(*)::int total
+          FROM ml_items
+          WHERE seller_id=$1
+            AND status='active'
+            AND freight_synced_at IS NULL
+        `,[me.id]);
+        const pendentes=Number(pend.rows[0]?.total||0);
+
+        const job=await criarJob(me.id,'freight_sync',{modo:'pendentes_v20'});
+
+        if(pendentes===0){
+            const pronto=await dbQuery(`
+              UPDATE ml_jobs SET
+                status='completed',
+                progress_total=0,
+                progress_current=0,
+                message='Nenhum anúncio novo ou alterado precisa atualizar o frete.',
+                finished_at=NOW(),
+                updated_at=NOW()
+              WHERE id=$1
+              RETURNING *
+            `,[job.id]);
+
+            return res.json({
+                sucesso:true,
+                job:pronto.rows[0],
+                sem_pendencias:true,
+                mensagem:pronto.rows[0].message
+            });
+        }
+
+        const jr=await dbQuery(
+          `UPDATE ml_jobs SET progress_total=$2,message=$3 WHERE id=$1 RETURNING *`,
+          [job.id,pendentes,`Fretes novos/alterados: 0/${pendentes.toLocaleString('pt-BR')}`]
+        );
+
+        return res.status(202).json({
+            sucesso:true,
+            job:jr.rows[0],
+            pendentes,
+            mensagem:`Sincronização iniciada somente para ${pendentes.toLocaleString('pt-BR')} anúncio(s) novo(s) ou alterado(s).`
+        });
+    }catch(e){
+        console.error('[FRETES V20 START]',e);
+        respostaErro(res,500,'Erro ao iniciar fretes: '+e.message);
+    }
 });
 
 app.get('/api/scale/status',async(req,res)=>{
