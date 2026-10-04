@@ -709,6 +709,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             >
 
                 <button
+                    id="acao-voltar-inicio"
                     type="button"
                     onclick="mudarAba('inicio')"
                     class="btn-dark px-4 py-2.5 rounded-xl text-xs font-black"
@@ -718,6 +719,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 </button>
 
                 <button
+                    id="acao-anuncios"
                     onclick="carregarDados()"
                     class="
                         btn-action
@@ -735,6 +737,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 </button>
 
                 <button
+                    id="acao-atualizar-painel"
                     onclick="carregarDashboard()"
                     class="
                         btn-action
@@ -5920,7 +5923,7 @@ async function carregarTop10V22(){
     if(!token)return {ok:false,erro:'Token não disponível.'};
 
     try{
-        const r=await fetch(`${RENDER_URL}/api/v22/top10?_=${Date.now()}`,{
+        const r=await fetch(`${RENDER_URL}/api/v23/top10?_=${Date.now()}`,{
             cache:'no-store',
             headers:{Authorization:token,Accept:'application/json'}
         });
@@ -5940,54 +5943,34 @@ async function carregarDashboard() {
 
     mostrarLoading('Buscando vendas, indicadores e Top 10...');
 
-    let dashboardOk=false;
-    let top10Ok=false;
-    let erroDashboard='';
-    let erroTop10='';
-
     try{
-        const [dashResultado,topResultado]=await Promise.allSettled([
-            fetch(`${RENDER_URL}/api/dashboard?_=${Date.now()}`,{
-                cache:'no-store',
-                headers:{Authorization:token,Accept:'application/json'}
-            }).then(async r=>{
-                const d=await r.json().catch(()=>({}));
-                if(!r.ok||!d.sucesso)throw new Error(d.erro||`HTTP ${r.status}`);
-                return d;
-            }),
-            carregarTop10V22()
-        ]);
+        const r=await fetch(`${RENDER_URL}/api/dashboard?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
 
-        if(dashResultado.status==='fulfilled'){
-            preencherDashboard(dashResultado.value);
-            dashboardOk=true;
-        }else{
-            erroDashboard=dashResultado.reason?.message||'Falha ao carregar indicadores.';
-            console.error('[DASHBOARD V22]',dashResultado.reason);
+        if(!r.ok||!d.sucesso){
+            throw new Error(d.erro||`HTTP ${r.status}`);
         }
 
-        if(topResultado.status==='fulfilled'&&topResultado.value?.ok){
-            top10Ok=true;
-        }else{
-            erroTop10=topResultado.status==='fulfilled'
-              ? topResultado.value?.erro||'Falha no Top 10.'
-              : topResultado.reason?.message||'Falha no Top 10.';
+        preencherDashboard(d);
+
+        // O dashboard V23 já traz unidades + faturamento reais pelos pedidos pagos.
+        // Só chama a rota independente como fallback quando o ranking vier vazio.
+        if(!Array.isArray(d.top10)||!d.top10.length){
+            const fallback=await carregarTop10V22();
+            if(!fallback.ok)console.warn('[TOP10 V23 FALLBACK]',fallback.erro);
         }
 
         const status=document.getElementById('home-tempo-real-status');
         if(status){
-            if(dashboardOk&&top10Ok){
-                status.innerText='● Painel e Top 10 atualizados agora';
-                status.className='text-[10px] text-emerald-400 font-bold';
-            }else if(dashboardOk||top10Ok){
-                status.innerText='● Atualização parcial — mantendo os últimos dados nas partes indisponíveis';
-                status.className='text-[10px] text-yellow-400 font-bold';
-            }
+            status.innerText='● Painel e Top 10 atualizados agora';
+            status.className='text-[10px] text-emerald-400 font-bold';
         }
-
-        if(!dashboardOk&&!top10Ok){
-            alert(`Não foi possível atualizar o painel.\n${erroDashboard}${erroTop10?`\nTop 10: ${erroTop10}`:''}`);
-        }
+    }catch(e){
+        console.error('[DASHBOARD V23]',e);
+        alert('Erro ao carregar o painel: '+e.message);
     }finally{
         esconderLoading();
     }
@@ -6747,6 +6730,16 @@ body.atendimento-isolado #secao-atendimento{
 }
 body.atendimento-isolado #secao-atendimento .chat-voltar-v22{
     display:inline-flex!important;
+}
+
+body.pagina-inicio-v23 #acao-anuncios{
+    display:none!important;
+}
+body.configuracoes-isolado-v23 #app-header nav{
+    display:none!important;
+}
+body.configuracoes-isolado-v23 #acao-voltar-inicio{
+    display:none!important;
 }
 
 .theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
@@ -7932,7 +7925,10 @@ function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedi
 /* Navegação V21: Gestão continua paginada; Simulação/Atualização/Pedidos ganham seus loaders próprios. */
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
-    document.body.classList.toggle('atendimento-isolado',String(aba)==='atendimento');
+    const destino=String(aba);
+    document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
+    document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
+    document.body.classList.toggle('pagina-inicio-v23',destino==='inicio');
     _mudarAbaV21(aba);
     if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
@@ -7941,6 +7937,10 @@ mudarAba=function(aba){
 
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
+    const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
+    document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
+    document.body.classList.toggle('pagina-inicio-v23',abaInicial==='inicio');
+
     // Enter aplica o filtro rapidamente nas duas páginas.
     document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
     document.getElementById('atual-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroAtualizacaoV21()});
