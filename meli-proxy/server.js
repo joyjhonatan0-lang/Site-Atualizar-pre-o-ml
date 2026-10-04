@@ -3508,6 +3508,19 @@ async function inicializarBancoEscala() {
       CREATE INDEX IF NOT EXISTS idx_ml_items_freight_pending
       ON ml_items(seller_id,status,freight_synced_at,freight_last_attempt_at);
 
+      CREATE TABLE IF NOT EXISTS ml_sku_pricing (
+        seller_id BIGINT NOT NULL,
+        sku TEXT NOT NULL,
+        sku_key TEXT NOT NULL,
+        cost NUMERIC(18,2) NOT NULL DEFAULT 0,
+        desired_margin NUMERIC(8,4) NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (seller_id, sku_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_sku_pricing_seller
+      ON ml_sku_pricing(seller_id,sku_key);
+
       CREATE TABLE IF NOT EXISTS ml_jobs (
         id BIGSERIAL PRIMARY KEY,
         seller_id BIGINT NOT NULL,
@@ -4316,6 +4329,157 @@ app.post('/api/scale/fretes',async(req,res)=>{
     }catch(e){
         console.error('[FRETES V26 START]',e);
         respostaErro(res,500,'Erro ao iniciar fretes: '+e.message);
+    }
+});
+
+/* =========================================================
+   V27 — CUSTO E MARGEM DE LUCRO POR SKU
+========================================================= */
+function normalizarSkuKeyV27(v){
+    return String(v||'').trim().toLowerCase();
+}
+
+app.get('/api/v27/sku-pricing',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+
+        const [regras,skus]=await Promise.all([
+            dbQuery(`
+              SELECT
+                sku,
+                sku_key,
+                cost::float8 AS custo,
+                desired_margin::float8 AS margem,
+                updated_at
+              FROM ml_sku_pricing
+              WHERE seller_id=$1
+              ORDER BY sku_key
+            `,[me.id]),
+            dbQuery(`
+              SELECT
+                MIN(sku) AS sku,
+                lower(trim(sku)) AS sku_key,
+                COUNT(*)::int AS anuncios
+              FROM ml_items
+              WHERE seller_id=$1
+                AND trim(COALESCE(sku,''))<>''
+              GROUP BY lower(trim(sku))
+              ORDER BY lower(trim(sku))
+              LIMIT 10000
+            `,[me.id])
+        ]);
+
+        res.set('Cache-Control','no-store');
+        return res.json({
+            sucesso:true,
+            regras:regras.rows,
+            skus_disponiveis:skus.rows
+        });
+    }catch(e){
+        console.error('[SKU PRICING V27 GET]',e);
+        respostaErro(res,500,'Erro ao carregar custos por SKU: '+e.message);
+    }
+});
+
+app.post('/api/v27/sku-pricing',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    const regras=Array.isArray(req.body?.regras)?req.body.regras:[];
+    if(!regras.length)return respostaErro(res,400,'Adicione pelo menos um SKU.');
+    if(regras.length>5000)return respostaErro(res,400,'Máximo de 5.000 SKUs por salvamento.');
+
+    try{
+        const me=await usuarioML(token);
+        const normalizadas=[];
+        const vistos=new Set();
+
+        for(const r of regras){
+            const sku=String(r?.sku||'').trim();
+            const skuKey=normalizarSkuKeyV27(sku);
+            const custo=Number(r?.custo);
+            const margem=Number(r?.margem);
+
+            if(!skuKey)continue;
+            if(!Number.isFinite(custo)||custo<0){
+                return respostaErro(res,400,`Custo inválido para o SKU ${sku}.`);
+            }
+            if(!Number.isFinite(margem)||margem<0||margem>=95){
+                return respostaErro(res,400,`Margem inválida para o SKU ${sku}. Use um valor entre 0 e 94,99%.`);
+            }
+
+            if(vistos.has(skuKey))continue;
+            vistos.add(skuKey);
+            normalizadas.push({sku,skuKey,custo,margem});
+        }
+
+        if(!normalizadas.length)return respostaErro(res,400,'Nenhum SKU válido para salvar.');
+
+        const client=await db.connect();
+        try{
+            await client.query('BEGIN');
+
+            for(const r of normalizadas){
+                await client.query(`
+                  INSERT INTO ml_sku_pricing
+                    (seller_id,sku,sku_key,cost,desired_margin,updated_at)
+                  VALUES($1,$2,$3,$4,$5,NOW())
+                  ON CONFLICT(seller_id,sku_key) DO UPDATE SET
+                    sku=EXCLUDED.sku,
+                    cost=EXCLUDED.cost,
+                    desired_margin=EXCLUDED.desired_margin,
+                    updated_at=NOW()
+                `,[me.id,r.sku,r.skuKey,r.custo,r.margem]);
+            }
+
+            await client.query('COMMIT');
+        }catch(e){
+            await client.query('ROLLBACK');
+            throw e;
+        }finally{
+            client.release();
+        }
+
+        return res.json({
+            sucesso:true,
+            salvos:normalizadas.length,
+            mensagem:`${normalizadas.length} SKU(s) salvo(s) na base de custos e margem.`
+        });
+    }catch(e){
+        console.error('[SKU PRICING V27 POST]',e);
+        respostaErro(res,500,'Erro ao salvar custos por SKU: '+e.message);
+    }
+});
+
+app.delete('/api/v27/sku-pricing/:sku',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const skuKey=normalizarSkuKeyV27(decodeURIComponent(req.params.sku||''));
+        if(!skuKey)return respostaErro(res,400,'SKU inválido.');
+
+        const r=await dbQuery(`
+          DELETE FROM ml_sku_pricing
+          WHERE seller_id=$1 AND sku_key=$2
+          RETURNING sku
+        `,[me.id,skuKey]);
+
+        return res.json({
+            sucesso:true,
+            removido:Boolean(r.rows.length),
+            sku:r.rows[0]?.sku||skuKey
+        });
+    }catch(e){
+        console.error('[SKU PRICING V27 DELETE]',e);
+        respostaErro(res,500,'Erro ao remover SKU: '+e.message);
     }
 });
 
