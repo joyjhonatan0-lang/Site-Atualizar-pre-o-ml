@@ -2588,6 +2588,88 @@ app.get('/api/v3/bpp/case/:id',async(req,res)=>{
     try{const r=await mlFetch(`${ML_API}/moderations/pppi/case/${encodeURIComponent(req.params.id)}`,token);const d=await jsonSeguro(r);if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));res.json(d)}catch(e){respostaErro(res,500,e.message)}
 });
 
+
+app.get('/api/v9/claims/:id/dossie',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    const id=encodeURIComponent(req.params.id);
+    try{
+        const urls=[
+          `${ML_API}/post-purchase/v1/claims/${id}`,
+          `${ML_API}/post-purchase/v1/claims/${id}/detail`,
+          `${ML_API}/post-purchase/v1/claims/${id}/messages`,
+          `${ML_API}/post-purchase/v1/claims/${id}/affects-reputation`
+        ];
+        const rr=await Promise.all(urls.map(u=>mlFetch(u,token).then(async r=>({ok:r.ok,status:r.status,data:await jsonSeguro(r)}))));
+        if(!rr[0].ok)return respostaErro(res,rr[0].status,formatarErroMercadoLivre(rr[0].data));
+        const messages=rr[2].ok&&Array.isArray(rr[2].data)?rr[2].data:[];
+        const attachments=[];
+        messages.forEach(m=>(m.attachments||[]).forEach(a=>attachments.push({...a,message_date:m.date_created||m.message_date,sender_role:m.sender_role})));
+        res.json({sucesso:true,claim:rr[0].data,detail:rr[1].ok?rr[1].data:{},messages,impact:rr[3].ok?rr[3].data:null,attachments});
+    }catch(e){respostaErro(res,500,'Erro ao montar dossiê: '+e.message)}
+});
+
+app.get('/api/v9/claims/:id/attachments/:file',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const u=`${ML_API}/post-purchase/v1/claims/${encodeURIComponent(req.params.id)}/attachments/${encodeURIComponent(req.params.file)}/download`;
+        const r=await mlFetch(u,token);
+        if(!r.ok){const d=await jsonSeguro(r);return respostaErro(res,r.status,formatarErroMercadoLivre(d))}
+        const buf=Buffer.from(await r.arrayBuffer());
+        res.setHeader('Content-Type',r.headers.get('content-type')||'application/octet-stream');
+        res.setHeader('Cache-Control','private, max-age=60');
+        res.send(buf);
+    }catch(e){respostaErro(res,500,'Erro ao baixar anexo: '+e.message)}
+});
+
+app.post('/api/v9/claims/:id/analisar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!process.env.OPENAI_API_KEY)return respostaErro(res,503,'Configure OPENAI_API_KEY no Render para usar a análise de reclamações.');
+    const id=encodeURIComponent(req.params.id);
+    try{
+        const get=async path=>{const r=await mlFetch(`${ML_API}${path}`,token);return {ok:r.ok,data:await jsonSeguro(r)}};
+        const [cr,dr,mr,ir]=await Promise.all([
+          get(`/post-purchase/v1/claims/${id}`),get(`/post-purchase/v1/claims/${id}/detail`),
+          get(`/post-purchase/v1/claims/${id}/messages`),get(`/post-purchase/v1/claims/${id}/affects-reputation`)
+        ]);
+        if(!cr.ok)return respostaErro(res,404,'Reclamação não encontrada.');
+        const msgs=mr.ok&&Array.isArray(mr.data)?mr.data:[];
+        const anexos=msgs.flatMap(m=>(m.attachments||[]).map(a=>({claim_id:id,filename:a.filename,type:a.type,original_filename:a.original_filename,sender_role:m.sender_role})));
+        const evidenciasVisuais=[];
+        // Envia imagens disponíveis para visão do modelo; PDFs/outros entram como metadados.
+        for(const a of anexos.filter(x=>String(x.type||'').startsWith('image/')).slice(0,6)){
+          try{
+            const ar=await mlFetch(`${ML_API}/post-purchase/v1/claims/${id}/attachments/${encodeURIComponent(a.filename)}/download`,token);
+            if(ar.ok){
+              const ct=ar.headers.get('content-type')||a.type||'image/jpeg';
+              const buf=Buffer.from(await ar.arrayBuffer());
+              if(buf.length<=5*1024*1024)evidenciasVisuais.push({type:'input_image',image_url:`data:${ct};base64,${buf.toString('base64')}`});
+            }
+          }catch(e){}
+        }
+        const contexto={claim:cr.data,detail:dr.ok?dr.data:{},impact:ir.ok?ir.data:null,messages:msgs.map(m=>({sender_role:m.sender_role,receiver_role:m.receiver_role,message:m.message,translated_message:m.translated_message,date_created:m.date_created,attachments:m.attachments}))};
+        const input=[{role:'user',content:[
+          {type:'input_text',text:`Analise esta reclamação do Mercado Livre como assistente do vendedor.\nDADOS:\n${JSON.stringify(contexto)}\n\nObjetivo: produzir uma análise factual e uma resposta profissional que defenda legitimamente o vendedor com base somente nas evidências disponíveis. Não invente fatos, não acuse o comprador, não prometa que a reclamação não afetará reputação e não prometa ausência de prejuízo. Identifique contradições, fatos favoráveis, riscos, informações faltantes e a melhor estratégia permitida. Se houver imagem, descreva apenas o que realmente é visível. Retorne SOMENTE JSON válido: {"analise":"...","resposta_sugerida":"..."}. A resposta sugerida deve ser clara, respeitosa, objetiva e adequada para comprador ou mediação.`},
+          ...evidenciasVisuais
+        ]}];
+        const or=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.6-luna',store:false,input})});
+        const od=await or.json();if(!or.ok)return respostaErro(res,or.status,od.error?.message||'Erro na IA.');
+        const txt=od.output_text||(od.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
+        let parsed;try{parsed=JSON.parse(String(txt).replace(/^```json\s*|```$/g,'').trim())}catch(e){parsed={analise:txt,resposta_sugerida:''}}
+        res.json({sucesso:true,...parsed,imagens_analisadas:evidenciasVisuais.length,anexos_encontrados:anexos.length});
+    }catch(e){respostaErro(res,500,'Erro na análise da reclamação: '+e.message)}
+});
+
+app.post('/api/v9/claims/:id/mensagem',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    const message=String(req.body?.message||'').trim(),receiver=String(req.body?.receiver_role||'complainant');
+    if(!message)return respostaErro(res,400,'Mensagem vazia.');
+    if(!['complainant','mediator'].includes(receiver))return respostaErro(res,400,'Destinatário inválido.');
+    try{
+        const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/${encodeURIComponent(req.params.id)}/actions/send-message`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({receiver_role:receiver,message,attachments:[]})});
+        const d=await jsonSeguro(r);if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));res.status(201).json({sucesso:true,resposta:d});
+    }catch(e){respostaErro(res,500,'Erro ao enviar mensagem: '+e.message)}
+});
+
 app.get('/api/v3/auditoria',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     try{
