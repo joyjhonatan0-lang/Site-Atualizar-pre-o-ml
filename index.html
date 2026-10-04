@@ -1335,7 +1335,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <button
                     onclick="puxarNovosAnuncios()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
-                    title="Busca somente anúncios novos que ainda não estão carregados no painel"
+                    title="Sincroniza os anúncios em lotes lógicos de até 5.000 e retoma se houver interrupção"
                 >
                     ↓ Puxar anúncios
                 </button>
@@ -1343,7 +1343,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <button
                     onclick="sincronizarPrecosApi()"
                     class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
-                    title="Atualiza somente o preço atual dos MLBs carregados"
+                    title="Atualiza os preços de todos os anúncios em lotes de até 1.000"
                 >
                     R$ Puxar preços
                 </button>
@@ -1351,7 +1351,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <button
                     onclick="sincronizarFretesApi()"
                     class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-slate-300 font-bold"
-                    title="Atualiza somente o frete atual dos MLBs carregados"
+                    title="Roda uma nova varredura completa de fretes em lotes de até 1.000; se interromper, retoma do ponto salvo"
                 >
                     🚚 Puxar fretes
                 </button>
@@ -1935,6 +1935,43 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
             </div>
 
+        </div>
+
+        <div id="sync-progress-area-v26" class="px-5 py-4 border-b border-slate-800 bg-slate-950/30">
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">Anúncios · lote 5.000</div>
+                        <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
+                    </div>
+                    <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div id="sync-bar-anuncios-v26" class="h-full bg-yellow-400 transition-all duration-300" style="width:0%"></div>
+                    </div>
+                    <div id="sync-msg-anuncios-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar anúncios.</div>
+                </div>
+
+                <div id="sync-card-precos-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-blue-400">Preços · lote 1.000</div>
+                        <div id="sync-status-precos-v26" class="text-[10px] text-slate-500">Aguardando</div>
+                    </div>
+                    <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div id="sync-bar-precos-v26" class="h-full bg-blue-400 transition-all duration-300" style="width:0%"></div>
+                    </div>
+                    <div id="sync-msg-precos-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar preços.</div>
+                </div>
+
+                <div id="sync-card-fretes-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-emerald-400">Fretes · lote 1.000</div>
+                        <div id="sync-status-fretes-v26" class="text-[10px] text-slate-500">Aguardando</div>
+                    </div>
+                    <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div id="sync-bar-fretes-v26" class="h-full bg-emerald-400 transition-all duration-300" style="width:0%"></div>
+                    </div>
+                    <div id="sync-msg-fretes-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar fretes.</div>
+                </div>
+            </div>
         </div>
 
         <div
@@ -8175,6 +8212,147 @@ document.addEventListener('DOMContentLoaded',()=>{
     // Enter aplica o filtro rapidamente nas duas páginas.
     document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
     document.getElementById('atual-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroAtualizacaoV21()});
+});
+</script>
+
+<script id="mlhub-v26-sync-progress">
+/* =========================================================
+   V26 — PROGRESSO DE ANÚNCIOS / PREÇOS / FRETES
+========================================================= */
+const syncTimersV26={anuncios:null,precos:null,fretes:null};
+
+function syncRefsV26(tipo){
+    return {
+        bar:document.getElementById(`sync-bar-${tipo}-v26`),
+        status:document.getElementById(`sync-status-${tipo}-v26`),
+        msg:document.getElementById(`sync-msg-${tipo}-v26`),
+        card:document.getElementById(`sync-card-${tipo}-v26`)
+    };
+}
+
+function atualizarProgressoV26(tipo,{status='running',atual=0,total=0,mensagem=''}={}){
+    const r=syncRefsV26(tipo);
+    const pct=total>0?Math.max(0,Math.min(100,Math.round((Number(atual||0)/Number(total))*100))):(status==='completed'?100:0);
+
+    if(r.bar){
+        r.bar.style.width=`${pct}%`;
+        r.bar.classList.toggle('bg-red-400',status==='failed');
+    }
+    if(r.status){
+        r.status.textContent=status==='completed'
+          ? 'Concluído'
+          : status==='failed'
+            ? 'Falhou'
+            : status==='queued'
+              ? 'Na fila'
+              : `${pct}%`;
+        r.status.className=`text-[10px] font-bold ${
+          status==='completed'?'text-emerald-400':
+          status==='failed'?'text-red-400':
+          status==='queued'?'text-yellow-400':'text-slate-300'
+        }`;
+    }
+    if(r.msg){
+        const numeros=total>0?` · ${Number(atual||0).toLocaleString('pt-BR')}/${Number(total).toLocaleString('pt-BR')}`:'';
+        r.msg.textContent=(mensagem||'Processando...')+numeros;
+    }
+}
+
+async function iniciarJobSyncV26(tipo,url){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    atualizarProgressoV26(tipo,{status:'queued',mensagem:'Solicitando sincronização ao servidor...'});
+
+    try{
+        const r=await fetch(`${RENDER_URL}${url}?_=${Date.now()}`,{
+            method:'POST',
+            cache:'no-store',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:'{}'
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const jobId=d.job?.id;
+        if(!jobId)throw new Error('Servidor não retornou o ID da sincronização.');
+
+        localStorage.setItem(`mlHubPro_sync_v26_${tipo}`,String(jobId));
+        atualizarProgressoV26(tipo,{
+            status:d.job?.status||'queued',
+            atual:Number(d.job?.progress_current||0),
+            total:Number(d.job?.progress_total||0),
+            mensagem:d.mensagem||d.job?.message||'Sincronização iniciada.'
+        });
+
+        acompanharJobSyncV26(tipo,jobId);
+    }catch(e){
+        atualizarProgressoV26(tipo,{status:'failed',mensagem:e.message||'Falha ao iniciar sincronização.'});
+    }
+}
+
+async function acompanharJobSyncV26(tipo,jobId){
+    clearTimeout(syncTimersV26[tipo]);
+
+    const token=obterToken();
+    if(!token)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const j=d.job||{};
+        atualizarProgressoV26(tipo,{
+            status:j.status||'running',
+            atual:Number(j.progress_current||0),
+            total:Number(j.progress_total||0),
+            mensagem:j.message||'Processando...'
+        });
+
+        if(['queued','running'].includes(j.status)){
+            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),1500);
+            return;
+        }
+
+        if(j.status==='completed'){
+            localStorage.removeItem(`mlHubPro_sync_v26_${tipo}`);
+            if(typeof carregarGestaoEscala==='function'){
+                await carregarGestaoEscala(gestaoPagina||1,{silencioso:true});
+            }
+            return;
+        }
+
+        if(j.status==='failed'){
+            // Mantém o job salvo para o próximo clique poder retomá-lo.
+            return;
+        }
+    }catch(e){
+        atualizarProgressoV26(tipo,{status:'failed',mensagem:'Erro ao acompanhar: '+e.message});
+    }
+}
+
+// Sobrescreve somente os três botões de sincronização.
+window.puxarNovosAnuncios=function(){
+    return iniciarJobSyncV26('anuncios','/api/scale/sync');
+};
+
+window.sincronizarPrecosApi=function(){
+    return iniciarJobSyncV26('precos','/api/scale/precos');
+};
+
+window.sincronizarFretesApi=function(){
+    return iniciarJobSyncV26('fretes','/api/scale/fretes');
+};
+
+document.addEventListener('DOMContentLoaded',()=>{
+    ['anuncios','precos','fretes'].forEach(tipo=>{
+        const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
+        if(id)acompanharJobSyncV26(tipo,id);
+    });
 });
 </script>
 
