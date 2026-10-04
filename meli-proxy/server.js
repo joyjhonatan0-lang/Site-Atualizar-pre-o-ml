@@ -2946,68 +2946,6 @@ app.get('/api/scale/status',async(req,res)=>{
     }catch(e){respostaErro(res,500,e.message)}
 });
 
-
-// Sincronização incremental para o botão "Puxar novos anúncios".
-// Não percorre os 90 mil anúncios: consulta os mais recentes e para quando
-// encontra uma sequência de itens que já está no PostgreSQL.
-app.post('/api/scale/sync-new', async (req,res)=>{
-    const token=obterToken(req);
-    if(!token)return respostaErro(res,401,'Token não fornecido.');
-    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
-    try{
-        const me=await usuarioML(token);
-        const sellerId=me.id;
-        let offset=0, novosTotal=0, paginas=0, conhecidosSeguidos=0;
-        const maxPaginas=Math.max(1,Math.min(20,Number(req.body?.max_pages||10))); // até 1000 recentes
-        while(paginas<maxPaginas && conhecidosSeguidos<100){
-            const params=new URLSearchParams({
-                orders:'start_time_desc',
-                limit:'100',
-                offset:String(offset)
-            });
-            const sr=await mlFetch(`${ML_API}/users/${sellerId}/items/search?${params}`,token);
-            const sd=await jsonSeguro(sr);
-            if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd)||`Mercado Livre HTTP ${sr.status}`);
-            const ids=Array.isArray(sd.results)?sd.results:[];
-            if(!ids.length)break;
-
-            const ex=await dbQuery(
-                `SELECT item_id FROM ml_items WHERE seller_id=$1 AND item_id = ANY($2::text[])`,
-                [sellerId,ids]
-            );
-            const existentes=new Set(ex.rows.map(r=>String(r.item_id)));
-            const idsNovos=ids.filter(id=>!existentes.has(String(id)));
-
-            if(idsNovos.length){
-                const mapa=await buscarItensBulk(token,idsNovos);
-                const itens=idsNovos.map(id=>mapa[id]).filter(Boolean);
-                if(itens.length)await upsertItensDb(sellerId,itens);
-                novosTotal+=itens.length;
-                conhecidosSeguidos=0;
-            }else{
-                conhecidosSeguidos+=ids.length;
-            }
-
-            paginas++;
-            offset+=ids.length;
-            if(ids.length<100)break;
-        }
-        const total=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[sellerId]);
-        res.json({
-            sucesso:true,
-            novos:novosTotal,
-            total:Number(total.rows[0]?.total||0),
-            paginas_verificadas:paginas,
-            mensagem:novosTotal
-              ? `${novosTotal} anúncio(s) novo(s) adicionado(s).`
-              : 'Nenhum anúncio novo encontrado.'
-        });
-    }catch(e){
-        console.error('[SYNC NOVOS]',e);
-        respostaErro(res,500,'Erro ao buscar anúncios novos: '+e.message);
-    }
-});
-
 app.post('/api/scale/sync',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
