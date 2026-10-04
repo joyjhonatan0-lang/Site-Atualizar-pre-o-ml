@@ -4949,7 +4949,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
     try{
         const me=await usuarioML(token);
-        const page=Math.max(1,Number(req.query.page||1)),limit=Math.min(100,Math.max(10,Number(req.query.limit||50))),offset=(page-1)*limit;
+        const page=Math.max(1,Number(req.query.page||1)),limit=Math.min(1000,Math.max(10,Number(req.query.limit||50))),offset=(page-1)*limit;
         const q=String(req.query.q||'').trim(),status=String(req.query.status||'').trim();
         const field=String(req.query.field||'all').trim().toLowerCase();
         const params=[me.id];let where=`seller_id=$1`;
