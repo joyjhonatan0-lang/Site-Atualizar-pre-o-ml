@@ -1313,75 +1313,90 @@ async function buscarItensBulk(
  * Usa a ordenação sold_quantity_desc do endpoint oficial do vendedor
  * e depois consulta os detalhes dos itens com o token proprietário.
  */
-async function buscarTop10MaisVendidosDaConta(token, sellerId) {
-    const params = new URLSearchParams({
-        sort: 'sold_quantity_desc',
-        limit: '10',
-        offset: '0'
+async function montarTop10PorPedidosPagos(token,pedidos){
+    const mapa=new Map();
+
+    for(const pedido of (Array.isArray(pedidos)?pedidos:[])){
+        if(String(pedido?.status||'').toLowerCase()!=='paid')continue;
+
+        for(const oi of (Array.isArray(pedido?.order_items)?pedido.order_items:[])){
+            const item=oi?.item||{};
+            const id=String(item.id||'').trim();
+            if(!id)continue;
+
+            const quantidade=Number(oi.quantity||0);
+            const unitPrice=Number(oi.unit_price||0);
+
+            if(!mapa.has(id)){
+                mapa.set(id,{
+                    item_id:id,
+                    titulo:item.title||id,
+                    unidades:0,
+                    faturamento:0
+                });
+            }
+
+            const reg=mapa.get(id);
+            reg.unidades+=quantidade;
+            reg.faturamento+=quantidade*unitPrice;
+        }
+    }
+
+    const ranking=[...mapa.values()]
+      .filter(x=>x.unidades>0)
+      .sort((a,b)=>b.unidades-a.unidades || b.faturamento-a.faturamento)
+      .slice(0,10);
+
+    if(!ranking.length)return [];
+
+    const detalhes=await buscarItensBulk(token,ranking.map(x=>x.item_id));
+
+    return ranking.map(item=>{
+        const detalhe=detalhes[item.item_id]||{};
+        return {
+            item_id:item.item_id,
+            titulo:detalhe.title||item.titulo||item.item_id,
+            unidades:Number(item.unidades||0),
+            faturamento:Number(Number(item.faturamento||0).toFixed(2)),
+            preco_atual:Number(detalhe.price||0),
+            thumbnail:detalhe.thumbnail||detalhe.secure_thumbnail||'',
+            permalink:detalhe.permalink||'#',
+            status:detalhe.status||''
+        };
     });
-
-    const response = await mlFetch(
-        `${ML_API}/users/${sellerId}/items/search?${params.toString()}`,
-        token
-    );
-
-    const data = await jsonSeguro(response);
-
-    if (!response.ok) {
-        throw new Error(
-            'Erro ao buscar ranking de anúncios: ' +
-            formatarErroMercadoLivre(data)
-        );
-    }
-
-    const ids = Array.isArray(data.results)
-        ? data.results.slice(0, 10)
-        : [];
-
-    if (!ids.length) {
-        return [];
-    }
-
-    const detalhes = await buscarItensBulk(token, ids);
-
-    return ids
-        .map(id => detalhes[id])
-        .filter(Boolean)
-        .map(item => ({
-            item_id: item.id,
-            titulo: item.title || item.id,
-            unidades: Number(item.sold_quantity || 0),
-            faturamento: Number(item.sold_quantity || 0) * Number(item.price || 0),
-            preco_atual: Number(item.price || 0),
-            thumbnail: item.thumbnail || item.secure_thumbnail || '',
-            permalink: item.permalink || '#',
-            status: item.status || ''
-        }))
-        .sort((a, b) => b.unidades - a.unidades)
-        .slice(0, 10);
 }
 
+/**
+ * Top 10 por vendas reais.
+ * A API de orders conserva os pedidos por até 12 meses; usamos somente orders
+ * pagas e somamos quantity + unit_price de cada anúncio.
+ */
+async function buscarTop10MaisVendidosDaConta(token,sellerId){
+    const pedidos=await buscarPedidosDoVendedor(token,sellerId);
+    return montarTop10PorPedidosPagos(token,pedidos);
+}
 
 /**
  * GET /api/v22/top10
  * Ranking rápido e independente do dashboard completo.
  */
-app.get('/api/v22/top10', async (req,res)=>{
+async function responderTop10V23(req,res){
     const token=obterToken(req);
     if(!token)return respostaErro(res,401,'Token não fornecido.');
+
     try{
         const me=await usuarioML(token);
         const sellerId=me.id;
-
         let top10=[];
-        let fonte='mercado_livre';
+        let fonte='pedidos_pagos_12_meses';
 
         try{
             top10=await buscarTop10MaisVendidosDaConta(token,sellerId);
         }catch(e){
-            console.warn('[TOP10 V22 API]',e.message);
+            console.warn('[TOP10 V23 PEDIDOS]',e.message);
         }
 
+        // Fallback somente se a busca de pedidos não retornar ranking.
         if((!Array.isArray(top10)||!top10.length) && db){
             const r=await dbQuery(`
               SELECT item_id,title,price::float8 price,sold_quantity,thumbnail,permalink,status
@@ -1392,7 +1407,7 @@ app.get('/api/v22/top10', async (req,res)=>{
             `,[sellerId]);
 
             if(r.rows.length){
-                fonte='postgresql';
+                fonte='postgresql_fallback';
                 top10=r.rows.map(item=>({
                     item_id:item.item_id,
                     titulo:item.title||item.item_id,
@@ -1407,12 +1422,22 @@ app.get('/api/v22/top10', async (req,res)=>{
         }
 
         res.set('Cache-Control','no-store');
-        return res.json({sucesso:true,fonte,total:top10.length,top10});
+        return res.json({
+            sucesso:true,
+            fonte,
+            periodo:'ultimos_12_meses',
+            total:top10.length,
+            top10
+        });
     }catch(e){
-        console.error('[TOP10 V22]',e);
+        console.error('[TOP10 V23]',e);
         return respostaErro(res,500,'Erro ao buscar Top 10: '+e.message);
     }
-});
+}
+
+app.get('/api/v23/top10',responderTop10V23);
+// Compatibilidade com o index anterior durante o deploy.
+app.get('/api/v22/top10',responderTop10V23);
 
 /**
  * GET /api/dashboard
@@ -1605,30 +1630,29 @@ app.get('/api/dashboard', async (req, res) => {
                 topIds
             );
 
-        // Top 10 da conta: usa sold_quantity dos anúncios do próprio vendedor.
-        // Se a consulta específica falhar, mantém como fallback o ranking dos pedidos.
+        // Top 10 real do período: soma unidades e faturamento dos pedidos pagos.
+        // Reaproveita os pedidos que o dashboard já buscou, sem fazer outra varredura.
         let top10;
 
         try {
-            top10 = await buscarTop10MaisVendidosDaConta(
+            top10 = await montarTop10PorPedidosPagos(
                 token,
-                sellerId
+                pedidosPagos
             );
         } catch (erroTop10) {
-            console.warn('Falha no Top 10 por sold_quantity; usando pedidos como fallback:', erroTop10.message);
-
+            console.warn('[TOP10 DASHBOARD V23]', erroTop10.message);
             top10 = Object.values(vendasPorItem)
-                .sort((a, b) => b.unidades - a.unidades)
+                .sort((a, b) => b.unidades - a.unidades || b.faturamento - a.faturamento)
                 .slice(0, 10)
                 .map(item => {
                     const detalhe = itensDetalhes[item.item_id];
-
                     return {
                         ...item,
                         titulo: detalhe?.title || item.titulo,
-                        preco_atual: detalhe?.price || 0,
-                        thumbnail: detalhe?.thumbnail || '',
-                        permalink: detalhe?.permalink || '#'
+                        preco_atual: Number(detalhe?.price || 0),
+                        thumbnail: detalhe?.thumbnail || detalhe?.secure_thumbnail || '',
+                        permalink: detalhe?.permalink || '#',
+                        status: detalhe?.status || ''
                     };
                 });
         }
