@@ -2783,40 +2783,55 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                     "
                 >
 
-                <input
-                    type="number"
-                    step="0.1"
-                    id="massa-taxa"
-                    placeholder="Taxa %"
-                    class="
-                        input-simulacao
-                        w-20
-                    "
-                >
+                <div class="flex flex-col gap-1 min-w-[96px]">
+                    <label for="massa-taxa" class="text-[9px] uppercase tracking-[.08em] text-slate-500 font-black">
+                        Taxa geral %
+                    </label>
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="massa-taxa"
+                        placeholder="Opcional"
+                        class="
+                            input-simulacao
+                            w-full
+                        "
+                    >
+                </div>
 
-                <input
-                    type="number"
-                    step="0.1"
-                    id="massa-taxa-premium"
-                    placeholder="Premium %"
-                    title="Taxa manual para anúncios Premium"
-                    class="
-                        input-simulacao
-                        w-24
-                    "
-                >
+                <div class="flex flex-col gap-1 min-w-[118px]">
+                    <label for="massa-taxa-premium" class="text-[9px] uppercase tracking-[.08em] text-amber-500 font-black">
+                        Taxa Premium %
+                    </label>
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="massa-taxa-premium"
+                        placeholder="Ex.: 17"
+                        title="Taxa manual em massa para todos os anúncios Premium"
+                        class="
+                            input-simulacao
+                            w-full
+                        "
+                    >
+                </div>
 
-                <input
-                    type="number"
-                    step="0.1"
-                    id="massa-taxa-classico"
-                    placeholder="Clássico %"
-                    title="Taxa manual para anúncios Clássico"
-                    class="
-                        input-simulacao
-                        w-24
-                    "
-                >
+                <div class="flex flex-col gap-1 min-w-[118px]">
+                    <label for="massa-taxa-classico" class="text-[9px] uppercase tracking-[.08em] text-blue-500 font-black">
+                        Taxa Clássico %
+                    </label>
+                    <input
+                        type="number"
+                        step="0.1"
+                        id="massa-taxa-classico"
+                        placeholder="Ex.: 14"
+                        title="Taxa manual em massa para todos os anúncios Clássico"
+                        class="
+                            input-simulacao
+                            w-full
+                        "
+                    >
+                </div>
 
                 <input
                     type="number"
@@ -2991,15 +3006,6 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         </div>
 
-    </div>
-
-    <div id="sim-paginacao" class="panel rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-        <button id="sim-anterior" onclick="simIrPaginaV21(-1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">← Anterior</button>
-        <div class="text-center">
-            <div id="sim-paginacao-info" class="text-xs text-slate-400">—</div>
-            <div id="sim-pagina-atual" class="text-[10px] text-slate-600 mt-1">—</div>
-        </div>
-        <button id="sim-proxima" onclick="simIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
     </div>
 
 </section>
@@ -3379,15 +3385,6 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         </div>
 
-    </div>
-
-    <div id="atual-paginacao" class="panel rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-        <button id="atual-anterior" onclick="atualIrPaginaV21(-1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">← Anterior</button>
-        <div class="text-center">
-            <div id="atual-paginacao-info" class="text-xs text-slate-400">—</div>
-            <div id="atual-pagina-atual" class="text-[10px] text-slate-600 mt-1">—</div>
-        </div>
-        <button id="atual-proxima" onclick="atualIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
     </div>
 
 </section>
@@ -8034,7 +8031,7 @@ function sincronizarFiltroCamposV21(){
     const si=document.getElementById('sim-filtro-info');
     const ai=document.getElementById('atual-filtro-info');
     if(si)si.textContent=texto;
-    if(ai)ai.textContent=valor?texto:'Sem filtro: todos os anúncios da conta serão listados por páginas.';
+    if(ai)ai.textContent=valor?texto:'Sem filtro: todos os anúncios da conta serão carregados em uma lista contínua.';
 }
 
 function lerFiltroV21(prefix){
@@ -8044,8 +8041,11 @@ function lerFiltroV21(prefix){
     sincronizarFiltroCamposV21();
 }
 
-function queryEscalaV21(page){
-    const p=new URLSearchParams({page:String(Math.max(1,page)),limit:'100'});
+function queryEscalaV21(page,limit=1000){
+    const p=new URLSearchParams({
+        page:String(Math.max(1,page)),
+        limit:String(Math.max(10,Math.min(1000,Number(limit||1000))))
+    });
     if(filtroEscalaV21.valor){
         p.set('q',filtroEscalaV21.valor);
         p.set('field',filtroEscalaV21.campo);
@@ -8163,28 +8163,172 @@ function recalcularV21(id){
     if(np)np.innerText=moeda(calc.preco);if(ls)ls.innerText=moeda(calc.lucroLiquido);if(mr)mr.innerText=calc.margem.toFixed(2)+'%';
 }
 
+async function buscarTodosAnunciosEscalaV29(tipo='simulacao'){
+    const token=obterToken();
+    if(!token)throw new Error('Token não disponível.');
+
+    const todos=[];
+    let pagina=1;
+    let paginas=1;
+    let total=0;
+    const limite=1000;
+
+    do{
+        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(pagina,limite)}&_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`Erro HTTP ${r.status} ao carregar anúncios.`);
+
+        const lote=(d.itens||[]).map(normalizarItemEscala);
+        todos.push(...lote);
+
+        total=Number(d.total||todos.length);
+        paginas=Math.max(1,Number(d.paginas||1));
+
+        const carregados=Math.min(todos.length,total||todos.length);
+        const info=document.getElementById(tipo==='simulacao'?'sim-filtro-info':'atual-filtro-info');
+        if(info){
+            info.textContent=`Carregando lista completa... ${carregados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} anúncio(s)`;
+        }
+
+        // Atualiza o texto do overlay sem criar várias janelas.
+        const loadingText=document.getElementById('loading-text');
+        if(loadingText){
+            loadingText.innerText=`Carregando todos os anúncios... ${carregados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`;
+        }
+
+        pagina++;
+    }while(pagina<=paginas);
+
+    return {itens:todos,total};
+}
+
+function renderizarSimulacaoCompletaV29(itens){
+    const tbody=document.getElementById('tabela-simulacao');
+    if(!tbody)return;
+
+    if(!itens.length){
+        tbody.innerHTML='<tr><td colspan="14" class="p-10 text-center text-slate-500">Nenhum anúncio encontrado para este filtro.</td></tr>';
+        return;
+    }
+
+    const html=itens.map(item=>{
+        const p=parametrosSimV21(item),sid=safeIdV21(item.id);
+        const calc=calcularSimulacaoV21(item,p);
+        simResultadosPorIdV21[item.id]=calc;
+        const tipo=item.listing_type_id==='gold_pro'?'Premium':'Clássico';
+
+        return `
+          <tr>
+            <td class="p-3 font-mono">${escapeHtml(item.id)}</td>
+            <td class="p-3 font-mono">
+              ${escapeHtml(item.sku)}
+              ${regraSkuV27(item)?'<div class="text-[9px] text-emerald-600 font-black mt-1">BASE SKU</div>':''}
+            </td>
+            <td class="p-3 max-w-[220px] truncate">${escapeHtml(item.title)}</td>
+            <td class="p-3 font-bold">${moeda(item.price)}</td>
+            <td class="p-3">${moeda(item.shipping_cost)}</td>
+            <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
+            <td class="p-3">${tipo}</td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-20"></td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+            <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
+            <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
+            <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>
+          </tr>`;
+    }).join('');
+
+    tbody.innerHTML=html;
+}
+
+function renderizarAtualizacaoCompletaV29(itens){
+    const tbody=document.getElementById('tabela-atualizacao');
+    if(!tbody)return;
+
+    let contador=0;
+    const linhas=[];
+
+    for(const item of itens){
+        const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
+        simResultadosPorIdV21[item.id]=calc;
+        if(!calc.foraDaMargem)continue;
+
+        contador++;
+        const sid=safeIdV21(item.id);
+
+        linhas.push(`
+          <tr>
+            <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" checked class="check-item accent-yellow-400 w-4 h-4"></td>
+            <td class="p-4">
+              <div class="flex items-center gap-3 min-w-[280px]">
+                <img src="${escapeHtml(item.thumbnail)}" class="w-11 h-11 object-cover rounded-xl border border-slate-700">
+                <div>
+                  <span class="font-semibold text-white block">${escapeHtml(item.title)}</span>
+                  <span class="text-[10px] text-slate-500">${escapeHtml(item.id)} • SKU: ${escapeHtml(item.sku)}</span>
+                </div>
+              </div>
+            </td>
+            <td class="p-4 font-bold text-white">${moeda(item.price)}</td>
+            <td class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
+            <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span></td>
+            <td id="status_api_${sid}" class="p-4"><span class="text-slate-500 text-[10px]">Pendente</span></td>
+          </tr>`);
+    }
+
+    tbody.innerHTML=linhas.length
+      ? linhas.join('')
+      : '<tr><td colspan="6" class="p-10 text-center text-slate-500">Nenhum anúncio precisa ser atualizado.</td></tr>';
+
+    const c=document.getElementById('contador-atualizacao');
+    if(c)c.innerText=contador.toLocaleString('pt-BR');
+}
+
 async function carregarSimulacaoEscalaV21(page=1){
     if(simCarregandoV21)return;
-    const token=obterToken();if(!token){solicitarToken();return}
-    simCarregandoV21=true;mostrarLoading('Carregando anúncios para simulação...');
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    simCarregandoV21=true;
+    mostrarLoading('Carregando todos os anúncios para simulação...');
+
     try{
         await carregarBaseSkuV27();
-        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
-        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
-        simPaginaV21=Number(d.pagina||1);simPaginasV21=Number(d.paginas||1);simTotalV21=Number(d.total||0);
-        simItensV21=(d.itens||[]).map(normalizarItemEscala);
-        montarTabelaSimulacaoV21(simItensV21);
-        atualizarPaginacaoSimV21();
-    }catch(e){alert(e.message)}finally{simCarregandoV21=false;esconderLoading()}
+
+        const resultado=await buscarTodosAnunciosEscalaV29('simulacao');
+        simPaginaV21=1;
+        simPaginasV21=1;
+        simTotalV21=Number(resultado.total||0);
+        simItensV21=resultado.itens;
+
+        const loadingText=document.getElementById('loading-text');
+        if(loadingText)loadingText.innerText=`Montando simulação completa com ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s)...`;
+
+        // Permite o navegador pintar o progresso antes de montar milhares de linhas.
+        await new Promise(resolve=>setTimeout(resolve,30));
+        renderizarSimulacaoCompletaV29(simItensV21);
+
+        const info=document.getElementById('sim-filtro-info');
+        if(info){
+            info.textContent=filtroEscalaV21.valor
+              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) em lista única`
+              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) carregados em lista única, sem páginas.`;
+        }
+    }catch(e){
+        alert(e.message);
+    }finally{
+        simCarregandoV21=false;
+        esconderLoading();
+    }
 }
-function atualizarPaginacaoSimV21(){
-    const info=document.getElementById('sim-paginacao-info'),pag=document.getElementById('sim-pagina-atual');
-    if(info)info.textContent=`${simTotalV21.toLocaleString('pt-BR')} anúncio(s) considerados · 100 por página`;
-    if(pag)pag.textContent=`Página ${simPaginaV21.toLocaleString('pt-BR')} de ${simPaginasV21.toLocaleString('pt-BR')}`;
-    const a=document.getElementById('sim-anterior'),p=document.getElementById('sim-proxima');
-    if(a)a.disabled=simPaginaV21<=1;if(p)p.disabled=simPaginaV21>=simPaginasV21;
-}
-function simIrPaginaV21(delta){const p=simPaginaV21+delta;if(p<1||p>simPaginasV21)return;carregarSimulacaoEscalaV21(p)}
+
+// Compatibilidade: paginação foi removida na V29.
+function atualizarPaginacaoSimV21(){}
+function simIrPaginaV21(){}
+
 
 aplicarEmMassa=function(){
     const vals={
@@ -8197,63 +8341,61 @@ aplicarEmMassa=function(){
     };
     Object.entries(vals).forEach(([k,v])=>{if(v!==''&&v!==undefined)simMassaV21[k]=Number(v)});
     simItensV21.forEach(item=>{delete simParametrosPorIdV21[item.id]});
-    montarTabelaSimulacaoV21(simItensV21);
+    renderizarSimulacaoCompletaV29(simItensV21);
 };
 
 function montarTabelaAtualizacaoV21(itens){
-    const tbody=document.getElementById('tabela-atualizacao');if(!tbody)return;
-    tbody.innerHTML='';let contador=0;
-    itens.forEach(item=>{
-        const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
-        simResultadosPorIdV21[item.id]=calc;
-        if(!calc.foraDaMargem)return;
-        contador++;
-        const sid=safeIdV21(item.id),tr=document.createElement('tr');
-        tr.innerHTML=`
-          <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" checked class="check-item accent-yellow-400 w-4 h-4"></td>
-          <td class="p-4"><div class="flex items-center gap-3 min-w-[280px]">
-            <img src="${escapeHtml(item.thumbnail)}" class="w-11 h-11 object-cover rounded-xl border border-slate-700">
-            <div><span class="font-semibold text-white block">${escapeHtml(item.title)}</span>
-            <span class="text-[10px] text-slate-500">${escapeHtml(item.id)} • SKU: ${escapeHtml(item.sku)}</span></div>
-          </div></td>
-          <td class="p-4 font-bold text-white">${moeda(item.price)}</td>
-          <td class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
-          <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span></td>
-          <td id="status_api_${sid}" class="p-4"><span class="text-slate-500 text-[10px]">Pendente</span></td>`;
-        tbody.appendChild(tr);
-    });
-    if(!contador)tbody.innerHTML='<tr><td colspan="6" class="p-10 text-center text-slate-500">Nenhum anúncio fora da margem nesta página.</td></tr>';
-    const c=document.getElementById('contador-atualizacao');if(c)c.innerText=contador.toLocaleString('pt-BR');
+    return renderizarAtualizacaoCompletaV29(itens);
 }
 
 async function carregarAtualizacaoEscalaV21(page=1){
     if(atualCarregandoV21)return;
-    const token=obterToken();if(!token){solicitarToken();return}
-    atualCarregandoV21=true;mostrarLoading('Carregando anúncios para atualização...');
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    atualCarregandoV21=true;
+    mostrarLoading('Carregando todos os anúncios para atualização...');
+
     try{
         await carregarBaseSkuV27();
-        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
-        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
-        atualPaginaV21=Number(d.pagina||1);atualPaginasV21=Number(d.paginas||1);atualTotalV21=Number(d.total||0);
-        atualItensV21=(d.itens||[]).map(normalizarItemEscala);
-        montarTabelaAtualizacaoV21(atualItensV21);
-        atualizarPaginacaoAtualV21();
-    }catch(e){alert(e.message)}finally{atualCarregandoV21=false;esconderLoading()}
+
+        const resultado=await buscarTodosAnunciosEscalaV29('atualizacao');
+        atualPaginaV21=1;
+        atualPaginasV21=1;
+        atualTotalV21=Number(resultado.total||0);
+        atualItensV21=resultado.itens;
+
+        const loadingText=document.getElementById('loading-text');
+        if(loadingText)loadingText.innerText=`Verificando margem de ${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s)...`;
+
+        await new Promise(resolve=>setTimeout(resolve,30));
+        renderizarAtualizacaoCompletaV29(atualItensV21);
+
+        const info=document.getElementById('atual-filtro-info');
+        const qtdAtualizar=document.querySelectorAll('#tabela-atualizacao .check-item').length;
+        if(info){
+            info.textContent=filtroEscalaV21.valor
+              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${qtdAtualizar.toLocaleString('pt-BR')} anúncio(s) precisam de atualização`
+              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) analisados · ${qtdAtualizar.toLocaleString('pt-BR')} precisam de atualização · lista única sem páginas.`;
+        }
+    }catch(e){
+        alert(e.message);
+    }finally{
+        atualCarregandoV21=false;
+        esconderLoading();
+    }
 }
-function atualizarPaginacaoAtualV21(){
-    const info=document.getElementById('atual-paginacao-info'),pag=document.getElementById('atual-pagina-atual');
-    if(info)info.textContent=`${atualTotalV21.toLocaleString('pt-BR')} anúncio(s) no filtro · 100 por página`;
-    if(pag)pag.textContent=`Página ${atualPaginaV21.toLocaleString('pt-BR')} de ${atualPaginasV21.toLocaleString('pt-BR')}`;
-    const a=document.getElementById('atual-anterior'),p=document.getElementById('atual-proxima');
-    if(a)a.disabled=atualPaginaV21<=1;if(p)p.disabled=atualPaginaV21>=atualPaginasV21;
-}
-function atualIrPaginaV21(delta){const p=atualPaginaV21+delta;if(p<1||p>atualPaginasV21)return;carregarAtualizacaoEscalaV21(p)}
+
+// Compatibilidade: paginação foi removida na V29.
+function atualizarPaginacaoAtualV21(){}
+function atualIrPaginaV21(){}
+
 
 atualizarPrecosMassaApi=async function(){
     const token=obterToken();if(!token){solicitarToken();return}
     const checks=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked')];
-    if(!checks.length)return alert('Nenhum anúncio selecionado nesta página.');
-    if(!confirm(`Deseja atualizar ${checks.length} anúncio(s) selecionado(s) desta página?`))return;
+    if(!checks.length)return alert('Nenhum anúncio selecionado para atualização.');
+    if(!confirm(`Deseja atualizar ${checks.length} anúncio(s) selecionado(s) da lista completa?`))return;
 
     const mapa=new Map(atualItensV21.map(x=>[String(x.id),x]));
     const itens=checks.map(c=>{
@@ -8280,7 +8422,7 @@ atualizarPrecosMassaApi=async function(){
             if(!r.ok&&!d.resultados)throw new Error(d.erro||`HTTP ${r.status}`);
         }
         alert(`Processo finalizado: ${ok} atualizado(s)${erros?` · ${erros} erro(s)`:''}.`);
-        await carregarAtualizacaoEscalaV21(atualPaginaV21);
+        await carregarAtualizacaoEscalaV21();
     }catch(e){alert('Erro ao atualizar preços: '+e.message)}finally{esconderLoading()}
 };
 
@@ -8561,8 +8703,8 @@ async function salvarBaseSkuV27(){
         if(st)st.innerHTML=`<span class="text-emerald-400 font-bold">✓ ${escapeHtml(d.mensagem||'Base salva com sucesso.')}</span>`;
 
         // Se a simulação já tem dados carregados, reaplica a nova base imediatamente.
-        if(simItensV21.length)montarTabelaSimulacaoV21(simItensV21);
-        if(atualItensV21.length)montarTabelaAtualizacaoV21(atualItensV21);
+        if(simItensV21.length)renderizarSimulacaoCompletaV29(simItensV21);
+        if(atualItensV21.length)renderizarAtualizacaoCompletaV29(atualItensV21);
     }catch(e){
         alert(e.message);
     }finally{
@@ -8591,8 +8733,8 @@ mudarAba=function(aba){
     });
 
     if(aba==='sku-base')setTimeout(()=>abrirBaseSkuV27(),0);
-    if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
-    if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
+    if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21()},0);
+    if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21()},0);
     if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
 };
 
