@@ -2394,7 +2394,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 <section id="secao-reclamacoes" class="hidden space-y-6">
   <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
     <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Pós-venda e risco</div><h1 class="text-2xl font-black text-white mt-1">Central de Reclamações</h1><p class="text-xs text-slate-500 mt-1">Analise contexto, mensagens, anexos e impacto antes de responder. A IA prepara uma defesa para sua revisão — nunca envia sozinha.</p></div>
-    <button onclick="carregarReclamacoesPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar reclamações</button>
+    <button type="button" onclick="carregarReclamacoesPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar reclamações</button>
   </div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Abertas</div><div id="claims-abertas" class="text-2xl font-black text-red-400 mt-2">—</div><div class="text-[10px] text-slate-600 mt-1">Precisam de acompanhamento</div></div>
@@ -7359,6 +7359,7 @@ async function enviarRespostaClaim(id){
   if(!confirm('Confirma o envio desta mensagem para a reclamação?'))return;
   const token=obterToken();mostrarLoading('Enviando resposta...');
   try{const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/mensagem`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({message:msg,receiver_role:receiver})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao enviar.');alert('Resposta enviada com sucesso.');await abrirDossieClaim(id)}catch(e){alert(e.message)}finally{esconderLoading()}
+}
 </script>
 
 <script id="mlhub-scale90k">
