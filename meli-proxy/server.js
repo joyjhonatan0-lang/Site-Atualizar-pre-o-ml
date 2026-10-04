@@ -2715,9 +2715,108 @@ app.get('/api/v9/claims/:id/attachments/:file',async(req,res)=>{
     }catch(e){respostaErro(res,500,'Erro ao baixar anexo: '+e.message)}
 });
 
+
+const GEMINI_INTERACTIONS_URL='https://generativelanguage.googleapis.com/v1beta/interactions';
+
+function modelosGeminiDisponiveis(){
+    const modelos=[process.env.GEMINI_MODEL,'gemini-3.8-flash','gemini-3.5-flash-lite']
+      .map(x=>String(x||'').trim()).filter(Boolean);
+    return [...new Set(modelos)];
+}
+
+function extrairTextoGemini(payload){
+    const d=payload?.interaction||payload||{};
+    if(typeof d.output_text==='string'&&d.output_text.trim())return d.output_text.trim();
+    const textos=[];
+    for(const step of (Array.isArray(d.steps)?d.steps:[])){
+        if(step?.type!=='model_output')continue;
+        for(const part of (Array.isArray(step.content)?step.content:[])){
+            if(part?.type==='text'&&typeof part.text==='string')textos.push(part.text);
+        }
+    }
+    return textos.join('\n').trim();
+}
+
+function erroGeminiAmigavel(status,payload){
+    const msg=String(payload?.error?.message||payload?.message||'Erro ao consultar o Gemini.');
+    if(status===400 && /api.?key|key/i.test(msg))return 'A chave GEMINI_API_KEY parece inválida. Confira a chave configurada no Render.';
+    if(status===401 || status===403)return 'A chave do Gemini não tem permissão para esta solicitação. Confira GEMINI_API_KEY e o projeto no Google AI Studio.';
+    if(status===429)return 'O limite gratuito do Gemini foi atingido no momento. Aguarde a liberação da cota e tente novamente.';
+    return msg;
+}
+
+async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=null}){
+    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
+    if(!apiKey){
+        const e=new Error('IA não configurada. Adicione GEMINI_API_KEY nas variáveis de ambiente do Render.');
+        e.status=503;throw e;
+    }
+
+    let ultimoErro=null;
+    for(const model of modelosGeminiDisponiveis()){
+        const body={model,input,store:false};
+        if(systemInstruction)body.system_instruction=systemInstruction;
+        if(responseSchema){
+            body.response_format={
+                type:'text',
+                mime_type:'application/json',
+                schema:responseSchema
+            };
+        }
+
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),90000);
+        try{
+            const r=await fetch(GEMINI_INTERACTIONS_URL,{
+                method:'POST',
+                headers:{
+                    'Content-Type':'application/json',
+                    'x-goog-api-key':apiKey
+                },
+                body:JSON.stringify(body),
+                signal:controller.signal
+            });
+            const d=await r.json().catch(()=>({}));
+            if(r.ok){
+                const texto=extrairTextoGemini(d);
+                if(!texto)throw new Error('O Gemini respondeu sem texto utilizável.');
+                return {texto,model,resposta:d};
+            }
+
+            const mensagem=erroGeminiAmigavel(r.status,d);
+            ultimoErro={status:r.status,mensagem};
+            // Só tenta outro modelo quando o problema parece ser disponibilidade/nome do modelo.
+            if((r.status===400||r.status===404) && /model|modelo|not found|not supported|unsupported|unknown/i.test(mensagem)){
+                continue;
+            }
+            const e=new Error(mensagem);e.status=r.status;throw e;
+        }catch(e){
+            if(e?.name==='AbortError'){
+                const ex=new Error('O Gemini demorou mais de 90 segundos para responder. Tente novamente.');
+                ex.status=504;throw ex;
+            }
+            throw e;
+        }finally{
+            clearTimeout(timer);
+        }
+    }
+
+    const e=new Error(ultimoErro?.mensagem||'Nenhum modelo Gemini disponível para esta chave.');
+    e.status=ultimoErro?.status||503;throw e;
+}
+
+async function chamarGeminiTexto(prompt,instructions='',responseSchema=null){
+    const r=await chamarGeminiInteracao({
+        input:String(prompt||''),
+        systemInstruction:String(instructions||''),
+        responseSchema
+    });
+    return r.texto;
+}
+
 app.post('/api/v9/claims/:id/analisar',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
-    if(!process.env.OPENAI_API_KEY)return respostaErro(res,503,'Configure OPENAI_API_KEY no Render para usar a análise de reclamações.');
+    if(!process.env.GEMINI_API_KEY)return respostaErro(res,503,'Configure GEMINI_API_KEY no Render para usar a análise de reclamações.');
     const id=encodeURIComponent(req.params.id);
     try{
         const get=async path=>{const r=await mlFetch(`${ML_API}${path}`,token);return {ok:r.ok,data:await jsonSeguro(r)}};
@@ -2726,31 +2825,105 @@ app.post('/api/v9/claims/:id/analisar',async(req,res)=>{
           get(`/post-purchase/v1/claims/${id}/messages`),get(`/post-purchase/v1/claims/${id}/affects-reputation`)
         ]);
         if(!cr.ok)return respostaErro(res,404,'Reclamação não encontrada.');
+
         const msgs=mr.ok&&Array.isArray(mr.data)?mr.data:[];
-        const anexos=msgs.flatMap(m=>(m.attachments||[]).map(a=>({claim_id:id,filename:a.filename,type:a.type,original_filename:a.original_filename,sender_role:m.sender_role})));
+        const anexos=msgs.flatMap(m=>(m.attachments||[]).map(a=>({
+            claim_id:id,
+            filename:a.filename||a.id||'',
+            type:a.type||a.mime_type||a.content_type||'',
+            original_filename:a.original_filename||a.filename||a.id||'anexo',
+            sender_role:m.sender_role
+        })));
+
         const evidenciasVisuais=[];
-        // Envia imagens disponíveis para visão do modelo; PDFs/outros entram como metadados.
-        for(const a of anexos.filter(x=>String(x.type||'').startsWith('image/')).slice(0,6)){
-          try{
-            const ar=await mlFetch(`${ML_API}/post-purchase/v1/claims/${id}/attachments/${encodeURIComponent(a.filename)}/download`,token);
-            if(ar.ok){
-              const ct=ar.headers.get('content-type')||a.type||'image/jpeg';
-              const buf=Buffer.from(await ar.arrayBuffer());
-              if(buf.length<=5*1024*1024)evidenciasVisuais.push({type:'input_image',image_url:`data:${ct};base64,${buf.toString('base64')}`});
+        let bytesImagens=0;
+        // Baixa até 6 anexos e inclui apenas imagens reais. Limite total reduz risco de requisição muito grande.
+        for(const a of anexos.slice(0,6)){
+            if(!a.filename)continue;
+            try{
+                const ar=await mlFetch(`${ML_API}/post-purchase/v1/claims/${id}/attachments/${encodeURIComponent(a.filename)}/download`,token);
+                if(!ar.ok)continue;
+                const ct=String(ar.headers.get('content-type')||a.type||'application/octet-stream').split(';')[0].trim().toLowerCase();
+                if(!ct.startsWith('image/'))continue;
+                const buf=Buffer.from(await ar.arrayBuffer());
+                if(buf.length>5*1024*1024)continue;
+                if(bytesImagens+buf.length>15*1024*1024)continue;
+                bytesImagens+=buf.length;
+                evidenciasVisuais.push({
+                    type:'image',
+                    mime_type:ct,
+                    data:buf.toString('base64')
+                });
+            }catch(e){
+                console.warn('[CLAIM ANEXO GEMINI]',a.filename,e.message);
             }
-          }catch(e){}
         }
-        const contexto={claim:cr.data,detail:dr.ok?dr.data:{},impact:ir.ok?ir.data:null,messages:msgs.map(m=>({sender_role:m.sender_role,receiver_role:m.receiver_role,message:m.message,translated_message:m.translated_message,date_created:m.date_created,attachments:m.attachments}))};
-        const input=[{role:'user',content:[
-          {type:'input_text',text:`Analise esta reclamação do Mercado Livre como assistente do vendedor.\nDADOS:\n${JSON.stringify(contexto)}\n\nObjetivo: produzir uma análise factual e uma resposta profissional que defenda legitimamente o vendedor com base somente nas evidências disponíveis. Não invente fatos, não acuse o comprador, não prometa que a reclamação não afetará reputação e não prometa ausência de prejuízo. Identifique contradições, fatos favoráveis, riscos, informações faltantes e a melhor estratégia permitida. Se houver imagem, descreva apenas o que realmente é visível. Retorne SOMENTE JSON válido: {"analise":"...","resposta_sugerida":"..."}. A resposta sugerida deve ser clara, respeitosa, objetiva e adequada para comprador ou mediação.`},
-          ...evidenciasVisuais
-        ]}];
-        const or=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.6-luna',store:false,input})});
-        const od=await or.json();if(!or.ok)return respostaErro(res,or.status,od.error?.message||'Erro na IA.');
-        const txt=od.output_text||(od.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
-        let parsed;try{parsed=JSON.parse(String(txt).replace(/^```json\s*|```$/g,'').trim())}catch(e){parsed={analise:txt,resposta_sugerida:''}}
-        res.json({sucesso:true,...parsed,imagens_analisadas:evidenciasVisuais.length,anexos_encontrados:anexos.length});
-    }catch(e){respostaErro(res,500,'Erro na análise da reclamação: '+e.message)}
+
+        const contexto={
+            claim:cr.data,
+            detail:dr.ok?dr.data:{},
+            impact:ir.ok?ir.data:null,
+            messages:msgs.map(m=>({
+                sender_role:m.sender_role,
+                receiver_role:m.receiver_role,
+                message:m.message,
+                translated_message:m.translated_message,
+                date_created:m.date_created,
+                attachments:m.attachments
+            }))
+        };
+
+        const prompt=`Analise esta reclamação do Mercado Livre como assistente do vendedor.
+
+DADOS DA RECLAMAÇÃO:
+${JSON.stringify(contexto)}
+
+Objetivo:
+- fazer uma análise factual e útil para o vendedor;
+- defender legitimamente o vendedor somente com fatos e evidências disponíveis;
+- identificar contradições, pontos favoráveis, riscos e informações faltantes;
+- sugerir a melhor resposta profissional permitida para comprador ou mediação;
+- se houver imagens anexadas, considerar somente fatos realmente visíveis nelas;
+- não inventar provas, não acusar o comprador sem evidência, não prometer decisão favorável;
+- não prometer que a reclamação deixará de afetar reputação ou que não haverá prejuízo;
+- indicar, quando necessário, quais evidências adicionais o vendedor deveria reunir.
+
+A resposta_sugerida deve ser clara, respeitosa, objetiva e pronta para revisão humana antes do envio.`;
+
+        const schema={
+            type:'object',
+            properties:{
+                analise:{type:'string',description:'Análise factual da reclamação sob a perspectiva do vendedor.'},
+                resposta_sugerida:{type:'string',description:'Mensagem profissional sugerida para revisão humana antes de enviar.'}
+            },
+            required:['analise','resposta_sugerida']
+        };
+
+        const gr=await chamarGeminiInteracao({
+            input:[
+                {type:'text',text:prompt},
+                ...evidenciasVisuais
+            ],
+            systemInstruction:'Você é um assistente de pós-venda especializado em marketplaces brasileiros. Trabalhe somente com as informações recebidas. Preserve neutralidade factual, destaque a defesa legítima do vendedor e nunca fabrique evidências.',
+            responseSchema:schema
+        });
+
+        let parsed;
+        try{parsed=extrairJsonIA(gr.texto)}
+        catch(e){parsed={analise:gr.texto,resposta_sugerida:''}}
+
+        res.json({
+            sucesso:true,
+            ...parsed,
+            provedor:'gemini',
+            modelo:gr.model,
+            imagens_analisadas:evidenciasVisuais.length,
+            anexos_encontrados:anexos.length
+        });
+    }catch(e){
+        console.error('[GEMINI CLAIM ANALYSIS]',e);
+        respostaErro(res,e.status||500,'Erro na análise da reclamação: '+e.message);
+    }
 });
 
 app.post('/api/v9/claims/:id/mensagem',async(req,res)=>{
@@ -2784,23 +2957,38 @@ app.get('/api/v3/auditoria',async(req,res)=>{
 
 app.get('/api/v3/integracoes/status',(req,res)=>{
     const b=lerJsonArquivoSeguro(BLING_STORE_FILE);
-    res.json({sucesso:true,openai:{configurado:Boolean(process.env.OPENAI_API_KEY)},bling:{configurado:Boolean(process.env.BLING_CLIENT_ID&&process.env.BLING_CLIENT_SECRET),conectado:Boolean(b.access_token)},mercado_livre:{configurado:true}});
+    const configurado=Boolean(process.env.GEMINI_API_KEY);
+    res.json({
+        sucesso:true,
+        gemini:{configurado,modelo:process.env.GEMINI_MODEL||'gemini-3.8-flash'},
+        // Mantido só para compatibilidade com versões antigas do front-end.
+        openai:{configurado,substituido_por:'gemini'},
+        bling:{configurado:Boolean(process.env.BLING_CLIENT_ID&&process.env.BLING_CLIENT_SECRET),conectado:Boolean(b.access_token)},
+        mercado_livre:{configurado:true}
+    });
+});
+
+app.get('/api/v17/gemini/status',(req,res)=>{
+    res.json({
+        sucesso:true,
+        configurado:Boolean(process.env.GEMINI_API_KEY),
+        modelo:process.env.GEMINI_MODEL||'gemini-3.8-flash',
+        provedor:'Google Gemini'
+    });
 });
 
 app.post('/api/v3/ia',async(req,res)=>{
-    if(!process.env.OPENAI_API_KEY)return respostaErro(res,503,'IA ainda não configurada. Adicione OPENAI_API_KEY nas variáveis de ambiente do Render.');
-    const mensagem=String(req.body?.mensagem||'').trim();if(!mensagem)return respostaErro(res,400,'Digite uma mensagem.');
+    const mensagem=String(req.body?.mensagem||'').trim();
+    if(!mensagem)return respostaErro(res,400,'Digite uma mensagem.');
     try{
-        const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
-            model:process.env.OPENAI_MODEL||'gpt-5.6-luna',
-            store:false,
-            instructions:'Você é o assistente operacional do ML Hub Pro para vendedores brasileiros do Mercado Livre. Responda em português do Brasil, seja objetivo, profissional e útil. Ajude com atendimento, pós-venda, anúncios, estoque, preço, margem, operação e organização. Não invente dados da conta que não foram fornecidos. Não execute alterações; apenas recomende ou redija textos para revisão humana.',
-            input:mensagem
-        })});
-        const d=await r.json();if(!r.ok)return respostaErro(res,r.status,d.error?.message||'Erro na IA.');
-        const resposta=d.output_text || (d.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n') || 'Sem resposta.';
-        res.json({sucesso:true,resposta});
-    }catch(e){respostaErro(res,500,'Erro ao consultar IA: '+e.message)}
+        const gr=await chamarGeminiInteracao({
+            input:mensagem,
+            systemInstruction:'Você é o assistente operacional do ML Hub Pro para vendedores brasileiros do Mercado Livre. Responda em português do Brasil, seja objetivo, profissional e útil. Ajude com atendimento, pós-venda, anúncios, estoque, preço, margem, operação e organização. Não invente dados da conta que não foram fornecidos. Não execute alterações; apenas recomende ou redija textos para revisão humana.'
+        });
+        res.json({sucesso:true,resposta:gr.texto,provedor:'gemini',modelo:gr.model});
+    }catch(e){
+        respostaErro(res,e.status||500,'Erro ao consultar Gemini: '+e.message);
+    }
 });
 
 // BLING OAuth 2.0 / JWT
@@ -2830,15 +3018,6 @@ app.post('/api/bling/webhook',(req,res)=>{res.status(200).json({recebido:true});
 /* =========================================================
    ML HUB PRO V4 - CONTEÚDO, QUALIDADE E CATÁLOGO
 ========================================================= */
-async function chamarOpenAITexto(prompt, instructions) {
-    if (!process.env.OPENAI_API_KEY) throw new Error('IA não configurada. Adicione OPENAI_API_KEY no Render.');
-    const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({
-        model:process.env.OPENAI_MODEL||'gpt-5.6-luna',store:false,instructions,input:prompt
-    })});
-    const d=await r.json();
-    if(!r.ok) throw new Error(d.error?.message||'Erro na IA.');
-    return d.output_text || (d.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
-}
 function extrairJsonIA(texto) {
     const limpo=String(texto||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
     try{return JSON.parse(limpo)}catch(e){const a=limpo.indexOf('{'),b=limpo.lastIndexOf('}');if(a>=0&&b>a)return JSON.parse(limpo.slice(a,b+1));throw e}
@@ -2848,22 +3027,22 @@ app.post('/api/v4/conteudo/titulos',async(req,res)=>{
         const produtos=(Array.isArray(req.body?.produtos)?req.body.produtos:[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50);
         const quantidade=Math.min(10,Math.max(1,Number(req.body?.quantidade||5))),limite=Math.min(200,Math.max(30,Number(req.body?.limite||60)));
         if(!produtos.length)return respostaErro(res,400,'Informe os produtos.');
-        const texto=await chamarOpenAITexto(`Produtos:\n${produtos.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nCrie ${quantidade} títulos diferentes por produto, cada um com no máximo ${limite} caracteres. Retorne SOMENTE JSON no formato {"resultados":[{"produto":"...","titulos":["..."]}]}. Não invente marca, modelo, material ou característica não fornecida.`, 'Você cria títulos claros e comerciais para anúncios de marketplace brasileiro. Priorize termos descritivos úteis e legibilidade. Não faça alegações falsas nem invente atributos.');
+        const texto=await chamarGeminiTexto(`Produtos:\n${produtos.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nCrie ${quantidade} títulos diferentes por produto, cada um com no máximo ${limite} caracteres. Retorne SOMENTE JSON no formato {"resultados":[{"produto":"...","titulos":["..."]}]}. Não invente marca, modelo, material ou característica não fornecida.`, 'Você cria títulos claros e comerciais para anúncios de marketplace brasileiro. Priorize termos descritivos úteis e legibilidade. Não faça alegações falsas nem invente atributos.');
         const obj=extrairJsonIA(texto);
         res.json({sucesso:true,resultados:obj.resultados||[]});
     }catch(e){respostaErro(res,500,e.message)}
 });
 app.post('/api/v4/conteudo/descricao',async(req,res)=>{
     const base=String(req.body?.base||'').trim();if(!base)return respostaErro(res,400,'Informe os dados do produto.');
-    try{const texto=await chamarOpenAITexto(base,'Crie uma descrição profissional em português do Brasil para marketplace. Use somente os fatos fornecidos. Organize benefícios, características, itens inclusos e observações quando aplicável. Não invente especificações. Seja clara e fácil de ler.');res.json({sucesso:true,texto})}catch(e){respostaErro(res,500,e.message)}
+    try{const texto=await chamarGeminiTexto(base,'Crie uma descrição profissional em português do Brasil para marketplace. Use somente os fatos fornecidos. Organize benefícios, características, itens inclusos e observações quando aplicável. Não invente especificações. Seja clara e fácil de ler.');res.json({sucesso:true,texto})}catch(e){respostaErro(res,500,e.message)}
 });
 app.post('/api/v4/conteudo/keywords',async(req,res)=>{
     const produto=String(req.body?.produto||'').trim();if(!produto)return respostaErro(res,400,'Informe o produto.');
-    try{const texto=await chamarOpenAITexto(`Produto: ${produto}\nRetorne SOMENTE JSON: {"keywords":["termo 1","termo 2"]}, com até 30 termos relacionados, sem inventar marca ou especificações.`,'Gere palavras-chave relevantes para organização e criação de conteúdo de marketplace brasileiro.');const o=extrairJsonIA(texto);res.json({sucesso:true,keywords:(o.keywords||[]).slice(0,30)})}catch(e){respostaErro(res,500,e.message)}
+    try{const texto=await chamarGeminiTexto(`Produto: ${produto}\nRetorne SOMENTE JSON: {"keywords":["termo 1","termo 2"]}, com até 30 termos relacionados, sem inventar marca ou especificações.`,'Gere palavras-chave relevantes para organização e criação de conteúdo de marketplace brasileiro.');const o=extrairJsonIA(texto);res.json({sucesso:true,keywords:(o.keywords||[]).slice(0,30)})}catch(e){respostaErro(res,500,e.message)}
 });
 app.post('/api/v4/conteudo/imagem-brief',async(req,res)=>{
     const brief=String(req.body?.brief||'').trim();if(!brief)return respostaErro(res,400,'Informe o briefing.');
-    try{const prompt=await chamarOpenAITexto(`Produto/objetivo: ${brief}\nFormato: ${req.body?.formato||'1:1'}\nEstilo: ${req.body?.estilo||'Marketplace profissional'}\nCrie um briefing/prompt visual detalhado para uma imagem comercial de produto. Preserve fielmente características fornecidas e não invente certificações, acessórios ou textos promocionais não solicitados.`,'Você é diretor de arte de e-commerce. Gere apenas o briefing visual, em português do Brasil.');res.json({sucesso:true,prompt,image_generation_available:Boolean(process.env.IMAGE_API_KEY)})}catch(e){respostaErro(res,500,e.message)}
+    try{const prompt=await chamarGeminiTexto(`Produto/objetivo: ${brief}\nFormato: ${req.body?.formato||'1:1'}\nEstilo: ${req.body?.estilo||'Marketplace profissional'}\nCrie um briefing/prompt visual detalhado para uma imagem comercial de produto. Preserve fielmente características fornecidas e não invente certificações, acessórios ou textos promocionais não solicitados.`,'Você é diretor de arte de e-commerce. Gere apenas o briefing visual, em português do Brasil.');res.json({sucesso:true,prompt,image_generation_available:Boolean(process.env.IMAGE_API_KEY)})}catch(e){respostaErro(res,500,e.message)}
 });
 app.get('/api/v4/items/:id/performance',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
