@@ -466,7 +466,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
      HEADER
 ===================================================== -->
 
-<header
+<header id="app-header"
     class="
         glass
         sticky
@@ -2348,7 +2348,10 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
      ATENDIMENTO + IA
 ===================================================== -->
 <section id="secao-atendimento" class="hidden space-y-6">
-  <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Assistente operacional</div><h1 class="text-2xl font-black text-white mt-1">Central de Atendimento com IA</h1><p class="text-xs text-slate-500 mt-1">Ajuda a redigir respostas, analisar problemas e sugerir ações. A resposta final continua sob sua revisão.</p></div>
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+    <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Assistente operacional</div><h1 class="text-2xl font-black text-white mt-1">Central de Atendimento com IA</h1><p class="text-xs text-slate-500 mt-1">Ajuda a redigir respostas, analisar problemas e sugerir ações. A resposta final continua sob sua revisão.</p></div>
+    <button onclick="mudarAba('inicio')" class="chat-voltar-v22 hidden bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-black">← Voltar ao painel</button>
+  </div>
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
     <div class="xl:col-span-2 panel rounded-2xl p-5">
       <div id="ia-chat" class="min-h-[320px] max-h-[520px] overflow-y-auto space-y-3"><div class="p-4 rounded-xl bg-slate-950 text-xs text-slate-400">Pergunte sobre atendimento, anúncio, reclamação, estoque, margem, título ou operação.</div></div>
@@ -5720,237 +5723,97 @@ function formatarIndicador(
 }
 
 
-function preencherDashboard(
-    data
-) {
+function preencherDashboard(data) {
+    dashboardCache=data;
 
-    dashboardCache =
-        data;
+    const setTxt=(id,valor)=>{
+        const el=document.getElementById(id);
+        if(el)el.innerText=valor;
+    };
 
-    const vendas =
-        data.vendas_reais ||
-        {};
+    const vendas=data?.vendas_reais||{};
+    const indicadores=data?.indicadores||{};
 
-    document.getElementById(
-        'dashboard-vendas'
-    ).innerText =
-        moeda(
-            vendas.valor_total
-        );
+    setTxt('dashboard-vendas',moeda(vendas.valor_total));
+    setTxt('dashboard-pedidos',Number(vendas.pedidos_pagos||0).toLocaleString('pt-BR'));
+    setTxt('dashboard-unidades',Number(vendas.unidades||0).toLocaleString('pt-BR'));
 
-    document.getElementById(
-        'dashboard-pedidos'
-    ).innerText =
-        Number(
-            vendas.pedidos_pagos || 0
-        ).toLocaleString(
-            'pt-BR'
-        );
+    setTxt('home-dashboard-vendas',moeda(vendas.valor_total));
+    setTxt('home-dashboard-pedidos',Number(vendas.pedidos_pagos||0).toLocaleString('pt-BR'));
+    setTxt('home-dashboard-unidades',Number(vendas.unidades||0).toLocaleString('pt-BR'));
 
-    document.getElementById(
-        'dashboard-unidades'
-    ).innerText =
-        Number(
-            vendas.unidades || 0
-        ).toLocaleString(
-            'pt-BR'
-        );
-
-
-    // Espelha o resumo de vendas também na página inicial.
-    const homeVendas = document.getElementById('home-dashboard-vendas');
-    const homePedidos = document.getElementById('home-dashboard-pedidos');
-    const homeUnidades = document.getElementById('home-dashboard-unidades');
-
-    if (homeVendas) homeVendas.innerText = moeda(vendas.valor_total);
-    if (homePedidos) homePedidos.innerText = Number(vendas.pedidos_pagos || 0).toLocaleString('pt-BR');
-    if (homeUnidades) homeUnidades.innerText = Number(vendas.unidades || 0).toLocaleString('pt-BR');
-
-    const homeVisitas = document.getElementById('home-dashboard-visitas');
-    const homeVisitasPeriodo = document.getElementById('home-dashboard-visitas-periodo');
-    if (homeVisitas) {
-        homeVisitas.innerText = data.visitas_dia?.total !== null && data.visitas_dia?.total !== undefined
-            ? Number(data.visitas_dia.total || 0).toLocaleString('pt-BR')
-            : '—';
-    }
-    if (homeVisitasPeriodo) {
-        homeVisitasPeriodo.innerText = data.visitas_dia?.periodo || 'Visitas aos anúncios da conta';
-    }
-
-    try {
-        localStorage.setItem('mlHubPro_resumoHome_v1', JSON.stringify({
-            vendas: homeVendas ? homeVendas.innerText : '',
-            pedidos: homePedidos ? homePedidos.innerText : '',
-            unidades: homeUnidades ? homeUnidades.innerText : '',
-            visitas: homeVisitas ? homeVisitas.innerText : '',
-            visitas_periodo: homeVisitasPeriodo ? homeVisitasPeriodo.innerText : ''
-        }));
-    } catch (erro) {
-        console.warn('Não foi possível salvar o resumo da Home:', erro);
-    }
-
-
-    const periodo =
-        data.periodo_vendas;
-
-    document.getElementById(
-        'dashboard-periodo'
-    ).innerText =
-        periodo
-            ? `Período consultado: ${formatarData(periodo.inicio)} até ${formatarData(periodo.fim)}. ${periodo.observacao || ''}`
-            : 'Dados atualizados.';
-
-
-    const homePeriodo = document.getElementById('home-dashboard-periodo');
-    if (homePeriodo) {
-        homePeriodo.innerText = document.getElementById('dashboard-periodo').innerText;
-        try { localStorage.setItem('mlHubPro_periodoHome_v1', homePeriodo.innerText); } catch (erro) {}
-    }
-
-
-    const indicadores =
-        data.indicadores ||
-        {};
-
-
-    const vendasMetric =
-        indicadores.vendas ||
-        {};
-
-    document.getElementById(
-        'metric-vendas'
-    ).innerText =
-        vendasMetric.valor ??
-        '—';
-
-    document.getElementById(
-        'metric-vendas-periodo'
-    ).innerText =
-        vendasMetric.periodo ||
-        'Período da API';
-
-
-    const reclamacoes =
-        indicadores.reclamacoes ||
-        {};
-
-    document.getElementById(
-        'metric-reclamacoes'
-    ).innerText =
-        formatarIndicador(
-            reclamacoes.taxa
-        );
-
-    document.getElementById(
-        'metric-reclamacoes-extra'
-    ).innerText =
-        reclamacoes.valor !== null &&
-        reclamacoes.valor !== undefined
-            ? `Valor: ${reclamacoes.valor}`
-            : 'Dados da API';
-
-
-    const atrasos =
-        indicadores.atrasos ||
-        {};
-
-    document.getElementById(
-        'metric-atrasos'
-    ).innerText =
-        formatarIndicador(
-            atrasos.taxa
-        );
-
-    document.getElementById(
-        'metric-atrasos-extra'
-    ).innerText =
-        atrasos.valor !== null &&
-        atrasos.valor !== undefined
-            ? `Valor: ${atrasos.valor}`
-            : 'Dados da API';
-
-
-    const cancelamentos =
-        indicadores.cancelamentos ||
-        {};
-
-    document.getElementById(
-        'metric-cancelamentos'
-    ).innerText =
-        formatarIndicador(
-            cancelamentos.taxa
-        );
-
-    document.getElementById(
-        'metric-cancelamentos-extra'
-    ).innerText =
-        cancelamentos.valor !== null &&
-        cancelamentos.valor !== undefined
-            ? `Valor: ${cancelamentos.valor}`
-            : 'Dados da API';
-
-
-    montarTop10(
-        data.top10 ||
-        []
+    const visitas=data?.visitas_dia||{};
+    setTxt(
+      'home-dashboard-visitas',
+      visitas.total!==null&&visitas.total!==undefined
+        ? Number(visitas.total||0).toLocaleString('pt-BR')
+        : '—'
     );
+    setTxt('home-dashboard-visitas-periodo',visitas.periodo||'Visitas aos anúncios da conta');
 
-    // Mantém os mesmos indicadores também na página inicial.
-    if (document.getElementById('home-metric-vendas') && document.getElementById('metric-vendas')) {
-        document.getElementById('home-metric-vendas').innerText =
-            document.getElementById('metric-vendas').innerText;
-    }
-    if (document.getElementById('home-metric-vendas-periodo') && document.getElementById('metric-vendas-periodo')) {
-        document.getElementById('home-metric-vendas-periodo').innerText =
-            document.getElementById('metric-vendas-periodo').innerText;
-    }
-    if (document.getElementById('home-metric-reclamacoes') && document.getElementById('metric-reclamacoes')) {
-        document.getElementById('home-metric-reclamacoes').innerText =
-            document.getElementById('metric-reclamacoes').innerText;
-    }
-    if (document.getElementById('home-metric-reclamacoes-extra') && document.getElementById('metric-reclamacoes-extra')) {
-        document.getElementById('home-metric-reclamacoes-extra').innerText =
-            document.getElementById('metric-reclamacoes-extra').innerText;
-    }
-    if (document.getElementById('home-metric-atrasos') && document.getElementById('metric-atrasos')) {
-        document.getElementById('home-metric-atrasos').innerText =
-            document.getElementById('metric-atrasos').innerText;
-    }
-    if (document.getElementById('home-metric-atrasos-extra') && document.getElementById('metric-atrasos-extra')) {
-        document.getElementById('home-metric-atrasos-extra').innerText =
-            document.getElementById('metric-atrasos-extra').innerText;
-    }
-    if (document.getElementById('home-metric-cancelamentos') && document.getElementById('metric-cancelamentos')) {
-        document.getElementById('home-metric-cancelamentos').innerText =
-            document.getElementById('metric-cancelamentos').innerText;
-    }
-    if (document.getElementById('home-metric-cancelamentos-extra') && document.getElementById('metric-cancelamentos-extra')) {
-        document.getElementById('home-metric-cancelamentos-extra').innerText =
-            document.getElementById('metric-cancelamentos-extra').innerText;
-    }
+    const periodo=data?.periodo_vendas;
+    const textoPeriodo=periodo
+      ? `Período consultado: ${formatarData(periodo.inicio)} até ${formatarData(periodo.fim)}. ${periodo.observacao||''}`
+      : 'Dados atualizados.';
+    setTxt('dashboard-periodo',textoPeriodo);
+    setTxt('home-dashboard-periodo',textoPeriodo);
 
-    try {
-        const indicadoresHomeCache = {};
+    const vendasMetric=indicadores.vendas||{};
+    const reclamacoes=indicadores.reclamacoes||{};
+    const atrasos=indicadores.atrasos||{};
+    const cancelamentos=indicadores.cancelamentos||{};
+
+    // A página atual usa IDs home-metric-*. Os IDs antigos metric-* podem não existir.
+    const pares=[
+      ['home-metric-vendas',vendasMetric.valor??'—'],
+      ['home-metric-vendas-periodo',vendasMetric.periodo||'Período da API'],
+      ['home-metric-reclamacoes',formatarIndicador(reclamacoes.taxa)],
+      ['home-metric-reclamacoes-extra',reclamacoes.valor!==null&&reclamacoes.valor!==undefined?`Valor: ${reclamacoes.valor}`:'Dados da API'],
+      ['home-metric-atrasos',formatarIndicador(atrasos.taxa)],
+      ['home-metric-atrasos-extra',atrasos.valor!==null&&atrasos.valor!==undefined?`Valor: ${atrasos.valor}`:'Dados da API'],
+      ['home-metric-cancelamentos',formatarIndicador(cancelamentos.taxa)],
+      ['home-metric-cancelamentos-extra',cancelamentos.valor!==null&&cancelamentos.valor!==undefined?`Valor: ${cancelamentos.valor}`:'Dados da API'],
+
+      // Compatibilidade, caso esses elementos existam em outra versão do layout.
+      ['metric-vendas',vendasMetric.valor??'—'],
+      ['metric-vendas-periodo',vendasMetric.periodo||'Período da API'],
+      ['metric-reclamacoes',formatarIndicador(reclamacoes.taxa)],
+      ['metric-reclamacoes-extra',reclamacoes.valor!==null&&reclamacoes.valor!==undefined?`Valor: ${reclamacoes.valor}`:'Dados da API'],
+      ['metric-atrasos',formatarIndicador(atrasos.taxa)],
+      ['metric-atrasos-extra',atrasos.valor!==null&&atrasos.valor!==undefined?`Valor: ${atrasos.valor}`:'Dados da API'],
+      ['metric-cancelamentos',formatarIndicador(cancelamentos.taxa)],
+      ['metric-cancelamentos-extra',cancelamentos.valor!==null&&cancelamentos.valor!==undefined?`Valor: ${cancelamentos.valor}`:'Dados da API']
+    ];
+    pares.forEach(([id,v])=>setTxt(id,v));
+
+    if(Array.isArray(data?.top10))montarTop10(data.top10);
+
+    try{
+        localStorage.setItem('mlHubPro_resumoHome_v1',JSON.stringify({
+          vendas:document.getElementById('home-dashboard-vendas')?.innerText||'',
+          pedidos:document.getElementById('home-dashboard-pedidos')?.innerText||'',
+          unidades:document.getElementById('home-dashboard-unidades')?.innerText||'',
+          visitas:document.getElementById('home-dashboard-visitas')?.innerText||'',
+          visitas_periodo:document.getElementById('home-dashboard-visitas-periodo')?.innerText||''
+        }));
+        localStorage.setItem('mlHubPro_periodoHome_v1',textoPeriodo);
+
+        const indicadoresHomeCache={};
         [
-            'home-metric-vendas',
-            'home-metric-vendas-periodo',
-            'home-metric-reclamacoes',
-            'home-metric-reclamacoes-extra',
-            'home-metric-atrasos',
-            'home-metric-atrasos-extra',
-            'home-metric-cancelamentos',
-            'home-metric-cancelamentos-extra'
-        ].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) indicadoresHomeCache[id] = el.innerText;
+          'home-metric-vendas','home-metric-vendas-periodo',
+          'home-metric-reclamacoes','home-metric-reclamacoes-extra',
+          'home-metric-atrasos','home-metric-atrasos-extra',
+          'home-metric-cancelamentos','home-metric-cancelamentos-extra'
+        ].forEach(id=>{
+            const el=document.getElementById(id);
+            if(el)indicadoresHomeCache[id]=el.innerText;
         });
-        localStorage.setItem('mlHubPro_indicadoresHome_v1', JSON.stringify(indicadoresHomeCache));
-    } catch (erro) {
-        console.warn('Não foi possível salvar os indicadores da página inicial:', erro);
+        localStorage.setItem('mlHubPro_indicadoresHome_v1',JSON.stringify(indicadoresHomeCache));
+        localStorage.setItem('mlHubPro_dashboardHome_v1',JSON.stringify(data));
+    }catch(e){
+        console.warn('Cache da Home:',e);
     }
-
 }
-
 
 function formatarData(
     valor
@@ -6052,71 +5915,80 @@ function montarTop10(lista) {
 }
 
 
-async function carregarDashboard() {
+async function carregarTop10V22(){
+    const token=obterToken();
+    if(!token)return {ok:false,erro:'Token não disponível.'};
 
-    const token =
-        obterToken();
-
-    if (!token) {
-
-        solicitarToken();
-
-        return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v22/top10?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.sucesso)throw new Error(d.erro||`HTTP ${r.status}`);
+        montarTop10(Array.isArray(d.top10)?d.top10:[]);
+        return {ok:true,total:Number(d.total||0),fonte:d.fonte||''};
+    }catch(e){
+        console.error('[TOP10 V22 FRONT]',e);
+        return {ok:false,erro:e.message};
     }
+}
 
-    mostrarLoading(
-        'Buscando vendas, indicadores e Top 10...'
-    );
+async function carregarDashboard() {
+    const token=obterToken();
+    if(!token){solicitarToken();return;}
 
-    try {
+    mostrarLoading('Buscando vendas, indicadores e Top 10...');
 
-        const response =
-            await fetch(
-                `${RENDER_URL}/api/dashboard`,
-                {
-                    headers: {
-                        Authorization:
-                            token
-                    }
-                }
-            );
+    let dashboardOk=false;
+    let top10Ok=false;
+    let erroDashboard='';
+    let erroTop10='';
 
-        const data =
-            await response.json();
+    try{
+        const [dashResultado,topResultado]=await Promise.allSettled([
+            fetch(`${RENDER_URL}/api/dashboard?_=${Date.now()}`,{
+                cache:'no-store',
+                headers:{Authorization:token,Accept:'application/json'}
+            }).then(async r=>{
+                const d=await r.json().catch(()=>({}));
+                if(!r.ok||!d.sucesso)throw new Error(d.erro||`HTTP ${r.status}`);
+                return d;
+            }),
+            carregarTop10V22()
+        ]);
 
-        if (
-            !response.ok ||
-            !data.sucesso
-        ) {
-
-            alert(
-                data.erro ||
-                'Erro ao carregar painel.'
-            );
-
-            return;
+        if(dashResultado.status==='fulfilled'){
+            preencherDashboard(dashResultado.value);
+            dashboardOk=true;
+        }else{
+            erroDashboard=dashResultado.reason?.message||'Falha ao carregar indicadores.';
+            console.error('[DASHBOARD V22]',dashResultado.reason);
         }
 
-        preencherDashboard(
-            data
-        );
+        if(topResultado.status==='fulfilled'&&topResultado.value?.ok){
+            top10Ok=true;
+        }else{
+            erroTop10=topResultado.status==='fulfilled'
+              ? topResultado.value?.erro||'Falha no Top 10.'
+              : topResultado.reason?.message||'Falha no Top 10.';
+        }
 
-        mudarAba(
-            'dashboard'
-        );
+        const status=document.getElementById('home-tempo-real-status');
+        if(status){
+            if(dashboardOk&&top10Ok){
+                status.innerText='● Painel e Top 10 atualizados agora';
+                status.className='text-[10px] text-emerald-400 font-bold';
+            }else if(dashboardOk||top10Ok){
+                status.innerText='● Atualização parcial — mantendo os últimos dados nas partes indisponíveis';
+                status.className='text-[10px] text-yellow-400 font-bold';
+            }
+        }
 
-    } catch (error) {
-
-        console.error(
-            error
-        );
-
-        alert(
-            'Erro de comunicação ao carregar o dashboard.'
-        );
-
-    } finally {
-
+        if(!dashboardOk&&!top10Ok){
+            alert(`Não foi possível atualizar o painel.\n${erroDashboard}${erroTop10?`\nTop 10: ${erroTop10}`:''}`);
+        }
+    }finally{
         esconderLoading();
     }
 }
@@ -6863,6 +6735,20 @@ document.addEventListener('DOMContentLoaded', () => {
     border:1px solid rgba(250,204,21,.35);
 }
 #btn-ia-flutuante:hover{transform:translateY(-2px);border-color:#facc15}
+body.atendimento-isolado #app-header{display:none!important}
+body.atendimento-isolado #btn-ia-flutuante,
+body.atendimento-isolado #btn-configuracoes-flutuante{display:none!important}
+body.atendimento-isolado main{
+    max-width:1600px!important;
+    padding-top:28px!important;
+}
+body.atendimento-isolado #secao-atendimento{
+    min-height:calc(100vh - 56px);
+}
+body.atendimento-isolado #secao-atendimento .chat-voltar-v22{
+    display:inline-flex!important;
+}
+
 .theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
 body.tema-escuro{background:#030712!important}
 body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
@@ -8046,6 +7932,7 @@ function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedi
 /* Navegação V21: Gestão continua paginada; Simulação/Atualização/Pedidos ganham seus loaders próprios. */
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
+    document.body.classList.toggle('atendimento-isolado',String(aba)==='atendimento');
     _mudarAbaV21(aba);
     if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
