@@ -2589,6 +2589,28 @@ app.get('/api/v3/bpp/case/:id',async(req,res)=>{
 });
 
 
+
+app.get('/api/v10/claims/todas',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+      const me=await usuarioML(token);
+      const statuses=['opened','closed'];
+      const mapa=new Map();
+      for(const status of statuses){
+        const params=new URLSearchParams({'players.user_id':String(me.id),'players.role':'respondent','limit':'50','offset':'0','sort':'last_updated:desc','status':status});
+        const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${params}`,token);
+        const d=await jsonSeguro(r);
+        if(!r.ok){console.error('[CLAIMS V10]',status,formatarErroMercadoLivre(d));continue}
+        for(const c of (Array.isArray(d.data)?d.data:[]))mapa.set(String(c.id),c);
+      }
+      const base=[...mapa.values()].sort((a,b)=>new Date(b.last_updated||b.date_created||0)-new Date(a.last_updated||a.date_created||0));
+      const enriquecidas=await Promise.all(base.map(async c=>{
+        try{const rd=await mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/detail`,token);const dd=await jsonSeguro(rd);return {...c,due_date:rd.ok?dd.due_date:null,detail_title:rd.ok?dd.title:null};}catch(e){return c}
+      }));
+      res.json({sucesso:true,total:enriquecidas.length,reclamacoes:enriquecidas});
+    }catch(e){respostaErro(res,500,'Erro ao consultar reclamações: '+e.message)}
+});
+
 app.get('/api/v9/claims/:id/dossie',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     const id=encodeURIComponent(req.params.id);
