@@ -2758,7 +2758,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                         mt-1
                     "
                 >
-                    Aplique os valores nos anúncios.
+                    Aplique os valores nos anúncios. Premium e Clássico permitem substituir manualmente a taxa trazida pelo Mercado Livre.
                 </p>
 
             </div>
@@ -2791,6 +2791,30 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                     class="
                         input-simulacao
                         w-20
+                    "
+                >
+
+                <input
+                    type="number"
+                    step="0.1"
+                    id="massa-taxa-premium"
+                    placeholder="Premium %"
+                    title="Taxa manual para anúncios Premium"
+                    class="
+                        input-simulacao
+                        w-24
+                    "
+                >
+
+                <input
+                    type="number"
+                    step="0.1"
+                    id="massa-taxa-classico"
+                    placeholder="Clássico %"
+                    title="Taxa manual para anúncios Clássico"
+                    class="
+                        input-simulacao
+                        w-24
                     "
                 >
 
@@ -4635,6 +4659,9 @@ function montarTabelaGestao(
                     <span class="text-slate-300">
                         ${moeda(item.sale_fee)}
                     </span>
+                    ${Number(item.commission_percentage||0)>0
+                      ? `<span class="text-[9px] text-blue-400 font-bold"> (${Number(item.commission_percentage).toFixed(2)}%)</span>`
+                      : ''}
 
                     <br>
 
@@ -7842,6 +7869,7 @@ function normalizarItemEscala(i){
   return {
     id:i.id||'', title:i.title||'', sku:i.sku||'Sem SKU',
     price:Number(i.price||0), sale_fee:Number(i.sale_fee||0),
+    commission_percentage:Number(i.commission_percentage||0),
     shipping_cost:Number(i.shipping_cost||0), net_received:Number(i.net_received ?? i.price ?? 0),
     available_quantity:Number(i.available_quantity||0), sold_quantity:Number(i.sold_quantity||0),
     status:i.status||'', listing_type_id:i.listing_type_id||'',
@@ -7968,7 +7996,14 @@ let pedidosPaginaV21=1, pedidosPaginasV21=1, pedidosCarregandoV21=false;
 let filtroEscalaV21={campo:'sku',valor:''};
 const simParametrosPorIdV21={};
 const simResultadosPorIdV21={};
-const simMassaV21={custo:null,taxa:null,imposto:null,lucro:null};
+const simMassaV21={
+    custo:null,
+    taxa:null,
+    taxaPremium:null,
+    taxaClassico:null,
+    imposto:null,
+    lucro:null
+};
 
 /* V27 — base persistente por SKU */
 const baseSkuV27={};
@@ -8026,8 +8061,24 @@ function limparFiltroAtualizacaoV21(){filtroEscalaV21={campo:'sku',valor:''};sin
 function parametrosSimV21(item){
     const salvo=simParametrosPorIdV21[item.id]||{};
     const regra=regraSkuV27(item);
+
+    const premium=String(item.listing_type_id||'')==='gold_pro';
+    const taxaManualTipo=premium
+      ? simMassaV21.taxaPremium
+      : simMassaV21.taxaClassico;
+
+    const taxaApi=Number(item.commission_percentage||0)>0
+      ? Number(item.commission_percentage)
+      : null;
+
     return {
-        taxa:Number(salvo.taxa ?? simMassaV21.taxa ?? (item.listing_type_id==='gold_pro'?17:12)),
+        taxa:Number(
+          salvo.taxa ??
+          taxaManualTipo ??
+          simMassaV21.taxa ??
+          taxaApi ??
+          (premium?17:12)
+        ),
         custo:Number(salvo.custo ?? simMassaV21.custo ?? regra?.custo ?? 10),
         imposto:Number(salvo.imposto ?? simMassaV21.imposto ?? 0),
         lucro:Number(salvo.lucro ?? simMassaV21.lucro ?? regra?.margem ?? 12)
@@ -8139,6 +8190,8 @@ aplicarEmMassa=function(){
     const vals={
       custo:document.getElementById('massa-custo')?.value,
       taxa:document.getElementById('massa-taxa')?.value,
+      taxaPremium:document.getElementById('massa-taxa-premium')?.value,
+      taxaClassico:document.getElementById('massa-taxa-classico')?.value,
       imposto:document.getElementById('massa-imposto')?.value,
       lucro:document.getElementById('massa-lucro')?.value
     };
