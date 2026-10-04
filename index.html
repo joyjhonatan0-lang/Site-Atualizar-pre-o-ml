@@ -376,6 +376,18 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
   position:static!important;pointer-events:auto!important;
 }
 </style>
+
+<style id="mlhub-v24-isolamento-final">
+body.perfil-isolado-v24 #acao-voltar-inicio,
+body.perfil-isolado-v24 #acao-anuncios,
+body.perfil-isolado-v24 #acao-atualizar-painel,
+body.configuracoes-isolado-v24 #acao-voltar-inicio,
+body.configuracoes-isolado-v24 #acao-anuncios,
+body.configuracoes-isolado-v24 #acao-atualizar-painel{
+    display:none!important;
+}
+</style>
+
 </head>
 
 <body
@@ -763,8 +775,52 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
     </div>
 </header>
 
+<aside id="painel-sidebar-v24" aria-label="Menu principal do painel">
+    <div class="painel-sidebar-v24-inner">
+        <div class="painel-sidebar-v24-titulo">PAINEL</div>
+
+        <button class="painel-sidebar-v24-item" data-aba="gestao" onclick="mudarAba('gestao')">
+            <span class="painel-sidebar-v24-icone">▦</span>
+            <span>Gestão de anúncios</span>
+        </button>
+
+        <button class="painel-sidebar-v24-item" data-aba="simulacao" onclick="mudarAba('simulacao')">
+            <span class="painel-sidebar-v24-icone">◈</span>
+            <span>Simulação</span>
+        </button>
+
+        <button class="painel-sidebar-v24-item" data-aba="atualizacao" onclick="mudarAba('atualizacao')">
+            <span class="painel-sidebar-v24-icone">↻</span>
+            <span>Atualização</span>
+        </button>
+
+        <button class="painel-sidebar-v24-item" data-aba="pedidos" onclick="mudarAba('pedidos')">
+            <span class="painel-sidebar-v24-icone">▤</span>
+            <span>Pedidos</span>
+        </button>
+
+        <button class="painel-sidebar-v24-item" data-aba="perguntas" onclick="mudarAba('perguntas')">
+            <span class="painel-sidebar-v24-icone">▣</span>
+            <span>Perguntas</span>
+        </button>
+
+        <button class="painel-sidebar-v24-item" data-aba="reclamacoes" onclick="mudarAba('reclamacoes')">
+            <span class="painel-sidebar-v24-icone">⚠</span>
+            <span>Pós-venda</span>
+        </button>
+
+        <div class="painel-sidebar-v24-divisor"></div>
+
+        <button class="painel-sidebar-v24-item painel-sidebar-v24-voltar" onclick="mudarAba('inicio')">
+            <span class="painel-sidebar-v24-icone">←</span>
+            <span>Voltar ao início</span>
+        </button>
+    </div>
+</aside>
+
 
 <main
+    id="app-main"
     class="
         max-w-[1800px]
         mx-auto
@@ -6742,6 +6798,157 @@ body.configuracoes-isolado-v23 #acao-voltar-inicio{
     display:none!important;
 }
 
+/* =========================================================
+   V24 — MENU LATERAL DO PAINEL
+========================================================= */
+#painel-sidebar-v24{
+    display:none;
+    position:fixed;
+    left:0;
+    top:72px;
+    bottom:0;
+    width:244px;
+    z-index:42;
+    border-right:1px solid rgba(51,65,85,.72);
+    background:rgba(3,7,18,.97);
+    backdrop-filter:blur(16px);
+    overflow-y:auto;
+}
+.painel-sidebar-v24-inner{
+    padding:20px 14px 28px;
+}
+.painel-sidebar-v24-titulo{
+    padding:0 12px 12px;
+    color:#64748b;
+    font-size:9px;
+    font-weight:900;
+    letter-spacing:.18em;
+}
+.painel-sidebar-v24-item{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 13px;
+    margin-bottom:5px;
+    border:1px solid transparent;
+    border-radius:12px;
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:700;
+    text-align:left;
+    transition:.18s ease;
+}
+.painel-sidebar-v24-item:hover{
+    color:#f8fafc;
+    background:#111827;
+    border-color:#1e293b;
+}
+.painel-sidebar-v24-item.active{
+    color:#0f172a;
+    background:#facc15;
+    border-color:#fde047;
+    box-shadow:0 8px 24px rgba(250,204,21,.10);
+}
+.painel-sidebar-v24-icone{
+    width:22px;
+    min-width:22px;
+    text-align:center;
+    font-size:15px;
+}
+.painel-sidebar-v24-divisor{
+    height:1px;
+    background:#1e293b;
+    margin:16px 8px;
+}
+.painel-sidebar-v24-voltar{
+    color:#cbd5e1;
+}
+
+/* Nas páginas operacionais, o antigo menu horizontal some e entra o lateral. */
+body.painel-menu-v24 #app-header nav{
+    display:none!important;
+}
+body.painel-menu-v24 #painel-sidebar-v24{
+    display:block;
+}
+body.painel-menu-v24 #app-main{
+    max-width:none!important;
+    width:auto!important;
+    margin-left:244px!important;
+    margin-right:0!important;
+    padding-left:28px!important;
+    padding-right:28px!important;
+}
+
+/* Perfil e Configurações ficam limpos:
+   somente logo no cabeçalho + botão "Voltar ao início" dentro da página. */
+body.perfil-isolado-v24 #app-header nav,
+body.perfil-isolado-v24 #app-header .top-actions,
+body.configuracoes-isolado-v24 #app-header nav,
+body.configuracoes-isolado-v24 #app-header .top-actions{
+    display:none!important;
+}
+body.perfil-isolado-v24 #painel-sidebar-v24,
+body.configuracoes-isolado-v24 #painel-sidebar-v24,
+body.atendimento-isolado #painel-sidebar-v24,
+body.pagina-inicio-v23 #painel-sidebar-v24{
+    display:none!important;
+}
+body.perfil-isolado-v24 #app-main,
+body.configuracoes-isolado-v24 #app-main{
+    margin-left:auto!important;
+    margin-right:auto!important;
+    max-width:1800px!important;
+}
+
+/* O chat continua sendo uma página totalmente própria. */
+body.atendimento-isolado #app-main{
+    margin-left:auto!important;
+    margin-right:auto!important;
+}
+
+@media (max-width:1100px){
+    #painel-sidebar-v24{
+        width:206px;
+    }
+    body.painel-menu-v24 #app-main{
+        margin-left:206px!important;
+        padding-left:18px!important;
+        padding-right:18px!important;
+    }
+}
+@media (max-width:820px){
+    #painel-sidebar-v24{
+        position:sticky;
+        top:0;
+        width:auto;
+        height:auto;
+        border-right:0;
+        border-bottom:1px solid #1e293b;
+    }
+    .painel-sidebar-v24-inner{
+        display:flex;
+        gap:6px;
+        overflow-x:auto;
+        padding:10px;
+    }
+    .painel-sidebar-v24-titulo,
+    .painel-sidebar-v24-divisor{
+        display:none;
+    }
+    .painel-sidebar-v24-item{
+        min-width:max-content;
+        margin:0;
+        padding:10px 12px;
+    }
+    body.painel-menu-v24 #app-main{
+        margin-left:0!important;
+        padding-left:14px!important;
+        padding-right:14px!important;
+    }
+}
+
 .theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
 body.tema-escuro{background:#030712!important}
 body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
@@ -7926,10 +8133,21 @@ function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedi
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
     const destino=String(aba);
+    const abasPainelV24=['gestao','simulacao','atualizacao','pedidos','perguntas','reclamacoes'];
+
     document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
     document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
+    document.body.classList.toggle('configuracoes-isolado-v24',destino==='configuracoes');
+    document.body.classList.toggle('perfil-isolado-v24',destino==='perfil');
     document.body.classList.toggle('pagina-inicio-v23',destino==='inicio');
+    document.body.classList.toggle('painel-menu-v24',abasPainelV24.includes(destino));
+
     _mudarAbaV21(aba);
+
+    document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
+        btn.classList.toggle('active',btn.dataset.aba===destino);
+    });
+
     if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
     if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
@@ -7938,8 +8156,18 @@ mudarAba=function(aba){
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
+    const abasPainelV24=['gestao','simulacao','atualizacao','pedidos','perguntas','reclamacoes'];
+
     document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
+    document.body.classList.toggle('configuracoes-isolado-v24',abaInicial==='configuracoes');
+    document.body.classList.toggle('perfil-isolado-v24',abaInicial==='perfil');
     document.body.classList.toggle('pagina-inicio-v23',abaInicial==='inicio');
+    document.body.classList.toggle('atendimento-isolado',abaInicial==='atendimento');
+    document.body.classList.toggle('painel-menu-v24',abasPainelV24.includes(abaInicial));
+
+    document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
+        btn.classList.toggle('active',btn.dataset.aba===abaInicial);
+    });
 
     // Enter aplica o filtro rapidamente nas duas páginas.
     document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
