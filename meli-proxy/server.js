@@ -2945,30 +2945,79 @@ app.post('/api/v9/claims/:id/analisar',async(req,res)=>{
             }))
         };
 
-        const prompt=`Analise esta reclamação do Mercado Livre como assistente do vendedor.
+        // Sinal auxiliar: não decide o caso sozinho, apenas chama atenção da IA para
+        // indícios explícitos de dano/avaria causados durante a entrega.
+        const textoContexto=JSON.stringify(contexto).toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        const termosLogistica=[
+          'transportadora','transportador','entregador','motorista',
+          'jogou','jogado','jogada','arremessou','arremessado','por cima do muro',
+          'embalagem danificada','caixa amassada','caixa rasgada','avaria no transporte',
+          'danificado no transporte','danificada no transporte','entrega danificou'
+        ];
+        const indiciosLogistica=termosLogistica.filter(t=>textoContexto.includes(t));
+
+        const prompt=`Analise esta reclamação do Mercado Livre como ASSISTENTE DE DEFESA DO VENDEDOR, com foco em apurar de quem é a responsabilidade pelo problema.
 
 DADOS DA RECLAMAÇÃO:
 ${JSON.stringify(contexto)}
 
-Objetivo:
-- fazer uma análise factual e útil para o vendedor;
-- defender legitimamente o vendedor somente com fatos e evidências disponíveis;
-- identificar contradições, pontos favoráveis, riscos e informações faltantes;
-- sugerir a melhor resposta profissional permitida para comprador ou mediação;
-- se houver imagens anexadas, considerar somente fatos realmente visíveis nelas;
-- não inventar provas, não acusar o comprador sem evidência, não prometer decisão favorável;
-- não prometer que a reclamação deixará de afetar reputação ou que não haverá prejuízo;
-- indicar, quando necessário, quais evidências adicionais o vendedor deveria reunir.
+INDÍCIOS TEXTUAIS DE PROBLEMA LOGÍSTICO DETECTADOS PELO SISTEMA:
+${JSON.stringify(indiciosLogistica)}
 
-A resposta_sugerida deve ser clara, respeitosa, objetiva e pronta para revisão humana antes do envio.`;
+REGRAS DE ANÁLISE:
+1. Trabalhe somente com fatos do dossiê, mensagens e imagens. Nunca invente prova.
+2. Determine primeiro a responsabilidade provável: "vendedor", "comprador", "logistica_transportadora" ou "inconclusiva".
+3. Diferencie DEFEITO DO PRODUTO de AVARIA LOGÍSTICA. Se o comprador relata que o entregador/transportadora jogou, arremessou, amassou, molhou ou danificou o pacote durante a entrega, e isso é compatível com as evidências, trate como forte indício de responsabilidade logística, não como defeito automaticamente atribuível ao vendedor.
+4. Se o produto FOI ENTREGUE ao comprador, mas chegou danificado, não chame isso de "extravio". Use "avaria/dano durante o transporte ou entrega". Só use "extravio" quando os dados realmente mostrarem que a mercadoria não foi entregue ou foi perdida.
+5. Quando a responsabilidade provável for "logistica_transportadora":
+   - NÃO admita culpa do vendedor;
+   - NÃO ofereça espontaneamente reembolso, devolução ou pagamento de etiqueta como se fossem obrigação do vendedor;
+   - destaque o relato do próprio comprador e as evidências que apontam para manuseio/entrega inadequados;
+   - recomende direcionar a defesa prioritariamente à MEDIAÇÃO/Mercado Livre;
+   - peça formalmente que o caso seja tratado como ocorrência logística/avaria de transporte;
+   - peça análise para que o vendedor não seja debitado pelo valor do produto, frete ou etiqueta/devolução quando a cobertura/regras aplicáveis permitirem;
+   - peça preservação ou compensação do valor da venda conforme a proteção logística aplicável;
+   - peça que a reclamação não gere impacto indevido na reputação, ou que o status "not_affected" seja mantido quando a API já indicar isso.
+6. Esses pedidos NÃO são garantias. Use linguagem como "solicito", "peço análise", "peço que seja aplicado", "caso previsto pelas regras da plataforma". Nunca diga que o Mercado Livre obrigatoriamente vai isentar, reembolsar ou retirar impacto.
+7. Se as evidências forem insuficientes ou contraditórias, diga exatamente o que falta e não force a conclusão a favor do vendedor.
+8. Se houver imagens, descreva somente fatos realmente visíveis e explique como eles apoiam ou não a tese logística.
+9. Evite respostas genéricas ao comprador. A resposta deve defender a posição do vendedor perante a plataforma quando houver indícios de responsabilidade logística.
+
+OBJETIVO DA RESPOSTA:
+Criar uma defesa curta, firme, profissional e factual, pronta para revisão humana, citando os elementos do próprio caso. Quando a responsabilidade provável for logística, a resposta deve pedir ao Mercado Livre/mediação que reconheça a ocorrência de transporte, preserve os direitos do vendedor e não transfira automaticamente a ele custos decorrentes da avaria.`;
 
         const schema={
             type:'object',
             properties:{
-                analise:{type:'string',description:'Análise factual da reclamação sob a perspectiva do vendedor.'},
-                resposta_sugerida:{type:'string',description:'Mensagem profissional sugerida para revisão humana antes de enviar.'}
+                responsabilidade_provavel:{
+                    type:'string',
+                    enum:['vendedor','comprador','logistica_transportadora','inconclusiva'],
+                    description:'Responsabilidade mais provável conforme as evidências disponíveis.'
+                },
+                confianca:{
+                    type:'string',
+                    enum:['alta','media','baixa'],
+                    description:'Nível de confiança da classificação com base nas evidências.'
+                },
+                destinatario_recomendado:{
+                    type:'string',
+                    enum:['complainant','mediator'],
+                    description:'Destinatário mais adequado para a resposta sugerida.'
+                },
+                fundamentos_defesa:{
+                    type:'array',
+                    items:{type:'string'},
+                    description:'Fatos concretos do caso que sustentam a defesa.'
+                },
+                analise:{type:'string',description:'Análise factual da reclamação sob a perspectiva do vendedor, distinguindo produto de logística.'},
+                estrategia_defesa:{type:'string',description:'Estratégia recomendada ao vendedor sem prometer resultado.'},
+                resposta_sugerida:{type:'string',description:'Mensagem profissional de defesa, pronta para revisão humana antes de enviar.'}
             },
-            required:['analise','resposta_sugerida']
+            required:[
+                'responsabilidade_provavel','confianca','destinatario_recomendado',
+                'fundamentos_defesa','analise','estrategia_defesa','resposta_sugerida'
+            ]
         };
 
         const gr=await chamarGeminiInteracao({
@@ -2976,13 +3025,21 @@ A resposta_sugerida deve ser clara, respeitosa, objetiva e pronta para revisão 
                 {type:'text',text:prompt},
                 ...evidenciasVisuais
             ],
-            systemInstruction:'Você é um assistente de pós-venda especializado em marketplaces brasileiros. Trabalhe somente com as informações recebidas. Preserve neutralidade factual, destaque a defesa legítima do vendedor e nunca fabrique evidências.',
+            systemInstruction:'Você atua como assistente de defesa do vendedor em pós-venda de marketplace. Sua prioridade é atribuir responsabilidade corretamente com base em evidências. Quando houver dano causado durante transporte/entrega, não transforme isso automaticamente em culpa do vendedor e não ofereça reembolso por iniciativa própria. Formule pedidos de proteção ao vendedor sem garantir resultado, sem fabricar evidências e sem acusar pessoas além do que os dados sustentam.',
             responseSchema:schema
         });
 
         let parsed;
         try{parsed=extrairJsonIA(gr.texto)}
-        catch(e){parsed={analise:gr.texto,resposta_sugerida:''}}
+        catch(e){parsed={analise:gr.texto,resposta_sugerida:'',responsabilidade_provavel:'inconclusiva',confianca:'baixa',destinatario_recomendado:'mediator',fundamentos_defesa:[],estrategia_defesa:''}}
+
+        if(!['vendedor','comprador','logistica_transportadora','inconclusiva'].includes(parsed?.responsabilidade_provavel)){
+            parsed.responsabilidade_provavel='inconclusiva';
+        }
+        if(!['alta','media','baixa'].includes(parsed?.confianca))parsed.confianca='baixa';
+        if(!['complainant','mediator'].includes(parsed?.destinatario_recomendado))parsed.destinatario_recomendado='mediator';
+        if(!Array.isArray(parsed?.fundamentos_defesa))parsed.fundamentos_defesa=[];
+        parsed.indicios_logistica_detectados=indiciosLogistica;
 
         res.json({
             sucesso:true,
