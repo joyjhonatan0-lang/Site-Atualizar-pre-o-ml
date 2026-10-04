@@ -4169,18 +4169,28 @@ async function sincronizarPrecosApi() {
 async function sincronizarFretesApi() {
     const token=obterToken();
     if(!token){solicitarToken();return;}
-    mostrarLoading('Iniciando fretes de todos os anúncios do banco...');
+
+    mostrarLoading('Verificando fretes novos ou alterados...');
     try{
-        const response=await fetch(`${RENDER_URL}/api/scale/fretes`,{
+        const response=await fetch(`${RENDER_URL}/api/scale/fretes?_=${Date.now()}`,{
             method:'POST',
+            cache:'no-store',
             headers:{'Content-Type':'application/json',Authorization:token},
             body:'{}'
         });
-        const data=await response.json();
+        const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.erro||`HTTP ${response.status}`);
+
         const jobId=data.job?.id;
         if(!jobId)throw new Error('Servidor não retornou o trabalho de fretes.');
-        esconderLoading();
+
+        if(data.sem_pendencias||data.job?.status==='completed'){
+            esconderLoading();
+            await carregarGestaoEscala(gestaoPagina,{silencioso:true});
+            alert(data.mensagem||'Todos os fretes já estão atualizados.');
+            return;
+        }
+
         await acompanharFretes90k(jobId);
     }catch(error){
         esconderLoading();
@@ -4191,28 +4201,80 @@ async function sincronizarFretesApi() {
 
 async function acompanharFretes90k(jobId){
     const token=obterToken();
-    mostrarLoading('Puxando custos de frete... preparando lote');
+    let atualJobId=jobId;
+    let ultimoProgresso=-1;
+    let ultimoAvanco=Date.now();
+    let recuperacoes=0;
+    const inicio=Date.now();
+
+    mostrarLoading('Puxando custos de frete...');
     while(true){
         try{
-            const r=await fetch(`${RENDER_URL}/api/scale/jobs/${jobId}`,{headers:{Authorization:token}});
-            const d=await r.json();if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+            const r=await fetch(`${RENDER_URL}/api/scale/jobs/${atualJobId}?_=${Date.now()}`,{
+                cache:'no-store',
+                headers:{Authorization:token}
+            });
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
             const j=d.job||{};
-            const atual=Number(j.progress_current||j.processed||0);
+            const atual=Number(j.progress_current||0);
             const total=Number(j.progress_total||0);
+            const erros=Number(j.errors||0);
+            const pct=total?Math.min(100,Math.round((atual/total)*100)):0;
+
+            if(atual!==ultimoProgresso){
+                ultimoProgresso=atual;
+                ultimoAvanco=Date.now();
+            }
+
             const texto=document.querySelector('#loading-overlay p, #loadingOverlay p, [id*="loading"] p');
-            if(texto)texto.textContent=`Puxando custos de frete... ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lotes de 1.000`;
+            if(texto){
+                texto.textContent=total
+                  ? `Puxando custos de frete... ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}%${erros?` · ${erros} falha(s)`:''}`
+                  : 'Preparando anúncios que precisam de frete...';
+            }
+
             if(j.status==='completed'){
                 esconderLoading();
                 await carregarGestaoEscala(gestaoPagina,{silencioso:true});
-                alert(j.message||`Fretes sincronizados com sucesso: ${atual} anúncio(s).`);
+                alert(j.message||`Fretes concluídos: ${atual.toLocaleString('pt-BR')} anúncio(s).`);
                 return;
             }
+
             if(j.status==='failed'){
-                esconderLoading();alert('Erro ao sincronizar fretes: '+(j.message||'falha no processamento.'));return;
+                esconderLoading();
+                alert('Erro ao sincronizar fretes: '+(j.message||'falha no processamento.'));
+                return;
             }
-            await new Promise(resolve=>setTimeout(resolve,2000));
+
+            if(Date.now()-ultimoAvanco>120000 && recuperacoes<2){
+                recuperacoes++;
+                const rr=await fetch(`${RENDER_URL}/api/scale/fretes?_=${Date.now()}`,{
+                    method:'POST',
+                    cache:'no-store',
+                    headers:{'Content-Type':'application/json',Authorization:token},
+                    body:'{}'
+                });
+                const rd=await rr.json().catch(()=>({}));
+                if(rr.ok&&rd.job?.id){
+                    atualJobId=rd.job.id;
+                    ultimoAvanco=Date.now();
+                    if(texto)texto.textContent='Retomando sincronização de fretes automaticamente...';
+                }
+            }
+
+            if(Date.now()-inicio>30*60*1000){
+                esconderLoading();
+                alert('A sincronização continua em segundo plano, mas demorou mais de 30 minutos. Você pode fechar esta mensagem e voltar depois; os dados já concluídos ficam salvos.');
+                return;
+            }
+
+            await new Promise(resolve=>setTimeout(resolve,1500));
         }catch(e){
-            esconderLoading();alert('Erro ao acompanhar fretes: '+e.message);return;
+            esconderLoading();
+            alert('Erro ao acompanhar fretes: '+e.message);
+            return;
         }
     }
 }
