@@ -7372,19 +7372,63 @@ async function analisarClaimIA(id){
     const fallback=d.fallback_utilizado
       ? '<span class="text-emerald-400">Fallback automático utilizado ✓</span>'
       : '<span class="text-slate-500">Modelo principal respondeu normalmente</span>';
+    const respMap={
+      vendedor:'Vendedor',
+      comprador:'Comprador',
+      logistica_transportadora:'Logística / transportadora',
+      inconclusiva:'Inconclusiva'
+    };
+    const respChave=String(d.responsabilidade_provavel||'inconclusiva');
+    const respLabel=claimEsc(respMap[respChave]||'Inconclusiva');
+    const confianca=claimEsc(String(d.confianca||'baixa').toUpperCase());
+    const fundamentos=Array.isArray(d.fundamentos_defesa)?d.fundamentos_defesa:[];
+    const fundamentosHtml=fundamentos.length
+      ? fundamentos.map(x=>`<li class="mt-1">${claimEsc(x)}</li>`).join('')
+      : '<li class="mt-1">A IA não encontrou fundamentos suficientes para listar.</li>';
+    const destino=String(d.destinatario_recomendado||'mediator')==='complainant'?'complainant':'mediator';
+    const badgeResp=respChave==='logistica_transportadora'
+      ? 'border-sky-400/30 bg-sky-400/10 text-sky-300'
+      : respChave==='vendedor'
+        ? 'border-red-400/30 bg-red-400/10 text-red-300'
+        : 'border-yellow-400/30 bg-yellow-400/10 text-yellow-300';
 
     b.innerHTML=`<div id="claim-ia-resultado" class="border border-emerald-400/30 bg-emerald-400/5 rounded-2xl p-4">
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <div class="text-[10px] uppercase text-emerald-400 font-black">✓ Análise concluída — Defesa do vendedor</div>
           <div class="text-[10px] text-slate-500 mt-1">Modelo: ${modelo} · Imagens analisadas: ${imagens} · ${fallback}</div>
-          <div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div>
+          <div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. Quando houver indícios de avaria logística, a IA prioriza a defesa do vendedor e solicita proteção ao Mercado Livre, sem prometer resultado.</div>
         </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="rounded-xl border ${badgeResp} p-3">
+          <div class="text-[9px] uppercase font-black opacity-70">Responsabilidade provável</div>
+          <div class="text-sm font-black mt-1">${respLabel}</div>
+        </div>
+        <div class="rounded-xl border border-slate-700 bg-slate-950 p-3">
+          <div class="text-[9px] uppercase text-slate-500 font-black">Confiança da análise</div>
+          <div class="text-sm text-white font-black mt-1">${confianca}</div>
+        </div>
+        <div class="rounded-xl border border-slate-700 bg-slate-950 p-3">
+          <div class="text-[9px] uppercase text-slate-500 font-black">Destino recomendado</div>
+          <div class="text-sm text-white font-black mt-1">${destino==='mediator'?'Mediação / Mercado Livre':'Comprador'}</div>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-slate-950 rounded-xl p-4 border border-slate-800">
+        <div class="text-[10px] uppercase text-yellow-400 font-bold mb-2">Fundamentos da defesa</div>
+        <ul class="text-xs text-slate-200 leading-relaxed list-disc pl-5">${fundamentosHtml}</ul>
       </div>
 
       <div class="mt-4 bg-slate-950 rounded-xl p-4 border border-slate-800">
         <div class="text-[10px] uppercase text-yellow-400 font-bold mb-2">Análise da reclamação</div>
         <div class="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">${claimEsc(d.analise||'Análise concluída sem texto adicional.')}</div>
+      </div>
+
+      <div class="mt-4 bg-slate-950 rounded-xl p-4 border border-slate-800">
+        <div class="text-[10px] uppercase text-emerald-400 font-bold mb-2">Estratégia de defesa recomendada</div>
+        <div class="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">${claimEsc(d.estrategia_defesa||'Revise os fatos antes de responder.')}</div>
       </div>
 
       <div class="mt-4">
@@ -7394,8 +7438,8 @@ async function analisarClaimIA(id){
 
       <div class="flex flex-col md:flex-row gap-2 mt-3">
         <select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white">
-          <option value="complainant">Comprador</option>
-          <option value="mediator">Mediação do Mercado Livre</option>
+          <option value="complainant" ${destino==='complainant'?'selected':''}>Comprador</option>
+          <option value="mediator" ${destino==='mediator'?'selected':''}>Mediação do Mercado Livre</option>
         </select>
         <button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button>
       </div>
