@@ -3966,86 +3966,37 @@ async function carregarDados() {
 
 
 async function puxarNovosAnuncios() {
+    const token=obterToken();
+    if(!token){solicitarToken();return;}
 
-    const token = obterToken();
+    mostrarLoading('Buscando somente anúncios novos no Mercado Livre...');
+    try{
+        const response=await fetch(`${RENDER_URL}/api/scale/sync-new`,{
+            method:'POST',
+            headers:{
+                Authorization:token,
+                'Content-Type':'application/json'
+            },
+            body:JSON.stringify({max_pages:10})
+        });
 
-    if (!token) {
-        solicitarToken();
-        return;
-    }
+        let data={};
+        try{data=await response.json();}catch(e){}
 
-    mostrarLoading(
-        'Buscando somente anúncios novos no Mercado Livre...'
-    );
-
-    try {
-
-        const idsExistentes = (cacheItens || [])
-            .map(item => item.id)
-            .filter(Boolean);
-
-        const params = new URLSearchParams();
-
-        if (idsExistentes.length > 0) {
-            params.set('existingIds', idsExistentes.join(','));
+        if(!response.ok){
+            throw new Error(data.erro||`Servidor respondeu HTTP ${response.status}`);
         }
 
-        const url =
-            `${RENDER_URL}/api/anuncios` +
-            (params.toString() ? `?${params.toString()}` : '');
-
-        const response = await fetch(
-            url,
-            {
-                headers: {
-                    Authorization: token
-                }
-            }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            alert(data.erro || 'Erro ao buscar anúncios novos.');
-            return;
+        // Recarrega somente a página atual do PostgreSQL.
+        if(typeof carregarGestaoEscala==='function'){
+            await carregarGestaoEscala(1,{silencioso:true});
         }
 
-        const novos = Array.isArray(data.itens)
-            ? data.itens
-            : [];
-
-        if (novos.length === 0) {
-            alert(data.mensagem || 'Nenhum anúncio novo encontrado.');
-            return;
-        }
-
-        const idsJaCarregados = new Set(
-            (cacheItens || []).map(item => item.id)
-        );
-
-        const realmenteNovos = novos.filter(
-            item => !idsJaCarregados.has(item.id)
-        );
-
-        cacheItens = [
-            ...realmenteNovos,
-            ...(cacheItens || [])
-        ];
-
-        // Mantém os novos anúncios salvos mesmo após F5.
-        salvarCacheItensLocal();
-
-        atualizarCards(cacheItens);
-        executarBusca();
-
-        alert(
-            `${realmenteNovos.length} anúncio(s) novo(s) adicionado(s).`
-        );
-
-    } catch (error) {
-        console.error('Erro ao puxar anúncios novos:', error);
-        alert('Erro de comunicação com o servidor.');
-    } finally {
+        alert(data.mensagem||'Atualização concluída.');
+    }catch(error){
+        console.error('Erro ao puxar anúncios novos:',error);
+        alert('Não foi possível puxar os anúncios novos: '+(error.message||'erro de comunicação com o servidor.'));
+    }finally{
         esconderLoading();
     }
 }
@@ -7382,7 +7333,7 @@ async function carregarDados(){
   if(!modo){alert('O PostgreSQL de escala não está disponível.');return}
   await carregarGestaoEscala(1);
 }
-async function puxarNovosAnuncios(){return iniciarSincronizacao90k();}
+
 
 // Ao entrar em Gestão, consulta apenas 50 registros.
 const _mudarAbaV6=mudarAba;
