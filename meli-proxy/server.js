@@ -2590,71 +2590,97 @@ app.get('/api/v3/bpp/case/:id',async(req,res)=>{
 
 
 
-app.get('/api/v10/claims/todas',async(req,res)=>{
-    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
-    try{
-      const me=await usuarioML(token);
-      const sellerId=String(me.id);
-      const mapa=new Map();
-      const erros=[];
+app.get('/api/v10/claims/todas', async (req,res) => {
+  const token=obterToken(req);
+  if(!token) return respostaErro(res,401,'Token não fornecido.');
+  try{
+    const me=await usuarioML(token);
+    if(!me?.id) return respostaErro(res,401,'Não foi possível identificar o vendedor do token.');
 
-      // A API atual exige a busca acotada pelo usuário + papel do vendedor.
-      // Busca opened e closed separadamente, com paginação.
-      for(const status of ['opened','closed']){
-        let offset=0;
-        while(offset<10000){
-          const params=new URLSearchParams({
-            'players.user_id':sellerId,
-            'players.role':'respondent',
-            'status':status,
-            'limit':'50',
-            'offset':String(offset)
-          });
-          const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${params.toString()}`,token);
-          const d=await jsonSeguro(r);
-          if(!r.ok){
-            erros.push({status,http:r.status,erro:formatarErroMercadoLivre(d)});
-            break;
-          }
-          const arr=Array.isArray(d?.data)?d.data:[];
-          for(const c of arr)mapa.set(String(c.id),c);
-          const total=Number(d?.paging?.total||arr.length);
-          offset+=arr.length;
-          if(!arr.length || offset>=total || arr.length<50)break;
+    const sellerId=String(me.id);
+    const mapa=new Map();
+    const diagnostico=[];
+
+    async function buscarStatus(status){
+      let offset=0, total=0, paginas=0;
+      do{
+        // Regra oficial: players.user_id + players.role, e offset + limit < 10000.
+        const limit=50;
+        if(offset + limit >= 10000) break;
+        const qs=new URLSearchParams();
+        qs.set('players.user_id',sellerId);
+        qs.set('players.role','respondent');
+        qs.set('status',status);
+        qs.set('limit',String(limit));
+        qs.set('offset',String(offset));
+
+        const url=`${ML_API}/post-purchase/v1/claims/search?${qs.toString()}`;
+        const rr=await mlFetch(url,token);
+        const body=await jsonSeguro(rr);
+
+        diagnostico.push({status,http:rr.status,offset,quantidade:Array.isArray(body?.data)?body.data.length:0});
+        if(!rr.ok){
+          const err=new Error(`Busca de reclamações ${status}: HTTP ${rr.status} - ${formatarErroMercadoLivre(body)}`);
+          err.http=rr.status; throw err;
         }
-      }
 
-      if(!mapa.size && erros.length){
-        return respostaErro(res,502,`Mercado Livre não retornou as reclamações: ${erros.map(x=>`${x.status} HTTP ${x.http} - ${x.erro}`).join(' | ')}`);
-      }
+        const dados=Array.isArray(body?.data)?body.data:[];
+        for(const claim of dados) mapa.set(String(claim.id),claim);
 
-      const base=[...mapa.values()].sort((a,b)=>new Date(b.last_updated||b.date_created||0)-new Date(a.last_updated||a.date_created||0));
-
-      // Enriquece só as mais recentes para não criar uma explosão de requisições.
-      const limiteDetalhes=Math.min(base.length,100);
-      const enriquecidas=[];
-      for(let i=0;i<base.length;i+=10){
-        const grupo=base.slice(i,Math.min(i+10,limiteDetalhes));
-        if(!grupo.length)break;
-        const parte=await Promise.all(grupo.map(async c=>{
-          try{
-            const [rd,ri]=await Promise.all([
-              mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/detail`,token),
-              mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/affects-reputation`,token)
-            ]);
-            const dd=await jsonSeguro(rd),di=await jsonSeguro(ri);
-            return {...c,due_date:rd.ok?dd?.due_date:null,detail_title:rd.ok?dd?.title:null,impact:ri.ok?di:null};
-          }catch(e){return c}
-        }));
-        enriquecidas.push(...parte);
-      }
-      if(base.length>limiteDetalhes)enriquecidas.push(...base.slice(limiteDetalhes));
-
-      res.json({sucesso:true,total:enriquecidas.length,reclamacoes:enriquecidas,erros_parciais:erros});
-    }catch(e){
-      console.error('[CLAIMS V10 TODAS]',e);
-      respostaErro(res,500,'Erro ao consultar reclamações: '+e.message);
+        total=Number(body?.paging?.total || 0);
+        paginas++;
+        offset += dados.length;
+        if(!dados.length || dados.length < limit || offset>=total) break;
+      }while(paginas<200);
     }
+
+    // Primeiro abertas: assim uma falha nas fechadas nunca impede as pendentes de aparecerem.
+    await buscarStatus('opened');
+    try{ await buscarStatus('closed'); }
+    catch(e){ diagnostico.push({status:'closed',warning:e.message}); }
+
+    const reclamacoes=[...mapa.values()].sort((x,y)=>
+      new Date(y.last_updated||y.date_created||0)-new Date(x.last_updated||x.date_created||0)
+    );
+
+    return res.json({
+      sucesso:true,
+      seller_id:sellerId,
+      total:reclamacoes.length,
+      reclamacoes,
+      diagnostico
+    });
+  }catch(e){
+    console.error('[CLAIMS V15]',e);
+    return respostaErro(res,e.http||500,e.message||'Erro ao consultar reclamações.');
+  }
+});
+
+// Diagnóstico direto para testar a conexão com reclamações sem depender do frontend.
+app.get('/api/v15/claims/diagnostico', async (req,res) => {
+  const token=obterToken(req);
+  if(!token) return respostaErro(res,401,'Token não fornecido.');
+  try{
+    const me=await usuarioML(token);
+    const qs=new URLSearchParams({
+      'players.user_id':String(me.id),
+      'players.role':'respondent',
+      'status':'opened',
+      'limit':'30',
+      'offset':'0'
+    });
+    const rr=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${qs.toString()}`,token);
+    const body=await jsonSeguro(rr);
+    return res.status(rr.ok?200:rr.status).json({
+      sucesso:rr.ok,
+      seller_id:String(me.id),
+      mercado_livre_http:rr.status,
+      total:Number(body?.paging?.total||0),
+      quantidade:Array.isArray(body?.data)?body.data.length:0,
+      reclamacoes:Array.isArray(body?.data)?body.data:[],
+      erro:rr.ok?null:formatarErroMercadoLivre(body)
+    });
+  }catch(e){return respostaErro(res,500,e.message)}
 });
 
 app.get('/api/v9/claims/:id/dossie',async(req,res)=>{
