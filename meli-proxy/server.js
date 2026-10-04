@@ -1061,18 +1061,23 @@ app.post('/api/atualizar-precos', async (req, res) => {
 
                         if (mlRes.ok) {
                             return {
-                                id:
-                                    item.id,
-                                sucesso:
-                                    true
+                                id: item.id,
+                                sucesso: true,
+                                requested_price: Number(item.price),
+                                price: Number(mlData?.price ?? item.price),
+                                http_status: mlRes.status
                             };
                         }
 
                         return {
-                            id:
-                                item.id,
-                            sucesso:
-                                false,
+                            id: item.id,
+                            sucesso: false,
+                            requested_price: Number(item.price),
+                            http_status: mlRes.status,
+                            codigo:
+                                mlData?.cause?.[0]?.code ||
+                                mlData?.error ||
+                                null,
                             erro:
                                 formatarErroMercadoLivre(
                                     mlData
@@ -1081,10 +1086,11 @@ app.post('/api/atualizar-precos', async (req, res) => {
 
                     } catch (err) {
                         return {
-                            id:
-                                item.id,
-                            sucesso:
-                                false,
+                            id: item.id,
+                            sucesso: false,
+                            requested_price: Number(item.price),
+                            http_status: null,
+                            codigo: 'connection_error',
                             erro:
                                 "Erro de conexão: " +
                                 err.message
