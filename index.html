@@ -4135,93 +4135,53 @@ async function sincronizarPrecosApi() {
 
 
 async function sincronizarFretesApi() {
-
-    const token = obterToken();
-
-    if (!token) {
-        solicitarToken();
-        return;
-    }
-
-    if (!cacheItens || cacheItens.length === 0) {
-        alert("Nenhum anúncio carregado.");
-        return;
-    }
-
-    const mlbs = cacheItens.map(item => item.id).filter(Boolean);
-    const tamanhoLote = 1000;
-    let atualizados = 0;
-    let falhas = 0;
-
-    mostrarLoading(`Puxando custos de frete... 0/${mlbs.length}`);
-
-    try {
-        for (let i = 0; i < mlbs.length; i += tamanhoLote) {
-            const lote = mlbs.slice(i, i + tamanhoLote);
-
-            // Atualiza a mensagem sem alterar o restante do layout.
-            const textoLoading = document.querySelector('#loading-overlay p, #loadingOverlay p, [id*="loading"] p');
-            if (textoLoading) {
-                textoLoading.textContent = `Puxando custos de frete... ${Math.min(i, mlbs.length)}/${mlbs.length}`;
-            }
-
-            const response = await fetch(`${RENDER_URL}/api/sincronizar-fretes`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: token
-                },
-                body: JSON.stringify({ ids: lote })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.fretes) {
-                falhas += lote.length;
-                console.error('Erro no lote de fretes:', data.erro || data);
-                continue;
-            }
-
-            cacheItens.forEach(item => {
-                const frete = data.fretes[item.id];
-                if (!frete) return;
-
-                item.shipping_cost = Number(frete.custo || 0);
-                item.free_shipping = Boolean(frete.gratis);
-                item.net_received = Math.max(
-                    0,
-                    Number(item.price || 0) -
-                    Number(item.sale_fee || 0) -
-                    Number(item.shipping_cost || 0)
-                );
-                atualizados++;
-            });
-
-            // Salva cada lote concluído. Assim, mesmo que a página seja
-            // recarregada durante a sincronização, os fretes já obtidos permanecem.
-            salvarCacheItensLocal();
-
-            // Atualiza a tabela a cada lote, então o usuário vê o resultado chegando.
-            executarBusca();
-        }
-
-        // Confirma no armazenamento local o estado final dos fretes.
-        salvarCacheItensLocal();
-
-        atualizarCards(cacheItens);
-        executarBusca();
-
-        if (falhas > 0) {
-            alert(`Fretes atualizados: ${atualizados}. Não foi possível consultar ${falhas} anúncio(s).`);
-        } else {
-            alert(`Fretes sincronizados com sucesso: ${atualizados} anúncio(s).`);
-        }
-
-    } catch (error) {
-        console.error('Erro ao sincronizar fretes:', error);
-        alert('Erro ao sincronizar fretes: ' + error.message);
-    } finally {
+    const token=obterToken();
+    if(!token){solicitarToken();return;}
+    mostrarLoading('Iniciando fretes de todos os anúncios do banco...');
+    try{
+        const response=await fetch(`${RENDER_URL}/api/scale/fretes`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json',Authorization:token},
+            body:'{}'
+        });
+        const data=await response.json();
+        if(!response.ok)throw new Error(data.erro||`HTTP ${response.status}`);
+        const jobId=data.job?.id;
+        if(!jobId)throw new Error('Servidor não retornou o trabalho de fretes.');
         esconderLoading();
+        await acompanharFretes90k(jobId);
+    }catch(error){
+        esconderLoading();
+        console.error('Erro ao sincronizar fretes:',error);
+        alert('Erro ao sincronizar fretes: '+error.message);
+    }
+}
+
+async function acompanharFretes90k(jobId){
+    const token=obterToken();
+    mostrarLoading('Puxando custos de frete... preparando lote');
+    while(true){
+        try{
+            const r=await fetch(`${RENDER_URL}/api/scale/jobs/${jobId}`,{headers:{Authorization:token}});
+            const d=await r.json();if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+            const j=d.job||{};
+            const atual=Number(j.progress_current||j.processed||0);
+            const total=Number(j.progress_total||0);
+            const texto=document.querySelector('#loading-overlay p, #loadingOverlay p, [id*="loading"] p');
+            if(texto)texto.textContent=`Puxando custos de frete... ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lotes de 1.000`;
+            if(j.status==='completed'){
+                esconderLoading();
+                await carregarGestaoEscala(gestaoPagina,{silencioso:true});
+                alert(j.message||`Fretes sincronizados com sucesso: ${atual} anúncio(s).`);
+                return;
+            }
+            if(j.status==='failed'){
+                esconderLoading();alert('Erro ao sincronizar fretes: '+(j.message||'falha no processamento.'));return;
+            }
+            await new Promise(resolve=>setTimeout(resolve,2000));
+        }catch(e){
+            esconderLoading();alert('Erro ao acompanhar fretes: '+e.message);return;
+        }
     }
 }
 
