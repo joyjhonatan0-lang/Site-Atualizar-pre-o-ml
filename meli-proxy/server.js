@@ -1315,7 +1315,7 @@ async function buscarItensBulk(
  */
 async function buscarTop10MaisVendidosDaConta(token, sellerId) {
     const params = new URLSearchParams({
-        orders: 'sold_quantity_desc',
+        sort: 'sold_quantity_desc',
         limit: '10',
         offset: '0'
     });
@@ -1360,6 +1360,59 @@ async function buscarTop10MaisVendidosDaConta(token, sellerId) {
         .sort((a, b) => b.unidades - a.unidades)
         .slice(0, 10);
 }
+
+
+/**
+ * GET /api/v22/top10
+ * Ranking rápido e independente do dashboard completo.
+ */
+app.get('/api/v22/top10', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const sellerId=me.id;
+
+        let top10=[];
+        let fonte='mercado_livre';
+
+        try{
+            top10=await buscarTop10MaisVendidosDaConta(token,sellerId);
+        }catch(e){
+            console.warn('[TOP10 V22 API]',e.message);
+        }
+
+        if((!Array.isArray(top10)||!top10.length) && db){
+            const r=await dbQuery(`
+              SELECT item_id,title,price::float8 price,sold_quantity,thumbnail,permalink,status
+              FROM ml_items
+              WHERE seller_id=$1 AND sold_quantity>0
+              ORDER BY sold_quantity DESC,item_id
+              LIMIT 10
+            `,[sellerId]);
+
+            if(r.rows.length){
+                fonte='postgresql';
+                top10=r.rows.map(item=>({
+                    item_id:item.item_id,
+                    titulo:item.title||item.item_id,
+                    unidades:Number(item.sold_quantity||0),
+                    faturamento:Number(item.sold_quantity||0)*Number(item.price||0),
+                    preco_atual:Number(item.price||0),
+                    thumbnail:item.thumbnail||'',
+                    permalink:item.permalink||'#',
+                    status:item.status||''
+                }));
+            }
+        }
+
+        res.set('Cache-Control','no-store');
+        return res.json({sucesso:true,fonte,total:top10.length,top10});
+    }catch(e){
+        console.error('[TOP10 V22]',e);
+        return respostaErro(res,500,'Erro ao buscar Top 10: '+e.message);
+    }
+});
 
 /**
  * GET /api/dashboard
@@ -1580,32 +1633,34 @@ app.get('/api/dashboard', async (req, res) => {
                 });
         }
 
-        // Se o PostgreSQL já possui os anúncios sincronizados, ele é a fonte
-        // mais rápida e estável para o ranking por sold_quantity.
-        try {
-            if (db) {
-                const rankDb = await dbQuery(`
-                    SELECT item_id,title,price::float8 price,sold_quantity,thumbnail,permalink,status
-                    FROM ml_items
-                    WHERE seller_id=$1 AND sold_quantity>0
-                    ORDER BY sold_quantity DESC, item_id
-                    LIMIT 10
-                `,[sellerId]);
-                if (rankDb.rows.length) {
-                    top10 = rankDb.rows.map(item => ({
-                        item_id:item.item_id,
-                        titulo:item.title || item.item_id,
-                        unidades:Number(item.sold_quantity||0),
-                        faturamento:Number(item.sold_quantity||0)*Number(item.price||0),
-                        preco_atual:Number(item.price||0),
-                        thumbnail:item.thumbnail||'',
-                        permalink:item.permalink||'#',
-                        status:item.status||''
-                    }));
+        // PostgreSQL é fallback. A consulta direta ao Mercado Livre acima
+        // é priorizada para o ranking ficar atualizado no clique.
+        if (!Array.isArray(top10) || top10.length === 0) {
+            try {
+                if (db) {
+                    const rankDb = await dbQuery(`
+                        SELECT item_id,title,price::float8 price,sold_quantity,thumbnail,permalink,status
+                        FROM ml_items
+                        WHERE seller_id=$1 AND sold_quantity>0
+                        ORDER BY sold_quantity DESC, item_id
+                        LIMIT 10
+                    `,[sellerId]);
+                    if (rankDb.rows.length) {
+                        top10 = rankDb.rows.map(item => ({
+                            item_id:item.item_id,
+                            titulo:item.title || item.item_id,
+                            unidades:Number(item.sold_quantity||0),
+                            faturamento:Number(item.sold_quantity||0)*Number(item.price||0),
+                            preco_atual:Number(item.price||0),
+                            thumbnail:item.thumbnail||'',
+                            permalink:item.permalink||'#',
+                            status:item.status||''
+                        }));
+                    }
                 }
+            } catch (e) {
+                console.warn('[TOP10 DB FALLBACK]', e.message);
             }
-        } catch (e) {
-            console.warn('[TOP10 DB]', e.message);
         }
 
 
