@@ -1098,6 +1098,35 @@ app.post('/api/atualizar-precos', async (req, res) => {
                 promises
             );
 
+        // Mantém a base PostgreSQL alinhada imediatamente após alterações de preço.
+        try {
+            if (db) {
+                const sucessoIds=resultados.filter(x=>x?.sucesso).map(x=>String(x.id));
+                const mapaPreco=new Map((itens||[]).map(x=>[String(x.id),Number(x.price||0)]));
+                if(sucessoIds.length){
+                    const params=[];
+                    const values=[];
+                    sucessoIds.forEach(id=>{
+                        const base=params.length;
+                        params.push(id,mapaPreco.get(id));
+                        values.push(`($${base+1}::text,$${base+2}::numeric)`);
+                    });
+                    await dbQuery(`
+                        UPDATE ml_items AS m SET
+                          price=v.price,
+                          net_received=GREATEST(0,v.price-m.sale_fee-m.shipping_cost),
+                          freight_synced_at=NULL,
+                          freight_last_attempt_at=NULL,
+                          synced_at=NOW()
+                        FROM (VALUES ${values.join(',')}) AS v(item_id,price)
+                        WHERE m.item_id=v.item_id
+                    `,params);
+                }
+            }
+        } catch (e) {
+            console.warn('[DB PREÇOS]',e.message);
+        }
+
         res.json({
             resultados
         });
@@ -1379,6 +1408,27 @@ app.get('/api/dashboard', async (req, res) => {
         const sellerId =
             user.id;
 
+        // Visitas recentes da conta. O recurso oficial retorna total_visits
+        // por janela diária para os anúncios do vendedor.
+        let visitasDia = { total: null, periodo: 'Visitas do dia' };
+        try {
+            const vr = await mlFetch(
+                `${ML_API}/users/${sellerId}/items_visits/time_window?last=1&unit=day`,
+                token
+            );
+            const vd = await jsonSeguro(vr);
+            if (vr.ok) {
+                visitasDia = {
+                    total: Number(vd?.total_visits ?? 0),
+                    periodo: vd?.date_from && vd?.date_to
+                        ? `${new Date(vd.date_from).toLocaleDateString('pt-BR')} · janela diária`
+                        : 'Janela diária da API'
+                };
+            }
+        } catch (e) {
+            console.warn('[DASHBOARD VISITAS]', e.message);
+        }
+
         const pedidos =
             await buscarPedidosDoVendedor(
                 token,
@@ -1530,6 +1580,34 @@ app.get('/api/dashboard', async (req, res) => {
                 });
         }
 
+        // Se o PostgreSQL já possui os anúncios sincronizados, ele é a fonte
+        // mais rápida e estável para o ranking por sold_quantity.
+        try {
+            if (db) {
+                const rankDb = await dbQuery(`
+                    SELECT item_id,title,price::float8 price,sold_quantity,thumbnail,permalink,status
+                    FROM ml_items
+                    WHERE seller_id=$1 AND sold_quantity>0
+                    ORDER BY sold_quantity DESC, item_id
+                    LIMIT 10
+                `,[sellerId]);
+                if (rankDb.rows.length) {
+                    top10 = rankDb.rows.map(item => ({
+                        item_id:item.item_id,
+                        titulo:item.title || item.item_id,
+                        unidades:Number(item.sold_quantity||0),
+                        faturamento:Number(item.sold_quantity||0)*Number(item.price||0),
+                        preco_atual:Number(item.price||0),
+                        thumbnail:item.thumbnail||'',
+                        permalink:item.permalink||'#',
+                        status:item.status||''
+                    }));
+                }
+            }
+        } catch (e) {
+            console.warn('[TOP10 DB]', e.message);
+        }
+
 
         /*
          * Busca os dados completos do vendedor.
@@ -1655,6 +1733,8 @@ app.get('/api/dashboard', async (req, res) => {
                 }
             },
 
+            visitas_dia: visitasDia,
+
             vendas_reais: {
                 pedidos_pagos:
                     pedidosPagos.length,
@@ -1696,6 +1776,101 @@ function inicioISO12Meses() {
 
     return data.toISOString();
 }
+
+async function mapLimitV21(lista,limite,fn){
+    const saida=new Array(lista.length);
+    let cursor=0;
+    async function worker(){
+        while(true){
+            const i=cursor++;
+            if(i>=lista.length)return;
+            try{saida[i]=await fn(lista[i],i)}
+            catch(e){saida[i]=null}
+        }
+    }
+    await Promise.all(Array.from({length:Math.min(limite,Math.max(1,lista.length))},()=>worker()));
+    return saida;
+}
+
+app.get('/api/v21/pedidos', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const page=Math.max(1,Number(req.query.page||1));
+        const limit=Math.min(50,Math.max(10,Number(req.query.limit||30)));
+        const offset=(page-1)*limit;
+        const params=new URLSearchParams({
+            seller:String(me.id),
+            sort:'date_desc',
+            offset:String(offset),
+            limit:String(limit)
+        });
+        const or=await mlFetch(`${ML_API}/orders/search?${params.toString()}`,token);
+        const od=await jsonSeguro(or);
+        if(!or.ok)return respostaErro(res,or.status,formatarErroMercadoLivre(od));
+
+        const orders=Array.isArray(od?.results)?od.results:[];
+        const enriquecidos=await mapLimitV21(orders,8,async order=>{
+            let shipment=null;
+            try{
+                const sr=await mlFetch(`${ML_API}/orders/${order.id}/shipments`,token,{
+                    headers:{'x-format-new':'true'}
+                });
+                const sd=await jsonSeguro(sr);
+                if(sr.ok)shipment=sd;
+            }catch(e){}
+
+            const shipmentStatus=String(shipment?.status||order?.shipping?.status||'').toLowerCase();
+            const orderStatus=String(order?.status||'').toLowerCase();
+            let situacao='em_andamento';
+            if(orderStatus==='cancelled'||orderStatus==='canceled'||shipmentStatus==='cancelled')situacao='cancelado';
+            else if(shipmentStatus==='delivered')situacao='entregue';
+            else if(orderStatus!=='paid'||['pending','ready_to_ship','handling'].includes(shipmentStatus))situacao='pendente';
+
+            return {
+                id:order.id,
+                date_created:order.date_created,
+                date_closed:order.date_closed,
+                status:order.status,
+                status_detail:order.status_detail,
+                total_amount:Number(order.total_amount||order.paid_amount||0),
+                paid_amount:Number(order.paid_amount||0),
+                currency_id:order.currency_id||'BRL',
+                buyer:{
+                    id:order.buyer?.id||null,
+                    nickname:order.buyer?.nickname||''
+                },
+                items:(order.order_items||[]).map(oi=>({
+                    id:oi.item?.id||'',
+                    title:oi.item?.title||oi.item?.id||'Produto',
+                    quantity:Number(oi.quantity||0),
+                    unit_price:Number(oi.unit_price||0)
+                })),
+                shipping:{
+                    id:shipment?.id||order?.shipping?.id||null,
+                    status:shipment?.status||order?.shipping?.status||null,
+                    substatus:shipment?.substatus||order?.shipping?.substatus||null
+                },
+                situacao
+            };
+        });
+
+        const pedidos=enriquecidos.filter(Boolean);
+        const total=Number(od?.paging?.total||0);
+        res.json({
+            sucesso:true,
+            pagina:page,
+            limite:limit,
+            total,
+            paginas:Math.max(1,Math.ceil(total/limit)),
+            pedidos
+        });
+    }catch(e){
+        console.error('[PEDIDOS V21]',e);
+        respostaErro(res,500,'Erro ao buscar pedidos: '+e.message);
+    }
+});
 
 /* =========================================================
    PERGUNTAS E RESPOSTAS
@@ -3946,9 +4121,21 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const me=await usuarioML(token);
         const page=Math.max(1,Number(req.query.page||1)),limit=Math.min(100,Math.max(10,Number(req.query.limit||50))),offset=(page-1)*limit;
         const q=String(req.query.q||'').trim(),status=String(req.query.status||'').trim();
+        const field=String(req.query.field||'all').trim().toLowerCase();
         const params=[me.id];let where=`seller_id=$1`;
         if(status){params.push(status);where+=` AND status=$${params.length}`}
-        if(q){params.push(`%${q.toLowerCase()}%`);where+=` AND (lower(title) LIKE $${params.length} OR lower(sku) LIKE $${params.length} OR lower(item_id) LIKE $${params.length})`}
+        if(q){
+            if(field==='sku'){
+                params.push(q.toLowerCase());
+                where+=` AND lower(COALESCE(sku,''))=$${params.length}`;
+            }else if(field==='mlb'){
+                params.push(q.toLowerCase());
+                where+=` AND lower(item_id)=$${params.length}`;
+            }else{
+                params.push(`%${q.toLowerCase()}%`);
+                where+=` AND (lower(title) LIKE $${params.length} OR lower(COALESCE(sku,'')) LIKE $${params.length} OR lower(item_id) LIKE $${params.length})`;
+            }
+        }
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
