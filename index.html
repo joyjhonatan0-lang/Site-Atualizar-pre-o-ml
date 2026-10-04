@@ -7242,9 +7242,9 @@ function renderListaClaimsV10(){
     const resolvida=claimResolvida(c), marcada=claimsMarcadasV10.has(String(c.id));
     return `<div class="p-4 hover:bg-slate-800/60 transition ${marcada?'bg-yellow-400/5':''}">
       <div class="flex gap-3 items-start">
-        <label class="mt-0.5 shrink-0 flex flex-col items-center gap-1 cursor-pointer" title="Selecionar esta reclamação">
+        <label class="mt-0.5 shrink-0 flex items-center gap-2 cursor-pointer border border-yellow-400/60 bg-yellow-400/10 rounded-lg px-2 py-2" title="Selecionar esta reclamação">
           <input type="checkbox" ${marcada?'checked':''} onchange="marcarClaimV10('${claimEsc(c.id)}',this.checked)" class="w-6 h-6 accent-yellow-400 cursor-pointer">
-          <span class="text-[8px] text-yellow-400 font-black">SELECIONAR</span>
+          <span class="text-[9px] text-yellow-400 font-black">SELECIONAR</span>
         </label>
         <button onclick="abrirDossieClaim('${claimEsc(c.id)}')" class="flex-1 text-left">
           <div class="flex justify-between gap-2"><div class="font-black text-white text-xs">Reclamação #${claimEsc(c.id)}</div><span class="text-[9px] px-2 py-1 rounded-full ${resolvida?'bg-emerald-400/10 text-emerald-400':'bg-yellow-400/10 text-yellow-400'}">${resolvida?'Resolvida':claimEsc(c.stage||c.status||'Pendente')}</span></div>
@@ -7264,21 +7264,8 @@ function atualizarBotaoClaimsV10(){
   const pend=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
   b.disabled=pend.length!==1;b.textContent=pend.length===1?'✦ Analisar reclamação selecionada':pend.length>1?`Selecione somente 1 pendente (${pend.length} marcadas)`:'✦ Analisar reclamação selecionada';
 }
-async function carregarReclamacoesProLegacy(){
-  const token=obterToken();if(!token)return solicitarToken();
-  mostrarLoading('Atualizando reclamações pendentes e resolvidas...');
-  try{
-    const r=await fetch(`${RENDER_URL}/api/v10/claims/todas`,{headers:{Authorization:token}});
-    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao consultar reclamações.');
-    claimsCacheV10=d.reclamacoes||[];
-    for(const id of [...claimsMarcadasV10])if(!claimsCacheV10.some(x=>String(x.id)===id))claimsMarcadasV10.delete(id);
-    const pend=claimsCacheV10.filter(c=>!claimResolvida(c));
-    document.getElementById('claims-abertas').textContent=pend.length;
-    document.getElementById('claims-disputas').textContent=pend.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
-    const agora=Date.now(),dias=2*86400000;
-    document.getElementById('claims-prazo').textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length;
-    renderListaClaimsV10();
-  }catch(e){alert(e.message)}finally{esconderLoading()}
+async function carregarReclamacoesProLegacy() {
+    return carregarReclamacoesPro();
 }
 async function selecionarEAnalisarClaimV11(id){
   claimsMarcadasV10.clear();
