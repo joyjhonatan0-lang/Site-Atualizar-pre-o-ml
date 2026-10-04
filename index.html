@@ -1860,6 +1860,74 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             </div>
         </div>
 
+        <div
+            id="atualizacao-progresso-v31"
+            class="
+                hidden
+                mt-5
+                pt-5
+                border-t
+                border-slate-800
+            "
+        >
+            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-[.12em] text-emerald-400 font-black">
+                                Progresso da atualização
+                            </div>
+                            <div id="atualizacao-progresso-texto-v31" class="text-xs text-slate-300 mt-1">
+                                Preparando atualização...
+                            </div>
+                        </div>
+                        <div id="atualizacao-progresso-percent-v31" class="text-xl font-black text-white">
+                            0%
+                        </div>
+                    </div>
+
+                    <div class="mt-3 h-3 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                            id="atualizacao-progresso-bar-v31"
+                            class="h-full bg-emerald-400 transition-all duration-300"
+                            style="width:0%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-[420px]">
+                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                        <div class="text-[9px] uppercase text-slate-500 font-bold">Processados</div>
+                        <div id="atualizacao-processados-v31" class="text-lg font-black text-white">0</div>
+                    </div>
+                    <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                        <div class="text-[9px] uppercase text-emerald-500 font-bold">Atualizados</div>
+                        <div id="atualizacao-sucessos-v31" class="text-lg font-black text-emerald-400">0</div>
+                    </div>
+                    <div class="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                        <div class="text-[9px] uppercase text-red-500 font-bold">Falhas</div>
+                        <div id="atualizacao-falhas-v31" class="text-lg font-black text-red-400">0</div>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                        <div class="text-[9px] uppercase text-slate-500 font-bold">Restantes</div>
+                        <div id="atualizacao-restantes-v31" class="text-lg font-black text-amber-400">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="atualizacao-ultimo-erro-v31" class="hidden mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <div class="text-[9px] uppercase tracking-[.1em] text-red-400 font-black">Último motivo de falha</div>
+                <div id="atualizacao-ultimo-erro-texto-v31" class="text-[11px] text-red-200 mt-1 break-words"></div>
+            </div>
+
+            <details id="atualizacao-erros-detalhes-v31" class="hidden mt-3 rounded-xl border border-slate-800 bg-slate-950/60">
+                <summary class="cursor-pointer px-4 py-3 text-xs font-black text-red-400">
+                    Ver anúncios que não foram atualizados e os motivos
+                </summary>
+                <div id="atualizacao-erros-lista-v31" class="max-h-72 overflow-y-auto border-t border-slate-800 divide-y divide-slate-800"></div>
+            </details>
+        </div>
+
     </div>
 
 
@@ -3248,6 +3316,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </div>
 
                 <button
+                    id="btn-atualizar-precos-v31"
                     onclick="atualizarPrecosMassaApi()"
                     class="
                         bg-emerald-500
@@ -3364,8 +3433,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                             Situação
                         </th>
 
-                        <th class="p-4">
-                            Status API
+                        <th class="p-4 min-w-[300px]">
+                            Status / motivo
                         </th>
 
                     </tr>
@@ -7992,6 +8061,11 @@ let atualPaginaV21=1, atualPaginasV21=1, atualTotalV21=0, atualItensV21=[], atua
 let pedidosPaginaV21=1, pedidosPaginasV21=1, pedidosCarregandoV21=false;
 let filtroEscalaV21={campo:'sku',valor:''};
 
+/* V31 — estado visual da atualização de preços em massa. */
+let atualizacaoExecutandoV31=false;
+const statusAtualizacaoV31=new Map();
+let errosAtualizacaoV31=[];
+
 /* V30 — cache compartilhado da lista completa.
    Simulação e Atualização reutilizam os anúncios já carregados. */
 const anunciosEscalaCacheV30=new Map();
@@ -8334,6 +8408,146 @@ function renderizarSimulacaoCompletaV29(itens){
     tbody.innerHTML=html;
 }
 
+function statusHtmlAtualizacaoV31(id){
+    const status=statusAtualizacaoV31.get(String(id));
+
+    if(!status){
+        return '<span class="text-slate-500 text-[10px]">Pendente</span>';
+    }
+
+    if(status.estado==='fila'){
+        return '<span class="text-amber-400 font-bold text-[10px]">● Na fila</span>';
+    }
+
+    if(status.estado==='processando'){
+        return '<span class="text-blue-400 font-bold text-[10px]">● Atualizando...</span>';
+    }
+
+    if(status.estado==='sucesso'){
+        return `
+          <div>
+            <span class="text-emerald-400 font-black text-[10px]">✓ Atualizado</span>
+            <div class="text-[9px] text-slate-500 mt-1">
+              ${status.http_status?`HTTP ${escapeHtml(status.http_status)}`:'Mercado Livre confirmou a alteração'}
+            </div>
+          </div>`;
+    }
+
+    const motivo=String(status.motivo||'O Mercado Livre não aceitou a atualização.');
+    const codigo=status.codigo?` · ${String(status.codigo)}`:'';
+    const http=status.http_status?`HTTP ${status.http_status}${codigo}`:(status.codigo?String(status.codigo):'Falha');
+
+    return `
+      <div class="max-w-[380px]">
+        <div class="text-red-400 font-black text-[10px]">✗ Não atualizado</div>
+        <div class="text-[9px] text-red-300 mt-1">${escapeHtml(http)}</div>
+        <div class="text-[10px] text-slate-300 mt-1 whitespace-normal break-words">${escapeHtml(motivo)}</div>
+      </div>`;
+}
+
+function atualizarStatusLinhaV31(id){
+    const el=document.getElementById(`status_api_${safeIdV21(id)}`);
+    if(el)el.innerHTML=statusHtmlAtualizacaoV31(id);
+}
+
+function atualizarPainelProgressoV31({total=0,processados=0,sucessos=0,falhas=0,texto='',estado='running'}={}){
+    const painel=document.getElementById('atualizacao-progresso-v31');
+    const bar=document.getElementById('atualizacao-progresso-bar-v31');
+    const percent=document.getElementById('atualizacao-progresso-percent-v31');
+    const textoEl=document.getElementById('atualizacao-progresso-texto-v31');
+
+    if(painel)painel.classList.remove('hidden');
+
+    const pct=total>0?Math.max(0,Math.min(100,Math.round((processados/total)*100))):0;
+    if(bar){
+        bar.style.width=`${pct}%`;
+        bar.classList.toggle('bg-red-400',estado==='error');
+        bar.classList.toggle('bg-emerald-400',estado!=='error');
+    }
+    if(percent)percent.textContent=`${pct}%`;
+    if(textoEl)textoEl.textContent=texto||`${processados.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}`;
+
+    const proc=document.getElementById('atualizacao-processados-v31');
+    const suc=document.getElementById('atualizacao-sucessos-v31');
+    const fal=document.getElementById('atualizacao-falhas-v31');
+    const rest=document.getElementById('atualizacao-restantes-v31');
+
+    if(proc)proc.textContent=Number(processados||0).toLocaleString('pt-BR');
+    if(suc)suc.textContent=Number(sucessos||0).toLocaleString('pt-BR');
+    if(fal)fal.textContent=Number(falhas||0).toLocaleString('pt-BR');
+    if(rest)rest.textContent=Math.max(0,Number(total||0)-Number(processados||0)).toLocaleString('pt-BR');
+}
+
+function registrarErroAtualizacaoV31({id,titulo='',sku='',preco=0,motivo='',http_status=null,codigo=null}){
+    const item={
+        id:String(id||''),
+        titulo:String(titulo||''),
+        sku:String(sku||''),
+        preco:Number(preco||0),
+        motivo:String(motivo||'Falha não detalhada.'),
+        http_status:http_status||null,
+        codigo:codigo||null
+    };
+
+    errosAtualizacaoV31.push(item);
+
+    const box=document.getElementById('atualizacao-ultimo-erro-v31');
+    const texto=document.getElementById('atualizacao-ultimo-erro-texto-v31');
+    if(box)box.classList.remove('hidden');
+    if(texto){
+        texto.textContent=`${item.id}${item.sku?` · SKU ${item.sku}`:''}: ${item.motivo}`;
+    }
+
+    const details=document.getElementById('atualizacao-erros-detalhes-v31');
+    const lista=document.getElementById('atualizacao-erros-lista-v31');
+    if(details)details.classList.remove('hidden');
+
+    if(lista){
+        lista.insertAdjacentHTML('beforeend',`
+          <div class="p-3">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+              <div>
+                <div class="text-[10px] font-black text-white">${escapeHtml(item.id)}${item.sku?` · SKU ${escapeHtml(item.sku)}`:''}</div>
+                <div class="text-[10px] text-slate-400 mt-1">${escapeHtml(item.titulo||'Anúncio')}</div>
+              </div>
+              <div class="text-[10px] text-slate-500">${moeda(item.preco)}</div>
+            </div>
+            <div class="text-[10px] text-red-300 mt-2 break-words">
+              ${item.http_status?`HTTP ${escapeHtml(item.http_status)} · `:''}${item.codigo?`${escapeHtml(item.codigo)} · `:''}${escapeHtml(item.motivo)}
+            </div>
+          </div>`);
+    }
+}
+
+function prepararProgressoAtualizacaoV31(total){
+    errosAtualizacaoV31=[];
+
+    const lista=document.getElementById('atualizacao-erros-lista-v31');
+    const details=document.getElementById('atualizacao-erros-detalhes-v31');
+    const ultimo=document.getElementById('atualizacao-ultimo-erro-v31');
+
+    if(lista)lista.innerHTML='';
+    if(details){
+        details.classList.add('hidden');
+        details.open=false;
+    }
+    if(ultimo)ultimo.classList.add('hidden');
+
+    atualizarPainelProgressoV31({
+        total,
+        processados:0,
+        sucessos:0,
+        falhas:0,
+        texto:`Preparando ${Number(total||0).toLocaleString('pt-BR')} anúncio(s) para atualização...`
+    });
+}
+
+function atualizarContadorSelecionadosV31(){
+    const selecionados=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked:not(:disabled)')].length;
+    const c=document.getElementById('contador-atualizacao');
+    if(c)c.textContent=selecionados.toLocaleString('pt-BR');
+}
+
 function renderizarAtualizacaoCompletaV29(itens){
     const tbody=document.getElementById('tabela-atualizacao');
     if(!tbody)return;
@@ -8349,9 +8563,12 @@ function renderizarAtualizacaoCompletaV29(itens){
         contador++;
         const sid=safeIdV21(item.id);
 
+        const st=statusAtualizacaoV31.get(String(item.id));
+        const bloqueado=st?.estado==='sucesso';
+
         linhas.push(`
-          <tr>
-            <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" checked class="check-item accent-yellow-400 w-4 h-4"></td>
+          <tr id="linha_atualizacao_${sid}">
+            <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" ${bloqueado?'':'checked'} ${bloqueado?'disabled':''} class="check-item accent-yellow-400 w-4 h-4"></td>
             <td class="p-4">
               <div class="flex items-center gap-3 min-w-[280px]">
                 <img src="${escapeHtml(item.thumbnail)}" class="w-11 h-11 object-cover rounded-xl border border-slate-700">
@@ -8361,10 +8578,14 @@ function renderizarAtualizacaoCompletaV29(itens){
                 </div>
               </div>
             </td>
-            <td class="p-4 font-bold text-white">${moeda(item.price)}</td>
-            <td class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
-            <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span></td>
-            <td id="status_api_${sid}" class="p-4"><span class="text-slate-500 text-[10px]">Pendente</span></td>
+            <td id="preco_atual_${sid}" class="p-4 font-bold text-white">${moeda(item.price)}</td>
+            <td id="novo_preco_${sid}_atualizacao" class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
+            <td id="situacao_${sid}" class="p-4">${
+                bloqueado
+                  ? '<span class="px-2.5 py-1 rounded-lg bg-emerald-400/10 text-emerald-400 font-bold text-[10px]">Atualizado</span>'
+                  : '<span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span>'
+            }</td>
+            <td id="status_api_${sid}" class="p-4 min-w-[300px]">${statusHtmlAtualizacaoV31(item.id)}</td>
           </tr>`);
     }
 
@@ -8374,6 +8595,8 @@ function renderizarAtualizacaoCompletaV29(itens){
 
     const c=document.getElementById('contador-atualizacao');
     if(c)c.innerText=contador.toLocaleString('pt-BR');
+
+    setTimeout(()=>atualizarContadorSelecionadosV31(),0);
 }
 
 async function carregarSimulacaoEscalaV21(page=1){
@@ -8524,53 +8747,264 @@ function atualIrPaginaV21(){}
 
 
 atualizarPrecosMassaApi=async function(){
-    const token=obterToken();if(!token){solicitarToken();return}
-    const checks=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked')];
+    if(atualizacaoExecutandoV31)return;
+
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const checks=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked:not(:disabled)')];
     if(!checks.length)return alert('Nenhum anúncio selecionado para atualização.');
-    if(!confirm(`Deseja atualizar ${checks.length} anúncio(s) selecionado(s) da lista completa?`))return;
+    if(!confirm(`Deseja atualizar ${checks.length.toLocaleString('pt-BR')} anúncio(s) selecionado(s)?`))return;
 
     const mapa=new Map(atualItensV21.map(x=>[String(x.id),x]));
     const itens=checks.map(c=>{
         const item=mapa.get(String(c.value));
         const calc=item?calcularSimulacaoV21(item,parametrosSimV21(item)):null;
-        return item&&calc?{id:item.id,price:parseFloat(calc.preco.toFixed(2))}:null;
+        return item&&calc?{
+            id:item.id,
+            title:item.title,
+            sku:item.sku,
+            price:parseFloat(calc.preco.toFixed(2))
+        }:null;
     }).filter(Boolean);
 
-    mostrarLoading(`Atualizando ${itens.length} anúncio(s)...`);
-    let ok=0,erros=0;
+    if(!itens.length)return alert('Nenhum preço válido para atualizar.');
+
+    atualizacaoExecutandoV31=true;
+    const botao=document.getElementById('btn-atualizar-precos-v31');
+    if(botao){
+        botao.disabled=true;
+        botao.classList.add('opacity-60','cursor-not-allowed');
+        botao.textContent='Atualizando...';
+    }
+
+    prepararProgressoAtualizacaoV31(itens.length);
+
+    // Tudo que foi selecionado entra inicialmente na fila.
+    itens.forEach(x=>{
+        statusAtualizacaoV31.set(String(x.id),{estado:'fila'});
+        atualizarStatusLinhaV31(x.id);
+    });
+
+    let ok=0;
+    let erros=0;
+    let processados=0;
+    let fatal=null;
+
     try{
-        for(let i=0;i<itens.length;i+=20){
-            const lote=itens.slice(i,i+20);
-            const r=await fetch(`${RENDER_URL}/api/atualizar-precos`,{
-              method:'POST',headers:{'Content-Type':'application/json',Authorization:token},body:JSON.stringify({itens:lote})
+        const TAMANHO_LOTE=20;
+
+        for(let i=0;i<itens.length;i+=TAMANHO_LOTE){
+            const lote=itens.slice(i,i+TAMANHO_LOTE);
+
+            lote.forEach(x=>{
+                statusAtualizacaoV31.set(String(x.id),{estado:'processando'});
+                atualizarStatusLinhaV31(x.id);
             });
-            const d=await r.json().catch(()=>({}));
-            (d.resultados||[]).forEach(resultado=>{
-                const sid=safeIdV21(resultado.id),el=document.getElementById(`status_api_${sid}`);
+
+            atualizarPainelProgressoV31({
+                total:itens.length,
+                processados,
+                sucessos:ok,
+                falhas:erros,
+                texto:`Atualizando lote ${Math.floor(i/TAMANHO_LOTE)+1} · anúncios ${i+1} a ${Math.min(i+TAMANHO_LOTE,itens.length)}`
+            });
+
+            let resposta=null;
+            let dados=null;
+            let erroLote=null;
+
+            // Uma nova tentativa automática para falhas temporárias de conexão.
+            for(let tentativa=1;tentativa<=2;tentativa++){
+                try{
+                    resposta=await fetch(`${RENDER_URL}/api/atualizar-precos`,{
+                        method:'POST',
+                        headers:{
+                            'Content-Type':'application/json',
+                            Authorization:token
+                        },
+                        body:JSON.stringify({
+                            itens:lote.map(({id,price})=>({id,price}))
+                        })
+                    });
+                    dados=await resposta.json().catch(()=>({}));
+
+                    if(resposta.ok || Array.isArray(dados?.resultados)){
+                        erroLote=null;
+                        break;
+                    }
+
+                    erroLote=dados?.erro||`HTTP ${resposta.status}`;
+                }catch(e){
+                    erroLote='Erro de conexão: '+e.message;
+                }
+
+                if(tentativa<2){
+                    await new Promise(resolve=>setTimeout(resolve,700));
+                }
+            }
+
+            if(!Array.isArray(dados?.resultados)){
+                const motivo=erroLote||'O servidor não retornou o resultado deste lote.';
+
+                for(const item of lote){
+                    erros++;
+                    processados++;
+
+                    statusAtualizacaoV31.set(String(item.id),{
+                        estado:'erro',
+                        motivo,
+                        http_status:resposta?.status||null,
+                        codigo:null
+                    });
+                    atualizarStatusLinhaV31(item.id);
+
+                    const original=mapa.get(String(item.id));
+                    registrarErroAtualizacaoV31({
+                        id:item.id,
+                        titulo:original?.title||item.title,
+                        sku:original?.sku||item.sku,
+                        preco:item.price,
+                        motivo,
+                        http_status:resposta?.status||null
+                    });
+                }
+
+                atualizarPainelProgressoV31({
+                    total:itens.length,
+                    processados,
+                    sucessos:ok,
+                    falhas:erros,
+                    texto:`${processados.toLocaleString('pt-BR')} de ${itens.length.toLocaleString('pt-BR')} processados · ${erros.toLocaleString('pt-BR')} falha(s)`
+                });
+
+                // Continua nos próximos lotes para não perder o restante da operação.
+                continue;
+            }
+
+            const retornoPorId=new Map(
+                dados.resultados.map(x=>[String(x.id),x])
+            );
+
+            for(const item of lote){
+                const resultado=retornoPorId.get(String(item.id)) || {
+                    id:item.id,
+                    sucesso:false,
+                    erro:'O Mercado Livre não retornou resultado para este anúncio.'
+                };
+
+                processados++;
+
+                const original=mapa.get(String(item.id));
+                const sid=safeIdV21(item.id);
+
                 if(resultado.sucesso){
                     ok++;
-                    const enviado=lote.find(x=>String(x.id)===String(resultado.id));
-                    if(enviado)atualizarPrecoNoCacheV30(resultado.id,enviado.price);
-                    if(el)el.innerHTML='<span class="text-emerald-400 font-bold text-[10px]">✓ Atualizado</span>';
+
+                    atualizarPrecoNoCacheV30(item.id,item.price);
+
+                    statusAtualizacaoV31.set(String(item.id),{
+                        estado:'sucesso',
+                        http_status:resultado.http_status||200
+                    });
+                    atualizarStatusLinhaV31(item.id);
+
+                    const preco=document.getElementById(`preco_atual_${sid}`);
+                    if(preco)preco.textContent=moeda(item.price);
+
+                    const situacao=document.getElementById(`situacao_${sid}`);
+                    if(situacao){
+                        situacao.innerHTML='<span class="px-2.5 py-1 rounded-lg bg-emerald-400/10 text-emerald-400 font-bold text-[10px]">Atualizado</span>';
+                    }
+
+                    const check=document.querySelector(`#linha_atualizacao_${sid} .check-item`);
+                    if(check){
+                        check.checked=false;
+                        check.disabled=true;
+                    }
                 }else{
                     erros++;
-                    if(el)el.innerHTML=`<span class="text-red-400 font-bold text-[10px]">✗ ${escapeHtml(resultado.erro||'Falha')}</span>`;
-                }
-            });
-            document.getElementById('loading-text').innerText=`Atualizando preços... ${Math.min(i+20,itens.length)}/${itens.length}`;
-            if(!r.ok&&!d.resultados)throw new Error(d.erro||`HTTP ${r.status}`);
-        }
-        alert(`Processo finalizado: ${ok} atualizado(s)${erros?` · ${erros} erro(s)`:''}.`);
 
-        // Recalcula a lista local sem baixar todos os anúncios de novo.
-        renderizarAtualizacaoCompletaV29(atualItensV21);
+                    const motivo=String(resultado.erro||'O Mercado Livre não aceitou a atualização.');
+                    statusAtualizacaoV31.set(String(item.id),{
+                        estado:'erro',
+                        motivo,
+                        http_status:resultado.http_status||null,
+                        codigo:resultado.codigo||null
+                    });
+                    atualizarStatusLinhaV31(item.id);
+
+                    registrarErroAtualizacaoV31({
+                        id:item.id,
+                        titulo:original?.title||item.title,
+                        sku:original?.sku||item.sku,
+                        preco:item.price,
+                        motivo,
+                        http_status:resultado.http_status||null,
+                        codigo:resultado.codigo||null
+                    });
+                }
+            }
+
+            atualizarContadorSelecionadosV31();
+
+            atualizarPainelProgressoV31({
+                total:itens.length,
+                processados,
+                sucessos:ok,
+                falhas:erros,
+                texto:`${processados.toLocaleString('pt-BR')} de ${itens.length.toLocaleString('pt-BR')} processados · ${ok.toLocaleString('pt-BR')} atualizados · ${erros.toLocaleString('pt-BR')} falha(s)`
+            });
+
+            // Dá tempo para a barra e os status das linhas serem pintados na tela.
+            await new Promise(resolve=>setTimeout(resolve,30));
+        }
+
+        atualizarPainelProgressoV31({
+            total:itens.length,
+            processados,
+            sucessos:ok,
+            falhas:erros,
+            texto:erros
+              ? `Concluído com ${ok.toLocaleString('pt-BR')} atualização(ões) e ${erros.toLocaleString('pt-BR')} falha(s). Os motivos estão nas linhas e na lista de falhas.`
+              : `Concluído: ${ok.toLocaleString('pt-BR')} anúncio(s) atualizado(s) com sucesso.`
+        });
+
+        // Mantém os resultados visíveis. Não abre o antigo modal e não recarrega os 8 mil anúncios.
         atualFiltroRenderKeyV30=chaveFiltroEscalaV30();
 
-        // Ao voltar para Simulação, apenas remonta usando o mesmo cache local.
         if(simItensV21.length){
             simFiltroRenderKeyV30='';
         }
-    }catch(e){alert('Erro ao atualizar preços: '+e.message)}finally{esconderLoading()}
+
+    }catch(e){
+        fatal=e;
+        atualizarPainelProgressoV31({
+            total:itens.length,
+            processados,
+            sucessos:ok,
+            falhas:erros,
+            texto:'A atualização foi interrompida: '+e.message,
+            estado:'error'
+        });
+    }finally{
+        atualizacaoExecutandoV31=false;
+
+        if(botao){
+            botao.disabled=false;
+            botao.classList.remove('opacity-60','cursor-not-allowed');
+            botao.textContent='↗ Atualizar preços';
+        }
+
+        atualizarContadorSelecionadosV31();
+
+        if(fatal){
+            const box=document.getElementById('atualizacao-ultimo-erro-v31');
+            const texto=document.getElementById('atualizacao-ultimo-erro-texto-v31');
+            if(box)box.classList.remove('hidden');
+            if(texto)texto.textContent='Processo interrompido: '+fatal.message;
+        }
+    }
 };
 
 /* PEDIDOS */
@@ -8906,6 +9340,12 @@ document.addEventListener('DOMContentLoaded',()=>{
     // Enter aplica o filtro rapidamente nas duas páginas.
     document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
     document.getElementById('atual-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroAtualizacaoV21()});
+
+    document.getElementById('tabela-atualizacao')?.addEventListener('change',e=>{
+        if(e.target?.classList?.contains('check-item')){
+            atualizarContadorSelecionadosV31();
+        }
+    });
 });
 </script>
 
