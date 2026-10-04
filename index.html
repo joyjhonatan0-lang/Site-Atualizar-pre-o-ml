@@ -7273,26 +7273,42 @@ function atualizarBotaoClaimsV10(){
   b.disabled=pend.length!==1;b.textContent=pend.length===1?'✦ Analisar reclamação selecionada':pend.length>1?`Selecione somente 1 pendente (${pend.length} marcadas)`:'✦ Analisar reclamação selecionada';
 }
 async function carregarReclamacoesPro(){
-  const token=obterToken();if(!token)return solicitarToken();
-  mostrarLoading('Atualizando reclamações pendentes e resolvidas...');
+  const token=obterToken();
+  if(!token){solicitarToken();return}
+  const box=document.getElementById('claims-lista');
+  if(box) box.innerHTML='<div class="p-6 text-center text-xs text-yellow-400">Buscando reclamações diretamente no Mercado Livre...</div>';
+  const ab=document.getElementById('claims-abertas'),di=document.getElementById('claims-disputas'),pr=document.getElementById('claims-prazo');
+  if(ab)ab.textContent='…';if(di)di.textContent='…';if(pr)pr.textContent='…';
+
   try{
-    const r=await fetch(`${RENDER_URL}/api/v10/claims/todas`,{headers:{Authorization:token}});
-    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao consultar reclamações.');
+    const r=await fetch(`${RENDER_URL}/api/v10/claims/todas?_=${Date.now()}`,{
+      method:'GET',
+      cache:'no-store',
+      headers:{Authorization:token,'Accept':'application/json'}
+    });
+    let d={};try{d=await r.json()}catch(_){}
+    if(!r.ok) throw new Error(d.erro||d.error||`Erro HTTP ${r.status} ao buscar reclamações.`);
+
     claimsCacheV10=Array.isArray(d.reclamacoes)?d.reclamacoes:[];
-    for(const id of [...claimsMarcadasV10]){
-      if(!claimsCacheV10.some(x=>String(x.id)===String(id)))claimsMarcadasV10.delete(id);
-    }
     const pend=claimsCacheV10.filter(c=>!claimResolvida(c));
-    const ab=document.getElementById('claims-abertas');if(ab)ab.textContent=pend.length;
-    const di=document.getElementById('claims-disputas');if(di)di.textContent=pend.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
-    const pr=document.getElementById('claims-prazo');if(pr){const agora=Date.now(),dias=2*86400000;pr.textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length}
+    if(ab)ab.textContent=String(pend.length);
+    if(di)di.textContent=String(pend.filter(x=>{
+      const st=String(x.stage||'').toLowerCase();
+      return st==='dispute'||st.includes('mediation');
+    }).length);
+    if(pr){
+      const agora=Date.now(),janela=2*86400000;
+      pr.textContent=String(pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()>=agora&&new Date(x.due_date).getTime()-agora<=janela).length);
+    }
     renderListaClaimsV10();
+    if(!claimsCacheV10.length && box){
+      box.innerHTML='<div class="p-6 text-center text-xs text-slate-500">O Mercado Livre retornou 0 reclamações para esta conta.</div>';
+    }
   }catch(e){
-    console.error('Erro ao carregar reclamações:',e);
-    const box=document.getElementById('claims-lista');if(box)box.innerHTML=`<div class="p-5 text-xs text-red-400"><b>Não foi possível carregar as reclamações.</b><div class="mt-2">${claimEsc(e.message)}</div><button onclick="carregarReclamacoesPro()" class="mt-3 bg-yellow-400 text-slate-950 px-3 py-2 rounded-lg font-black">Tentar novamente</button></div>`;
-    const ab=document.getElementById('claims-abertas'),di=document.getElementById('claims-disputas'),pr=document.getElementById('claims-prazo');
+    console.error('[RECLAMAÇÕES]',e);
     if(ab)ab.textContent='!';if(di)di.textContent='!';if(pr)pr.textContent='!';
-  }finally{esconderLoading()}
+    if(box)box.innerHTML=`<div class="p-5 text-xs text-red-400"><b>Erro ao buscar reclamações no Mercado Livre.</b><div class="mt-2">${claimEsc(e.message)}</div><button onclick="carregarReclamacoesPro()" class="mt-3 bg-yellow-400 text-slate-950 px-3 py-2 rounded-lg font-black">Tentar novamente</button></div>`;
+  }
 }
 async function selecionarEAnalisarClaimV11(id){
   claimsMarcadasV10.clear();
