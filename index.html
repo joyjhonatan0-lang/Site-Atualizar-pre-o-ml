@@ -368,6 +368,14 @@ body.pagina-inicial-ativa button[title="Voltar para a página inicial"]{display:
 body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:inline-flex!important}
 </style>
 
+<style id="claims-v13-fix">
+#claims-lista input[type="checkbox"]{
+  appearance:checkbox!important;-webkit-appearance:checkbox!important;
+  display:block!important;visibility:visible!important;opacity:1!important;
+  width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;
+  position:static!important;pointer-events:auto!important;
+}
+</style>
 </head>
 
 <body
@@ -7196,7 +7204,7 @@ async function perguntarIA(){
   try{const d=await apiPro('/api/v3/ia',{method:'POST',body:JSON.stringify({mensagem:texto})});load.className='max-w-[90%] p-4 rounded-xl bg-slate-950 text-xs text-slate-300 whitespace-pre-wrap';load.innerText=d.resposta||'Sem resposta.';}catch(e){load.className='p-4 rounded-xl bg-red-500/10 text-xs text-red-300';load.innerText=e.message;}
   chat.scrollTop=chat.scrollHeight;
 }
-async function carregarReclamacoesPro(){
+async function carregarReclamacoesProAntiga(){
   const box=document.getElementById('claims-lista');box.innerHTML='<div class="panel rounded-2xl p-8 text-xs text-yellow-400">Buscando reclamações...</div>';
   try{const d=await apiPro('/api/v3/claims?status=opened');const arr=d.reclamacoes||[];document.getElementById('claims-abertas').innerText=arr.length;document.getElementById('claims-disputas').innerText=arr.filter(x=>x.stage==='dispute').length;document.getElementById('claims-prazo').innerText=arr.filter(x=>x.due_date).length;
   box.innerHTML=arr.map(x=>`<div class="panel rounded-2xl p-4"><div class="flex justify-between gap-4"><div><div class="text-xs font-black text-white">Reclamação #${escapeHtml(String(x.id))}</div><div class="text-[11px] text-slate-500 mt-1">Pedido/recurso: ${escapeHtml(String(x.resource_id||'—'))} · ${escapeHtml(x.stage||'')} · ${escapeHtml(x.type||'')}</div></div><button onclick="verImpactoClaim('${String(x.id)}')" class="bg-slate-800 px-3 py-2 rounded-lg text-[10px] font-bold text-white">Impacto reputação</button></div><div id="impacto-${String(x.id)}" class="text-[10px] text-slate-500 mt-2"></div></div>`).join('')||'<div class="panel rounded-2xl p-8 text-xs text-emerald-400">Nenhuma reclamação aberta encontrada.</div>';}catch(e){box.innerHTML=`<div class="panel rounded-2xl p-8 text-xs text-red-300">${escapeHtml(e.message)}</div>`}
@@ -7264,8 +7272,24 @@ function atualizarBotaoClaimsV10(){
   const pend=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
   b.disabled=pend.length!==1;b.textContent=pend.length===1?'✦ Analisar reclamação selecionada':pend.length>1?`Selecione somente 1 pendente (${pend.length} marcadas)`:'✦ Analisar reclamação selecionada';
 }
-async function carregarReclamacoesProLegacy() {
-    return carregarReclamacoesPro();
+async function carregarReclamacoesPro(){
+  const token=obterToken();if(!token)return solicitarToken();
+  mostrarLoading('Atualizando reclamações pendentes e resolvidas...');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v10/claims/todas`,{headers:{Authorization:token}});
+    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao consultar reclamações.');
+    claimsCacheV10=Array.isArray(d.reclamacoes)?d.reclamacoes:[];
+    for(const id of [...claimsMarcadasV10]){
+      if(!claimsCacheV10.some(x=>String(x.id)===String(id)))claimsMarcadasV10.delete(id);
+    }
+    const pend=claimsCacheV10.filter(c=>!claimResolvida(c));
+    const ab=document.getElementById('claims-abertas');if(ab)ab.textContent=pend.length;
+    const di=document.getElementById('claims-disputas');if(di)di.textContent=pend.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
+    const pr=document.getElementById('claims-prazo');if(pr){const agora=Date.now(),dias=2*86400000;pr.textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length}
+    renderListaClaimsV10();
+  }catch(e){
+    const box=document.getElementById('claims-lista');if(box)box.innerHTML=`<div class="p-5 text-xs text-red-400">${claimEsc(e.message)}</div>`;
+  }finally{esconderLoading()}
 }
 async function selecionarEAnalisarClaimV11(id){
   claimsMarcadasV10.clear();
