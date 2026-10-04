@@ -2755,6 +2755,11 @@ async function inicializarBancoEscala() {
       CREATE INDEX IF NOT EXISTS idx_ml_items_seller_updated ON ml_items(seller_id,ml_updated_at DESC NULLS LAST);
       CREATE INDEX IF NOT EXISTS idx_ml_items_title_lower ON ml_items(seller_id,lower(title));
 
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(18,2) NOT NULL DEFAULT 0;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS free_shipping BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS sale_fee NUMERIC(18,2) NOT NULL DEFAULT 0;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS net_received NUMERIC(18,2) NOT NULL DEFAULT 0;
+
       CREATE TABLE IF NOT EXISTS ml_jobs (
         id BIGSERIAL PRIMARY KEY,
         seller_id BIGINT NOT NULL,
@@ -2923,6 +2928,7 @@ async function workerLoop(indice) {
             if(job) {
                 try {
                     if(job.type==='full_sync') await processarSyncCompleto(job);
+                    else if(job.type==='freight_sync') await processarFretesEscala(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
                     const retry=Number(job.attempts||0)<4;
@@ -2936,6 +2942,62 @@ async function workerLoop(indice) {
     }
 }
 function jobSleepMs(){return 1200}
+
+
+async function processarFretesEscala(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para sincronizar fretes.');
+    const lote=1000;
+    let offset=Number(job.payload?.offset||0), processados=Number(job.processed||0), erros=Number(job.errors||0);
+    const totalR=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[job.seller_id]);
+    const total=Number(totalR.rows[0]?.total||0);
+    await dbQuery(`UPDATE ml_jobs SET progress_total=$2,message=$3,updated_at=NOW() WHERE id=$1`,
+      [job.id,total,`Preparando fretes: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`]);
+
+    while(offset<total){
+        const rr=await dbQuery(`SELECT item_id FROM ml_items WHERE seller_id=$1 ORDER BY item_id LIMIT $2 OFFSET $3`,[job.seller_id,lote,offset]);
+        const ids=rr.rows.map(x=>x.item_id); if(!ids.length)break;
+        const mapa=await buscarItensBulk(token,ids);
+        const itens=ids.map(id=>mapa[id]).filter(Boolean);
+
+        // Concorrência controlada: rápida, sem disparar milhares de chamadas ao mesmo tempo.
+        const concorrencia=Math.max(5,Math.min(30,Number(process.env.ML_FREIGHT_CONCURRENCY||20)));
+        for(let i=0;i<itens.length;i+=concorrencia){
+            const grupo=itens.slice(i,i+concorrencia);
+            const resultados=await Promise.allSettled(grupo.map(async item=>{
+                const custo=await calcularFreteExato(item,token);
+                return {id:item.id,custo,gratis:Boolean(item.shipping?.free_shipping)};
+            }));
+            for(const r of resultados){
+                if(r.status==='fulfilled'){
+                    const x=r.value;
+                    await dbQuery(`UPDATE ml_items SET shipping_cost=$3,free_shipping=$4,net_received=GREATEST(0,price-sale_fee-$3),synced_at=NOW() WHERE seller_id=$1 AND item_id=$2`,
+                      [job.seller_id,x.id,x.custo,x.gratis]);
+                    processados++;
+                }else erros++;
+            }
+        }
+        offset+=ids.length;
+        await dbQuery(`UPDATE ml_jobs SET processed=$2,progress_current=$2,progress_total=$3,errors=$4,payload=jsonb_set(payload,'{offset}',to_jsonb($5::int)),message=$6,updated_at=NOW() WHERE id=$1`,
+          [job.id,processados,total,erros,offset,`Fretes: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lote de até 1.000`]);
+    }
+    await dbQuery(`UPDATE ml_jobs SET status='completed',progress_current=$2,progress_total=$3,processed=$2,errors=$4,message=$5,finished_at=NOW(),updated_at=NOW() WHERE id=$1`,
+      [job.id,processados,total,erros,`Fretes sincronizados: ${processados.toLocaleString('pt-BR')} anúncio(s).`]);
+}
+
+app.post('/api/scale/fretes',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const total=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[me.id]);
+        const existente=await dbQuery(`SELECT * FROM ml_jobs WHERE seller_id=$1 AND type='freight_sync' AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`,[me.id]);
+        if(existente.rows.length)return res.status(202).json({sucesso:true,job:existente.rows[0],mensagem:'A sincronização de fretes já está em andamento.'});
+        const job=await criarJob(me.id,'freight_sync',{offset:0});
+        await dbQuery(`UPDATE ml_jobs SET progress_total=$2 WHERE id=$1`,[job.id,Number(total.rows[0]?.total||0)]);
+        res.status(202).json({sucesso:true,job:{...job,progress_total:Number(total.rows[0]?.total||0)},mensagem:'Fretes colocados na fila em lotes de até 1.000 anúncios.'});
+    }catch(e){respostaErro(res,500,'Erro ao iniciar fretes: '+e.message)}
+});
 
 app.get('/api/scale/status',async(req,res)=>{
     if(!db)return res.json({sucesso:true,database:false,worker:false,mensagem:'Configure DATABASE_URL para ativar o modo 90k.'});
@@ -3044,7 +3106,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,0::float8 sale_fee,0::float8 shipping_cost,(price)::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
         res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
