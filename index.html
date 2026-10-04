@@ -7288,7 +7288,10 @@ async function carregarReclamacoesPro(){
     const pr=document.getElementById('claims-prazo');if(pr){const agora=Date.now(),dias=2*86400000;pr.textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length}
     renderListaClaimsV10();
   }catch(e){
-    const box=document.getElementById('claims-lista');if(box)box.innerHTML=`<div class="p-5 text-xs text-red-400">${claimEsc(e.message)}</div>`;
+    console.error('Erro ao carregar reclamações:',e);
+    const box=document.getElementById('claims-lista');if(box)box.innerHTML=`<div class="p-5 text-xs text-red-400"><b>Não foi possível carregar as reclamações.</b><div class="mt-2">${claimEsc(e.message)}</div><button onclick="carregarReclamacoesPro()" class="mt-3 bg-yellow-400 text-slate-950 px-3 py-2 rounded-lg font-black">Tentar novamente</button></div>`;
+    const ab=document.getElementById('claims-abertas'),di=document.getElementById('claims-disputas'),pr=document.getElementById('claims-prazo');
+    if(ab)ab.textContent='!';if(di)di.textContent='!';if(pr)pr.textContent='!';
   }finally{esconderLoading()}
 }
 async function selecionarEAnalisarClaimV11(id){
