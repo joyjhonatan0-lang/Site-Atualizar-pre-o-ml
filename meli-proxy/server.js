@@ -2594,21 +2594,67 @@ app.get('/api/v10/claims/todas',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
     try{
       const me=await usuarioML(token);
-      const statuses=['opened','closed'];
+      const sellerId=String(me.id);
       const mapa=new Map();
-      for(const status of statuses){
-        const params=new URLSearchParams({'players.user_id':String(me.id),'players.role':'respondent','limit':'50','offset':'0','sort':'last_updated:desc','status':status});
-        const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${params}`,token);
-        const d=await jsonSeguro(r);
-        if(!r.ok){console.error('[CLAIMS V10]',status,formatarErroMercadoLivre(d));continue}
-        for(const c of (Array.isArray(d.data)?d.data:[]))mapa.set(String(c.id),c);
+      const erros=[];
+
+      // A API atual exige a busca acotada pelo usuário + papel do vendedor.
+      // Busca opened e closed separadamente, com paginação.
+      for(const status of ['opened','closed']){
+        let offset=0;
+        while(offset<10000){
+          const params=new URLSearchParams({
+            'players.user_id':sellerId,
+            'players.role':'respondent',
+            'status':status,
+            'limit':'50',
+            'offset':String(offset)
+          });
+          const r=await mlFetch(`${ML_API}/post-purchase/v1/claims/search?${params.toString()}`,token);
+          const d=await jsonSeguro(r);
+          if(!r.ok){
+            erros.push({status,http:r.status,erro:formatarErroMercadoLivre(d)});
+            break;
+          }
+          const arr=Array.isArray(d?.data)?d.data:[];
+          for(const c of arr)mapa.set(String(c.id),c);
+          const total=Number(d?.paging?.total||arr.length);
+          offset+=arr.length;
+          if(!arr.length || offset>=total || arr.length<50)break;
+        }
       }
+
+      if(!mapa.size && erros.length){
+        return respostaErro(res,502,`Mercado Livre não retornou as reclamações: ${erros.map(x=>`${x.status} HTTP ${x.http} - ${x.erro}`).join(' | ')}`);
+      }
+
       const base=[...mapa.values()].sort((a,b)=>new Date(b.last_updated||b.date_created||0)-new Date(a.last_updated||a.date_created||0));
-      const enriquecidas=await Promise.all(base.map(async c=>{
-        try{const rd=await mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/detail`,token);const dd=await jsonSeguro(rd);return {...c,due_date:rd.ok?dd.due_date:null,detail_title:rd.ok?dd.title:null};}catch(e){return c}
-      }));
-      res.json({sucesso:true,total:enriquecidas.length,reclamacoes:enriquecidas});
-    }catch(e){respostaErro(res,500,'Erro ao consultar reclamações: '+e.message)}
+
+      // Enriquece só as mais recentes para não criar uma explosão de requisições.
+      const limiteDetalhes=Math.min(base.length,100);
+      const enriquecidas=[];
+      for(let i=0;i<base.length;i+=10){
+        const grupo=base.slice(i,Math.min(i+10,limiteDetalhes));
+        if(!grupo.length)break;
+        const parte=await Promise.all(grupo.map(async c=>{
+          try{
+            const [rd,ri]=await Promise.all([
+              mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/detail`,token),
+              mlFetch(`${ML_API}/post-purchase/v1/claims/${c.id}/affects-reputation`,token)
+            ]);
+            const dd=await jsonSeguro(rd),di=await jsonSeguro(ri);
+            return {...c,due_date:rd.ok?dd?.due_date:null,detail_title:rd.ok?dd?.title:null,impact:ri.ok?di:null};
+          }catch(e){return c}
+        }));
+        enriquecidas.push(...parte);
+      }
+      if(base.length>limiteDetalhes)enriquecidas.push(...base.slice(limiteDetalhes));
+
+      res.json({sucesso:true,total:enriquecidas.length,reclamacoes:enriquecidas,erros_parciais:erros});
+    }catch(e){
+      console.error('[CLAIMS V10 TODAS]',e);
+      respostaErro(res,500,'Erro ao consultar reclamações: '+e.message);
+    }
 });
 
 app.get('/api/v9/claims/:id/dossie',async(req,res)=>{
