@@ -2395,7 +2395,16 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
   </div>
   <div class="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-4">
     <div class="panel rounded-2xl overflow-hidden">
-      <div class="p-4 border-b border-slate-800"><div class="font-black text-white text-sm">Reclamações</div><div class="text-[10px] text-slate-500 mt-1">Clique em uma reclamação para abrir o dossiê.</div></div>
+      <div class="p-4 border-b border-slate-800">
+        <div class="font-black text-white text-sm">Reclamações</div>
+        <div class="text-[10px] text-slate-500 mt-1">Marque pendentes ou resolvidas. A análise com IA fica disponível para reclamações pendentes.</div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button id="claim-filtro-pendentes" onclick="filtrarClaims('pendentes')" class="bg-yellow-400 text-slate-950 px-3 py-2 rounded-lg text-[10px] font-black">Pendentes</button>
+          <button id="claim-filtro-resolvidas" onclick="filtrarClaims('resolvidas')" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Resolvidas</button>
+          <button id="claim-filtro-todas" onclick="filtrarClaims('todas')" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Todas</button>
+        </div>
+        <button id="claim-analisar-selecionadas" onclick="analisarClaimsSelecionadas()" class="w-full mt-3 bg-emerald-500 disabled:opacity-40 text-slate-950 px-3 py-2.5 rounded-xl text-[10px] font-black" disabled>✦ Analisar reclamação selecionada</button>
+      </div>
       <div id="claims-lista" class="divide-y divide-slate-800"><div class="p-8 text-center text-xs text-slate-600">Clique em Atualizar reclamações.</div></div>
     </div>
     <div id="claim-dossie" class="panel rounded-2xl p-5 min-h-[430px]">
@@ -7218,22 +7227,58 @@ async function consultarCompeticao(){const id=document.getElementById('catalogo-
 
 <script id="mlhub-claims-v9">
 let claimSelecionada=null;
+let claimsCacheV10=[];
+let claimsFiltroV10='pendentes';
+const claimsMarcadasV10=new Set();
 function claimEsc(v){return escapeHtml(String(v??''))}
 function claimData(v){if(!v)return '—';try{return new Date(v).toLocaleString('pt-BR')}catch(e){return v}}
+function claimResolvida(c){const x=String(c.status||'').toLowerCase();return ['closed','resolved','cancelled','canceled'].includes(x)}
+function renderListaClaimsV10(){
+  const box=document.getElementById('claims-lista');if(!box)return;
+  let arr=claimsCacheV10;
+  if(claimsFiltroV10==='pendentes')arr=arr.filter(c=>!claimResolvida(c));
+  if(claimsFiltroV10==='resolvidas')arr=arr.filter(claimResolvida);
+  box.innerHTML=arr.length?arr.map(c=>{
+    const resolvida=claimResolvida(c), marcada=claimsMarcadasV10.has(String(c.id));
+    return `<div class="p-4 hover:bg-slate-800/60 transition ${marcada?'bg-yellow-400/5':''}">
+      <div class="flex gap-3 items-start">
+        <input type="checkbox" ${marcada?'checked':''} onchange="marcarClaimV10('${claimEsc(c.id)}',this.checked)" class="mt-1 w-4 h-4 accent-yellow-400">
+        <button onclick="abrirDossieClaim('${claimEsc(c.id)}')" class="flex-1 text-left">
+          <div class="flex justify-between gap-2"><div class="font-black text-white text-xs">Reclamação #${claimEsc(c.id)}</div><span class="text-[9px] px-2 py-1 rounded-full ${resolvida?'bg-emerald-400/10 text-emerald-400':'bg-yellow-400/10 text-yellow-400'}">${resolvida?'Resolvida':claimEsc(c.stage||c.status||'Pendente')}</span></div>
+          <div class="text-[10px] text-slate-500 mt-2">${claimEsc(c.detail_title||c.reason_id||'Clique para abrir o dossiê')}</div>
+          <div class="text-[9px] text-slate-600 mt-2">Atualizada: ${claimData(c.last_updated||c.date_created)}</div>
+        </button>
+      </div></div>`}).join(''):'<div class="p-8 text-center text-xs text-slate-600">Nenhuma reclamação neste filtro.</div>';
+  ['pendentes','resolvidas','todas'].forEach(f=>{const b=document.getElementById('claim-filtro-'+f);if(b){b.className=(f===claimsFiltroV10?'bg-yellow-400 text-slate-950':'bg-slate-800 text-white')+' px-3 py-2 rounded-lg text-[10px] font-black'}});
+  atualizarBotaoClaimsV10();
+}
+function filtrarClaims(f){claimsFiltroV10=f;renderListaClaimsV10()}
+function marcarClaimV10(id,checked){checked?claimsMarcadasV10.add(String(id)):claimsMarcadasV10.delete(String(id));renderListaClaimsV10()}
+function atualizarBotaoClaimsV10(){
+  const b=document.getElementById('claim-analisar-selecionadas');if(!b)return;
+  const pend=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
+  b.disabled=pend.length!==1;b.textContent=pend.length===1?'✦ Analisar reclamação selecionada':pend.length>1?`Selecione somente 1 pendente (${pend.length} marcadas)`:'✦ Analisar reclamação selecionada';
+}
 async function carregarReclamacoesPro(){
   const token=obterToken();if(!token)return solicitarToken();
-  mostrarLoading('Atualizando reclamações...');
+  mostrarLoading('Atualizando reclamações pendentes e resolvidas...');
   try{
-    const r=await fetch(`${RENDER_URL}/api/v3/claims?status=opened`,{headers:{Authorization:token}});
+    const r=await fetch(`${RENDER_URL}/api/v10/claims/todas`,{headers:{Authorization:token}});
     const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao consultar reclamações.');
-    const arr=d.reclamacoes||[];
-    document.getElementById('claims-abertas').textContent=Number(d.total||arr.length);
-    document.getElementById('claims-disputas').textContent=arr.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
+    claimsCacheV10=d.reclamacoes||[];
+    for(const id of [...claimsMarcadasV10])if(!claimsCacheV10.some(x=>String(x.id)===id))claimsMarcadasV10.delete(id);
+    const pend=claimsCacheV10.filter(c=>!claimResolvida(c));
+    document.getElementById('claims-abertas').textContent=pend.length;
+    document.getElementById('claims-disputas').textContent=pend.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
     const agora=Date.now(),dias=2*86400000;
-    document.getElementById('claims-prazo').textContent=arr.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length;
-    const box=document.getElementById('claims-lista');
-    box.innerHTML=arr.length?arr.map(c=>`<button onclick="abrirDossieClaim('${claimEsc(c.id)}')" class="w-full text-left p-4 hover:bg-slate-800/60 transition"><div class="flex justify-between gap-2"><div class="font-black text-white text-xs">Reclamação #${claimEsc(c.id)}</div><span class="text-[9px] px-2 py-1 rounded-full bg-yellow-400/10 text-yellow-400">${claimEsc(c.stage||c.status||'aberta')}</span></div><div class="text-[10px] text-slate-500 mt-2">${claimEsc(c.detail_title||c.reason_id||'Clique para ver todos os detalhes')}</div><div class="text-[9px] text-slate-600 mt-2">Atualizada: ${claimData(c.last_updated||c.date_created)}</div></button>`).join(''):'<div class="p-8 text-center text-xs text-slate-600">Nenhuma reclamação aberta.</div>';
+    document.getElementById('claims-prazo').textContent=pend.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length;
+    renderListaClaimsV10();
   }catch(e){alert(e.message)}finally{esconderLoading()}
+}
+async function analisarClaimsSelecionadas(){
+  const ids=[...claimsMarcadasV10].filter(id=>{const c=claimsCacheV10.find(x=>String(x.id)===id);return c&&!claimResolvida(c)});
+  if(ids.length!==1)return alert('Selecione exatamente uma reclamação pendente para analisar.');
+  await abrirDossieClaim(ids[0]);await analisarClaimIA(ids[0]);
 }
 async function abrirDossieClaim(id){
   const token=obterToken();claimSelecionada=id;mostrarLoading('Montando dossiê da reclamação...');
