@@ -2685,6 +2685,19 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             Sua função original de simulação foi mantida.
         </p>
 
+        <div class="mt-4">
+            <button
+                type="button"
+                onclick="mudarAba('sku-base')"
+                class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black"
+            >
+                ＋ Adicionar custo e lucro desejado por SKU
+            </button>
+            <div class="text-[10px] text-slate-500 mt-2">
+                Os valores salvos por SKU serão usados automaticamente na simulação.
+            </div>
+        </div>
+
     </div>
 
     <div class="panel rounded-2xl p-5">
@@ -2965,6 +2978,88 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <button id="sim-proxima" onclick="simIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
     </div>
 
+</section>
+
+
+<!-- =====================================================
+     V27 — BASE DE CUSTO E LUCRO POR SKU
+===================================================== -->
+<section id="secao-sku-base" class="hidden space-y-5">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.18em] text-emerald-400 font-bold">Base financeira</div>
+            <h1 class="text-xl md:text-2xl font-black text-white mt-2">Custo e lucro desejado por SKU</h1>
+            <p class="text-xs text-slate-500 mt-1">
+                Cadastre uma única vez o custo e a margem desejada de cada SKU. Todos os anúncios com o mesmo SKU usarão esses valores na Simulação.
+            </p>
+        </div>
+        <button onclick="mudarAba('simulacao')" class="bg-slate-800 hover:bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-black">
+            ← Voltar para Simulação
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="panel rounded-2xl p-5">
+            <div class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">SKUs cadastrados</div>
+            <div id="sku-base-total-v27" class="text-3xl font-black text-emerald-400 mt-3">0</div>
+            <div class="text-[10px] text-slate-500 mt-2">Com custo e margem definidos</div>
+        </div>
+        <div class="panel rounded-2xl p-5">
+            <div class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">SKUs encontrados na conta</div>
+            <div id="sku-base-disponiveis-v27" class="text-3xl font-black text-white mt-3">0</div>
+            <div class="text-[10px] text-slate-500 mt-2">Lidos dos anúncios sincronizados</div>
+        </div>
+        <div class="panel rounded-2xl p-5">
+            <div class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Aplicação</div>
+            <div class="text-sm font-black text-yellow-400 mt-3">Automática</div>
+            <div class="text-[10px] text-slate-500 mt-2">A Simulação usa a base pelo SKU</div>
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl overflow-hidden">
+        <div class="p-5 border-b border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div>
+                <div class="font-black text-white">Tabela de custos e margens</div>
+                <div class="text-[11px] text-slate-500 mt-1">
+                    Escolha/digite o SKU, informe o custo real do produto e a margem de lucro desejada.
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="adicionarLinhaSkuV27()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-black">
+                    ＋ Adicionar linha
+                </button>
+                <button onclick="salvarBaseSkuV27()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">
+                    Salvar base
+                </button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left futuristic-table">
+                <thead>
+                    <tr>
+                        <th class="p-4">SKU</th>
+                        <th class="p-4">Anúncios com este SKU</th>
+                        <th class="p-4">Custo do produto R$</th>
+                        <th class="p-4">Lucro desejado %</th>
+                        <th class="p-4">Atualizado</th>
+                        <th class="p-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="sku-base-tabela-v27" class="divide-y divide-slate-800 text-xs">
+                    <tr><td colspan="6" class="p-10 text-center text-slate-600">Carregando base...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="p-4 border-t border-slate-800">
+            <div id="sku-base-status-v27" class="text-[10px] text-slate-500">
+                Os dados ficam salvos no PostgreSQL da sua conta.
+            </div>
+        </div>
+    </div>
+
+    <datalist id="sku-base-list-v27"></datalist>
 </section>
 
 
@@ -3858,6 +3953,7 @@ function mudarAba(aba) {
         'perfil',
         'configuracoes',
         'simulacao',
+        'sku-base',
         'atualizacao',
         'perguntas'
     ];
@@ -6706,6 +6802,7 @@ document.addEventListener(
             'gestao',
             'dashboard',
             'simulacao',
+            'sku-base',
             'atualizacao',
             'pedidos',
             'atendimento',
@@ -7873,6 +7970,20 @@ const simParametrosPorIdV21={};
 const simResultadosPorIdV21={};
 const simMassaV21={custo:null,taxa:null,imposto:null,lucro:null};
 
+/* V27 — base persistente por SKU */
+const baseSkuV27={};
+let baseSkuCarregadaV27=false;
+let skuDisponiveisV27=[];
+let skuLinhaSeqV27=0;
+
+function normalizarSkuV27(v){
+    return String(v||'').trim().toLowerCase();
+}
+
+function regraSkuV27(item){
+    return baseSkuV27[normalizarSkuV27(item?.sku)]||null;
+}
+
 function sincronizarFiltroCamposV21(){
     const campo=filtroEscalaV21.campo||'sku';
     const valor=filtroEscalaV21.valor||'';
@@ -7914,11 +8025,12 @@ function limparFiltroAtualizacaoV21(){filtroEscalaV21={campo:'sku',valor:''};sin
 
 function parametrosSimV21(item){
     const salvo=simParametrosPorIdV21[item.id]||{};
+    const regra=regraSkuV27(item);
     return {
         taxa:Number(salvo.taxa ?? simMassaV21.taxa ?? (item.listing_type_id==='gold_pro'?17:12)),
-        custo:Number(salvo.custo ?? simMassaV21.custo ?? 10),
+        custo:Number(salvo.custo ?? simMassaV21.custo ?? regra?.custo ?? 10),
         imposto:Number(salvo.imposto ?? simMassaV21.imposto ?? 0),
-        lucro:Number(salvo.lucro ?? simMassaV21.lucro ?? 12)
+        lucro:Number(salvo.lucro ?? simMassaV21.lucro ?? regra?.margem ?? 12)
     };
 }
 
@@ -7964,7 +8076,10 @@ function montarTabelaSimulacaoV21(itens){
         const tr=document.createElement('tr');
         tr.innerHTML=`
           <td class="p-3 font-mono">${escapeHtml(item.id)}</td>
-          <td class="p-3 font-mono">${escapeHtml(item.sku)}</td>
+          <td class="p-3 font-mono">
+            ${escapeHtml(item.sku)}
+            ${regraSkuV27(item)?'<div class="text-[9px] text-emerald-600 font-black mt-1">BASE SKU</div>':''}
+          </td>
           <td class="p-3 max-w-[220px] truncate">${escapeHtml(item.title)}</td>
           <td class="p-3 font-bold">${moeda(item.price)}</td>
           <td class="p-3">${moeda(item.shipping_cost)}</td>
@@ -8002,6 +8117,7 @@ async function carregarSimulacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     simCarregandoV21=true;mostrarLoading('Carregando anúncios para simulação...');
     try{
+        await carregarBaseSkuV27();
         const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
         const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
         simPaginaV21=Number(d.pagina||1);simPaginasV21=Number(d.paginas||1);simTotalV21=Number(d.total||0);
@@ -8062,6 +8178,7 @@ async function carregarAtualizacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     atualCarregandoV21=true;mostrarLoading('Carregando anúncios para atualização...');
     try{
+        await carregarBaseSkuV27();
         const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
         const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
         atualPaginaV21=Number(d.pagina||1);atualPaginasV21=Number(d.paginas||1);atualTotalV21=Number(d.total||0);
@@ -8169,11 +8286,242 @@ async function carregarPedidosV21(page=1){
 }
 function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedidosPaginasV21)return;carregarPedidosV21(p)}
 
+
+/* =========================================================
+   V27 — BASE DE CUSTO E MARGEM POR SKU
+========================================================= */
+async function carregarBaseSkuV27(force=false){
+    if(baseSkuCarregadaV27&&!force)return;
+    const token=obterToken();
+    if(!token)return;
+
+    const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing?_=${Date.now()}`,{
+        cache:'no-store',
+        headers:{Authorization:token,Accept:'application/json'}
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||'Erro ao carregar a base de custos por SKU.');
+
+    Object.keys(baseSkuV27).forEach(k=>delete baseSkuV27[k]);
+
+    (d.regras||[]).forEach(regra=>{
+        const key=normalizarSkuV27(regra.sku_key||regra.sku);
+        if(!key)return;
+        baseSkuV27[key]={
+            sku:String(regra.sku||'').trim(),
+            custo:Number(regra.custo||0),
+            margem:Number(regra.margem||0),
+            updated_at:regra.updated_at||null
+        };
+    });
+
+    skuDisponiveisV27=Array.isArray(d.skus_disponiveis)?d.skus_disponiveis:[];
+    baseSkuCarregadaV27=true;
+}
+
+function anunciosSkuV27(sku){
+    const key=normalizarSkuV27(sku);
+    return Number(skuDisponiveisV27.find(x=>normalizarSkuV27(x.sku_key||x.sku)===key)?.anuncios||0);
+}
+
+function dataCurtaSkuV27(v){
+    if(!v)return '—';
+    const d=new Date(v);
+    return Number.isNaN(d.getTime())?'—':d.toLocaleString('pt-BR');
+}
+
+function linhaSkuV27(regra={}){
+    skuLinhaSeqV27++;
+    const id=`sku-row-v27-${skuLinhaSeqV27}`;
+    const sku=String(regra.sku||'');
+    const custo=regra.custo!==undefined&&regra.custo!==null?Number(regra.custo):'';
+    const margem=regra.margem!==undefined&&regra.margem!==null?Number(regra.margem):'';
+    const anuncios=sku?anunciosSkuV27(sku):0;
+    const atualizado=regra.updated_at?dataCurtaSkuV27(regra.updated_at):'Nova linha';
+
+    return `<tr id="${id}" data-sku-original="${escapeHtml(sku)}">
+      <td class="p-4 min-w-[230px]">
+        <input list="sku-base-list-v27" value="${escapeHtml(sku)}"
+          class="sku-v27-input w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white"
+          placeholder="Digite ou selecione um SKU"
+          oninput="atualizarContagemLinhaSkuV27('${id}')">
+      </td>
+      <td class="p-4">
+        <span class="sku-v27-contagem text-slate-300 font-bold">${anuncios.toLocaleString('pt-BR')}</span>
+      </td>
+      <td class="p-4 min-w-[170px]">
+        <input type="number" min="0" step="0.01" value="${custo}"
+          class="sku-v27-custo w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white"
+          placeholder="Ex.: 25,00">
+      </td>
+      <td class="p-4 min-w-[170px]">
+        <input type="number" min="0" max="94.99" step="0.1" value="${margem}"
+          class="sku-v27-margem w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white"
+          placeholder="Ex.: 20">
+      </td>
+      <td class="p-4 text-slate-500 text-[10px]">${escapeHtml(atualizado)}</td>
+      <td class="p-4">
+        <button onclick="removerLinhaSkuV27('${id}')" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-2 rounded-lg text-[10px] font-black">
+          Remover
+        </button>
+      </td>
+    </tr>`;
+}
+
+function preencherDatalistSkuV27(){
+    const dl=document.getElementById('sku-base-list-v27');
+    if(!dl)return;
+    dl.innerHTML=skuDisponiveisV27
+      .map(x=>`<option value="${escapeHtml(x.sku||'')}">${Number(x.anuncios||0).toLocaleString('pt-BR')} anúncio(s)</option>`)
+      .join('');
+}
+
+function renderBaseSkuV27(){
+    preencherDatalistSkuV27();
+
+    const tbody=document.getElementById('sku-base-tabela-v27');
+    if(!tbody)return;
+
+    const regras=Object.values(baseSkuV27).sort((a,b)=>String(a.sku).localeCompare(String(b.sku),'pt-BR'));
+    tbody.innerHTML=regras.length
+      ? regras.map(linhaSkuV27).join('')
+      : linhaSkuV27({});
+
+    const total=document.getElementById('sku-base-total-v27');
+    const disp=document.getElementById('sku-base-disponiveis-v27');
+    if(total)total.innerText=regras.length.toLocaleString('pt-BR');
+    if(disp)disp.innerText=skuDisponiveisV27.length.toLocaleString('pt-BR');
+
+    const st=document.getElementById('sku-base-status-v27');
+    if(st)st.textContent=regras.length
+      ? `${regras.length.toLocaleString('pt-BR')} SKU(s) com custo e margem salvos.`
+      : 'Nenhum custo por SKU cadastrado ainda.';
+}
+
+async function abrirBaseSkuV27(){
+    mostrarLoading('Carregando custos e margens por SKU...');
+    try{
+        await carregarBaseSkuV27(true);
+        renderBaseSkuV27();
+    }catch(e){
+        const tb=document.getElementById('sku-base-tabela-v27');
+        if(tb)tb.innerHTML=`<tr><td colspan="6" class="p-8 text-center text-red-400">${escapeHtml(e.message)}</td></tr>`;
+    }finally{
+        esconderLoading();
+    }
+}
+
+function adicionarLinhaSkuV27(){
+    const tbody=document.getElementById('sku-base-tabela-v27');
+    if(!tbody)return;
+    const vazio=tbody.querySelector('td[colspan="6"]');
+    if(vazio)tbody.innerHTML='';
+    tbody.insertAdjacentHTML('beforeend',linhaSkuV27({}));
+    tbody.lastElementChild?.querySelector('.sku-v27-input')?.focus();
+}
+
+function atualizarContagemLinhaSkuV27(rowId){
+    const row=document.getElementById(rowId);
+    if(!row)return;
+    const sku=row.querySelector('.sku-v27-input')?.value||'';
+    const el=row.querySelector('.sku-v27-contagem');
+    if(el)el.textContent=anunciosSkuV27(sku).toLocaleString('pt-BR');
+}
+
+async function removerLinhaSkuV27(rowId){
+    const row=document.getElementById(rowId);
+    if(!row)return;
+
+    const skuOriginal=String(row.dataset.skuOriginal||'').trim();
+    const skuAtual=String(row.querySelector('.sku-v27-input')?.value||'').trim();
+
+    if(skuOriginal && baseSkuV27[normalizarSkuV27(skuOriginal)]){
+        if(!confirm(`Remover a base de custo e margem do SKU ${skuOriginal}?`))return;
+
+        const token=obterToken();
+        try{
+            const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing/${encodeURIComponent(skuOriginal)}`,{
+                method:'DELETE',
+                headers:{Authorization:token}
+            });
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||'Erro ao remover SKU.');
+
+            delete baseSkuV27[normalizarSkuV27(skuOriginal)];
+            row.remove();
+            renderBaseSkuV27();
+        }catch(e){
+            alert(e.message);
+        }
+        return;
+    }
+
+    row.remove();
+    const tbody=document.getElementById('sku-base-tabela-v27');
+    if(tbody&&!tbody.children.length)tbody.innerHTML=linhaSkuV27({});
+}
+
+async function salvarBaseSkuV27(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const rows=[...document.querySelectorAll('#sku-base-tabela-v27 tr')];
+    const mapa=new Map();
+
+    for(const row of rows){
+        const sku=String(row.querySelector('.sku-v27-input')?.value||'').trim();
+        const custoTexto=row.querySelector('.sku-v27-custo')?.value;
+        const margemTexto=row.querySelector('.sku-v27-margem')?.value;
+
+        if(!sku&&!custoTexto&&!margemTexto)continue;
+        if(!sku)return alert('Existe uma linha sem SKU. Preencha ou remova essa linha.');
+
+        const custo=Number(custoTexto);
+        const margem=Number(margemTexto);
+
+        if(!Number.isFinite(custo)||custo<0)return alert(`Custo inválido no SKU ${sku}.`);
+        if(!Number.isFinite(margem)||margem<0||margem>=95)return alert(`Margem inválida no SKU ${sku}. Use de 0 até 94,99%.`);
+
+        mapa.set(normalizarSkuV27(sku),{sku,custo,margem});
+    }
+
+    const regras=[...mapa.values()];
+    if(!regras.length)return alert('Adicione pelo menos um SKU com custo e margem.');
+
+    mostrarLoading(`Salvando ${regras.length.toLocaleString('pt-BR')} SKU(s)...`);
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({regras})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||'Erro ao salvar a base.');
+
+        // Limpa edições temporárias para a nova base passar a valer imediatamente.
+        Object.keys(simParametrosPorIdV21).forEach(k=>delete simParametrosPorIdV21[k]);
+        baseSkuCarregadaV27=false;
+        await carregarBaseSkuV27(true);
+        renderBaseSkuV27();
+
+        const st=document.getElementById('sku-base-status-v27');
+        if(st)st.innerHTML=`<span class="text-emerald-400 font-bold">✓ ${escapeHtml(d.mensagem||'Base salva com sucesso.')}</span>`;
+
+        // Se a simulação já tem dados carregados, reaplica a nova base imediatamente.
+        if(simItensV21.length)montarTabelaSimulacaoV21(simItensV21);
+        if(atualItensV21.length)montarTabelaAtualizacaoV21(atualItensV21);
+    }catch(e){
+        alert(e.message);
+    }finally{
+        esconderLoading();
+    }
+}
+
 /* Navegação V21: Gestão continua paginada; Simulação/Atualização/Pedidos ganham seus loaders próprios. */
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
     const destino=String(aba);
-    const abasPainelV24=['gestao','simulacao','atualizacao','pedidos','perguntas','reclamacoes'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes'];
 
     document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
     document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
@@ -8184,10 +8532,12 @@ mudarAba=function(aba){
 
     _mudarAbaV21(aba);
 
+    const destaqueMenu=destino==='sku-base'?'simulacao':destino;
     document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
-        btn.classList.toggle('active',btn.dataset.aba===destino);
+        btn.classList.toggle('active',btn.dataset.aba===destaqueMenu);
     });
 
+    if(aba==='sku-base')setTimeout(()=>abrirBaseSkuV27(),0);
     if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
     if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
@@ -8196,7 +8546,7 @@ mudarAba=function(aba){
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
-    const abasPainelV24=['gestao','simulacao','atualizacao','pedidos','perguntas','reclamacoes'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes'];
 
     document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
     document.body.classList.toggle('configuracoes-isolado-v24',abaInicial==='configuracoes');
@@ -8205,9 +8555,11 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.body.classList.toggle('atendimento-isolado',abaInicial==='atendimento');
     document.body.classList.toggle('painel-menu-v24',abasPainelV24.includes(abaInicial));
 
+    const destaqueInicial=abaInicial==='sku-base'?'simulacao':abaInicial;
     document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
-        btn.classList.toggle('active',btn.dataset.aba===abaInicial);
+        btn.classList.toggle('active',btn.dataset.aba===destaqueInicial);
     });
+    if(abaInicial==='sku-base')setTimeout(()=>abrirBaseSkuV27(),0);
 
     // Enter aplica o filtro rapidamente nas duas páginas.
     document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
