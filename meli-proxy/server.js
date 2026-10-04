@@ -3501,6 +3501,8 @@ async function inicializarBancoEscala() {
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(18,2) NOT NULL DEFAULT 0;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS free_shipping BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS sale_fee NUMERIC(18,2) NOT NULL DEFAULT 0;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS commission_percentage NUMERIC(8,4) NOT NULL DEFAULT 0;
+      ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS commission_synced_at TIMESTAMPTZ NULL;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS net_received NUMERIC(18,2) NOT NULL DEFAULT 0;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS freight_synced_at TIMESTAMPTZ NULL;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS freight_last_attempt_at TIMESTAMPTZ NULL;
@@ -3565,50 +3567,327 @@ async function inicializarBancoEscala() {
 
 function itemParaDb(item, sellerId) {
     const n=normalizarItemGestao(item);
-    return [sellerId,n.id,n.titulo,n.sku,n.preco,n.estoque,n.vendidos,n.status,n.listing_type_id,n.categoria,n.thumbnail,n.permalink,n.atualizado_em,item];
+    const saleFee=Number(item?._sale_fee_amount ?? item?.sale_fee ?? 0);
+    const commissionPercentage=Number(item?._commission_percentage ?? item?.commission_percentage ?? 0);
+    const commissionSyncedAt=item?._commission_synced_at||item?.commission_synced_at||null;
+    const netReceived=Math.max(0,Number(n.preco||0)-Math.max(0,saleFee));
+
+    return [
+      sellerId,n.id,n.titulo,n.sku,n.preco,n.estoque,n.vendidos,n.status,
+      n.listing_type_id,n.categoria,n.thumbnail,n.permalink,n.atualizado_em,
+      item,
+      Number.isFinite(saleFee)?saleFee:0,
+      Number.isFinite(commissionPercentage)?commissionPercentage:0,
+      commissionSyncedAt,
+      netReceived
+    ];
 }
+
 async function upsertItensDb(sellerId, itens) {
     if (!itens.length) return;
     const client=await db.connect();
     try {
         await client.query('BEGIN');
+
         for (const item of itens) {
             const v=itemParaDb(item,sellerId);
+
             await client.query(`
               INSERT INTO ml_items
-              (seller_id,item_id,title,sku,price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,raw,synced_at)
-              VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+              (
+                seller_id,item_id,title,sku,price,available_quantity,sold_quantity,
+                status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,
+                raw,sale_fee,commission_percentage,commission_synced_at,net_received,synced_at
+              )
+              VALUES(
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+                $15,$16,$17,$18,NOW()
+              )
               ON CONFLICT(seller_id,item_id) DO UPDATE SET
-                title=EXCLUDED.title,sku=EXCLUDED.sku,price=EXCLUDED.price,
-                available_quantity=EXCLUDED.available_quantity,sold_quantity=EXCLUDED.sold_quantity,
-                status=EXCLUDED.status,listing_type_id=EXCLUDED.listing_type_id,
-                category_id=EXCLUDED.category_id,thumbnail=EXCLUDED.thumbnail,
-                permalink=EXCLUDED.permalink,ml_updated_at=EXCLUDED.ml_updated_at,
+                title=EXCLUDED.title,
+                sku=EXCLUDED.sku,
+                price=EXCLUDED.price,
+                available_quantity=EXCLUDED.available_quantity,
+                sold_quantity=EXCLUDED.sold_quantity,
+                status=EXCLUDED.status,
+                listing_type_id=EXCLUDED.listing_type_id,
+                category_id=EXCLUDED.category_id,
+                thumbnail=EXCLUDED.thumbnail,
+                permalink=EXCLUDED.permalink,
+                ml_updated_at=EXCLUDED.ml_updated_at,
+
+                sale_fee=CASE
+                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                  THEN EXCLUDED.sale_fee
+                  ELSE ml_items.sale_fee
+                END,
+
+                commission_percentage=CASE
+                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                  THEN EXCLUDED.commission_percentage
+                  ELSE ml_items.commission_percentage
+                END,
+
+                commission_synced_at=COALESCE(
+                  EXCLUDED.commission_synced_at,
+                  ml_items.commission_synced_at
+                ),
+
                 freight_synced_at=CASE
                   WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
                     OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
                     OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
                        IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
                   THEN NULL ELSE ml_items.freight_synced_at END,
+
                 freight_last_attempt_at=CASE
                   WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
                     OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
                     OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
                        IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
                   THEN NULL ELSE ml_items.freight_last_attempt_at END,
+
                 freight_last_error=CASE
                   WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
                     OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
                     OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
                        IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
                   THEN NULL ELSE ml_items.freight_last_error END,
-                raw=EXCLUDED.raw,synced_at=NOW()
+
+                net_received=GREATEST(
+                  0,
+                  EXCLUDED.price -
+                  (
+                    CASE
+                      WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                      THEN EXCLUDED.sale_fee
+                      ELSE ml_items.sale_fee
+                    END
+                  ) -
+                  ml_items.shipping_cost
+                ),
+
+                raw=EXCLUDED.raw,
+                synced_at=NOW()
             `,v);
         }
+
         await client.query('COMMIT');
     } catch(e) {
-        await client.query('ROLLBACK'); throw e;
-    } finally { client.release(); }
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+}
+
+/* =========================================================
+   V28 — CUSTO DE VENDA / COMISSÃO POR ANÚNCIO
+   Usa o recurso oficial sites/{site}/listing_prices.
+========================================================= */
+function flattenListingPricesV28(data){
+    const out=[];
+    const walk=v=>{
+        if(Array.isArray(v)){
+            v.forEach(walk);
+            return;
+        }
+        if(v && typeof v==='object')out.push(v);
+    };
+    walk(data);
+    return out;
+}
+
+function contextoComissaoMudouV28(anterior,item){
+    if(!anterior)return true;
+
+    const oldShipping=anterior?.raw?.shipping||{};
+    const newShipping=item?.shipping||{};
+
+    return (
+      Number(anterior.price||0)!==Number(item?.price||0) ||
+      String(anterior.listing_type_id||'')!==String(item?.listing_type_id||'') ||
+      String(anterior.category_id||'')!==String(item?.category_id||'') ||
+      String(oldShipping.mode||'')!==String(newShipping.mode||'') ||
+      String(oldShipping.logistic_type||'')!==String(newShipping.logistic_type||'') ||
+      String(anterior?.raw?.catalog_product_id||'')!==String(item?.catalog_product_id||'')
+    );
+}
+
+async function consultarComissaoItemV28(item,token){
+    const price=Number(item?.price||0);
+    const listingType=String(item?.listing_type_id||'').trim();
+    if(!(price>0)||!listingType){
+        throw new Error('Anúncio sem preço ou listing_type para calcular comissão.');
+    }
+
+    const site=String(item?.site_id||'MLB');
+    const shipping=item?.shipping||{};
+    const params=new URLSearchParams({
+        price:String(price),
+        currency_id:String(item?.currency_id||'BRL'),
+        listing_type_id:listingType
+    });
+
+    // A documentação atual recomenda enviar o contexto logístico para
+    // o fixed_fee ficar coerente com o que será efetivamente cobrado.
+    if(shipping?.logistic_type)params.set('logistic_type',String(shipping.logistic_type));
+    if(shipping?.mode)params.set('shipping_mode',String(shipping.mode));
+
+    // Para maior precisão, usa produto de catálogo quando existir;
+    // caso contrário usa a categoria.
+    if(item?.catalog_product_id){
+        params.set('catalog_product_id',String(item.catalog_product_id));
+    }else if(item?.category_id){
+        params.set('category_id',String(item.category_id));
+    }
+
+    let ultimoErro='Falha ao calcular comissão.';
+    for(let tentativa=1;tentativa<=3;tentativa++){
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),12000);
+
+        try{
+            const r=await mlFetch(
+                `${ML_API}/sites/${encodeURIComponent(site)}/listing_prices?${params.toString()}`,
+                token,
+                {signal:controller.signal}
+            );
+            const d=await jsonSeguro(r);
+
+            if(r.ok){
+                const lista=flattenListingPricesV28(d);
+                const row=
+                  lista.find(x=>String(x?.listing_type_id||x?.mapping||'')===listingType) ||
+                  lista.find(x=>Number.isFinite(Number(x?.sale_fee_amount))) ||
+                  null;
+
+                if(row){
+                    const saleFee=Number(row.sale_fee_amount);
+                    const percentage=Number(row?.sale_fee_details?.percentage_fee);
+
+                    if(Number.isFinite(saleFee)&&saleFee>=0){
+                        return {
+                            sale_fee_amount:saleFee,
+                            percentage_fee:Number.isFinite(percentage)&&percentage>=0?percentage:0
+                        };
+                    }
+                }
+
+                ultimoErro='Listing Prices respondeu sem sale_fee_amount.';
+                break;
+            }
+
+            ultimoErro=`Comissão HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
+            if(![408,429,500,502,503,504].includes(r.status))break;
+
+            const retryAfter=Number(r.headers.get('retry-after')||0);
+            await new Promise(resolve=>setTimeout(
+              resolve,
+              retryAfter>0?Math.min(5000,retryAfter*1000):500*tentativa
+            ));
+        }catch(e){
+            ultimoErro=e?.name==='AbortError'
+              ? 'Timeout ao consultar comissão.'
+              : e.message;
+            if(tentativa<3)await new Promise(resolve=>setTimeout(resolve,500*tentativa));
+        }finally{
+            clearTimeout(timer);
+        }
+    }
+
+    throw new Error(ultimoErro);
+}
+
+async function enriquecerComissoesV28(sellerId,itens,token){
+    if(!Array.isArray(itens)||!itens.length)return {itens:[],consultados:0,erros:0};
+
+    const ids=itens.map(x=>String(x.id||'')).filter(Boolean);
+    const antigos=await dbQuery(`
+      SELECT
+        item_id,
+        price::float8 AS price,
+        listing_type_id,
+        category_id,
+        sale_fee::float8 AS sale_fee,
+        commission_percentage::float8 AS commission_percentage,
+        commission_synced_at,
+        raw
+      FROM ml_items
+      WHERE seller_id=$1
+        AND item_id=ANY($2::text[])
+    `,[sellerId,ids]);
+
+    const mapaAntigos=new Map(antigos.rows.map(x=>[String(x.item_id),x]));
+    const alvos=[];
+
+    for(const item of itens){
+        const anterior=mapaAntigos.get(String(item.id));
+
+        if(
+          !anterior ||
+          !anterior.commission_synced_at ||
+          contextoComissaoMudouV28(anterior,item)
+        ){
+            alvos.push(item);
+        }else{
+            item._sale_fee_amount=Number(anterior.sale_fee||0);
+            item._commission_percentage=Number(anterior.commission_percentage||0);
+            item._commission_synced_at=anterior.commission_synced_at;
+        }
+    }
+
+    const concorrencia=Math.max(
+      4,
+      Math.min(20,Number(process.env.ML_COMMISSION_CONCURRENCY||12))
+    );
+
+    let cursor=0;
+    let erros=0;
+
+    async function worker(){
+        while(true){
+            const idx=cursor++;
+            if(idx>=alvos.length)return;
+
+            const item=alvos[idx];
+            const anterior=mapaAntigos.get(String(item.id));
+
+            try{
+                const fee=await consultarComissaoItemV28(item,token);
+                item._sale_fee_amount=fee.sale_fee_amount;
+                item._commission_percentage=fee.percentage_fee;
+                item._commission_synced_at=new Date().toISOString();
+            }catch(e){
+                erros++;
+                console.warn('[COMISSÃO V28]',item.id,e.message);
+
+                // Nunca apaga uma comissão boa já salva por causa de falha temporária.
+                if(anterior){
+                    item._sale_fee_amount=Number(anterior.sale_fee||0);
+                    item._commission_percentage=Number(anterior.commission_percentage||0);
+                    item._commission_synced_at=anterior.commission_synced_at||null;
+                }else{
+                    item._sale_fee_amount=0;
+                    item._commission_percentage=0;
+                    item._commission_synced_at=null;
+                }
+            }
+        }
+    }
+
+    await Promise.all(
+      Array.from(
+        {length:Math.min(concorrencia,Math.max(1,alvos.length))},
+        ()=>worker()
+      )
+    );
+
+    return {
+        itens,
+        consultados:alvos.length,
+        erros
+    };
 }
 
 async function criarJob(sellerId,type,payload={}) {
@@ -3670,7 +3949,13 @@ async function processarSyncCompleto(job) {
         const itens=ids.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
         errors+=Math.max(0,ids.length-itens.length);
 
-        if(itens.length)await upsertItensDb(job.seller_id,itens);
+        let comissoesConsultadas=0;
+        if(itens.length){
+            const enriquecidos=await enriquecerComissoesV28(job.seller_id,itens,token);
+            comissoesConsultadas=enriquecidos.consultados;
+            errors+=enriquecidos.erros;
+            await upsertItensDb(job.seller_id,enriquecidos.itens);
+        }
 
         processed+=ids.length;
         scrollId=sd.scroll_id||null;
@@ -3696,7 +3981,7 @@ async function processarSyncCompleto(job) {
             total,
             errors,
             scrollId,
-            `Anúncios: ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · lote ${loteAtual.toLocaleString('pt-BR')} de até 5.000 (${dentroDoLote.toLocaleString('pt-BR')}/5.000)`
+            `Anúncios + comissão: ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · lote ${loteAtual.toLocaleString('pt-BR')} de até 5.000 (${dentroDoLote.toLocaleString('pt-BR')}/5.000) · ${comissoesConsultadas.toLocaleString('pt-BR')} comissão(ões) atualizada(s) nesta página`
         ]);
 
         // scroll_id expira em poucos minutos: segue sem pausa longa.
@@ -4684,7 +4969,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
         res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
