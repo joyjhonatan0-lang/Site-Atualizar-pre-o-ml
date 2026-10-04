@@ -2384,10 +2384,25 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
      RECLAMAÇÕES / DEVOLUÇÕES / DENÚNCIAS
 ===================================================== -->
 <section id="secao-reclamacoes" class="hidden space-y-6">
-  <div class="flex items-center justify-between gap-4"><div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Pós-venda e risco</div><h1 class="text-2xl font-black text-white mt-1">Reclamações & Proteção</h1><p class="text-xs text-slate-500 mt-1">Reclamações abertas, impacto na reputação e consulta de casos de Brand Protection.</p></div><button onclick="carregarReclamacoesPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Atualizar</button></div>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Abertas</div><div id="claims-abertas" class="text-2xl font-black text-red-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Em disputa</div><div id="claims-disputas" class="text-2xl font-black text-yellow-400 mt-2">—</div></div><div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Prazo próximo</div><div id="claims-prazo" class="text-2xl font-black text-white mt-2">—</div></div></div>
-  <div id="claims-lista" class="space-y-3"><div class="panel rounded-2xl p-10 text-center text-xs text-slate-600">Clique em Atualizar.</div></div>
-  <div class="panel rounded-2xl p-5"><h2 class="text-sm font-black text-white">Consultar denúncia / Brand Protection</h2><p class="text-[11px] text-slate-500 mt-1">Informe o ID do caso. Algumas funções de denúncia dependem de participação no Brand Protection Program.</p><div class="flex gap-2 mt-4"><input id="bpp-case-id" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="ID do caso"><button onclick="consultarCasoBPP()" class="bg-slate-800 text-white px-5 rounded-xl text-xs font-bold">Consultar caso</button></div><pre id="bpp-resultado" class="hidden mt-4 whitespace-pre-wrap text-[11px] text-slate-300 bg-slate-950 rounded-xl p-4 overflow-auto"></pre></div>
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Pós-venda e risco</div><h1 class="text-2xl font-black text-white mt-1">Central de Reclamações</h1><p class="text-xs text-slate-500 mt-1">Analise contexto, mensagens, anexos e impacto antes de responder. A IA prepara uma defesa para sua revisão — nunca envia sozinha.</p></div>
+    <button onclick="carregarReclamacoesPro()" class="bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar reclamações</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Abertas</div><div id="claims-abertas" class="text-2xl font-black text-red-400 mt-2">—</div><div class="text-[10px] text-slate-600 mt-1">Precisam de acompanhamento</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Em disputa/mediação</div><div id="claims-disputas" class="text-2xl font-black text-yellow-400 mt-2">—</div><div class="text-[10px] text-slate-600 mt-1">Exigem atenção ao fluxo permitido</div></div>
+    <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Prazo próximo</div><div id="claims-prazo" class="text-2xl font-black text-white mt-2">—</div><div class="text-[10px] text-slate-600 mt-1">Priorize respostas com vencimento</div></div>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-4">
+    <div class="panel rounded-2xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800"><div class="font-black text-white text-sm">Reclamações</div><div class="text-[10px] text-slate-500 mt-1">Clique em uma reclamação para abrir o dossiê.</div></div>
+      <div id="claims-lista" class="divide-y divide-slate-800"><div class="p-8 text-center text-xs text-slate-600">Clique em Atualizar reclamações.</div></div>
+    </div>
+    <div id="claim-dossie" class="panel rounded-2xl p-5 min-h-[430px]">
+      <div class="h-full flex items-center justify-center text-center p-8"><div><div class="text-3xl">🛡️</div><div class="font-black text-white mt-3">Dossiê da reclamação</div><div class="text-xs text-slate-500 mt-2 max-w-md">Selecione uma reclamação. Aqui aparecerão detalhes, histórico, anexos, impacto na reputação e análise da IA.</div></div></div>
+    </div>
+  </div>
+  <div class="panel rounded-2xl p-5"><h2 class="text-sm font-black text-white">Consultar denúncia / Brand Protection</h2><p class="text-[11px] text-slate-500 mt-1">Informe o ID do caso. Algumas funções dependem de participação no Brand Protection Program.</p><div class="flex gap-2 mt-4"><input id="bpp-case-id" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="ID do caso"><button onclick="consultarCasoBPP()" class="bg-slate-800 text-white px-5 rounded-xl text-xs font-bold">Consultar caso</button></div><pre id="bpp-resultado" class="hidden mt-4 whitespace-pre-wrap text-[11px] text-slate-300 bg-slate-950 rounded-xl p-4 overflow-auto"></pre></div>
 </section>
 
 <!-- =====================================================
@@ -7200,6 +7215,64 @@ async function consultarQualidade(){const id=document.getElementById('qualidade-
 async function consultarCompeticao(){const id=document.getElementById('catalogo-mlb').value.trim(),out=document.getElementById('catalogo-out');if(!id)return;out.innerHTML=hubCard('Status','Consultando...');try{const d=await apiPro(`/api/v4/items/${encodeURIComponent(id)}/competition`);out.innerHTML=hubCard('Situação',d.status||'—','winning = ganhando; competing = disputando')+hubCard('Preço atual',d.current_price!=null?moeda(d.current_price):'—')+hubCard('Preço para competir',d.price_to_win!=null?moeda(d.price_to_win):'—','Sugestão retornada pela API')+`<div class="lg:col-span-3 panel rounded-2xl p-5"><div class="hub-section-title">Oportunidades e boosts</div><pre class="text-[11px] text-slate-400 mt-3 whitespace-pre-wrap overflow-auto">${escapeHtml(JSON.stringify(d,null,2))}</pre></div>`}catch(e){out.innerHTML=`<div class="lg:col-span-3 hub-info text-red-300">${escapeHtml(e.message)}</div>`}}
 </script>
 
+
+<script id="mlhub-claims-v9">
+let claimSelecionada=null;
+function claimEsc(v){return escapeHtml(String(v??''))}
+function claimData(v){if(!v)return '—';try{return new Date(v).toLocaleString('pt-BR')}catch(e){return v}}
+async function carregarReclamacoesPro(){
+  const token=obterToken();if(!token)return solicitarToken();
+  mostrarLoading('Atualizando reclamações...');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v3/claims?status=opened`,{headers:{Authorization:token}});
+    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao consultar reclamações.');
+    const arr=d.reclamacoes||[];
+    document.getElementById('claims-abertas').textContent=Number(d.total||arr.length);
+    document.getElementById('claims-disputas').textContent=arr.filter(x=>String(x.stage||'').toLowerCase().includes('dispute')||String(x.stage||'').toLowerCase().includes('mediation')).length;
+    const agora=Date.now(),dias=2*86400000;
+    document.getElementById('claims-prazo').textContent=arr.filter(x=>x.due_date&&new Date(x.due_date).getTime()-agora<=dias).length;
+    const box=document.getElementById('claims-lista');
+    box.innerHTML=arr.length?arr.map(c=>`<button onclick="abrirDossieClaim('${claimEsc(c.id)}')" class="w-full text-left p-4 hover:bg-slate-800/60 transition"><div class="flex justify-between gap-2"><div class="font-black text-white text-xs">Reclamação #${claimEsc(c.id)}</div><span class="text-[9px] px-2 py-1 rounded-full bg-yellow-400/10 text-yellow-400">${claimEsc(c.stage||c.status||'aberta')}</span></div><div class="text-[10px] text-slate-500 mt-2">${claimEsc(c.detail_title||c.reason_id||'Clique para ver todos os detalhes')}</div><div class="text-[9px] text-slate-600 mt-2">Atualizada: ${claimData(c.last_updated||c.date_created)}</div></button>`).join(''):'<div class="p-8 text-center text-xs text-slate-600">Nenhuma reclamação aberta.</div>';
+  }catch(e){alert(e.message)}finally{esconderLoading()}
+}
+async function abrirDossieClaim(id){
+  const token=obterToken();claimSelecionada=id;mostrarLoading('Montando dossiê da reclamação...');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/dossie`,{headers:{Authorization:token}});
+    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao abrir reclamação.');
+    renderDossieClaim(d);
+  }catch(e){alert(e.message)}finally{esconderLoading()}
+}
+function renderDossieClaim(d){
+  const c=d.claim||{}, msgs=d.messages||[], anexos=d.attachments||[];
+  const box=document.getElementById('claim-dossie');
+  box.innerHTML=`<div class="flex flex-col md:flex-row md:items-start justify-between gap-3"><div><div class="text-[10px] text-yellow-400 uppercase font-bold">Dossiê #${claimEsc(c.id||claimSelecionada)}</div><h2 class="text-xl font-black text-white mt-1">${claimEsc(d.detail?.title||c.reason_id||'Reclamação')}</h2><div class="text-[10px] text-slate-500 mt-2">Estágio: ${claimEsc(c.stage||'—')} · Status: ${claimEsc(c.status||'—')} · Prazo: ${claimData(d.detail?.due_date||c.due_date)}</div></div><button onclick="analisarClaimIA('${claimEsc(c.id||claimSelecionada)}')" class="bg-yellow-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">✦ Analisar com IA</button></div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5"><div class="bg-slate-950 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Pedido/recurso</div><div class="text-xs text-white mt-1">${claimEsc(c.resource||c.order_id||'—')}</div></div><div class="bg-slate-950 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Impacto reputação</div><div class="text-xs ${d.impact?.affects_reputation===true?'text-red-400':'text-emerald-400'} mt-1">${d.impact?claimEsc(JSON.stringify(d.impact)):'Não informado'}</div></div><div class="bg-slate-950 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Anexos encontrados</div><div class="text-xs text-white mt-1">${anexos.length}</div></div></div>
+  <div class="mt-5"><div class="font-black text-white text-xs">Histórico e mensagens</div><div class="space-y-2 mt-3">${msgs.length?msgs.map(m=>`<div class="bg-slate-950 rounded-xl p-3"><div class="text-[9px] text-slate-500">${claimEsc(m.sender_role)} → ${claimEsc(m.receiver_role)} · ${claimData(m.date_created||m.message_date)}</div><div class="text-xs text-slate-200 mt-2 whitespace-pre-wrap">${claimEsc(m.message||m.translated_message||'')}</div>${(m.attachments||[]).length?`<div class="flex flex-wrap gap-2 mt-3">${m.attachments.map(a=>`<button onclick="abrirAnexoClaim('${claimEsc(c.id||claimSelecionada)}','${claimEsc(a.filename)}')" class="text-[10px] bg-slate-800 text-blue-300 px-3 py-2 rounded-lg">🖼 ${claimEsc(a.original_filename||a.filename)}</button>`).join('')}</div>`:''}</div>`).join(''):'<div class="text-xs text-slate-600">Sem mensagens retornadas.</div>'}</div></div>
+  <div id="claim-anexo-preview" class="mt-5"></div>
+  <div id="claim-ia-box" class="mt-5 hidden"></div>`;
+}
+function abrirAnexoClaim(id,file){
+  const token=obterToken();
+  const url=`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/attachments/${encodeURIComponent(file)}`;
+  fetch(url,{headers:{Authorization:token}}).then(r=>r.blob()).then(b=>{const u=URL.createObjectURL(b);document.getElementById('claim-anexo-preview').innerHTML=`<div class="font-black text-white text-xs mb-2">Anexo</div><img src="${u}" class="max-h-[420px] rounded-xl border border-slate-700 object-contain bg-slate-950">`}).catch(()=>alert('Não foi possível abrir o anexo.'));
+}
+async function analisarClaimIA(id){
+  const token=obterToken();mostrarLoading('IA analisando contexto e evidências...');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/analisar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:'{}'});
+    const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro na análise.');
+    const b=document.getElementById('claim-ia-box');b.classList.remove('hidden');
+    b.innerHTML=`<div class="border border-yellow-400/20 bg-yellow-400/5 rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-[10px] uppercase text-yellow-400 font-bold">Análise assistida por IA</div><div class="text-[10px] text-slate-500 mt-1">Revise antes de enviar. A IA não pode garantir exclusão de impacto, reembolso ou decisão favorável.</div></div></div><div class="mt-4 text-xs text-slate-300 whitespace-pre-wrap">${claimEsc(d.analise||'')}</div><div class="mt-4"><label class="text-[10px] uppercase text-slate-500 font-bold">Resposta sugerida</label><textarea id="claim-resposta-ia" class="w-full min-h-[150px] mt-2 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white">${claimEsc(d.resposta_sugerida||'')}</textarea></div><div class="flex gap-2 mt-3"><select id="claim-destinatario" class="bg-slate-950 border border-slate-700 rounded-xl px-3 text-xs text-white"><option value="complainant">Comprador</option><option value="mediator">Mediação do Mercado Livre</option></select><button onclick="enviarRespostaClaim('${claimEsc(id)}')" class="bg-emerald-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black">Enviar resposta revisada</button></div></div>`;
+  }catch(e){alert(e.message)}finally{esconderLoading()}
+}
+async function enviarRespostaClaim(id){
+  const msg=document.getElementById('claim-resposta-ia')?.value?.trim(),receiver=document.getElementById('claim-destinatario')?.value||'complainant';
+  if(!msg)return alert('Revise e preencha a resposta antes de enviar.');
+  if(!confirm('Confirma o envio desta mensagem para a reclamação?'))return;
+  const token=obterToken();mostrarLoading('Enviando resposta...');
+  try{const r=await fetch(`${RENDER_URL}/api/v9/claims/${encodeURIComponent(id)}/mensagem`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({message:msg,receiver_role:receiver})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao enviar.');alert('Resposta enviada com sucesso.');await abrirDossieClaim(id)}catch(e){alert(e.message)}finally{esconderLoading()}
+</script>
 
 <script id="mlhub-scale90k">
 let mlScaleJobId=null, mlScaleTimer=null;
