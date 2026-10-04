@@ -615,23 +615,6 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 >
 
                     <button
-                        onclick="mudarTela('gestao')"
-                        id="btn-inicio"
-                        class="
-                            nav-button
-                            active
-                            px-3
-                            py-2
-                            rounded-lg
-                            text-xs
-                            font-bold
-                            whitespace-nowrap
-                        "
-                    >
-                        🏠 Início
-                    </button>
-
-                    <button
                         onclick="mudarAba('gestao')"
                         id="btn-gestao" title="Gestão: preços, estoque, títulos, SKU e status dos anúncios"
                         class="
@@ -683,8 +666,14 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                     >
                         ↻ Atualização
                     </button>
-<button onclick="mudarAba('atendimento')" id="btn-atendimento" title="IA: assistente para atendimento e operação" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✦ IA</button>
-                    <button onclick="mudarAba('conteudo')" id="btn-conteudo" class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap">✎ Conteúdo IA</button>
+                    <button
+                        onclick="mudarAba('pedidos')"
+                        id="btn-pedidos"
+                        title="Pedidos: acompanhe todas as vendas e entregas"
+                        class="nav-button px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 whitespace-nowrap"
+                    >
+                        🧾 Pedidos
+                    </button>
 <button
                         onclick="mudarAba('perguntas')"
                         id="btn-perguntas" title="Perguntas: consulte e responda clientes do Mercado Livre"
@@ -762,25 +751,6 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                     "
                 >
                     📊 Atualizar painel
-                </button>
-
-                <button
-                    onclick="mudarAba('configuracoes'); atualizarStatusOAuthML()"
-                    class="
-                        btn-action
-                        bg-slate-900
-                        hover:bg-slate-800
-                        text-slate-300
-                        px-3.5
-                        py-2.5
-                        rounded-xl
-                        text-xs
-                        font-bold
-                        border
-                        border-slate-700
-                    "
-                >
-                    ⚿ Token
                 </button>
 
             </div>
@@ -1190,7 +1160,7 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             <div id="home-tempo-real-status" class="text-[10px] text-emerald-400 font-bold">● Atualização automática ativa</div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div class="panel metric-card rounded-2xl p-5">
                 <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Faturamento</div>
                 <div id="home-dashboard-vendas" class="text-3xl font-black text-emerald-400 mt-3">—</div>
@@ -1205,6 +1175,11 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
                 <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Unidades vendidas</div>
                 <div id="home-dashboard-unidades" class="text-3xl font-black text-yellow-400 mt-3">—</div>
                 <div class="text-[10px] text-slate-500 mt-2">Quantidade total</div>
+            </div>
+            <div class="panel metric-card rounded-2xl p-5">
+                <div class="text-[10px] uppercase tracking-[.14em] text-slate-500 font-bold">Visitas do dia</div>
+                <div id="home-dashboard-visitas" class="text-3xl font-black text-blue-400 mt-3">—</div>
+                <div id="home-dashboard-visitas-periodo" class="text-[10px] text-slate-500 mt-2">Visitas aos anúncios da conta</div>
             </div>
         </div>
     </div>
@@ -2446,44 +2421,6 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 </section>
 
 
-<!-- =====================================================
-     ESTÚDIO DE CONTEÚDO IA
-===================================================== -->
-<section id="secao-conteudo" class="hidden space-y-6">
-  <div class="hub-page-head"><div><div class="hub-eyebrow">Conteúdo & conversão</div><h1 class="hub-title">Estúdio de Conteúdo IA</h1><p class="hub-help">Crie títulos, descrições, palavras-chave e prompts profissionais para imagens. Para geração visual real, conecte um provedor de imagens no servidor; o painel não publica nada automaticamente sem sua confirmação.</p></div><span class="hub-badge">✦ IA assistida</span></div>
-
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
-    <div class="xl:col-span-2 panel rounded-2xl p-5">
-      <div class="hub-section-title">Gerador de títulos em massa</div><div class="hub-section-help">Cole um produto por linha. A IA cria opções focadas em clareza, busca e conversão, respeitando o limite configurado.</div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-        <div class="md:col-span-2 hub-field"><label>Produtos / termos base</label><textarea id="conteudo-produtos" rows="8" class="hub-input" placeholder="Ex.: Aparador corporal masculino recarregável&#10;Máquina de cortar cabelo sem fio"></textarea><div class="hub-tip">Um produto por linha. Para grandes volumes, trabalhe em lotes para revisar a qualidade.</div></div>
-        <div class="space-y-3">
-          <div class="hub-field"><label>Quantidade por produto</label><select id="conteudo-qtd" class="hub-input"><option>3</option><option selected>5</option><option>10</option></select></div>
-          <div class="hub-field"><label>Máximo de caracteres</label><input id="conteudo-limite" type="number" value="60" min="30" max="200" class="hub-input"><div class="hub-tip">Use o limite exigido pela sua estratégia/categoria.</div></div>
-          <button onclick="gerarTitulosMassa()" class="w-full bg-yellow-400 text-slate-950 px-4 py-3 rounded-xl text-xs font-black">Gerar títulos</button>
-        </div>
-      </div>
-      <div id="conteudo-titulos-out" class="mt-5 hidden"></div>
-    </div>
-
-    <div class="panel rounded-2xl p-5">
-      <div class="hub-section-title">Descrição profissional</div><div class="hub-section-help">Transforma características em uma descrição organizada, sem inventar especificações.</div>
-      <div class="hub-field mt-5"><label>Informações reais do produto</label><textarea id="conteudo-descricao-base" rows="9" class="hub-input" placeholder="Material, medidas, voltagem, itens inclusos, benefícios reais..."></textarea></div>
-      <button onclick="gerarDescricaoIA()" class="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl text-xs font-black">Gerar descrição</button>
-      <pre id="conteudo-descricao-out" class="hidden mt-4 whitespace-pre-wrap text-xs text-slate-300 bg-slate-950 p-4 rounded-xl max-h-80 overflow-auto"></pre>
-    </div>
-  </div>
-
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-    <div class="panel rounded-2xl p-5"><div class="hub-section-title">Gerador de imagem de produto</div><div class="hub-section-help">Cria um briefing/prompt visual profissional com fundo, composição, benefícios e restrições. Se o servidor tiver um provedor de imagem configurado, a imagem pode ser gerada diretamente.</div>
-      <div class="hub-field mt-5"><label>Produto e objetivo da imagem</label><textarea id="imagem-brief" rows="5" class="hub-input" placeholder="Ex.: Aparador dourado, fundo branco premium, destacar leveza e precisão, sem alterar o formato real do produto."></textarea></div>
-      <div class="grid grid-cols-2 gap-3 mt-3"><div class="hub-field"><label>Formato</label><select id="imagem-formato" class="hub-input"><option value="1:1">Quadrado 1:1</option><option value="4:5">Vertical 4:5</option><option value="16:9">Banner 16:9</option></select></div><div class="hub-field"><label>Estilo</label><select id="imagem-estilo" class="hub-input"><option>Marketplace profissional</option><option>Premium minimalista</option><option>Infográfico comercial</option><option>Ambientado realista</option></select></div></div>
-      <button onclick="gerarBriefImagem()" class="mt-3 bg-yellow-400 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Gerar briefing visual</button>
-      <div id="imagem-out" class="hidden mt-4"></div>
-    </div>
-    <div class="panel rounded-2xl p-5"><div class="hub-section-title">Palavras-chave & SEO</div><div class="hub-section-help">Gera termos relacionados ao produto para pesquisa, organização interna e apoio na criação de conteúdo.</div><div class="hub-field mt-5"><label>Produto</label><input id="seo-produto" class="hub-input" placeholder="Digite o produto"></div><button onclick="gerarKeywords()" class="mt-3 bg-slate-800 text-white px-5 py-3 rounded-xl text-xs font-black">Gerar palavras-chave</button><div id="seo-out" class="flex flex-wrap gap-2 mt-4"></div></div>
-  </div>
-</section>
 
 <!-- =====================================================
      QUALIDADE DOS ANÚNCIOS
@@ -2649,6 +2586,25 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             Sua função original de simulação foi mantida.
         </p>
 
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-col xl:flex-row xl:items-end gap-3">
+            <div class="w-full xl:w-44">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Filtrar por</label>
+                <select id="sim-filtro-campo" class="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-xs text-white">
+                    <option value="sku">SKU</option>
+                    <option value="mlb">MLB</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Filtro</label>
+                <input id="sim-filtro-valor" class="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Digite o SKU ou MLB exato">
+            </div>
+            <button onclick="aplicarFiltroSimulacaoV21()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Filtrar</button>
+            <button onclick="limparFiltroSimulacaoV21()" class="bg-slate-800 hover:bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-bold">Limpar</button>
+        </div>
+        <div id="sim-filtro-info" class="text-[10px] text-slate-500 mt-3">Sem filtro: todos os anúncios da conta serão considerados.</div>
     </div>
 
 
@@ -2901,6 +2857,15 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
     </div>
 
+    <div id="sim-paginacao" class="panel rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+        <button id="sim-anterior" onclick="simIrPaginaV21(-1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">← Anterior</button>
+        <div class="text-center">
+            <div id="sim-paginacao-info" class="text-xs text-slate-400">—</div>
+            <div id="sim-pagina-atual" class="text-[10px] text-slate-600 mt-1">—</div>
+        </div>
+        <button id="sim-proxima" onclick="simIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
+    </div>
+
 </section>
 
 
@@ -2950,6 +2915,25 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
             foi mantida.
         </p>
 
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-col xl:flex-row xl:items-end gap-3">
+            <div class="w-full xl:w-44">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Filtrar por</label>
+                <select id="atual-filtro-campo" class="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-xs text-white">
+                    <option value="sku">SKU</option>
+                    <option value="mlb">MLB</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Filtro</label>
+                <input id="atual-filtro-valor" class="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Digite o SKU ou MLB exato">
+            </div>
+            <button onclick="aplicarFiltroAtualizacaoV21()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">Filtrar</button>
+            <button onclick="limparFiltroAtualizacaoV21()" class="bg-slate-800 hover:bg-slate-700 text-white px-5 py-3 rounded-xl text-xs font-bold">Limpar</button>
+        </div>
+        <div id="atual-filtro-info" class="text-[10px] text-slate-500 mt-3">Sem filtro: todos os anúncios da conta serão listados por páginas.</div>
     </div>
 
 
@@ -3179,6 +3163,61 @@ body.painel-interno-ativo button[title="Voltar para a página inicial"]{display:
 
     </div>
 
+    <div id="atual-paginacao" class="panel rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+        <button id="atual-anterior" onclick="atualIrPaginaV21(-1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">← Anterior</button>
+        <div class="text-center">
+            <div id="atual-paginacao-info" class="text-xs text-slate-400">—</div>
+            <div id="atual-pagina-atual" class="text-[10px] text-slate-600 mt-1">—</div>
+        </div>
+        <button id="atual-proxima" onclick="atualIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     PEDIDOS
+===================================================== -->
+<section id="secao-pedidos" class="hidden space-y-5">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.18em] text-blue-400 font-bold">Vendas</div>
+            <h1 class="text-xl md:text-2xl font-black text-white mt-2">Pedidos</h1>
+            <p class="text-xs text-slate-500 mt-1">Acompanhe vendas pendentes, em andamento, entregues e canceladas disponíveis na API do Mercado Livre.</p>
+        </div>
+        <button onclick="carregarPedidosV21(1)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar pedidos</button>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Página atual</div><div id="pedidos-total-pagina" class="text-2xl font-black text-white mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Pendentes</div><div id="pedidos-pendentes" class="text-2xl font-black text-yellow-400 mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Em andamento</div><div id="pedidos-andamento" class="text-2xl font-black text-blue-400 mt-2">—</div></div>
+        <div class="panel rounded-2xl p-5"><div class="text-[10px] uppercase text-slate-500 font-bold">Entregues</div><div id="pedidos-entregues" class="text-2xl font-black text-emerald-400 mt-2">—</div></div>
+    </div>
+
+    <div class="panel rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left futuristic-table">
+                <thead><tr>
+                    <th class="p-4">Pedido</th>
+                    <th class="p-4">Data</th>
+                    <th class="p-4">Produto</th>
+                    <th class="p-4">Comprador</th>
+                    <th class="p-4">Valor</th>
+                    <th class="p-4">Pagamento</th>
+                    <th class="p-4">Entrega</th>
+                </tr></thead>
+                <tbody id="pedidos-tabela" class="divide-y divide-slate-800 text-xs">
+                    <tr><td colspan="7" class="p-10 text-center text-slate-600">Abra a página para carregar os pedidos.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="p-4 border-t border-slate-800 flex items-center justify-between gap-3">
+            <button id="pedidos-anterior" onclick="pedidosIrPaginaV21(-1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">← Anterior</button>
+            <div id="pedidos-paginacao" class="text-xs text-slate-500 text-center">—</div>
+            <button id="pedidos-proxima" onclick="pedidosIrPaginaV21(1)" class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-bold disabled:opacity-40">Próxima →</button>
+        </div>
+    </div>
 </section>
 
 
@@ -3711,10 +3750,10 @@ function mudarAba(aba) {
         'alertas',
         'central',
         'atendimento',
+        'pedidos',
         'reclamacoes',
         'integracoes',
         'oportunidades',
-        'conteudo',
         'qualidade',
         'catalogo',
         'perfil',
@@ -5727,11 +5766,24 @@ function preencherDashboard(
     if (homePedidos) homePedidos.innerText = Number(vendas.pedidos_pagos || 0).toLocaleString('pt-BR');
     if (homeUnidades) homeUnidades.innerText = Number(vendas.unidades || 0).toLocaleString('pt-BR');
 
+    const homeVisitas = document.getElementById('home-dashboard-visitas');
+    const homeVisitasPeriodo = document.getElementById('home-dashboard-visitas-periodo');
+    if (homeVisitas) {
+        homeVisitas.innerText = data.visitas_dia?.total !== null && data.visitas_dia?.total !== undefined
+            ? Number(data.visitas_dia.total || 0).toLocaleString('pt-BR')
+            : '—';
+    }
+    if (homeVisitasPeriodo) {
+        homeVisitasPeriodo.innerText = data.visitas_dia?.periodo || 'Visitas aos anúncios da conta';
+    }
+
     try {
         localStorage.setItem('mlHubPro_resumoHome_v1', JSON.stringify({
             vendas: homeVendas ? homeVendas.innerText : '',
             pedidos: homePedidos ? homePedidos.innerText : '',
-            unidades: homeUnidades ? homeUnidades.innerText : ''
+            unidades: homeUnidades ? homeUnidades.innerText : '',
+            visitas: homeVisitas ? homeVisitas.innerText : '',
+            visitas_periodo: homeVisitasPeriodo ? homeVisitasPeriodo.innerText : ''
         }));
     } catch (erro) {
         console.warn('Não foi possível salvar o resumo da Home:', erro);
@@ -6707,7 +6759,10 @@ document.addEventListener(
             'dashboard',
             'simulacao',
             'atualizacao',
-            'perguntas'
+            'pedidos',
+            'atendimento',
+            'perguntas',
+            'reclamacoes'
         ];
 
         mudarAba(
@@ -6799,6 +6854,15 @@ document.addEventListener('DOMContentLoaded', () => {
     border:1px solid rgba(255,255,255,.12);
 }
 #btn-configuracoes-flutuante:hover{transform:translateY(-2px)}
+#btn-ia-flutuante{
+    position:fixed; right:22px; bottom:82px; z-index:70;
+    width:48px; height:48px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:#0f172a; color:#facc15; font-size:20px; font-weight:900;
+    box-shadow:0 14px 35px rgba(0,0,0,.35);
+    border:1px solid rgba(250,204,21,.35);
+}
+#btn-ia-flutuante:hover{transform:translateY(-2px);border-color:#facc15}
 .theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
 body.tema-escuro{background:#030712!important}
 body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
@@ -6822,6 +6886,11 @@ body.tema-claro .border-slate-800,
 body.tema-claro .border-slate-700{border-color:#cbd5e1!important}
 body.tema-claro input{background:#fff!important;color:#0f172a!important}
 </style>
+
+<button id="btn-ia-flutuante"
+        onclick="mudarAba('atendimento')"
+        title="Atendimento com IA"
+        aria-label="Atendimento com IA">💬</button>
 
 <button id="btn-configuracoes-flutuante"
         onclick="mudarAba('configuracoes')"
@@ -6930,6 +6999,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('home-dashboard-pedidos').innerText = resumo.pedidos;
             if (resumo.unidades && document.getElementById('home-dashboard-unidades'))
                 document.getElementById('home-dashboard-unidades').innerText = resumo.unidades;
+            if (resumo.visitas && document.getElementById('home-dashboard-visitas'))
+                document.getElementById('home-dashboard-visitas').innerText = resumo.visitas;
+            if (resumo.visitas_periodo && document.getElementById('home-dashboard-visitas-periodo'))
+                document.getElementById('home-dashboard-visitas-periodo').innerText = resumo.visitas_periodo;
 
             const periodo = localStorage.getItem('mlHubPro_periodoHome_v1');
             if (periodo && document.getElementById('home-dashboard-periodo'))
@@ -7659,6 +7732,332 @@ mudarAba=function(aba){
   _mudarAbaV6(aba);
   if(aba==='gestao')setTimeout(()=>carregarGestaoEscala(gestaoPagina,{silencioso:true}),0);
 };
+</script>
+
+<script id="mlhub-v21-mega-implementacao">
+/* =========================================================
+   V21 — SIMULAÇÃO/ATUALIZAÇÃO SERVER-SIDE + PEDIDOS
+========================================================= */
+
+let simPaginaV21=1, simPaginasV21=1, simTotalV21=0, simItensV21=[], simCarregandoV21=false;
+let atualPaginaV21=1, atualPaginasV21=1, atualTotalV21=0, atualItensV21=[], atualCarregandoV21=false;
+let pedidosPaginaV21=1, pedidosPaginasV21=1, pedidosCarregandoV21=false;
+let filtroEscalaV21={campo:'sku',valor:''};
+const simParametrosPorIdV21={};
+const simResultadosPorIdV21={};
+const simMassaV21={custo:null,taxa:null,imposto:null,lucro:null};
+
+function sincronizarFiltroCamposV21(){
+    const campo=filtroEscalaV21.campo||'sku';
+    const valor=filtroEscalaV21.valor||'';
+    ['sim','atual'].forEach(prefix=>{
+        const c=document.getElementById(`${prefix}-filtro-campo`);
+        const v=document.getElementById(`${prefix}-filtro-valor`);
+        if(c)c.value=campo;
+        if(v)v.value=valor;
+    });
+    const texto=valor
+      ? `Filtro ativo: ${campo.toUpperCase()} = ${valor}`
+      : 'Sem filtro: todos os anúncios da conta serão considerados.';
+    const si=document.getElementById('sim-filtro-info');
+    const ai=document.getElementById('atual-filtro-info');
+    if(si)si.textContent=texto;
+    if(ai)ai.textContent=valor?texto:'Sem filtro: todos os anúncios da conta serão listados por páginas.';
+}
+
+function lerFiltroV21(prefix){
+    const campo=document.getElementById(`${prefix}-filtro-campo`)?.value||'sku';
+    const valor=document.getElementById(`${prefix}-filtro-valor`)?.value?.trim()||'';
+    filtroEscalaV21={campo,valor};
+    sincronizarFiltroCamposV21();
+}
+
+function queryEscalaV21(page){
+    const p=new URLSearchParams({page:String(Math.max(1,page)),limit:'100'});
+    if(filtroEscalaV21.valor){
+        p.set('q',filtroEscalaV21.valor);
+        p.set('field',filtroEscalaV21.campo);
+    }
+    return p;
+}
+
+function aplicarFiltroSimulacaoV21(){lerFiltroV21('sim');carregarSimulacaoEscalaV21(1)}
+function limparFiltroSimulacaoV21(){filtroEscalaV21={campo:'sku',valor:''};sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(1)}
+function aplicarFiltroAtualizacaoV21(){lerFiltroV21('atual');carregarAtualizacaoEscalaV21(1)}
+function limparFiltroAtualizacaoV21(){filtroEscalaV21={campo:'sku',valor:''};sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(1)}
+
+function parametrosSimV21(item){
+    const salvo=simParametrosPorIdV21[item.id]||{};
+    return {
+        taxa:Number(salvo.taxa ?? simMassaV21.taxa ?? (item.listing_type_id==='gold_pro'?17:12)),
+        custo:Number(salvo.custo ?? simMassaV21.custo ?? 10),
+        imposto:Number(salvo.imposto ?? simMassaV21.imposto ?? 0),
+        lucro:Number(salvo.lucro ?? simMassaV21.lucro ?? 12)
+    };
+}
+
+function calcularSimulacaoV21(item,p){
+    const PRECO_REFERENCIA=78.90,FRETE_REFERENCIA=10.00;
+    const precoAtual=Number(item.price||0),freteAtual=Number(item.shipping_cost||0);
+    const taxa=Number(p.taxa||0),custo=Number(p.custo||0),imposto=Number(p.imposto||0),lucro=Number(p.lucro||0);
+    const taxaRef=PRECO_REFERENCIA*(taxa/100);
+    const impostoRef=PRECO_REFERENCIA*(imposto/100);
+    const lucroRef=PRECO_REFERENCIA-custo-taxaRef-impostoRef-FRETE_REFERENCIA;
+    const margemRef=PRECO_REFERENCIA>0?(lucroRef/PRECO_REFERENCIA)*100:0;
+    const podeReferencia=precoAtual>PRECO_REFERENCIA && margemRef+0.0001>=lucro;
+    const freteAplicado=podeReferencia?FRETE_REFERENCIA:freteAtual;
+    const divisor=1-((taxa+imposto+lucro)/100);
+    let novoPreco=divisor>0?(custo+freteAplicado)/divisor:custo*1.5;
+    if(precoAtual>PRECO_REFERENCIA&&!podeReferencia)novoPreco=Math.max(PRECO_REFERENCIA+0.01,novoPreco);
+    const valorTaxa=novoPreco*(taxa/100),valorImposto=novoPreco*(imposto/100);
+    const lucroLiquido=novoPreco-custo-valorTaxa-valorImposto-freteAplicado;
+    const margem=novoPreco>0?(lucroLiquido/novoPreco)*100:0;
+    return {
+        preco:novoPreco,
+        freteSimulado:freteAplicado,
+        usouReferencia7890:podeReferencia,
+        lucroLiquido,
+        margem,
+        foraDaMargem:Math.abs(novoPreco-precoAtual)>0.05
+    };
+}
+
+function safeIdV21(v){return String(v||'').replace(/[^a-zA-Z0-9_-]/g,'_')}
+
+function montarTabelaSimulacaoV21(itens){
+    const tbody=document.getElementById('tabela-simulacao');if(!tbody)return;
+    tbody.innerHTML='';
+    if(!itens.length){
+        tbody.innerHTML='<tr><td colspan="14" class="p-10 text-center text-slate-500">Nenhum anúncio encontrado para este filtro.</td></tr>';
+        return;
+    }
+    itens.forEach(item=>{
+        const p=parametrosSimV21(item),sid=safeIdV21(item.id);
+        const calc=calcularSimulacaoV21(item,p);simResultadosPorIdV21[item.id]=calc;
+        const tipo=item.listing_type_id==='gold_pro'?'Premium':'Clássico';
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td class="p-3 font-mono">${escapeHtml(item.id)}</td>
+          <td class="p-3 font-mono">${escapeHtml(item.sku)}</td>
+          <td class="p-3 max-w-[220px] truncate">${escapeHtml(item.title)}</td>
+          <td class="p-3 font-bold">${moeda(item.price)}</td>
+          <td class="p-3">${moeda(item.shipping_cost)}</td>
+          <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
+          <td class="p-3">${tipo}</td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-20"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+          <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
+          <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
+          <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+function recalcularV21(id){
+    const item=simItensV21.find(x=>String(x.id)===String(id))||atualItensV21.find(x=>String(x.id)===String(id));
+    if(!item)return;
+    const sid=safeIdV21(id);
+    const p={
+        taxa:parseFloat(document.getElementById(`taxa_${sid}`)?.value ?? parametrosSimV21(item).taxa)||0,
+        custo:parseFloat(document.getElementById(`custo_${sid}`)?.value ?? parametrosSimV21(item).custo)||0,
+        imposto:parseFloat(document.getElementById(`imposto_${sid}`)?.value ?? parametrosSimV21(item).imposto)||0,
+        lucro:parseFloat(document.getElementById(`lucro_${sid}`)?.value ?? parametrosSimV21(item).lucro)||0
+    };
+    simParametrosPorIdV21[id]=p;
+    const calc=calcularSimulacaoV21(item,p);simResultadosPorIdV21[id]=calc;
+    const np=document.getElementById(`novo_preco_${sid}`),ls=document.getElementById(`lucro_sim_${sid}`),mr=document.getElementById(`margem_real_${sid}`);
+    if(np)np.innerText=moeda(calc.preco);if(ls)ls.innerText=moeda(calc.lucroLiquido);if(mr)mr.innerText=calc.margem.toFixed(2)+'%';
+}
+
+async function carregarSimulacaoEscalaV21(page=1){
+    if(simCarregandoV21)return;
+    const token=obterToken();if(!token){solicitarToken();return}
+    simCarregandoV21=true;mostrarLoading('Carregando anúncios para simulação...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
+        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
+        simPaginaV21=Number(d.pagina||1);simPaginasV21=Number(d.paginas||1);simTotalV21=Number(d.total||0);
+        simItensV21=(d.itens||[]).map(normalizarItemEscala);
+        montarTabelaSimulacaoV21(simItensV21);
+        atualizarPaginacaoSimV21();
+    }catch(e){alert(e.message)}finally{simCarregandoV21=false;esconderLoading()}
+}
+function atualizarPaginacaoSimV21(){
+    const info=document.getElementById('sim-paginacao-info'),pag=document.getElementById('sim-pagina-atual');
+    if(info)info.textContent=`${simTotalV21.toLocaleString('pt-BR')} anúncio(s) considerados · 100 por página`;
+    if(pag)pag.textContent=`Página ${simPaginaV21.toLocaleString('pt-BR')} de ${simPaginasV21.toLocaleString('pt-BR')}`;
+    const a=document.getElementById('sim-anterior'),p=document.getElementById('sim-proxima');
+    if(a)a.disabled=simPaginaV21<=1;if(p)p.disabled=simPaginaV21>=simPaginasV21;
+}
+function simIrPaginaV21(delta){const p=simPaginaV21+delta;if(p<1||p>simPaginasV21)return;carregarSimulacaoEscalaV21(p)}
+
+aplicarEmMassa=function(){
+    const vals={
+      custo:document.getElementById('massa-custo')?.value,
+      taxa:document.getElementById('massa-taxa')?.value,
+      imposto:document.getElementById('massa-imposto')?.value,
+      lucro:document.getElementById('massa-lucro')?.value
+    };
+    Object.entries(vals).forEach(([k,v])=>{if(v!==''&&v!==undefined)simMassaV21[k]=Number(v)});
+    simItensV21.forEach(item=>{delete simParametrosPorIdV21[item.id]});
+    montarTabelaSimulacaoV21(simItensV21);
+};
+
+function montarTabelaAtualizacaoV21(itens){
+    const tbody=document.getElementById('tabela-atualizacao');if(!tbody)return;
+    tbody.innerHTML='';let contador=0;
+    itens.forEach(item=>{
+        const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
+        simResultadosPorIdV21[item.id]=calc;
+        if(!calc.foraDaMargem)return;
+        contador++;
+        const sid=safeIdV21(item.id),tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" checked class="check-item accent-yellow-400 w-4 h-4"></td>
+          <td class="p-4"><div class="flex items-center gap-3 min-w-[280px]">
+            <img src="${escapeHtml(item.thumbnail)}" class="w-11 h-11 object-cover rounded-xl border border-slate-700">
+            <div><span class="font-semibold text-white block">${escapeHtml(item.title)}</span>
+            <span class="text-[10px] text-slate-500">${escapeHtml(item.id)} • SKU: ${escapeHtml(item.sku)}</span></div>
+          </div></td>
+          <td class="p-4 font-bold text-white">${moeda(item.price)}</td>
+          <td class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
+          <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span></td>
+          <td id="status_api_${sid}" class="p-4"><span class="text-slate-500 text-[10px]">Pendente</span></td>`;
+        tbody.appendChild(tr);
+    });
+    if(!contador)tbody.innerHTML='<tr><td colspan="6" class="p-10 text-center text-slate-500">Nenhum anúncio fora da margem nesta página.</td></tr>';
+    const c=document.getElementById('contador-atualizacao');if(c)c.innerText=contador.toLocaleString('pt-BR');
+}
+
+async function carregarAtualizacaoEscalaV21(page=1){
+    if(atualCarregandoV21)return;
+    const token=obterToken();if(!token){solicitarToken();return}
+    atualCarregandoV21=true;mostrarLoading('Carregando anúncios para atualização...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(page)}`,{cache:'no-store',headers:{Authorization:token}});
+        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar anúncios.');
+        atualPaginaV21=Number(d.pagina||1);atualPaginasV21=Number(d.paginas||1);atualTotalV21=Number(d.total||0);
+        atualItensV21=(d.itens||[]).map(normalizarItemEscala);
+        montarTabelaAtualizacaoV21(atualItensV21);
+        atualizarPaginacaoAtualV21();
+    }catch(e){alert(e.message)}finally{atualCarregandoV21=false;esconderLoading()}
+}
+function atualizarPaginacaoAtualV21(){
+    const info=document.getElementById('atual-paginacao-info'),pag=document.getElementById('atual-pagina-atual');
+    if(info)info.textContent=`${atualTotalV21.toLocaleString('pt-BR')} anúncio(s) no filtro · 100 por página`;
+    if(pag)pag.textContent=`Página ${atualPaginaV21.toLocaleString('pt-BR')} de ${atualPaginasV21.toLocaleString('pt-BR')}`;
+    const a=document.getElementById('atual-anterior'),p=document.getElementById('atual-proxima');
+    if(a)a.disabled=atualPaginaV21<=1;if(p)p.disabled=atualPaginaV21>=atualPaginasV21;
+}
+function atualIrPaginaV21(delta){const p=atualPaginaV21+delta;if(p<1||p>atualPaginasV21)return;carregarAtualizacaoEscalaV21(p)}
+
+atualizarPrecosMassaApi=async function(){
+    const token=obterToken();if(!token){solicitarToken();return}
+    const checks=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked')];
+    if(!checks.length)return alert('Nenhum anúncio selecionado nesta página.');
+    if(!confirm(`Deseja atualizar ${checks.length} anúncio(s) selecionado(s) desta página?`))return;
+
+    const mapa=new Map(atualItensV21.map(x=>[String(x.id),x]));
+    const itens=checks.map(c=>{
+        const item=mapa.get(String(c.value));
+        const calc=item?calcularSimulacaoV21(item,parametrosSimV21(item)):null;
+        return item&&calc?{id:item.id,price:parseFloat(calc.preco.toFixed(2))}:null;
+    }).filter(Boolean);
+
+    mostrarLoading(`Atualizando ${itens.length} anúncio(s)...`);
+    let ok=0,erros=0;
+    try{
+        for(let i=0;i<itens.length;i+=20){
+            const lote=itens.slice(i,i+20);
+            const r=await fetch(`${RENDER_URL}/api/atualizar-precos`,{
+              method:'POST',headers:{'Content-Type':'application/json',Authorization:token},body:JSON.stringify({itens:lote})
+            });
+            const d=await r.json().catch(()=>({}));
+            (d.resultados||[]).forEach(resultado=>{
+                const sid=safeIdV21(resultado.id),el=document.getElementById(`status_api_${sid}`);
+                if(resultado.sucesso){ok++;if(el)el.innerHTML='<span class="text-emerald-400 font-bold text-[10px]">✓ Atualizado</span>'}
+                else{erros++;if(el)el.innerHTML=`<span class="text-red-400 font-bold text-[10px]">✗ ${escapeHtml(resultado.erro||'Falha')}</span>`}
+            });
+            document.getElementById('loading-text').innerText=`Atualizando preços... ${Math.min(i+20,itens.length)}/${itens.length}`;
+            if(!r.ok&&!d.resultados)throw new Error(d.erro||`HTTP ${r.status}`);
+        }
+        alert(`Processo finalizado: ${ok} atualizado(s)${erros?` · ${erros} erro(s)`:''}.`);
+        await carregarAtualizacaoEscalaV21(atualPaginaV21);
+    }catch(e){alert('Erro ao atualizar preços: '+e.message)}finally{esconderLoading()}
+};
+
+/* PEDIDOS */
+function statusPedidoLabelV21(p){
+    const map={
+      pendente:['Pendente','text-yellow-400','bg-yellow-400/10'],
+      em_andamento:['Em andamento','text-blue-400','bg-blue-400/10'],
+      entregue:['Entregue','text-emerald-400','bg-emerald-400/10'],
+      cancelado:['Cancelado','text-red-400','bg-red-400/10']
+    };
+    return map[p]||['Em andamento','text-blue-400','bg-blue-400/10'];
+}
+function formatarDataHoraV21(v){
+    if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString('pt-BR');
+}
+async function carregarPedidosV21(page=1){
+    if(pedidosCarregandoV21)return;
+    const token=obterToken();if(!token){solicitarToken();return}
+    pedidosCarregandoV21=true;mostrarLoading('Buscando pedidos e status de entrega...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v21/pedidos?page=${Math.max(1,page)}&limit=30&_=${Date.now()}`,{
+            cache:'no-store',headers:{Authorization:token}
+        });
+        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Erro ao carregar pedidos.');
+        pedidosPaginaV21=Number(d.pagina||1);pedidosPaginasV21=Number(d.paginas||1);
+        const pedidos=Array.isArray(d.pedidos)?d.pedidos:[];
+        const tbody=document.getElementById('pedidos-tabela');
+        if(tbody){
+            tbody.innerHTML=pedidos.length?pedidos.map(p=>{
+                const [lbl,cor,bg]=statusPedidoLabelV21(p.situacao);
+                const itens=(p.items||[]).map(i=>`${Number(i.quantity||0)}x ${escapeHtml(i.title||i.id)}`).join('<br>');
+                const buyer=p.buyer?.nickname||p.buyer?.id||'—';
+                return `<tr>
+                  <td class="p-4 font-mono text-white">${escapeHtml(p.id)}</td>
+                  <td class="p-4 text-slate-300">${formatarDataHoraV21(p.date_created)}</td>
+                  <td class="p-4 text-slate-200 min-w-[280px]">${itens||'—'}</td>
+                  <td class="p-4 text-slate-300">${escapeHtml(buyer)}</td>
+                  <td class="p-4 font-black text-emerald-400">${moeda(p.paid_amount||p.total_amount)}</td>
+                  <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-bold">${escapeHtml(p.status||'—')}</span></td>
+                  <td class="p-4"><span class="px-2.5 py-1 rounded-lg ${bg} ${cor} text-[10px] font-black">${lbl}</span><div class="text-[9px] text-slate-600 mt-1">${escapeHtml(p.shipping?.status||'')}</div></td>
+                </tr>`;
+            }).join(''):'<tr><td colspan="7" class="p-10 text-center text-slate-500">Nenhum pedido encontrado.</td></tr>';
+        }
+        const stats={
+          pendente:pedidos.filter(x=>x.situacao==='pendente').length,
+          em_andamento:pedidos.filter(x=>x.situacao==='em_andamento').length,
+          entregue:pedidos.filter(x=>x.situacao==='entregue').length
+        };
+        const tp=document.getElementById('pedidos-total-pagina'),pe=document.getElementById('pedidos-pendentes'),pa=document.getElementById('pedidos-andamento'),pd=document.getElementById('pedidos-entregues');
+        if(tp)tp.innerText=pedidos.length.toLocaleString('pt-BR');if(pe)pe.innerText=stats.pendente.toLocaleString('pt-BR');if(pa)pa.innerText=stats.em_andamento.toLocaleString('pt-BR');if(pd)pd.innerText=stats.entregue.toLocaleString('pt-BR');
+        const pag=document.getElementById('pedidos-paginacao');if(pag)pag.textContent=`${Number(d.total||0).toLocaleString('pt-BR')} pedido(s) · Página ${pedidosPaginaV21}/${pedidosPaginasV21}`;
+        const ant=document.getElementById('pedidos-anterior'),prox=document.getElementById('pedidos-proxima');
+        if(ant)ant.disabled=pedidosPaginaV21<=1;if(prox)prox.disabled=pedidosPaginaV21>=pedidosPaginasV21;
+    }catch(e){alert(e.message)}finally{pedidosCarregandoV21=false;esconderLoading()}
+}
+function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedidosPaginasV21)return;carregarPedidosV21(p)}
+
+/* Navegação V21: Gestão continua paginada; Simulação/Atualização/Pedidos ganham seus loaders próprios. */
+const _mudarAbaV21=mudarAba;
+mudarAba=function(aba){
+    _mudarAbaV21(aba);
+    if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21(simPaginaV21)},0);
+    if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21(atualPaginaV21)},0);
+    if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
+};
+
+document.addEventListener('DOMContentLoaded',()=>{
+    sincronizarFiltroCamposV21();
+    // Enter aplica o filtro rapidamente nas duas páginas.
+    document.getElementById('sim-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroSimulacaoV21()});
+    document.getElementById('atual-filtro-valor')?.addEventListener('keydown',e=>{if(e.key==='Enter')aplicarFiltroAtualizacaoV21()});
+});
 </script>
 
 </body>
