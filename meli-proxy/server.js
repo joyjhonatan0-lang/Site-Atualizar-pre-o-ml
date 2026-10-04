@@ -2719,8 +2719,17 @@ app.get('/api/v9/claims/:id/attachments/:file',async(req,res)=>{
 const GEMINI_INTERACTIONS_URL='https://generativelanguage.googleapis.com/v1beta/interactions';
 
 function modelosGeminiDisponiveis(){
-    const modelos=[process.env.GEMINI_MODEL,'gemini-3.8-flash','gemini-3.5-flash-lite']
-      .map(x=>String(x||'').trim()).filter(Boolean);
+    // Priorizamos modelos estáveis e menos sujeitos a pico.
+    // GEMINI_MODEL continua opcional para você escolher manualmente no Render.
+    const configurado=String(process.env.GEMINI_MODEL||'').trim();
+    const modelos=[
+      configurado,
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash'
+    ].filter(Boolean);
     return [...new Set(modelos)];
 }
 
@@ -2741,8 +2750,18 @@ function erroGeminiAmigavel(status,payload){
     const msg=String(payload?.error?.message||payload?.message||'Erro ao consultar o Gemini.');
     if(status===400 && /api.?key|key/i.test(msg))return 'A chave GEMINI_API_KEY parece inválida. Confira a chave configurada no Render.';
     if(status===401 || status===403)return 'A chave do Gemini não tem permissão para esta solicitação. Confira GEMINI_API_KEY e o projeto no Google AI Studio.';
-    if(status===429)return 'O limite gratuito do Gemini foi atingido no momento. Aguarde a liberação da cota e tente novamente.';
+    if(status===429)return 'O nível gratuito do Gemini está temporariamente no limite. O sistema tentou outros modelos automaticamente.';
+    if(status===503)return 'O Gemini está com alta demanda no momento. O sistema tentou outros modelos automaticamente.';
+    if(status>=500)return 'O Gemini apresentou uma instabilidade temporária. O sistema tentou outros modelos automaticamente.';
     return msg;
+}
+
+function esperarGemini(ms){
+    return new Promise(resolve=>setTimeout(resolve,ms));
+}
+
+function erroGeminiTransitorio(status){
+    return status===408 || status===429 || status===500 || status===502 || status===503 || status===504;
 }
 
 async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=null}){
@@ -2752,59 +2771,112 @@ async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=
         e.status=503;throw e;
     }
 
+    const modelos=modelosGeminiDisponiveis();
+    const inicio=Date.now();
+    const prazoTotalMs=80000;
     let ultimoErro=null;
-    for(const model of modelosGeminiDisponiveis()){
-        const body={model,input,store:false};
-        if(systemInstruction)body.system_instruction=systemInstruction;
-        if(responseSchema){
-            body.response_format={
-                type:'text',
-                mime_type:'application/json',
-                schema:responseSchema
-            };
-        }
+    const tentativas=[];
 
-        const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(),90000);
-        try{
-            const r=await fetch(GEMINI_INTERACTIONS_URL,{
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json',
-                    'x-goog-api-key':apiKey
-                },
-                body:JSON.stringify(body),
-                signal:controller.signal
-            });
-            const d=await r.json().catch(()=>({}));
-            if(r.ok){
-                const texto=extrairTextoGemini(d);
-                if(!texto)throw new Error('O Gemini respondeu sem texto utilizável.');
-                return {texto,model,resposta:d};
+    for(const model of modelos){
+        for(let tentativa=1;tentativa<=2;tentativa++){
+            const decorrido=Date.now()-inicio;
+            const restante=prazoTotalMs-decorrido;
+            if(restante<5000)break;
+
+            const body={model,input,store:false};
+            if(systemInstruction)body.system_instruction=systemInstruction;
+            if(responseSchema){
+                body.response_format={
+                    type:'text',
+                    mime_type:'application/json',
+                    schema:responseSchema
+                };
             }
 
-            const mensagem=erroGeminiAmigavel(r.status,d);
-            ultimoErro={status:r.status,mensagem};
-            // Só tenta outro modelo quando o problema parece ser disponibilidade/nome do modelo.
-            if((r.status===400||r.status===404) && /model|modelo|not found|not supported|unsupported|unknown/i.test(mensagem)){
-                continue;
+            const controller=new AbortController();
+            const timeoutMs=Math.min(25000,Math.max(5000,restante-1000));
+            const timer=setTimeout(()=>controller.abort(),timeoutMs);
+
+            try{
+                const r=await fetch(GEMINI_INTERACTIONS_URL,{
+                    method:'POST',
+                    headers:{
+                        'Content-Type':'application/json',
+                        'x-goog-api-key':apiKey,
+                        'Api-Revision':'2026-05-20'
+                    },
+                    body:JSON.stringify(body),
+                    signal:controller.signal
+                });
+                const d=await r.json().catch(()=>({}));
+
+                if(r.ok){
+                    const texto=extrairTextoGemini(d);
+                    if(!texto){
+                        ultimoErro={status:502,mensagem:'O Gemini respondeu sem texto utilizável.'};
+                        tentativas.push({model,tentativa,status:502});
+                        break;
+                    }
+                    return {
+                        texto,
+                        model,
+                        resposta:d,
+                        tentativas
+                    };
+                }
+
+                const mensagem=erroGeminiAmigavel(r.status,d);
+                ultimoErro={status:r.status,mensagem,original:String(d?.error?.message||d?.message||'')};
+                tentativas.push({model,tentativa,status:r.status});
+
+                // Chave/permissão: trocar de modelo não resolve.
+                if(r.status===401 || r.status===403){
+                    const e=new Error(mensagem);e.status=r.status;throw e;
+                }
+
+                // Modelo indisponível/incompatível: pula diretamente para o próximo.
+                if((r.status===400||r.status===404) &&
+                   /model|modelo|not found|not supported|unsupported|unknown|does not exist/i.test(String(d?.error?.message||d?.message||''))){
+                    break;
+                }
+
+                // Alta demanda, limite temporário e 5xx:
+                // repete com espera exponencial e depois tenta outro modelo.
+                if(erroGeminiTransitorio(r.status)){
+                    if(tentativa<2){
+                        let espera=tentativa===1?1500:3500;
+                        const retryAfter=Number(r.headers.get('retry-after')||0);
+                        if(Number.isFinite(retryAfter)&&retryAfter>0)espera=Math.min(8000,retryAfter*1000);
+                        await esperarGemini(espera);
+                        continue;
+                    }
+                    break;
+                }
+
+                const e=new Error(mensagem);e.status=r.status;throw e;
+            }catch(e){
+                if(e?.name==='AbortError'){
+                    ultimoErro={status:504,mensagem:`O modelo ${model} demorou para responder.`};
+                    tentativas.push({model,tentativa,status:504});
+                    // Timeout é tratado como transitório e o próximo modelo pode responder.
+                    break;
+                }
+                throw e;
+            }finally{
+                clearTimeout(timer);
             }
-            const e=new Error(mensagem);e.status=r.status;throw e;
-        }catch(e){
-            if(e?.name==='AbortError'){
-                const ex=new Error('O Gemini demorou mais de 90 segundos para responder. Tente novamente.');
-                ex.status=504;throw ex;
-            }
-            throw e;
-        }finally{
-            clearTimeout(timer);
         }
     }
 
-    const e=new Error(ultimoErro?.mensagem||'Nenhum modelo Gemini disponível para esta chave.');
-    e.status=ultimoErro?.status||503;throw e;
+    console.error('[GEMINI FALLBACK ESGOTADO]',{ultimoErro,tentativas});
+    const e=new Error(
+      ultimoErro?.mensagem ||
+      'A IA está temporariamente indisponível. Tente novamente em alguns instantes.'
+    );
+    e.status=ultimoErro?.status||503;
+    e.tentativas=tentativas;
+    throw e;
 }
-
 async function chamarGeminiTexto(prompt,instructions='',responseSchema=null){
     const r=await chamarGeminiInteracao({
         input:String(prompt||''),
@@ -2918,11 +2990,16 @@ A resposta_sugerida deve ser clara, respeitosa, objetiva e pronta para revisão 
             provedor:'gemini',
             modelo:gr.model,
             imagens_analisadas:evidenciasVisuais.length,
-            anexos_encontrados:anexos.length
+            anexos_encontrados:anexos.length,
+            fallback_utilizado:Array.isArray(gr.tentativas)&&gr.tentativas.length>0,
+            tentativas_anteriores:Array.isArray(gr.tentativas)?gr.tentativas:[]
         });
     }catch(e){
         console.error('[GEMINI CLAIM ANALYSIS]',e);
-        respostaErro(res,e.status||500,'Erro na análise da reclamação: '+e.message);
+        const msg=(e.status===429||e.status===503||e.status===504)
+          ? 'A IA gratuita está temporariamente ocupada. O sistema tentou modelos alternativos automaticamente. Tente novamente em alguns instantes.'
+          : 'Erro na análise da reclamação: '+e.message;
+        respostaErro(res,e.status||500,msg);
     }
 });
 
@@ -2960,7 +3037,7 @@ app.get('/api/v3/integracoes/status',(req,res)=>{
     const configurado=Boolean(process.env.GEMINI_API_KEY);
     res.json({
         sucesso:true,
-        gemini:{configurado,modelo:process.env.GEMINI_MODEL||'gemini-3.8-flash'},
+        gemini:{configurado,modelo:process.env.GEMINI_MODEL||'gemini-3.7-flash'},
         // Mantido só para compatibilidade com versões antigas do front-end.
         openai:{configurado,substituido_por:'gemini'},
         bling:{configurado:Boolean(process.env.BLING_CLIENT_ID&&process.env.BLING_CLIENT_SECRET),conectado:Boolean(b.access_token)},
@@ -2972,7 +3049,7 @@ app.get('/api/v17/gemini/status',(req,res)=>{
     res.json({
         sucesso:true,
         configurado:Boolean(process.env.GEMINI_API_KEY),
-        modelo:process.env.GEMINI_MODEL||'gemini-3.8-flash',
+        modelo:process.env.GEMINI_MODEL||'gemini-3.7-flash',
         provedor:'Google Gemini'
     });
 });
