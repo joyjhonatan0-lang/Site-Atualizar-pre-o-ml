@@ -2533,6 +2533,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <button onclick="gerarConteudoCriacaoV37()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">✦ Gerar títulos, descrição e características com IA</button>
                 <button onclick="gerarPackImagensV37()" class="bg-purple-500 hover:bg-purple-400 text-white font-black text-xs px-5 py-3 rounded-xl">🖼 Gerar / continuar as 11 imagens do anúncio</button>
                 <button onclick="gerarUrlsFotosV37()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-3 rounded-xl">🔗 Gerar URL das fotos</button>
+                <button onclick="limparImagensGeradasV45()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs px-5 py-3 rounded-xl">🗑 Apagar imagens geradas</button>
             </div>
         </div>
 
@@ -2618,7 +2619,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">4. Fotos do anúncio geradas</div>
-            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As 11 imagens são geradas pela Cloudflare Workers AI em formato quadrado; as demais são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
+            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As 11 imagens são geradas pela Cloudflare Workers AI em 1080 x 1080; as demais são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
             <div class="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <div class="flex items-center justify-between gap-3 text-[10px]">
                     <span id="criar-imagens-status-v40" class="text-slate-400">Aguardando geração das imagens.</span>
@@ -11301,13 +11302,99 @@ function alternarVariacoesV37(){
     renderPlanilhaPreviewV37();
 }
 
+
+function chaveCacheConteudoV45(){
+    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
+    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
+    const quantidade=Math.min(1000,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
+    const categoryIds=(criarEstadoV37.selectedCategories||[]).map(c=>c.category_id).sort();
+    const refs=(criarEstadoV37.referenceImages||[]).slice(0,4).map(x=>`${String(x||'').length}:${String(x||'').slice(0,60)}`);
+    return 'mlhubpro_v45_conteudo_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,quantidade,categoryIds,refs})))).slice(0,400);
+}
+function salvarCacheConteudoV45(payload){
+    try{localStorage.setItem(chaveCacheConteudoV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
+}
+function lerCacheConteudoV45(){
+    try{
+        const raw=localStorage.getItem(chaveCacheConteudoV45());
+        if(!raw)return null;
+        const obj=JSON.parse(raw);
+        if(Date.now()-Number(obj?.created_at||0)>1000*60*60*12)return null;
+        return obj?.data||null;
+    }catch(e){return null;}
+}
+function chaveCacheKeywordsV45(){
+    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
+    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
+    const categoryIds=(criarEstadoV37.selectedCategories||[]).map(c=>c.category_id).sort();
+    return 'mlhubpro_v45_keywords_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,categoryIds})))).slice(0,300);
+}
+function salvarCacheKeywordsV45(payload){
+    try{localStorage.setItem(chaveCacheKeywordsV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
+}
+function lerCacheKeywordsV45(){
+    try{
+        const raw=localStorage.getItem(chaveCacheKeywordsV45());
+        if(!raw)return null;
+        const obj=JSON.parse(raw);
+        if(Date.now()-Number(obj?.created_at||0)>1000*60*60*12)return null;
+        return obj?.data||null;
+    }catch(e){return null;}
+}
+function aplicarConteudoGeradoV45(d){
+    if(d.produto_detectado && !String(document.getElementById('criar-produto-v37')?.value||'').trim())document.getElementById('criar-produto-v37').value=d.produto_detectado;
+    document.getElementById('criar-titulos-v37').value=(d.titulos||[]).join('\n');
+    document.getElementById('criar-descricao-v37').value=d.descricao||'';
+    document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
+    const categorias=Array.isArray(d.categorias)?d.categorias:[];
+    categorias.forEach(c=>{
+        const local=criarEstadoV37.selectedCategories.find(x=>String(x.category_id)===String(c.category_id));
+        if(local){
+            if(c.category_path)local.category_path=String(c.category_path);
+            if(c.category_leaf_name)local.category_leaf_name=String(c.category_leaf_name);
+        }
+        aplicarSugestoesCategoriaV37(c.category_id,c.suggested_attributes||[]);
+    });
+    renderCategoriasSelecionadasV37();
+    if(!document.getElementById('criar-detalhes-v37').value && d.resumo){
+        document.getElementById('criar-detalhes-v37').value=d.resumo;
+    }
+    if(!document.getElementById('criar-imagens-urls-v37').dataset.prompt && d.image_prompt){
+        document.getElementById('criar-imagens-urls-v37').dataset.prompt=d.image_prompt;
+    }
+    renderPlanilhaPreviewV37();
+}
+function removerImagemGeradaV45(indice){
+    const idx=Number(indice);
+    criarEstadoV37.pictures=(criarEstadoV37.pictures||[]).filter((p,i)=>Number(p.index||i)!==idx);
+    renderImagensGeradasV37();
+    gerarUrlsFotosV37();
+    renderPlanilhaPreviewV37();
+    atualizarProgressoImagensV40((criarEstadoV37.pictures||[]).length,'Imagem removida. Clique em “Gerar / continuar” para refazer a que faltou.','aviso');
+}
+function limparImagensGeradasV45(){
+    if(!confirm('Deseja apagar as imagens geradas do painel para refazer novamente?'))return;
+    criarEstadoV37.pictures=[];
+    renderImagensGeradasV37();
+    gerarUrlsFotosV37();
+    renderPlanilhaPreviewV37();
+    atualizarProgressoImagensV40(0,'Imagens apagadas do painel. Gere novamente quando quiser.','aviso');
+}
+
 async function gerarConteudoCriacaoV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    const quantidade=Math.min(500,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
+    const quantidade=Math.min(1000,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
     if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto.');
+
+    const cached=lerCacheConteudoV45();
+    if(cached){
+        aplicarConteudoGeradoV45(cached);
+        return;
+    }
+
     mostrarLoading('Analisando a foto, gerando títulos SEO, descrição robusta e preenchendo os atributos...');
     try{
         const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
@@ -11323,31 +11410,8 @@ async function gerarConteudoCriacaoV37(){
         });
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-
-        if(d.produto_detectado && !produto)document.getElementById('criar-produto-v37').value=d.produto_detectado;
-        document.getElementById('criar-titulos-v37').value=(d.titulos||[]).join('\n');
-        document.getElementById('criar-descricao-v37').value=d.descricao||'';
-        document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
-
-        const categorias=Array.isArray(d.categorias)?d.categorias:[];
-        categorias.forEach(c=>{
-            const local=criarEstadoV37.selectedCategories.find(x=>String(x.category_id)===String(c.category_id));
-            if(local){
-                if(c.category_path)local.category_path=String(c.category_path);
-                if(c.category_leaf_name)local.category_leaf_name=String(c.category_leaf_name);
-            }
-            aplicarSugestoesCategoriaV37(c.category_id,c.suggested_attributes||[]);
-        });
-        renderCategoriasSelecionadasV37();
-
-        if(!document.getElementById('criar-detalhes-v37').value && d.resumo){
-            document.getElementById('criar-detalhes-v37').value=d.resumo;
-        }
-
-        if(!document.getElementById('criar-imagens-urls-v37').dataset.prompt && d.image_prompt){
-            document.getElementById('criar-imagens-urls-v37').dataset.prompt=d.image_prompt;
-        }
-        renderPlanilhaPreviewV37();
+        aplicarConteudoGeradoV45(d);
+        salvarCacheConteudoV45(d);
     }catch(e){
         alert('Erro ao gerar conteúdo com IA: '+e.message);
     }finally{esconderLoading();}
@@ -11360,6 +11424,12 @@ async function gerarKeywordsV38(){
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
     if(!produto&&!detalhes)return alert('Informe o produto ou os detalhes para pesquisar palavras-chave.');
     const status=document.getElementById('criar-keywords-status-v38');
+    const cached=lerCacheKeywordsV45();
+    if(cached){
+        document.getElementById('criar-keywords-v37').value=(cached.keywords||[]).join(', ');
+        if(status){status.textContent='✓ Palavras-chave carregadas do cache local.';status.className='text-[10px] text-emerald-400';}
+        return;
+    }
     if(status){status.textContent='Pesquisando termos de compra e SEO...';status.className='text-[10px] text-yellow-400';}
     mostrarLoading('Pesquisando palavras-chave e termos de compra...');
     try{
@@ -11371,8 +11441,9 @@ async function gerarKeywordsV38(){
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
         document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
+        salvarCacheKeywordsV45(d);
         if(status){
-            status.textContent=d.pesquisa_web?`✓ Palavras-chave pesquisadas na Web com IA (${d.fonte||'Google Search'}).`:`✓ Palavras-chave geradas pela IA. A pesquisa Web não estava disponível e o fallback foi usado.`;
+            status.textContent=d.pesquisa_web?`✓ Palavras-chave pesquisadas na Web com IA (${d.fonte||'Google Search'}).`:`✓ Palavras-chave geradas pela IA.`;
             status.className='text-[10px] text-emerald-400';
         }
     }catch(e){
@@ -11380,7 +11451,6 @@ async function gerarKeywordsV38(){
         alert('Erro ao buscar palavras-chave: '+e.message);
     }finally{esconderLoading();}
 }
-
 
 async function redimensionarReferenciaCloudflareV44(src,maxDim=480){
     const img=await carregarImagemCanvasV40(src);
@@ -11620,14 +11690,14 @@ async function gerarPackImagensV37(){
                 total,
                 usouFallback
                     ? '11 imagens prontas. A cota da Cloudflare terminou e o pacote foi completado com suas fotos reais.'
-                    : 'As 11 imagens foram geradas pela Cloudflare e enviadas para o Mercado Livre.',
+                    : 'As 11 imagens 1080x1080 foram geradas pela Cloudflare e enviadas para o Mercado Livre.',
                 'ok'
             );
 
             alert(
                 usouFallback
                     ? 'As 11 imagens estão prontas. Parte delas foi criada pela Cloudflare e, após o limite disponível, o painel completou o restante usando as fotos reais enviadas.'
-                    : 'As 11 imagens foram geradas pela Cloudflare Workers AI e enviadas ao Mercado Livre com sucesso. As URLs já estão disponíveis no painel.'
+                    : 'As 11 imagens 1080x1080 foram geradas pela Cloudflare Workers AI e enviadas ao Mercado Livre com sucesso. As URLs já estão disponíveis no painel.'
             );
         }else{
             atualizarProgressoImagensV40(
@@ -11660,8 +11730,13 @@ function renderImagensGeradasV37(){
         <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
             <div class="aspect-square bg-white flex items-center justify-center overflow-hidden">${p.url?`<img src="${p.url}" class="w-full h-full object-cover">`:'<div class="text-xs text-slate-700">Sem preview</div>'}</div>
             <div class="px-2 py-2 text-[10px] text-white">
-                <div class="font-black">${i+1}. ${textoEscapeV37(p.titulo||p.tipo||'Imagem')}</div>
-                <div class="text-slate-500 truncate">${textoEscapeV37(p.id||'')}</div>
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="font-black">${i+1}. ${textoEscapeV37(p.titulo||p.tipo||'Imagem')}</div>
+                        <div class="text-slate-500 truncate">${textoEscapeV37(p.id||'')}</div>
+                    </div>
+                    <button onclick="removerImagemGeradaV45(${Number(p.index||i)})" class="shrink-0 bg-rose-700 hover:bg-rose-600 text-white rounded-lg px-2 py-1 font-bold">Excluir</button>
+                </div>
             </div>
         </div>
     `).join('') || '<div class="text-[11px] text-slate-500 col-span-full">As imagens geradas aparecerão aqui.</div>';
@@ -11669,7 +11744,7 @@ function renderImagensGeradasV37(){
 
 function gerarUrlsFotosV37(){
     const urls=(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
-    document.getElementById('criar-imagens-urls-v37').value=urls.join('\n');
+    document.getElementById('criar-imagens-urls-v37').value=urls.length?`[${urls.join(',')}]`:'';
 }
 
 function coletarAttributesCategoriaV37(cat){
