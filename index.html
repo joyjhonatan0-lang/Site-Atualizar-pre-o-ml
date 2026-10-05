@@ -2688,7 +2688,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
     <div>
       <div class="text-[10px] uppercase tracking-[.16em] text-orange-400 font-bold">Controle de anúncios</div>
       <h1 class="text-2xl font-black text-white mt-1">Anúncios inativos, pausados, finalizados e em revisão</h1>
-      <p class="text-xs text-slate-500 mt-1">Mostra somente as quatro situações solicitadas. Itens excluídos pelo vendedor não entram nesta lista.</p>
+      <p class="text-xs text-slate-500 mt-1">Mostra somente as quatro situações solicitadas. O motivo real da moderação é consultado no Mercado Livre e exibido em português.</p>
     </div>
     <button onclick="carregarAnunciosRestritosV40(true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar lista</button>
   </div>
@@ -2700,26 +2700,63 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
     <button onclick="filtrarAnunciosRestritosV40('under_review')" class="panel panel-hover rounded-2xl p-5 text-left"><div class="text-[10px] uppercase text-slate-500 font-bold">Em revisão</div><div id="restritos-revisao-v40" class="text-2xl font-black text-fuchsia-400 mt-2">—</div></button>
   </div>
 
+  <div id="restritos-progresso-exclusao-v41" class="panel rounded-2xl p-5 hidden">
+    <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+      <div>
+        <div class="text-[10px] uppercase tracking-[.12em] text-red-400 font-black">Progresso da exclusão</div>
+        <div id="restritos-exclusao-msg-v41" class="text-xs text-slate-300 mt-1">Aguardando...</div>
+      </div>
+      <div class="grid grid-cols-4 gap-2 text-center min-w-[420px]">
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Processados</div><div id="restritos-exclusao-processados-v41" class="text-lg font-black text-white mt-1">0</div></div>
+        <div class="bg-slate-950 border border-emerald-900 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Excluídos</div><div id="restritos-exclusao-sucesso-v41" class="text-lg font-black text-emerald-400 mt-1">0</div></div>
+        <div class="bg-slate-950 border border-red-900 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Falhas</div><div id="restritos-exclusao-falhas-v41" class="text-lg font-black text-red-400 mt-1">0</div></div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><div class="text-[9px] text-slate-500 uppercase">Restantes</div><div id="restritos-exclusao-restantes-v41" class="text-lg font-black text-yellow-300 mt-1">0</div></div>
+      </div>
+    </div>
+    <div class="flex justify-between text-[10px] mt-4"><span id="restritos-exclusao-status-v41" class="text-slate-500">0 de 0</span><span id="restritos-exclusao-pct-v41" class="font-black text-white">0%</span></div>
+    <div class="h-3 bg-slate-800 rounded-full overflow-hidden mt-2"><div id="restritos-exclusao-bar-v41" class="h-full bg-red-500 transition-all" style="width:0%"></div></div>
+    <div id="restritos-exclusao-erros-v41" class="hidden mt-4 border border-red-900/70 bg-red-950/20 rounded-xl p-3 text-[10px] text-red-200 max-h-48 overflow-auto"></div>
+  </div>
+
   <div class="panel rounded-2xl overflow-hidden">
-    <div class="p-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div class="p-4 border-b border-slate-800 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
       <div>
         <div class="font-black text-white text-sm">Lista completa</div>
         <div id="restritos-status-v40" class="text-[10px] text-slate-500 mt-1">Clique em Atualizar lista para carregar.</div>
+        <div id="restritos-motivos-status-v41" class="text-[10px] text-cyan-500 mt-1"></div>
       </div>
-      <div class="flex gap-2 flex-wrap">
-        <button onclick="filtrarAnunciosRestritosV40('')" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Todos</button>
-        <button onclick="filtrarAnunciosRestritosV40('paused')" class="bg-slate-900 border border-slate-700 text-yellow-300 px-3 py-2 rounded-lg text-[10px] font-bold">Pausados</button>
-        <button onclick="filtrarAnunciosRestritosV40('inactive')" class="bg-slate-900 border border-slate-700 text-orange-300 px-3 py-2 rounded-lg text-[10px] font-bold">Inativos</button>
-        <button onclick="filtrarAnunciosRestritosV40('closed')" class="bg-slate-900 border border-slate-700 text-red-300 px-3 py-2 rounded-lg text-[10px] font-bold">Finalizados</button>
-        <button onclick="filtrarAnunciosRestritosV40('under_review')" class="bg-slate-900 border border-slate-700 text-fuchsia-300 px-3 py-2 rounded-lg text-[10px] font-bold">Em revisão</button>
+      <div class="flex flex-wrap items-end gap-2">
+        <div>
+          <label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Filtrar situação</label>
+          <select id="restritos-filtro-select-v41" onchange="filtrarAnunciosRestritosV40(this.value)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold min-w-[180px]">
+            <option value="">Todos</option>
+            <option value="paused">Pausados</option>
+            <option value="inactive">Inativos</option>
+            <option value="closed">Finalizados</option>
+            <option value="under_review">Em revisão</option>
+          </select>
+        </div>
+        <button onclick="selecionarVisiveisRestritosV41(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Selecionar visíveis</button>
+        <button onclick="selecionarVisiveisRestritosV41(false)" class="bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Limpar seleção</button>
+        <button id="restritos-excluir-btn-v41" onclick="excluirSelecionadosRestritosV41()" class="bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-[10px] font-black" disabled>🗑 Excluir selecionados (0)</button>
       </div>
     </div>
     <div class="overflow-auto max-h-[70vh]">
-      <table class="w-full min-w-[1250px] text-[11px]">
+      <table class="w-full min-w-[1500px] text-[11px]">
         <thead class="sticky top-0 z-10 bg-slate-900 text-slate-300 uppercase tracking-[.08em]">
-          <tr><th class="px-3 py-3 text-left">Anúncio</th><th class="px-3 py-3 text-left">MLB / SKU</th><th class="px-3 py-3 text-left">Status</th><th class="px-3 py-3 text-left">Motivo / substatus</th><th class="px-3 py-3 text-right">Preço</th><th class="px-3 py-3 text-right">Estoque</th><th class="px-3 py-3 text-left">Atualizado</th><th class="px-3 py-3 text-center">Ação</th></tr>
+          <tr>
+            <th class="px-3 py-3 text-center w-12"><input id="restritos-check-all-v41" type="checkbox" onchange="selecionarVisiveisRestritosV41(this.checked)" class="w-4 h-4 accent-yellow-400"></th>
+            <th class="px-3 py-3 text-left">Anúncio</th>
+            <th class="px-3 py-3 text-left">MLB / SKU</th>
+            <th class="px-3 py-3 text-left">Status</th>
+            <th class="px-3 py-3 text-left min-w-[420px]">Motivo real / solução</th>
+            <th class="px-3 py-3 text-right">Preço</th>
+            <th class="px-3 py-3 text-right">Estoque</th>
+            <th class="px-3 py-3 text-left">Atualizado</th>
+            <th class="px-3 py-3 text-center">Ação</th>
+          </tr>
         </thead>
-        <tbody id="restritos-tbody-v40" class="divide-y divide-slate-800 bg-slate-950/30"><tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Nenhum dado carregado.</td></tr></tbody>
+        <tbody id="restritos-tbody-v40" class="divide-y divide-slate-800 bg-slate-950/30"><tr><td colspan="9" class="px-4 py-10 text-center text-slate-600">Nenhum dado carregado.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -11395,6 +11432,10 @@ async function acompanharCriacaoV37(jobId){
 let anunciosRestritosV40=[];
 let anunciosRestritosCarregadoV40=false;
 let filtroRestritosV40='';
+const restritosSelecionadosV41=new Set();
+let restritosCarregandoMotivosV41=false;
+let restritosExcluindoV41=false;
+const restritosErrosExclusaoV41=new Map();
 
 function normalizarSubstatusV40(v){
     if(Array.isArray(v))return v.join(', ');
@@ -11406,6 +11447,50 @@ function nomeStatusRestritoV40(status){
 }
 function classeStatusRestritoV40(status){
     return ({paused:'text-yellow-400',inactive:'text-orange-400',closed:'text-red-400',under_review:'text-fuchsia-400'})[String(status)]||'text-slate-300';
+}
+function listaRestritosVisiveisV41(){
+    return filtroRestritosV40?anunciosRestritosV40.filter(x=>String(x.status)===filtroRestritosV40):anunciosRestritosV40;
+}
+function traduzirSubstatusRestritoV41(status,sub,tags=[]){
+    const s=String(sub||'').toLowerCase();
+    const lista=Array.isArray(tags)?tags.map(x=>String(x).toLowerCase()):[];
+    const mapa={
+      waiting_for_patch:'O Mercado Livre detectou uma infração no anúncio. É necessário corrigir a publicação para que ela possa voltar a ficar ativa.',
+      forbidden:'O anúncio foi desativado pelo Mercado Livre por uma moderação e não pode ser reativado.',
+      held:'O anúncio está oculto enquanto passa por uma revisão manual do Mercado Livre.',
+      pending_documentation:'O Mercado Livre solicitou documentação relacionada a uma moderação ou denúncia. O anúncio ficará oculto até a análise terminar.',
+      suspended:'O anúncio foi suspenso pelo Mercado Livre durante uma análise de segurança ou risco.',
+      suspended_for_prevention:'O anúncio foi suspenso preventivamente pelo Mercado Livre por uma análise de segurança ou risco.',
+      picture_downloading_pending:'O anúncio está pausado enquanto o Mercado Livre processa ou baixa uma imagem informada por URL.',
+      paused_by_seller:'O anúncio foi pausado pelo vendedor.',
+      out_of_stock:'O anúncio foi pausado por falta de estoque.',
+      warning:'O Mercado Livre identificou uma correção pendente na publicação.',
+      expired:'O anúncio foi finalizado porque chegou ao fim do período de publicação.',
+      freezed:'O anúncio foi finalizado e congelado pelo Mercado Livre.'
+    };
+    if(mapa[s])return mapa[s];
+    if(lista.includes('moderation_penalty'))return 'O anúncio possui uma penalidade ou moderação aplicada pelo Mercado Livre. Aguarde o motivo detalhado da moderação.';
+    if(status==='under_review')return 'O anúncio está em revisão pelo Mercado Livre. Aguarde a consulta do motivo detalhado.';
+    if(status==='inactive')return 'O anúncio está inativo no Mercado Livre.';
+    if(status==='paused')return 'O anúncio está pausado no Mercado Livre.';
+    if(status==='closed')return 'O anúncio foi finalizado no Mercado Livre.';
+    return 'Motivo ainda não informado pelo Mercado Livre.';
+}
+function atualizarBotaoExcluirRestritosV41(){
+    const btn=document.getElementById('restritos-excluir-btn-v41');
+    if(btn){btn.disabled=restritosSelecionadosV41.size===0||restritosExcluindoV41;btn.textContent=`🗑 Excluir selecionados (${restritosSelecionadosV41.size.toLocaleString('pt-BR')})`;}
+    const all=document.getElementById('restritos-check-all-v41');
+    if(all){const vis=listaRestritosVisiveisV41();all.checked=vis.length>0&&vis.every(i=>restritosSelecionadosV41.has(String(i.id)));}
+}
+function alternarSelecaoRestritoV41(id,checked){
+    const key=String(id||'');
+    if(!key)return;
+    if(checked)restritosSelecionadosV41.add(key);else restritosSelecionadosV41.delete(key);
+    atualizarBotaoExcluirRestritosV41();
+}
+function selecionarVisiveisRestritosV41(marcar=true){
+    listaRestritosVisiveisV41().forEach(i=>marcar?restritosSelecionadosV41.add(String(i.id)):restritosSelecionadosV41.delete(String(i.id)));
+    renderAnunciosRestritosV40();
 }
 
 async function carregarAnunciosRestritosV40(forcar=false){
@@ -11427,39 +11512,133 @@ async function carregarAnunciosRestritosV40(forcar=false){
         }while(offset<total);
         anunciosRestritosV40=todos;
         anunciosRestritosCarregadoV40=true;
+        restritosSelecionadosV41.clear();
+        restritosErrosExclusaoV41.clear();
         const t=totais||{};
         const sets=[['restritos-pausados-v40',t.pausados],['restritos-inativos-v40',t.inativos],['restritos-finalizados-v40',t.finalizados],['restritos-revisao-v40',t.revisao]];
         sets.forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('pt-BR');});
         renderAnunciosRestritosV40();
+        carregarMotivosReaisRestritosV41();
     }catch(e){
         if(st)st.textContent='Erro ao carregar: '+e.message;
     }
 }
 function filtrarAnunciosRestritosV40(status=''){
     filtroRestritosV40=String(status||'');
+    const sel=document.getElementById('restritos-filtro-select-v41');if(sel&&sel.value!==filtroRestritosV40)sel.value=filtroRestritosV40;
     if(!anunciosRestritosCarregadoV40)return carregarAnunciosRestritosV40(false);
     renderAnunciosRestritosV40();
 }
 function renderAnunciosRestritosV40(){
     const tbody=document.getElementById('restritos-tbody-v40');if(!tbody)return;
-    const lista=filtroRestritosV40?anunciosRestritosV40.filter(x=>String(x.status)===filtroRestritosV40):anunciosRestritosV40;
+    const lista=listaRestritosVisiveisV41();
     const st=document.getElementById('restritos-status-v40');
     if(st)st.textContent=`${lista.length.toLocaleString('pt-BR')} anúncio(s) exibido(s)${filtroRestritosV40?` · filtro: ${nomeStatusRestritoV40(filtroRestritosV40)}`:' · todos os quatro status'}.`;
-    if(!lista.length){tbody.innerHTML='<tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Nenhum anúncio encontrado neste status.</td></tr>';return;}
+    if(!lista.length){tbody.innerHTML='<tr><td colspan="9" class="px-4 py-10 text-center text-slate-600">Nenhum anúncio encontrado neste status.</td></tr>';atualizarBotaoExcluirRestritosV41();return;}
     tbody.innerHTML=lista.map(i=>{
         const sub=normalizarSubstatusV40(i.sub_status)||'—';
         const dt=i.last_updated?new Date(i.last_updated).toLocaleString('pt-BR'):'—';
-        return `<tr class="hover:bg-slate-900/50">
+        const motivo=String(i.moderation_reason||i.motivo_pt||traduzirSubstatusRestritoV41(i.status,sub,i.tags)||'');
+        const remedy=String(i.moderation_remedy||'');
+        const checked=restritosSelecionadosV41.has(String(i.id));
+        const erroExcluir=restritosErrosExclusaoV41.get(String(i.id))||'';
+        return `<tr id="restrito-row-${textoEscapeV37(i.id)}" class="hover:bg-slate-900/50">
+          <td class="px-3 py-3 text-center"><input type="checkbox" class="w-4 h-4 accent-yellow-400" ${checked?'checked':''} onchange="alternarSelecaoRestritoV41('${textoEscapeV37(i.id)}',this.checked)"></td>
           <td class="px-3 py-3"><div class="flex items-center gap-3">${i.thumbnail?`<img src="${textoEscapeV37(i.thumbnail)}" class="w-11 h-11 rounded-lg object-cover bg-white">`:''}<div class="max-w-[420px]"><div class="font-bold text-white line-clamp-2">${textoEscapeV37(i.title||'Sem título')}</div></div></div></td>
           <td class="px-3 py-3"><div class="font-mono text-slate-300">${textoEscapeV37(i.id||'')}</div><div class="text-[10px] text-slate-500 mt-1">SKU: ${textoEscapeV37(i.sku||'—')}</div></td>
           <td class="px-3 py-3 font-black ${classeStatusRestritoV40(i.status)}">${textoEscapeV37(nomeStatusRestritoV40(i.status))}</td>
-          <td class="px-3 py-3 text-slate-400 max-w-[300px]">${textoEscapeV37(sub)}</td>
+          <td id="restrito-motivo-${textoEscapeV37(i.id)}" class="px-3 py-3 max-w-[480px]"><div class="text-slate-200 font-semibold leading-relaxed">${textoEscapeV37(motivo)}</div>${remedy?`<div class="text-emerald-400 mt-1 leading-relaxed"><b>Solução:</b> ${textoEscapeV37(remedy)}</div>`:''}<div class="text-[9px] text-slate-600 mt-1">Substatus: ${textoEscapeV37(sub)}</div></td>
           <td class="px-3 py-3 text-right text-white font-bold">${textoEscapeV37(moeda(Number(i.price||0)))}</td>
           <td class="px-3 py-3 text-right text-slate-300">${Number(i.available_quantity||0).toLocaleString('pt-BR')}</td>
           <td class="px-3 py-3 text-slate-500">${textoEscapeV37(dt)}</td>
-          <td class="px-3 py-3 text-center">${i.permalink?`<a href="${textoEscapeV37(i.permalink)}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-blue-300 px-3 py-2 rounded-lg font-bold">Ver anúncio</a>`:'—'}</td>
+          <td class="px-3 py-3 text-center"><div class="flex flex-col gap-2 items-center">${i.permalink?`<a href="${textoEscapeV37(i.permalink)}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-blue-300 px-3 py-2 rounded-lg font-bold">Ver anúncio</a>`:'—'}${erroExcluir?`<div class="text-[9px] text-red-400 max-w-[180px]">${textoEscapeV37(erroExcluir)}</div>`:''}</div></td>
         </tr>`;
     }).join('');
+    atualizarBotaoExcluirRestritosV41();
+}
+
+async function carregarMotivosReaisRestritosV41(){
+    if(restritosCarregandoMotivosV41||!anunciosRestritosV40.length)return;
+    const token=obterToken();if(!token)return;
+    restritosCarregandoMotivosV41=true;
+    const status=document.getElementById('restritos-motivos-status-v41');
+    try{
+        const alvos=anunciosRestritosV40.filter(i=>!i.moderation_checked).map(i=>String(i.id));
+        let done=0;
+        for(let p=0;p<alvos.length;p+=15){
+            const bloco=alvos.slice(p,p+15);
+            if(status)status.textContent=`Consultando motivo real no Mercado Livre: ${done.toLocaleString('pt-BR')}/${alvos.length.toLocaleString('pt-BR')}...`;
+            const r=await fetch(`${RENDER_URL}/api/v41/anuncios-restritos/motivos`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({ids:bloco})});
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+            for(const m of (d.itens||[])){
+                const item=anunciosRestritosV40.find(x=>String(x.id)===String(m.id));
+                if(item){item.moderation_checked=true;item.moderation_reason=m.reason||item.motivo_pt;item.moderation_remedy=m.remedy||'';item.moderation_name=m.name||'';}
+            }
+            done+=bloco.length;
+            renderAnunciosRestritosV40();
+        }
+        if(status)status.textContent=`Motivos reais consultados em português para ${done.toLocaleString('pt-BR')} anúncio(s).`;
+    }catch(e){
+        if(status)status.textContent='Não foi possível consultar todos os motivos reais: '+e.message;
+    }finally{restritosCarregandoMotivosV41=false;}
+}
+
+function atualizarProgressoExclusaoV41(processados,total,sucesso,falhas,msg=''){
+    const wrap=document.getElementById('restritos-progresso-exclusao-v41');if(wrap)wrap.classList.remove('hidden');
+    const pct=total?Math.round((processados/total)*100):0;
+    const ids={
+      'restritos-exclusao-processados-v41':processados,
+      'restritos-exclusao-sucesso-v41':sucesso,
+      'restritos-exclusao-falhas-v41':falhas,
+      'restritos-exclusao-restantes-v41':Math.max(0,total-processados)
+    };
+    Object.entries(ids).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('pt-BR');});
+    const st=document.getElementById('restritos-exclusao-status-v41');if(st)st.textContent=`${processados.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}`;
+    const pe=document.getElementById('restritos-exclusao-pct-v41');if(pe)pe.textContent=`${pct}%`;
+    const bar=document.getElementById('restritos-exclusao-bar-v41');if(bar)bar.style.width=`${pct}%`;
+    const me=document.getElementById('restritos-exclusao-msg-v41');if(me)me.textContent=msg||'Excluindo anúncios no Mercado Livre...';
+}
+
+async function excluirSelecionadosRestritosV41(){
+    if(restritosExcluindoV41)return;
+    const ids=[...restritosSelecionadosV41];
+    if(!ids.length)return alert('Selecione pelo menos um anúncio para excluir.');
+    const ok=confirm(`ATENÇÃO: você está prestes a excluir permanentemente ${ids.length.toLocaleString('pt-BR')} anúncio(s) do Mercado Livre.\n\nEssa ação é irreversível. Deseja continuar?`);
+    if(!ok)return;
+    const ok2=confirm('Confirme novamente: os anúncios selecionados serão finalizados quando necessário e depois marcados como excluídos no Mercado Livre. Continuar?');
+    if(!ok2)return;
+    const token=obterToken();if(!token){solicitarToken();return}
+    restritosExcluindoV41=true;restritosErrosExclusaoV41.clear();atualizarBotaoExcluirRestritosV41();
+    const errosEl=document.getElementById('restritos-exclusao-erros-v41');if(errosEl){errosEl.classList.add('hidden');errosEl.innerHTML='';}
+    let processados=0,sucesso=0,falhas=0;const erros=[];
+    atualizarProgressoExclusaoV41(0,ids.length,0,0,'Preparando exclusão...');
+    try{
+        for(let p=0;p<ids.length;p+=20){
+            const bloco=ids.slice(p,p+20);
+            atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo lote ${Math.floor(p/20)+1}...`);
+            const r=await fetch(`${RENDER_URL}/api/v41/anuncios-restritos/excluir-lote`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({ids:bloco})});
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+            for(const x of (d.resultados||[])){
+                processados++;
+                if(x.sucesso){
+                    sucesso++;restritosSelecionadosV41.delete(String(x.id));
+                    anunciosRestritosV40=anunciosRestritosV40.filter(i=>String(i.id)!==String(x.id));
+                }else{
+                    falhas++;const msg=String(x.erro||'Mercado Livre não permitiu excluir este anúncio.');restritosErrosExclusaoV41.set(String(x.id),msg);erros.push(`${x.id}: ${msg}`);
+                }
+                atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo anúncios: ${processados.toLocaleString('pt-BR')}/${ids.length.toLocaleString('pt-BR')}`);
+            }
+            renderAnunciosRestritosV40();
+        }
+        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Concluído: ${sucesso.toLocaleString('pt-BR')} excluído(s) e ${falhas.toLocaleString('pt-BR')} falha(s).`);
+        if(erros.length&&errosEl){errosEl.classList.remove('hidden');errosEl.innerHTML='<div class="font-black mb-2">Anúncios que não foram excluídos:</div>'+erros.map(e=>`<div class="py-1 border-t border-red-900/50">${textoEscapeV37(e)}</div>`).join('');}
+        anunciosRestritosCarregadoV40=false;
+        await carregarAnunciosRestritosV40(true);
+    }catch(e){
+        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,'Erro durante a exclusão: '+e.message);
+    }finally{restritosExcluindoV41=false;atualizarBotaoExcluirRestritosV41();}
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
