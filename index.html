@@ -803,6 +803,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <span>Criar anúncios em massa</span>
         </button>
 
+        <button class="painel-sidebar-v24-item" data-aba="anuncios-restritos" onclick="mudarAba('anuncios-restritos')">
+            <span class="painel-sidebar-v24-icone">◫</span>
+            <span>Anúncios inativos / revisão</span>
+        </button>
+
         <div class="painel-sidebar-v24-divisor"></div>
 
         <button class="painel-sidebar-v24-item painel-sidebar-v24-voltar" onclick="mudarAba('inicio')">
@@ -2598,6 +2603,16 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">4. Fotos do anúncio geradas</div>
             <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As demais imagens são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
+            <div class="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <div class="flex items-center justify-between gap-3 text-[10px]">
+                    <span id="criar-imagens-status-v40" class="text-slate-400">Aguardando geração das imagens.</span>
+                    <span id="criar-imagens-pct-v40" class="font-black text-white">0/11</span>
+                </div>
+                <div class="h-2 bg-slate-800 rounded-full overflow-hidden mt-2">
+                    <div id="criar-imagens-bar-v40" class="h-full bg-purple-500 transition-all" style="width:0%"></div>
+                </div>
+                <div class="text-[9px] text-slate-600 mt-2">Primeiro o painel tenta o Gemini. Se a cota de imagens não estiver disponível, ele cria automaticamente um kit visual gratuito a partir das fotos que você enviou, sem inventar características do produto.</div>
+            </div>
             <div id="criar-imagens-preview-v37" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-4"></div>
             <div class="mt-4">
                 <label class="text-[9px] font-bold uppercase text-slate-500">URL das fotos do anúncio</label>
@@ -2665,6 +2680,49 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         </div>
     </div>
 
+</section>
+
+
+<section id="secao-anuncios-restritos" class="hidden space-y-6">
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div>
+      <div class="text-[10px] uppercase tracking-[.16em] text-orange-400 font-bold">Controle de anúncios</div>
+      <h1 class="text-2xl font-black text-white mt-1">Anúncios inativos, pausados, finalizados e em revisão</h1>
+      <p class="text-xs text-slate-500 mt-1">Mostra somente as quatro situações solicitadas. Itens excluídos pelo vendedor não entram nesta lista.</p>
+    </div>
+    <button onclick="carregarAnunciosRestritosV40(true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">↻ Atualizar lista</button>
+  </div>
+
+  <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+    <button onclick="filtrarAnunciosRestritosV40('paused')" class="panel panel-hover rounded-2xl p-5 text-left"><div class="text-[10px] uppercase text-slate-500 font-bold">Pausados</div><div id="restritos-pausados-v40" class="text-2xl font-black text-yellow-400 mt-2">—</div></button>
+    <button onclick="filtrarAnunciosRestritosV40('inactive')" class="panel panel-hover rounded-2xl p-5 text-left"><div class="text-[10px] uppercase text-slate-500 font-bold">Inativos</div><div id="restritos-inativos-v40" class="text-2xl font-black text-orange-400 mt-2">—</div></button>
+    <button onclick="filtrarAnunciosRestritosV40('closed')" class="panel panel-hover rounded-2xl p-5 text-left"><div class="text-[10px] uppercase text-slate-500 font-bold">Finalizados pelo ML</div><div id="restritos-finalizados-v40" class="text-2xl font-black text-red-400 mt-2">—</div></button>
+    <button onclick="filtrarAnunciosRestritosV40('under_review')" class="panel panel-hover rounded-2xl p-5 text-left"><div class="text-[10px] uppercase text-slate-500 font-bold">Em revisão</div><div id="restritos-revisao-v40" class="text-2xl font-black text-fuchsia-400 mt-2">—</div></button>
+  </div>
+
+  <div class="panel rounded-2xl overflow-hidden">
+    <div class="p-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div>
+        <div class="font-black text-white text-sm">Lista completa</div>
+        <div id="restritos-status-v40" class="text-[10px] text-slate-500 mt-1">Clique em Atualizar lista para carregar.</div>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button onclick="filtrarAnunciosRestritosV40('')" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Todos</button>
+        <button onclick="filtrarAnunciosRestritosV40('paused')" class="bg-slate-900 border border-slate-700 text-yellow-300 px-3 py-2 rounded-lg text-[10px] font-bold">Pausados</button>
+        <button onclick="filtrarAnunciosRestritosV40('inactive')" class="bg-slate-900 border border-slate-700 text-orange-300 px-3 py-2 rounded-lg text-[10px] font-bold">Inativos</button>
+        <button onclick="filtrarAnunciosRestritosV40('closed')" class="bg-slate-900 border border-slate-700 text-red-300 px-3 py-2 rounded-lg text-[10px] font-bold">Finalizados</button>
+        <button onclick="filtrarAnunciosRestritosV40('under_review')" class="bg-slate-900 border border-slate-700 text-fuchsia-300 px-3 py-2 rounded-lg text-[10px] font-bold">Em revisão</button>
+      </div>
+    </div>
+    <div class="overflow-auto max-h-[70vh]">
+      <table class="w-full min-w-[1250px] text-[11px]">
+        <thead class="sticky top-0 z-10 bg-slate-900 text-slate-300 uppercase tracking-[.08em]">
+          <tr><th class="px-3 py-3 text-left">Anúncio</th><th class="px-3 py-3 text-left">MLB / SKU</th><th class="px-3 py-3 text-left">Status</th><th class="px-3 py-3 text-left">Motivo / substatus</th><th class="px-3 py-3 text-right">Preço</th><th class="px-3 py-3 text-right">Estoque</th><th class="px-3 py-3 text-left">Atualizado</th><th class="px-3 py-3 text-center">Ação</th></tr>
+        </thead>
+        <tbody id="restritos-tbody-v40" class="divide-y divide-slate-800 bg-slate-950/30"><tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Nenhum dado carregado.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <section id="secao-reclamacoes" class="hidden space-y-6">
@@ -4242,6 +4300,7 @@ function mudarAba(aba) {
         'pedidos',
         'reclamacoes',
         'criar-massa',
+        'anuncios-restritos',
         'integracoes',
         'oportunidades',
         'qualidade',
@@ -9730,7 +9789,7 @@ async function salvarBaseSkuV27(){
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
     const destino=String(aba);
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','anuncios-restritos'];
 
     document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
     document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
@@ -9750,12 +9809,13 @@ mudarAba=function(aba){
     if(aba==='simulacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarSimulacaoEscalaV21()},0);
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21()},0);
     if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
+    if(aba==='anuncios-restritos')setTimeout(()=>carregarAnunciosRestritosV40(false),0);
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','anuncios-restritos'];
 
     document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
     document.body.classList.toggle('configuracoes-isolado-v24',abaInicial==='configuracoes');
@@ -11007,6 +11067,91 @@ async function gerarKeywordsV38(){
     }finally{esconderLoading();}
 }
 
+function atualizarProgressoImagensV40(atual,msg,tipo='normal'){
+    const total=11;
+    const pct=Math.max(0,Math.min(100,Math.round((Number(atual||0)/total)*100)));
+    const st=document.getElementById('criar-imagens-status-v40');
+    const pe=document.getElementById('criar-imagens-pct-v40');
+    const bar=document.getElementById('criar-imagens-bar-v40');
+    if(st){st.textContent=msg||`${atual}/${total} imagens`;st.className=`text-[10px] ${tipo==='erro'?'text-red-400':tipo==='ok'?'text-emerald-400':tipo==='aviso'?'text-yellow-400':'text-slate-400'}`;}
+    if(pe)pe.textContent=`${atual}/${total}`;
+    if(bar)bar.style.width=`${pct}%`;
+}
+
+function carregarImagemCanvasV40(src){
+    return new Promise((resolve,reject)=>{
+        const img=new Image();
+        img.onload=()=>resolve(img);
+        img.onerror=()=>reject(new Error('Não foi possível usar uma das fotos de referência.'));
+        img.src=src;
+    });
+}
+
+function desenharContainV40(ctx,img,x,y,w,h,scale=1){
+    const r=Math.min(w/img.width,h/img.height)*scale;
+    const dw=img.width*r,dh=img.height*r;
+    ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+}
+function desenharCoverV40(ctx,img,x,y,w,h,zoom=1){
+    const r=Math.max(w/img.width,h/img.height)*zoom;
+    const dw=img.width*r,dh=img.height*r;
+    ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+}
+
+async function criarComposicaoFallbackV40(index){
+    const refs=criarEstadoV37.referenceImages||[];
+    if(!refs.length)throw new Error('Envie pelo menos uma foto do produto para usar o modo visual gratuito.');
+    const a=await carregarImagemCanvasV40(refs[index%refs.length]);
+    const b=refs.length>1?await carregarImagemCanvasV40(refs[(index+1)%refs.length]):null;
+    const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1080;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle=index===0?'#ffffff':(index%3===0?'#f8fafc':'#ffffff');ctx.fillRect(0,0,1080,1080);
+
+    if(index===0){
+        desenharContainV40(ctx,a,70,70,940,940,.96);
+    }else if(index===3 && b){
+        ctx.save();ctx.beginPath();ctx.roundRect(55,80,465,820,28);ctx.clip();desenharCoverV40(ctx,a,55,80,465,820,1);ctx.restore();
+        ctx.save();ctx.beginPath();ctx.roundRect(560,180,465,820,28);ctx.clip();desenharCoverV40(ctx,b,560,180,465,820,1);ctx.restore();
+    }else if(index===5 && b){
+        desenharContainV40(ctx,a,40,40,650,650,.95);
+        ctx.save();ctx.beginPath();ctx.arc(820,760,210,0,Math.PI*2);ctx.clip();desenharCoverV40(ctx,b,610,550,420,420,1.1);ctx.restore();
+    }else if(index===7){
+        desenharCoverV40(ctx,a,0,0,1080,1080,1.12);
+        ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(0,840,1080,240);
+    }else{
+        const scales=[.90,1.05,1.20,.82,1.10,.95,1.25,.88,1.08,1.18];
+        if(index%2===0)desenharContainV40(ctx,a,70,70,940,940,scales[index%scales.length]);
+        else desenharCoverV40(ctx,a,90,90,900,900,Math.min(1.18,scales[index%scales.length]));
+    }
+
+    if(index>0){
+        const rotulos=['Vista adicional','Detalhe do produto','Composição visual','Outra perspectiva','Apresentação do produto','Detalhe visual','Enquadramento adicional','Vista complementar','Destaque visual','Apresentação final'];
+        ctx.fillStyle='rgba(255,255,255,.92)';ctx.fillRect(48,48,390,64);
+        ctx.fillStyle='#0f172a';ctx.font='600 28px Arial';ctx.fillText(rotulos[(index-1)%rotulos.length],68,90);
+    }
+    return canvas.toDataURL('image/jpeg',.94);
+}
+
+async function gerarFallbackRestanteV40(token,porIndice,inicio=0){
+    const total=11;
+    for(let idx=inicio;idx<total;idx++){
+        if(porIndice.has(idx))continue;
+        atualizarProgressoImagensV40(porIndice.size,`Gemini sem cota de imagem. Criando composição visual gratuita ${idx+1}/${total} a partir das suas fotos...`,'aviso');
+        const dataUrl=await criarComposicaoFallbackV40(idx);
+        const r=await fetch(`${RENDER_URL}/api/v40/criar/imagem-upload`,{
+            method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({image_data_url:dataUrl,index:idx,tipo:'fallback',titulo:idx===0?'Capa em fundo branco':`Imagem visual ${idx+1}`})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.picture)throw new Error(d.erro||`HTTP ${r.status}`);
+        porIndice.set(idx,d.picture);
+        criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
+        renderImagensGeradasV37();gerarUrlsFotosV37();renderPlanilhaPreviewV37();
+        atualizarProgressoImagensV40(porIndice.size,`${porIndice.size}/${total} imagens prontas.`,'normal');
+        await new Promise(r=>setTimeout(r,250));
+    }
+}
+
 async function gerarPackImagensV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
@@ -11017,32 +11162,42 @@ async function gerarPackImagensV37(){
     const total=11;
     const porIndice=new Map((criarEstadoV37.pictures||[]).map((p,pos)=>[Number.isFinite(Number(p.index))?Number(p.index):pos,p]));
     let ultimoErro='';
+    let usouFallback=false;
+    atualizarProgressoImagensV40(porIndice.size,'Iniciando geração das imagens...');
 
     try{
         for(let idx=0;idx<total;idx++){
             if(porIndice.has(idx))continue;
             let sucesso=false;
-            for(let tentativa=1;tentativa<=3&&!sucesso;tentativa++){
-                mostrarLoading(`Gerando imagem ${idx+1} de ${total} · tentativa ${tentativa}/3...`);
+            for(let tentativa=1;tentativa<=5&&!sucesso;tentativa++){
+                atualizarProgressoImagensV40(porIndice.size,`Gemini: gerando imagem ${idx+1}/${total} · tentativa ${tentativa}/5...`);
                 const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/imagem-item`,{
-                    method:'POST',
-                    headers:{Authorization:token,'Content-Type':'application/json'},
+                    method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
                     body:JSON.stringify({index:idx,produto,detalhes,reference_images:criarEstadoV37.referenceImages})
                 });
                 const d=await r.json().catch(()=>({}));
                 if(r.ok&&d.picture){
                     porIndice.set(idx,d.picture);
                     criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
-                    renderImagensGeradasV37();
-                    gerarUrlsFotosV37();
-                    renderPlanilhaPreviewV37();
+                    renderImagensGeradasV37();gerarUrlsFotosV37();renderPlanilhaPreviewV37();
+                    atualizarProgressoImagensV40(porIndice.size,`${porIndice.size}/${total} imagens geradas pelo Gemini.`,'normal');
                     sucesso=true;
+                    // Evita atingir o limite por minuto fazendo 11 chamadas em sequência muito rápida.
+                    if(idx<total-1)await new Promise(resolve=>setTimeout(resolve,7000));
                     break;
                 }
                 ultimoErro=d.erro||`HTTP ${r.status}`;
-                if(d.retryable&&tentativa<3){
-                    mostrarLoading(`Limite temporário do Gemini. Aguardando para continuar a imagem ${idx+1}/${total}...`);
-                    await new Promise(resolve=>setTimeout(resolve,tentativa===1?5000:9000));
+                if(d.quota_unavailable){
+                    usouFallback=true;
+                    await gerarFallbackRestanteV40(token,porIndice,idx);
+                    sucesso=true;
+                    idx=total;
+                    break;
+                }
+                if(d.retryable&&tentativa<5){
+                    const espera=Math.max(12000,Math.min(60000,Number(d.retry_after||0)*1000 || [15000,25000,40000,55000][tentativa-1]));
+                    atualizarProgressoImagensV40(porIndice.size,`Limite temporário do Gemini. Aguardando ${Math.ceil(espera/1000)}s e tentando novamente...`,'aviso');
+                    await new Promise(resolve=>setTimeout(resolve,espera));
                     continue;
                 }
                 break;
@@ -11051,18 +11206,19 @@ async function gerarPackImagensV37(){
         }
 
         criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
-        renderImagensGeradasV37();
-        gerarUrlsFotosV37();
-        renderPlanilhaPreviewV37();
+        renderImagensGeradasV37();gerarUrlsFotosV37();renderPlanilhaPreviewV37();
 
         if(criarEstadoV37.pictures.length>=total){
-            alert('As 11 imagens foram geradas e enviadas para o Mercado Livre com sucesso.');
+            atualizarProgressoImagensV40(total,usouFallback?'11 imagens prontas. A cota do Gemini não estava disponível; as restantes foram montadas automaticamente com suas fotos.':'As 11 imagens foram geradas e enviadas para o Mercado Livre.','ok');
+            alert(usouFallback?'As 11 imagens estão prontas. Como a API de imagens do Gemini não tinha cota disponível, o painel completou o pacote com composições visuais gratuitas feitas a partir das fotos que você enviou.':'As 11 imagens foram geradas e enviadas para o Mercado Livre com sucesso.');
         }else{
-            alert(`Foram geradas ${criarEstadoV37.pictures.length} de ${total} imagens. ${ultimoErro||'O Gemini atingiu um limite temporário.'}\n\nAs imagens já geradas foram mantidas. Clique novamente em “Gerar / continuar” para retomar exatamente da próxima imagem.`);
+            atualizarProgressoImagensV40(criarEstadoV37.pictures.length,`Geração pausada: ${ultimoErro||'erro desconhecido'}`,'erro');
+            alert(`Foram concluídas ${criarEstadoV37.pictures.length} de ${total} imagens. ${ultimoErro}\n\nAs imagens concluídas foram mantidas. Clique novamente para continuar.`);
         }
     }catch(e){
+        atualizarProgressoImagensV40(porIndice.size,`Erro: ${e.message}`,'erro');
         alert(`A geração foi pausada depois de ${porIndice.size} imagem(ns): ${e.message}\n\nNada foi perdido. Clique novamente para continuar.`);
-    }finally{esconderLoading();}
+    }
 }
 
 function renderImagensGeradasV37(){
@@ -11233,6 +11389,77 @@ async function acompanharCriacaoV37(jobId){
         const msg=document.getElementById('criar-job-msg-v37'); if(msg)msg.textContent='Erro ao acompanhar: '+e.message;
         criarEstadoV37.jobTimer=setTimeout(()=>acompanharCriacaoV37(jobId),3000);
     }
+}
+
+
+let anunciosRestritosV40=[];
+let anunciosRestritosCarregadoV40=false;
+let filtroRestritosV40='';
+
+function normalizarSubstatusV40(v){
+    if(Array.isArray(v))return v.join(', ');
+    if(v&&typeof v==='object')return Object.values(v).join(', ');
+    return String(v||'').replace(/^"|"$/g,'');
+}
+function nomeStatusRestritoV40(status){
+    return ({paused:'Pausado',inactive:'Inativo',closed:'Finalizado pelo ML',under_review:'Em revisão'})[String(status)]||String(status||'');
+}
+function classeStatusRestritoV40(status){
+    return ({paused:'text-yellow-400',inactive:'text-orange-400',closed:'text-red-400',under_review:'text-fuchsia-400'})[String(status)]||'text-slate-300';
+}
+
+async function carregarAnunciosRestritosV40(forcar=false){
+    if(anunciosRestritosCarregadoV40&&!forcar){renderAnunciosRestritosV40();return;}
+    const token=obterToken();if(!token){solicitarToken();return}
+    const st=document.getElementById('restritos-status-v40');
+    if(st)st.textContent='Carregando todos os anúncios nas quatro situações...';
+    try{
+        const todos=[];let offset=0,total=0,totais=null;
+        do{
+            const r=await fetch(`${RENDER_URL}/api/scale/anuncios-restritos?limit=2000&offset=${offset}&_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+            total=Number(d.total||0);totais=d.totais||totais;
+            const itens=Array.isArray(d.itens)?d.itens:[];
+            todos.push(...itens);offset+=itens.length;
+            if(st)st.textContent=`Carregando ${todos.length.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}...`;
+            if(!itens.length)break;
+        }while(offset<total);
+        anunciosRestritosV40=todos;
+        anunciosRestritosCarregadoV40=true;
+        const t=totais||{};
+        const sets=[['restritos-pausados-v40',t.pausados],['restritos-inativos-v40',t.inativos],['restritos-finalizados-v40',t.finalizados],['restritos-revisao-v40',t.revisao]];
+        sets.forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('pt-BR');});
+        renderAnunciosRestritosV40();
+    }catch(e){
+        if(st)st.textContent='Erro ao carregar: '+e.message;
+    }
+}
+function filtrarAnunciosRestritosV40(status=''){
+    filtroRestritosV40=String(status||'');
+    if(!anunciosRestritosCarregadoV40)return carregarAnunciosRestritosV40(false);
+    renderAnunciosRestritosV40();
+}
+function renderAnunciosRestritosV40(){
+    const tbody=document.getElementById('restritos-tbody-v40');if(!tbody)return;
+    const lista=filtroRestritosV40?anunciosRestritosV40.filter(x=>String(x.status)===filtroRestritosV40):anunciosRestritosV40;
+    const st=document.getElementById('restritos-status-v40');
+    if(st)st.textContent=`${lista.length.toLocaleString('pt-BR')} anúncio(s) exibido(s)${filtroRestritosV40?` · filtro: ${nomeStatusRestritoV40(filtroRestritosV40)}`:' · todos os quatro status'}.`;
+    if(!lista.length){tbody.innerHTML='<tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Nenhum anúncio encontrado neste status.</td></tr>';return;}
+    tbody.innerHTML=lista.map(i=>{
+        const sub=normalizarSubstatusV40(i.sub_status)||'—';
+        const dt=i.last_updated?new Date(i.last_updated).toLocaleString('pt-BR'):'—';
+        return `<tr class="hover:bg-slate-900/50">
+          <td class="px-3 py-3"><div class="flex items-center gap-3">${i.thumbnail?`<img src="${textoEscapeV37(i.thumbnail)}" class="w-11 h-11 rounded-lg object-cover bg-white">`:''}<div class="max-w-[420px]"><div class="font-bold text-white line-clamp-2">${textoEscapeV37(i.title||'Sem título')}</div></div></div></td>
+          <td class="px-3 py-3"><div class="font-mono text-slate-300">${textoEscapeV37(i.id||'')}</div><div class="text-[10px] text-slate-500 mt-1">SKU: ${textoEscapeV37(i.sku||'—')}</div></td>
+          <td class="px-3 py-3 font-black ${classeStatusRestritoV40(i.status)}">${textoEscapeV37(nomeStatusRestritoV40(i.status))}</td>
+          <td class="px-3 py-3 text-slate-400 max-w-[300px]">${textoEscapeV37(sub)}</td>
+          <td class="px-3 py-3 text-right text-white font-bold">${textoEscapeV37(moeda(Number(i.price||0)))}</td>
+          <td class="px-3 py-3 text-right text-slate-300">${Number(i.available_quantity||0).toLocaleString('pt-BR')}</td>
+          <td class="px-3 py-3 text-slate-500">${textoEscapeV37(dt)}</td>
+          <td class="px-3 py-3 text-center">${i.permalink?`<a href="${textoEscapeV37(i.permalink)}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-blue-300 px-3 py-2 rounded-lg font-bold">Ver anúncio</a>`:'—'}</td>
+        </tr>`;
+    }).join('');
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
