@@ -5301,12 +5301,121 @@ function normalizarCategoriasConfigV37(cfg){
     return out;
 }
 
+
+/* =========================================================
+   V47 — FRETE AUTOMÁTICO + URL MANUAL DE IMAGENS
+========================================================= */
+const cacheShippingPublicacaoV47=new Map();
+
+function normalizarUrlsManuaisV47(valor){
+    const itens=[];
+    const entrada=Array.isArray(valor)?valor.join('\n'):String(valor||'');
+    const encontrados=entrada.match(/https?:\/\/[^\s,\]\)]+/gi)||[];
+    const seen=new Set();
+    for(const raw of encontrados){
+        const url=String(raw||'').trim().replace(/[;]+$/,'');
+        if(!url||seen.has(url))continue;
+        try{
+            const u=new URL(url);
+            if(!['http:','https:'].includes(u.protocol))continue;
+            seen.add(url);itens.push(url);
+        }catch{}
+    }
+    return itens.slice(0,30);
+}
+
+async function obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{force=false}={}){
+    sellerId=String(sellerId||'').trim();
+    categoryId=String(categoryId||'').trim();
+    if(!sellerId||!categoryId)throw new Error('Não foi possível identificar vendedor/categoria para configurar o envio.');
+
+    const key=`${sellerId}:${categoryId}`;
+    const ttl=15*60*1000;
+    const cached=cacheShippingPublicacaoV47.get(key);
+    if(!force && cached && (Date.now()-cached.at)<ttl)return cached.data;
+
+    const [ur,cr]=await Promise.all([
+        mlFetch(`${ML_API}/users/${encodeURIComponent(sellerId)}/shipping_preferences`,token),
+        mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/shipping_preferences`,token)
+    ]);
+    const [ud,cd]=await Promise.all([jsonSeguro(ur),jsonSeguro(cr)]);
+    if(!ur.ok)throw new Error('Não foi possível consultar as preferências de envio da conta: '+formatarErroMercadoLivre(ud));
+    if(!cr.ok)throw new Error('Não foi possível consultar os modos de envio da categoria: '+formatarErroMercadoLivre(cd));
+
+    const userModes=[...(Array.isArray(ud?.modes)?ud.modes:[])].map(x=>String(x||'').toLowerCase()).filter(Boolean);
+    const categoryModes=[...new Set((Array.isArray(cd?.logistics)?cd.logistics:[]).map(x=>String(x?.mode||'').toLowerCase()).filter(Boolean))];
+    const intersection=categoryModes.filter(m=>userModes.includes(m));
+
+    // Mercado Envios 2 é preferido quando conta e categoria permitem.
+    // not_specified vem antes de ME1 para evitar o erro shipping.lost_me1_by_user
+    // em contas que perderam o ME1. Custom fica por último porque pode exigir tabela própria.
+    const priority=['me2','not_specified','me1','custom'];
+    const candidates=priority.filter(m=>intersection.includes(m));
+
+    if(!candidates.length){
+        const e=new Error(`Nenhum modo de envio compatível foi encontrado para esta conta e categoria. Conta: ${userModes.join(', ')||'nenhum'}; categoria: ${categoryModes.join(', ')||'nenhum'}.`);
+        e.code='shipping.no_compatible_mode';
+        throw e;
+    }
+
+    const mode=candidates[0];
+    const shipping={
+        mode,
+        local_pick_up:Boolean(ud?.local_pick_up),
+        free_shipping:false,
+        free_methods:[]
+    };
+    const data={mode,candidates,userModes,categoryModes,shipping,restricted:Boolean(cd?.restricted)};
+    cacheShippingPublicacaoV47.set(key,{at:Date.now(),data});
+    return data;
+}
+
+function contemErroModoEnvioV47(data){
+    const txt=JSON.stringify(data||{}).toLowerCase();
+    return txt.includes('shipping.lost_me1_by_user') ||
+           txt.includes('shipping') && (txt.includes('mode')||txt.includes('me1')||txt.includes('me2'));
+}
+
+async function validarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
+    const base={...payload};
+    const candidates=Array.isArray(shippingInfo?.candidates)&&shippingInfo.candidates.length?shippingInfo.candidates:[String(payload?.shipping?.mode||'')].filter(Boolean);
+    let ultimo=null;
+    for(const mode of candidates){
+        const tentativa={...base,shipping:{...(base.shipping||{}),mode}};
+        const r=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tentativa)});
+        const d=await jsonSeguro(r);
+        ultimo={response:r,data:d,payload:tentativa,mode};
+        if(r.ok)return ultimo;
+        if(!contemErroModoEnvioV47(d))return ultimo;
+    }
+    return ultimo;
+}
+
+async function publicarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
+    const base={...payload};
+    const candidates=Array.isArray(shippingInfo?.candidates)&&shippingInfo.candidates.length?shippingInfo.candidates:[String(payload?.shipping?.mode||'')].filter(Boolean);
+    let ultimo=null;
+    for(const mode of candidates){
+        const tentativa={...base,shipping:{...(base.shipping||{}),mode}};
+        const pr=await mlPostComRetryV36(`${ML_API}/items`,token,tentativa,4);
+        ultimo={...pr,payload:tentativa,mode};
+        if(pr?.ok)return ultimo;
+        if(!contemErroModoEnvioV47(pr?.data))return ultimo;
+    }
+    return ultimo;
+}
+
 function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProductSeller=false,category}){
     const title=limitarTituloV36(cfg.titles?.[familyIndex]||cfg.family_name||cfg.product_name||'',60);
     const price=Number(cfg.price||0);
     const stock=Math.max(1,Number(cfg.stock||1));
     const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).map(String).filter(Boolean);
-    const pictures=pictureIds.map(id=>({id}));
+    const manualPictureSources=normalizarUrlsManuaisV47(cfg.picture_sources_manual||cfg.manual_picture_urls||[]);
+    // Se o usuário informar URLs manualmente, elas substituem as imagens geradas.
+    // Caso contrário, preserva o fluxo atual usando os IDs já enviados ao CDN do Mercado Livre.
+    const pictures=manualPictureSources.length
+      ? manualPictureSources.map(source=>({source}))
+      : pictureIds.map(id=>({id}));
 
     let attributes=(Array.isArray(category?.attributes)?category.attributes:[])
       .filter(a=>a?.id && (a?.value_id || a?.value_name))
@@ -5353,7 +5462,7 @@ function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProd
                 attribute_combinations:[{id:String(varCfg.attribute_id),value_name:String(value)}],
                 price,
                 available_quantity:stock,
-                picture_ids:pictureIds,
+                ...(pictureIds.length?{picture_ids:pictureIds}:{}),
                 ...(skuPrefix?{seller_custom_field:`${skuPrefix}-${String(familyIndex+1).padStart(5,'0')}-${String(i+1).padStart(2,'0')}`}:{})
             }));
         }
@@ -5395,7 +5504,7 @@ async function processarCriacaoMassaV37(job){
         const familyIndex=Math.floor(rem/varCount);
         const variationIndex=rem%varCount;
         const category=categories[categoryIndex];
-        const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex,variationIndex,userProductSeller,category});
+        const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex,variationIndex,userProductSeller,category,sellerId:job.seller_id});
         const payload=prepared.payload;
         const titleRequested=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
 
@@ -5411,7 +5520,7 @@ async function processarCriacaoMassaV37(job){
             continue;
         }
 
-        const pr=await mlPostComRetryV36(`${ML_API}/items`,token,payload,4);
+        const pr=await publicarPayloadMercadoComFallbackEnvioV47(token,payload,prepared.shippingInfo);
         if(pr?.ok && pr?.data?.id){
             let warning='';
             const item=pr.data;
@@ -6794,6 +6903,20 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
     }
     payload.attributes=attrs;
 
+    // Resolve automaticamente o envio permitido pela conta + categoria.
+    // Evita deixar o Mercado Livre assumir ME1 quando a conta não possui mais esse modo.
+    const sellerId=String(opts?.sellerId||opts?.seller_id||'').trim();
+    const shippingInfo=sellerId
+      ? await obterPreferenciasEnvioPublicacaoV47(token,sellerId,category.category_id)
+      : null;
+    if(shippingInfo){
+        const preferred=String(category?.shipping_mode||'').toLowerCase();
+        const mode=(preferred&&shippingInfo.candidates.includes(preferred))?preferred:shippingInfo.mode;
+        payload.shipping={...shippingInfo.shipping,mode};
+        shippingInfo.mode=mode;
+        shippingInfo.candidates=[mode,...shippingInfo.candidates.filter(x=>x!==mode)];
+    }
+
     const maxPics=Number(meta.max_pictures_per_item||0);
     if(maxPics>0&&Array.isArray(payload.pictures)&&payload.pictures.length>maxPics){
         payload.pictures=payload.pictures.slice(0,maxPics);
@@ -6809,7 +6932,7 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
       .filter(d=>!['ITEM_CONDITION'].includes(d.id))
       .map(d=>({id:d.id,name:d.name}));
 
-    return {payload,meta,faltantes,maxPics};
+    return {payload,meta,faltantes,maxPics,shippingInfo};
 }
 
 function detalhesValidacaoV46(data){
@@ -7602,7 +7725,7 @@ app.post('/api/v37/criar/validar',async(req,res)=>{
         const resultados=[];
         for(const category of categories){
             try{
-                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
+                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
                 const sample=prepared.payload;
                 if(up && cfg?.variations?.enabled) delete sample.variations;
 
@@ -7620,8 +7743,9 @@ app.post('/api/v37/criar/validar',async(req,res)=>{
                     continue;
                 }
 
-                const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
-                const vd=await jsonSeguro(vr);
+                const validacao=await validarPayloadMercadoComFallbackEnvioV47(token,sample,prepared.shippingInfo);
+                const vr=validacao.response;
+                const vd=validacao.data;
                 resultados.push({
                     category_id:category.category_id,
                     category_name:category.category_name,
@@ -7629,7 +7753,8 @@ app.post('/api/v37/criar/validar',async(req,res)=>{
                     validacao:vd,
                     erro:vr.ok?null:formatarErroMercadoLivre(vd),
                     detalhes:vr.ok?[]:detalhesValidacaoV46(vd),
-                    fotos_enviadas:sample.pictures?.length||0,
+                    shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
+                    fotos_enviadas:validacao.payload?.pictures?.length||sample.pictures?.length||0,
                     limite_fotos:prepared.maxPics
                 });
             }catch(e){
@@ -7667,7 +7792,8 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
         if(titles.length<quantity)return respostaErro(res,400,`Existem ${titles.length} título(s), mas foram solicitados ${quantity} anúncio(s). Gere todos os títulos antes de publicar.`);
 
         const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).filter(Boolean);
-        if(!pictureIds.length)return respostaErro(res,400,'Adicione pelo menos uma imagem antes de publicar.');
+        const manualPictureSources=normalizarUrlsManuaisV47(cfg.picture_sources_manual||cfg.manual_picture_urls||[]);
+        if(!pictureIds.length&&!manualPictureSources.length)return respostaErro(res,400,'Adicione pelo menos uma imagem gerada ou informe uma URL pública de imagem antes de publicar.');
 
         const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
         const varCfg=cfg.variations||{};
@@ -7682,9 +7808,9 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
         // Assim a fila não começa condenada por um campo inválido.
         const errosValidacao=[];
         const categoriasLimpas=[];
-        let maxPicsGlobal=pictureIds.length;
+        let maxPicsGlobal=manualPictureSources.length||pictureIds.length;
         for(const category of categories){
-            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
+            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
             if(prepared.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,prepared.maxPics);
             if(prepared.faltantes.length){
                 errosValidacao.push(`${category.category_name}: faltam ${prepared.faltantes.map(x=>x.name).join(', ')}`);
@@ -7692,12 +7818,15 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
             }
             const sample=prepared.payload;
             if(up&&varCfg.enabled)delete sample.variations;
-            const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
-            const vd=await jsonSeguro(vr);
+            const validacao=await validarPayloadMercadoComFallbackEnvioV47(token,sample,prepared.shippingInfo);
+            const vr=validacao.response;
+            const vd=validacao.data;
             if(!vr.ok){
                 errosValidacao.push(`${category.category_name}: ${formatarErroMercadoLivre(vd)}`);
                 continue;
             }
+            // Salva o modo que efetivamente passou na validação para o worker usar a mesma configuração.
+            category.shipping_mode=validacao.mode||prepared.shippingInfo?.mode||null;
             categoriasLimpas.push({
                 ...category,
                 attributes:prepared.payload.attributes
@@ -7724,6 +7853,7 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
 
         cfg.titles=titles.slice(0,quantity);
         cfg.quantity=quantity;
+        cfg.picture_sources_manual=manualPictureSources.slice(0,Math.max(1,maxPicsGlobal));
         cfg.picture_ids=pictureIds.slice(0,Math.max(1,maxPicsGlobal));
         cfg.categories=categoriasLimpas;
 
@@ -7732,7 +7862,7 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
           : 1;
         const total=quantity*categoriasLimpas.length*varCount;
 
-        const job=await criarJob(me.id,'mass_create_v37',{version:'v46',config:cfg});
+        const job=await criarJob(me.id,'mass_create_v37',{version:'v47',config:cfg});
         const jr=await dbQuery(`
           UPDATE ml_jobs SET
             progress_total=$2,
@@ -7752,7 +7882,7 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
             job:jr.rows[0],
             modo:up?'user_products':'legacy',
             total,
-            fotos_por_anuncio:cfg.picture_ids.length,
+            fotos_por_anuncio:(cfg.picture_sources_manual?.length||cfg.picture_ids.length),
             mensagem:`${categoriasLimpas.length} categoria(s) × ${quantity} anúncio(s)/família(s)${up&&varCfg.enabled?` × ${varCount} variação(ões)`:''}.`
         });
     }catch(e){
