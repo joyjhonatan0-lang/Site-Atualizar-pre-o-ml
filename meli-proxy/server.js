@@ -11,7 +11,7 @@ const fetch = (...args) =>
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 
 const PORT = process.env.PORT || 3000;
 const ML_API = 'https://api.mercadolibre.com';
@@ -1038,6 +1038,10 @@ function motivoBloqueioStatusV35(status){
     }
     if(st==='payment_required'){
         return 'O anúncio está bloqueado aguardando regularização de pagamento. O preço não pode ser alterado enquanto esse bloqueio existir.';
+    }
+
+    if(st==='active'){
+        return 'O anúncio está ativo, mas o Mercado Livre marcou o preço como não editável neste momento. Isso pode acontecer por revisão/moderação, promoção ou automatização de preço, catálogo ou outra restrição temporária da publicação.';
     }
 
     return `O anúncio está com status "${statusItemPtV35(status)}" e o Mercado Livre não permite alterar o preço nesse estado.`;
@@ -3817,6 +3821,58 @@ async function inicializarBancoEscala() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_ml_notifications_external
       ON ml_notifications(external_id) WHERE external_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_ml_notifications_queue ON ml_notifications(status,available_at,created_at);
+
+      ALTER TABLE ml_jobs
+      ADD COLUMN IF NOT EXISTS result JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS ml_sync_seen (
+        job_id BIGINT NOT NULL,
+        seller_id BIGINT NOT NULL,
+        item_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY(job_id,item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_sync_seen_seller_job
+      ON ml_sync_seen(seller_id,job_id);
+
+      CREATE TABLE IF NOT EXISTS ml_price_update_errors (
+        job_id BIGINT NOT NULL,
+        seller_id BIGINT NOT NULL,
+        item_id TEXT NOT NULL,
+        requested_price NUMERIC(18,2) NOT NULL DEFAULT 0,
+        failure_type TEXT NOT NULL DEFAULT 'erro',
+        message_pt TEXT NOT NULL DEFAULT '',
+        technical_message TEXT NOT NULL DEFAULT '',
+        http_status INTEGER NULL,
+        code TEXT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY(job_id,item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_price_update_errors_job
+      ON ml_price_update_errors(job_id,created_at);
+
+      CREATE TABLE IF NOT EXISTS ml_mass_create_results (
+        job_id BIGINT NOT NULL,
+        seller_id BIGINT NOT NULL,
+        seq INTEGER NOT NULL,
+        family_seq INTEGER NOT NULL DEFAULT 0,
+        variation_seq INTEGER NOT NULL DEFAULT 0,
+        title_requested TEXT NOT NULL DEFAULT '',
+        item_id TEXT NULL,
+        permalink TEXT NULL,
+        success BOOLEAN NOT NULL DEFAULT FALSE,
+        message TEXT NOT NULL DEFAULT '',
+        technical_message TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY(job_id,seq)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_mass_create_results_job
+      ON ml_mass_create_results(job_id,seq);
+
+      DELETE FROM ml_sync_seen
+      WHERE created_at < NOW() - INTERVAL '3 days';
     `);
     console.log('[ESCALA] PostgreSQL pronto.');
 }
@@ -3840,122 +3896,147 @@ function itemParaDb(item, sellerId) {
 }
 
 async function upsertItensDb(sellerId, itens) {
-    if (!itens.length) return;
-    const client=await db.connect();
-    try {
-        await client.query('BEGIN');
+    if(!Array.isArray(itens) || !itens.length)return;
 
-        for (const item of itens) {
-            const v=itemParaDb(item,sellerId);
+    /*
+      V36:
+      - upsert em blocos via jsonb_to_recordset, muito mais rápido para 90k+;
+      - shipping_cost/free_shipping/freight_synced_at NÃO são tocados aqui;
+      - portanto Puxar anúncios nunca zera nem altera o frete salvo.
+    */
+    const TAMANHO=Math.max(100,Math.min(1000,Number(process.env.ML_DB_UPSERT_BATCH||500)));
 
-            await client.query(`
-              INSERT INTO ml_items
+    for(let inicio=0;inicio<itens.length;inicio+=TAMANHO){
+        const lote=itens.slice(inicio,inicio+TAMANHO).map(item=>{
+            const n=normalizarItemGestao(item);
+            const saleFee=Number(item?._sale_fee_amount ?? item?.sale_fee ?? 0);
+            const commissionPercentage=Number(item?._commission_percentage ?? item?.commission_percentage ?? 0);
+            const commissionSyncedAt=item?._commission_synced_at||item?.commission_synced_at||null;
+
+            return {
+                item_id:String(n.id||''),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price:Number(n.preco||0),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                ml_updated_at:n.atualizado_em||null,
+                raw:item||{},
+                sale_fee:Number.isFinite(saleFee)?saleFee:0,
+                commission_percentage:Number.isFinite(commissionPercentage)?commissionPercentage:0,
+                commission_synced_at:commissionSyncedAt,
+                net_received:Math.max(0,Number(n.preco||0)-Math.max(0,saleFee))
+            };
+        }).filter(x=>x.item_id);
+
+        if(!lote.length)continue;
+
+        await dbQuery(`
+          INSERT INTO ml_items (
+            seller_id,item_id,title,sku,price,available_quantity,sold_quantity,
+            status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,
+            raw,sale_fee,commission_percentage,commission_synced_at,net_received,synced_at
+          )
+          SELECT
+            $1::bigint,
+            x.item_id,x.title,x.sku,x.price,x.available_quantity,x.sold_quantity,
+            x.status,x.listing_type_id,x.category_id,x.thumbnail,x.permalink,
+            x.ml_updated_at,x.raw,x.sale_fee,x.commission_percentage,
+            x.commission_synced_at,x.net_received,NOW()
+          FROM jsonb_to_recordset($2::jsonb) AS x(
+            item_id text,
+            title text,
+            sku text,
+            price numeric,
+            available_quantity integer,
+            sold_quantity integer,
+            status text,
+            listing_type_id text,
+            category_id text,
+            thumbnail text,
+            permalink text,
+            ml_updated_at timestamptz,
+            raw jsonb,
+            sale_fee numeric,
+            commission_percentage numeric,
+            commission_synced_at timestamptz,
+            net_received numeric
+          )
+          ON CONFLICT(seller_id,item_id) DO UPDATE SET
+            title=EXCLUDED.title,
+            sku=EXCLUDED.sku,
+            price=EXCLUDED.price,
+            available_quantity=EXCLUDED.available_quantity,
+            sold_quantity=EXCLUDED.sold_quantity,
+            status=EXCLUDED.status,
+            listing_type_id=EXCLUDED.listing_type_id,
+            category_id=EXCLUDED.category_id,
+            thumbnail=EXCLUDED.thumbnail,
+            permalink=EXCLUDED.permalink,
+            ml_updated_at=EXCLUDED.ml_updated_at,
+
+            sale_fee=CASE
+              WHEN EXCLUDED.commission_synced_at IS NOT NULL
+              THEN EXCLUDED.sale_fee
+              ELSE ml_items.sale_fee
+            END,
+
+            commission_percentage=CASE
+              WHEN EXCLUDED.commission_synced_at IS NOT NULL
+              THEN EXCLUDED.commission_percentage
+              ELSE ml_items.commission_percentage
+            END,
+
+            commission_synced_at=COALESCE(
+              EXCLUDED.commission_synced_at,
+              ml_items.commission_synced_at
+            ),
+
+            /* Frete preservado: só /api/scale/fretes pode alterá-lo. */
+            net_received=GREATEST(
+              0,
+              EXCLUDED.price -
               (
-                seller_id,item_id,title,sku,price,available_quantity,sold_quantity,
-                status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,
-                raw,sale_fee,commission_percentage,commission_synced_at,net_received,synced_at
-              )
-              VALUES(
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-                $15,$16,$17,$18,NOW()
-              )
-              ON CONFLICT(seller_id,item_id) DO UPDATE SET
-                title=EXCLUDED.title,
-                sku=EXCLUDED.sku,
-                price=EXCLUDED.price,
-                available_quantity=EXCLUDED.available_quantity,
-                sold_quantity=EXCLUDED.sold_quantity,
-                status=EXCLUDED.status,
-                listing_type_id=EXCLUDED.listing_type_id,
-                category_id=EXCLUDED.category_id,
-                thumbnail=EXCLUDED.thumbnail,
-                permalink=EXCLUDED.permalink,
-                ml_updated_at=EXCLUDED.ml_updated_at,
-
-                sale_fee=CASE
+                CASE
                   WHEN EXCLUDED.commission_synced_at IS NOT NULL
                   THEN EXCLUDED.sale_fee
                   ELSE ml_items.sale_fee
-                END,
-
-                commission_percentage=CASE
-                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                  THEN EXCLUDED.commission_percentage
-                  ELSE ml_items.commission_percentage
-                END,
-
-                commission_synced_at=COALESCE(
-                  EXCLUDED.commission_synced_at,
-                  ml_items.commission_synced_at
-                ),
-
-                freight_synced_at=CASE
-                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
-                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
-                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
-                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
-                  THEN NULL ELSE ml_items.freight_synced_at END,
-
-                freight_last_attempt_at=CASE
-                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
-                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
-                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
-                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
-                  THEN NULL ELSE ml_items.freight_last_attempt_at END,
-
-                freight_last_error=CASE
-                  WHEN ml_items.price IS DISTINCT FROM EXCLUDED.price
-                    OR ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id
-                    OR COALESCE(ml_items.raw->'shipping','{}'::jsonb)
-                       IS DISTINCT FROM COALESCE(EXCLUDED.raw->'shipping','{}'::jsonb)
-                  THEN NULL ELSE ml_items.freight_last_error END,
-
-                net_received=GREATEST(
-                  0,
-                  EXCLUDED.price -
-                  (
-                    CASE
-                      WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                      THEN EXCLUDED.sale_fee
-                      ELSE ml_items.sale_fee
-                    END
-                  ) -
-                  ml_items.shipping_cost
-                ),
-
-                raw=EXCLUDED.raw,
-                synced_at=CASE WHEN
-                    ml_items.title IS DISTINCT FROM EXCLUDED.title OR
-                    ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
-                    ml_items.price IS DISTINCT FROM EXCLUDED.price OR
-                    ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
-                    ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
-                    ml_items.status IS DISTINCT FROM EXCLUDED.status OR
-                    ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
-                    ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
-                    ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
-                    ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
-                    ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
-                    ml_items.sale_fee IS DISTINCT FROM (
-                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                           THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
-                    ) OR
-                    ml_items.commission_percentage IS DISTINCT FROM (
-                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                           THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
-                    )
-                  THEN NOW()
-                  ELSE ml_items.synced_at
                 END
-            `,v);
-        }
+              ) -
+              ml_items.shipping_cost
+            ),
 
-        await client.query('COMMIT');
-    } catch(e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
+            raw=EXCLUDED.raw,
+
+            synced_at=CASE WHEN
+                ml_items.title IS DISTINCT FROM EXCLUDED.title OR
+                ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
+                ml_items.price IS DISTINCT FROM EXCLUDED.price OR
+                ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
+                ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
+                ml_items.status IS DISTINCT FROM EXCLUDED.status OR
+                ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
+                ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
+                ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
+                ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
+                ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
+                ml_items.sale_fee IS DISTINCT FROM (
+                  CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                       THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
+                ) OR
+                ml_items.commission_percentage IS DISTINCT FROM (
+                  CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                       THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
+                )
+              THEN NOW()
+              ELSE ml_items.synced_at
+            END
+        `,[sellerId,JSON.stringify(lote)]);
     }
 }
 
@@ -4199,6 +4280,14 @@ async function processarSyncCompleto(job) {
     let errors=Number(job.errors||0);
     let total=Number(job.progress_total||0);
     let ciclos=0;
+    let scanCompleto=false;
+    let removidos=0;
+
+    // Mantém uma lista persistente dos IDs vistos neste job.
+    // Se o Render reiniciar, a reconciliação continua segura.
+    if(processed===0 && !scrollId){
+        await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
+    }
 
     // O Mercado Livre limita a busca a no máximo 100 IDs por chamada.
     // Agrupamos 50 páginas de 100 como um lote lógico de 5.000 anúncios.
@@ -4220,7 +4309,20 @@ async function processarSyncCompleto(job) {
         }
 
         const ids=Array.isArray(sd.results)?sd.results:[];
-        if(!ids.length){scrollId=null;break}
+        if(!ids.length){
+            scrollId=null;
+            scanCompleto=true;
+            break;
+        }
+
+        // Marca IDs vistos antes de buscar detalhes. Uma falha de bulk nunca
+        // fará um anúncio existente ser apagado por engano.
+        await dbQuery(`
+          INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
+          SELECT $1,$2,x
+          FROM unnest($3::text[]) AS x
+          ON CONFLICT(job_id,item_id) DO NOTHING
+        `,[job.id,job.seller_id,ids.map(String)]);
 
         // Usa o bulk atual do Mercado Livre em subgrupos e concorrência controlada.
         const detalhes=await buscarItensBulkFreteRapido(token,ids);
@@ -4265,6 +4367,30 @@ async function processarSyncCompleto(job) {
         // scroll_id expira em poucos minutos: segue sem pausa longa.
     } while(scrollId && ciclos<2000);
 
+    if(!scrollId)scanCompleto=true;
+
+    if(!scanCompleto){
+        throw new Error('A varredura não chegou ao final. A reconciliação de exclusões não foi executada por segurança.');
+    }
+
+    // Espelha a conta: se o ID não apareceu na varredura completa atual,
+    // ele foi removido da lista local. O frete dos itens restantes é preservado.
+    const del=await dbQuery(`
+      DELETE FROM ml_items m
+      WHERE m.seller_id=$1
+        AND NOT EXISTS(
+          SELECT 1
+          FROM ml_sync_seen s
+          WHERE s.job_id=$2
+            AND s.seller_id=$1
+            AND s.item_id=m.item_id
+        )
+      RETURNING m.item_id
+    `,[job.seller_id,job.id]);
+    removidos=del.rowCount||0;
+
+    await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
+
     const finalTotal=total>0?total:processed;
     await dbQuery(`
       UPDATE ml_jobs SET
@@ -4283,7 +4409,7 @@ async function processarSyncCompleto(job) {
         processed,
         finalTotal,
         errors,
-        `Anúncios concluídos: ${processed.toLocaleString('pt-BR')} processado(s) em lotes lógicos de até 5.000.`
+        `Anúncios concluídos: ${processed.toLocaleString('pt-BR')} processado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base por não existirem mais na conta · fretes preservados.`
     ]);
 }
 
@@ -4327,6 +4453,582 @@ async function processarNotificacaoFila() {
     }
 }
 
+
+/* =========================================================
+   V36 — ATUALIZAÇÃO DE PREÇOS EM JOB PERSISTENTE
+   Escala para dezenas de milhares de anúncios sem depender
+   do navegador ficar aberto.
+========================================================= */
+
+async function gravarErrosPrecoV36(jobId,sellerId,erros){
+    if(!erros.length)return;
+    const rows=erros.map(e=>({
+        item_id:String(e.id||''),
+        requested_price:Number(e.requested_price||0),
+        failure_type:String(e.tipo_falha||'erro'),
+        message_pt:String(e.erro||'Falha sem detalhe.'),
+        technical_message:String(e.erro_tecnico||''),
+        http_status:e.http_status==null?null:Number(e.http_status),
+        code:e.codigo==null?null:String(e.codigo),
+        attempts:Number(e.tentativas||0)
+    })).filter(x=>x.item_id);
+
+    if(!rows.length)return;
+
+    await dbQuery(`
+      INSERT INTO ml_price_update_errors(
+        job_id,seller_id,item_id,requested_price,failure_type,
+        message_pt,technical_message,http_status,code,attempts,updated_at
+      )
+      SELECT
+        $1::bigint,$2::bigint,x.item_id,x.requested_price,x.failure_type,
+        x.message_pt,x.technical_message,x.http_status,x.code,x.attempts,NOW()
+      FROM jsonb_to_recordset($3::jsonb) AS x(
+        item_id text,
+        requested_price numeric,
+        failure_type text,
+        message_pt text,
+        technical_message text,
+        http_status integer,
+        code text,
+        attempts integer
+      )
+      ON CONFLICT(job_id,item_id) DO UPDATE SET
+        requested_price=EXCLUDED.requested_price,
+        failure_type=EXCLUDED.failure_type,
+        message_pt=EXCLUDED.message_pt,
+        technical_message=EXCLUDED.technical_message,
+        http_status=EXCLUDED.http_status,
+        code=EXCLUDED.code,
+        attempts=EXCLUDED.attempts,
+        updated_at=NOW()
+    `,[jobId,sellerId,JSON.stringify(rows)]);
+}
+
+async function processarAtualizacaoPrecosMassaV36(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para atualizar preços.');
+
+    const itens=Array.isArray(job.payload?.items)?job.payload.items:[];
+    const total=itens.length;
+    let indice=Math.max(0,Number(job.cursor||0));
+    let sucessos=Number(job.result?.success||0);
+    let erros=Number(job.errors||0);
+    let bloqueados=Number(job.result?.blocked||0);
+    let temporarios=Number(job.result?.temporary||0);
+
+    const CHUNK=Math.max(100,Math.min(1000,Number(process.env.ML_PRICE_MASS_CHUNK||500)));
+    const CONCORRENCIA=Math.max(2,Math.min(20,Number(process.env.ML_PRICE_MASS_CONCURRENCY||10)));
+    const PAUSA_GRUPO=Math.max(25,Math.min(1000,Number(process.env.ML_PRICE_MASS_GROUP_DELAY_MS||90)));
+
+    if(indice===0){
+        await dbQuery(`DELETE FROM ml_price_update_errors WHERE job_id=$1`,[job.id]);
+    }
+
+    while(indice<total){
+        const lote=itens.slice(indice,Math.min(total,indice+CHUNK));
+        const ids=lote.map(x=>String(x.id));
+
+        const meta=await dbQuery(`
+          SELECT item_id,status,raw
+          FROM ml_items
+          WHERE seller_id=$1 AND item_id=ANY($2::text[])
+        `,[job.seller_id,ids]);
+
+        const metaMap=new Map(meta.rows.map(r=>[
+            String(r.item_id),
+            {
+                status:String(r.status||''),
+                dynamicPricing:Array.isArray(r?.raw?.tags)
+                  ? r.raw.tags.includes('dynamic_standard_price')
+                  : false,
+                subStatus:Array.isArray(r?.raw?.sub_status)?r.raw.sub_status:[]
+            }
+        ]));
+
+        const resultados=new Array(lote.length);
+        let cursorLocal=0;
+
+        async function workerPreco(){
+            while(true){
+                const pos=cursorLocal++;
+                if(pos>=lote.length)return;
+
+                const item=lote[pos];
+                const m=metaMap.get(String(item.id))||{};
+                const st=String(m.status||'').toLowerCase();
+
+                if(st && st!=='active'){
+                    resultados[pos]={
+                        id:item.id,
+                        requested_price:Number(item.price||0),
+                        sucesso:false,
+                        bloqueado:true,
+                        tipo_falha:'bloqueio',
+                        http_status:400,
+                        codigo:'item.price.not_modifiable',
+                        tentativas:0,
+                        erro:motivoBloqueioStatusV35(st),
+                        erro_tecnico:`status:${st}`
+                    };
+                    continue;
+                }
+
+                if(m.dynamicPricing){
+                    resultados[pos]={
+                        id:item.id,
+                        requested_price:Number(item.price||0),
+                        sucesso:false,
+                        bloqueado:true,
+                        tipo_falha:'bloqueio',
+                        http_status:400,
+                        codigo:'item.price.not_modifiable',
+                        tentativas:0,
+                        erro:'Este anúncio está com Automatização de Preços configurada no Mercado Livre. Desative a automatização antes de alterar o preço manualmente pela API.',
+                        erro_tecnico:'dynamic_standard_price'
+                    };
+                    continue;
+                }
+
+                resultados[pos]=await atualizarPrecoItemV35(item,token,m);
+            }
+        }
+
+        for(let p=0;p<CONCORRENCIA;p++){
+            if(p>0)await esperarV35(Math.min(PAUSA_GRUPO,75));
+            workerPreco();
+        }
+
+        // Espera todos os workers terminarem usando polling leve do cursor/results.
+        while(resultados.filter(Boolean).length<lote.length){
+            await esperarV35(80);
+        }
+
+        const ok=resultados.filter(r=>r?.sucesso);
+        const falhas=resultados.filter(r=>!r?.sucesso);
+
+        if(ok.length){
+            await atualizarPrecosDbLoteV26(
+                job.seller_id,
+                ok.map(r=>({id:r.id,price:r.price??r.requested_price}))
+            );
+        }
+
+        if(falhas.length){
+            await gravarErrosPrecoV36(job.id,job.seller_id,falhas);
+        }
+
+        sucessos+=ok.length;
+        erros+=falhas.length;
+        bloqueados+=falhas.filter(x=>x?.bloqueado||x?.tipo_falha==='bloqueio').length;
+        temporarios+=falhas.filter(x=>x?.tipo_falha==='temporario').length;
+        indice+=lote.length;
+
+        const pct=total?Math.round((indice/total)*100):100;
+        const result={
+            success:sucessos,
+            failed:erros,
+            blocked:bloqueados,
+            temporary:temporarios,
+            concurrency:CONCORRENCIA,
+            chunk:CHUNK
+        };
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            progress_current=$2,
+            progress_total=$3,
+            errors=$4,
+            cursor=$5,
+            result=$6::jsonb,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            job.id,indice,total,erros,String(indice),JSON.stringify(result),
+            `Atualização de preços: ${indice.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${sucessos.toLocaleString('pt-BR')} atualizado(s) · ${erros.toLocaleString('pt-BR')} não atualizado(s)`
+        ]);
+
+        await esperarV35(PAUSA_GRUPO);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        processed=$2,
+        progress_current=$2,
+        progress_total=$3,
+        errors=$4,
+        cursor=NULL,
+        result=$5::jsonb,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+        job.id,total,total,erros,
+        JSON.stringify({
+            success:sucessos,
+            failed:erros,
+            blocked:bloqueados,
+            temporary:temporarios,
+            concurrency:CONCORRENCIA,
+            chunk:CHUNK
+        }),
+        `Preços concluídos: ${sucessos.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} não atualizado(s).`
+    ]);
+}
+
+/* =========================================================
+   V36 — CRIAÇÃO DE ANÚNCIOS EM MASSA
+========================================================= */
+
+function limitarTituloV36(texto,limite=60){
+    let t=String(texto||'').replace(/\s+/g,' ').trim();
+    if(t.length<=limite)return t;
+    t=t.slice(0,limite+1);
+    const corte=t.lastIndexOf(' ');
+    if(corte>=Math.floor(limite*0.72))t=t.slice(0,corte);
+    return t.slice(0,limite).trim();
+}
+
+async function gerarImagemGeminiV36(prompt){
+    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
+    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
+
+    const model=String(process.env.GEMINI_IMAGE_MODEL||'gemini-3.1-flash-lite-image').trim();
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+    const r=await fetch(url,{
+        method:'POST',
+        headers:{
+            'Content-Type':'application/json',
+            'x-goog-api-key':apiKey
+        },
+        body:JSON.stringify({
+            contents:[{
+                parts:[{
+                    text:String(prompt||'')+
+                      '\nGere uma imagem quadrada 1:1 de produto para marketplace, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d’água visuais, sem texto promocional, sem inventar acessórios ou características que não foram informadas.'
+                }]
+            }],
+            generationConfig:{
+                responseModalities:['IMAGE']
+            }
+        })
+    });
+
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+        const msg=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
+        if(r.status===429)throw new Error('O limite gratuito do Gemini para imagens foi atingido temporariamente. Aguarde e tente novamente.');
+        throw new Error(msg);
+    }
+
+    const parts=d?.candidates?.[0]?.content?.parts||[];
+    const imagePart=parts.find(p=>p?.inlineData?.data||p?.inline_data?.data);
+    const inline=imagePart?.inlineData||imagePart?.inline_data;
+
+    if(!inline?.data)throw new Error('O Gemini respondeu sem uma imagem utilizável.');
+
+    return {
+        buffer:Buffer.from(inline.data,'base64'),
+        mime:String(inline.mimeType||inline.mime_type||'image/png'),
+        model
+    };
+}
+
+async function enviarImagemMercadoLivreV36(token,img){
+    const mod=await import('node-fetch');
+    const form=new mod.FormData();
+    const blob=new mod.Blob([img.buffer],{type:img.mime||'image/png'});
+    form.append('file',blob,'ml-hub-pro-ai.png');
+
+    const r=await mod.default(`${ML_API}/pictures/items/upload`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${token}`},
+        body:form
+    });
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok || !d?.id){
+        throw new Error(formatarErroMercadoLivre(d)||`Falha ao enviar imagem ao Mercado Livre (HTTP ${r.status}).`);
+    }
+
+    const melhor=(Array.isArray(d.variations)?d.variations:[])
+      .sort((a,b)=>{
+          const aa=String(a.size||'0x0').split('x').map(Number);
+          const bb=String(b.size||'0x0').split('x').map(Number);
+          return (bb[0]*bb[1])-(aa[0]*aa[1]);
+      })[0];
+
+    return {
+        id:String(d.id),
+        url:String(melhor?.secure_url||melhor?.url||''),
+        model:img.model
+    };
+}
+
+async function mlPostComRetryV36(url,token,body,maxTentativas=4){
+    let ultimo=null;
+    for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+        const r=await mlFetch(url,token,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(body)
+        });
+        const d=await jsonSeguro(r);
+
+        if(r.ok)return {ok:true,status:r.status,data:d,tentativa};
+
+        ultimo={ok:false,status:r.status,data:d,tentativa};
+        if(![408,429,500,502,503,504].includes(r.status))return ultimo;
+
+        const retryAfter=Number(r.headers.get('retry-after')||0);
+        const espera=retryAfter>0
+          ? Math.min(20000,retryAfter*1000)
+          : Math.min(12000,900*Math.pow(2,tentativa-1)+Math.floor(Math.random()*500));
+        await esperarV35(espera);
+    }
+    return ultimo;
+}
+
+function montarPayloadPublicacaoV36(cfg,{familyIndex=0,variationIndex=0,userProductSeller=false}={}){
+    const title=limitarTituloV36(cfg.titles?.[familyIndex]||cfg.family_name||cfg.product_name||'',60);
+    const price=Number(cfg.price||0);
+    const stock=Math.max(1,Number(cfg.stock||1));
+    const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).map(String).filter(Boolean);
+    const pictures=pictureIds.map(id=>({id}));
+
+    let attributes=(Array.isArray(cfg.attributes)?cfg.attributes:[])
+      .filter(a=>a?.id && (a?.value_id || a?.value_name))
+      .map(a=>({
+          id:String(a.id),
+          ...(a.value_id?{value_id:String(a.value_id)}:{}),
+          ...(a.value_name?{value_name:String(a.value_name)}:{})
+      }));
+
+    const varCfg=cfg.variations||{};
+    const varValues=Array.isArray(varCfg.values)?varCfg.values.map(String).filter(Boolean):[];
+
+    if(userProductSeller && varCfg.enabled && varValues.length){
+        const value=varValues[variationIndex%varValues.length];
+        attributes=attributes.filter(a=>String(a.id)!==String(varCfg.attribute_id));
+        attributes.push({
+            id:String(varCfg.attribute_id),
+            value_name:value
+        });
+    }
+
+    const base={
+        category_id:String(cfg.category_id),
+        price,
+        currency_id:'BRL',
+        available_quantity:stock,
+        buying_mode:'buy_it_now',
+        listing_type_id:String(cfg.listing_type_id||'gold_special'),
+        condition:String(cfg.condition||'new'),
+        pictures,
+        attributes
+    };
+
+    if(userProductSeller){
+        base.family_name=title;
+    }else{
+        base.title=title;
+
+        const skuPrefix=String(cfg.sku_prefix||'').trim();
+        if(skuPrefix){
+            base.seller_custom_field=`${skuPrefix}-${String(familyIndex+1).padStart(5,'0')}`;
+        }
+
+        if(varCfg.enabled && varValues.length){
+            const qtd=Math.min(
+                Math.max(1,Number(varCfg.count||varValues.length)),
+                varValues.length
+            );
+
+            base.available_quantity=stock*qtd;
+            base.variations=varValues.slice(0,qtd).map((value,i)=>({
+                attribute_combinations:[{
+                    id:String(varCfg.attribute_id),
+                    value_name:String(value)
+                }],
+                price,
+                available_quantity:stock,
+                picture_ids:pictureIds,
+                ...(skuPrefix?{
+                    seller_custom_field:`${skuPrefix}-${String(familyIndex+1).padStart(5,'0')}-${String(i+1).padStart(2,'0')}`
+                }:{})
+            }));
+        }
+    }
+
+    return base;
+}
+
+async function gravarResultadoCriacaoV36(jobId,sellerId,row){
+    await dbQuery(`
+      INSERT INTO ml_mass_create_results(
+        job_id,seller_id,seq,family_seq,variation_seq,title_requested,
+        item_id,permalink,success,message,technical_message
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ON CONFLICT(job_id,seq) DO UPDATE SET
+        item_id=EXCLUDED.item_id,
+        permalink=EXCLUDED.permalink,
+        success=EXCLUDED.success,
+        message=EXCLUDED.message,
+        technical_message=EXCLUDED.technical_message
+    `,[
+        jobId,sellerId,row.seq,row.family_seq,row.variation_seq,row.title_requested,
+        row.item_id||null,row.permalink||null,Boolean(row.success),
+        String(row.message||''),String(row.technical_message||'')
+    ]);
+}
+
+async function processarCriacaoMassaV36(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para criar anúncios.');
+
+    const cfg=job.payload?.config||{};
+    const meRes=await mlFetch(`${ML_API}/users/me`,token);
+    const me=await jsonSeguro(meRes);
+    if(!meRes.ok)throw new Error(formatarErroMercadoLivre(me));
+
+    const userProductSeller=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+    const families=Math.max(1,Number(cfg.quantity||cfg.titles?.length||1));
+    const varValues=Array.isArray(cfg?.variations?.values)?cfg.variations.values.filter(Boolean):[];
+    const varCount=(cfg?.variations?.enabled && userProductSeller)
+      ? Math.min(Math.max(1,Number(cfg.variations.count||varValues.length||1)),Math.max(1,varValues.length))
+      : 1;
+
+    const total=families*varCount;
+    let seq=Math.max(0,Number(job.cursor||0));
+    let sucessos=Number(job.result?.success||0);
+    let erros=Number(job.errors||0);
+
+    while(seq<total){
+        const existing=await dbQuery(
+            `SELECT success FROM ml_mass_create_results WHERE job_id=$1 AND seq=$2`,
+            [job.id,seq]
+        );
+        if(existing.rows.length){
+            seq++;
+            continue;
+        }
+
+        const familyIndex=Math.floor(seq/varCount);
+        const variationIndex=seq%varCount;
+        const payload=montarPayloadPublicacaoV36(cfg,{
+            familyIndex,
+            variationIndex,
+            userProductSeller
+        });
+
+        const titleRequested=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
+        const pr=await mlPostComRetryV36(`${ML_API}/items`,token,payload,4);
+
+        if(pr?.ok && pr?.data?.id){
+            let warning='';
+            const item=pr.data;
+
+            if(cfg.description){
+                const dr=await mlPostComRetryV36(
+                    `${ML_API}/items/${encodeURIComponent(item.id)}/description`,
+                    token,
+                    {plain_text:String(cfg.description).slice(0,50000)},
+                    3
+                );
+                if(!dr?.ok){
+                    warning='Anúncio criado, mas a descrição não foi adicionada: '+formatarErroMercadoLivre(dr?.data);
+                }
+            }
+
+            await gravarResultadoCriacaoV36(job.id,job.seller_id,{
+                seq,
+                family_seq:familyIndex,
+                variation_seq:variationIndex,
+                title_requested:titleRequested,
+                item_id:item.id,
+                permalink:item.permalink||'',
+                success:true,
+                message:warning||'Anúncio criado com sucesso.'
+            });
+
+            await upsertItensDb(job.seller_id,[item]);
+            sucessos++;
+        }else{
+            const tecnico=formatarErroMercadoLivre(pr?.data)||`HTTP ${pr?.status||500}`;
+            await gravarResultadoCriacaoV36(job.id,job.seller_id,{
+                seq,
+                family_seq:familyIndex,
+                variation_seq:variationIndex,
+                title_requested:titleRequested,
+                success:false,
+                message:'O Mercado Livre recusou a criação deste anúncio. Revise os campos obrigatórios da categoria e os detalhes exibidos.',
+                technical_message:tecnico
+            });
+            erros++;
+        }
+
+        seq++;
+        const pct=Math.round((seq/total)*100);
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            progress_current=$2,
+            progress_total=$3,
+            errors=$4,
+            cursor=$5,
+            result=$6::jsonb,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            job.id,seq,total,erros,String(seq),
+            JSON.stringify({
+                success:sucessos,
+                failed:erros,
+                mode:userProductSeller?'user_products':'legacy',
+                families,
+                items_total:total
+            }),
+            `Criação em massa: ${seq.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${sucessos.toLocaleString('pt-BR')} criado(s)`
+        ]);
+
+        // Publicação é naturalmente limitada pela API; pequena pausa reduz picos.
+        await esperarV35(180);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        cursor=NULL,
+        processed=$2,
+        progress_current=$2,
+        progress_total=$3,
+        errors=$4,
+        result=$5::jsonb,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+        job.id,total,total,erros,
+        JSON.stringify({
+            success:sucessos,
+            failed:erros,
+            mode:userProductSeller?'user_products':'legacy',
+            families,
+            items_total:total
+        }),
+        `Criação concluída: ${sucessos.toLocaleString('pt-BR')} item(ns) criado(s), ${erros.toLocaleString('pt-BR')} falha(s).`
+    ]);
+}
+
 async function workerLoop(indice) {
     while(true) {
         try {
@@ -4336,6 +5038,8 @@ async function workerLoop(indice) {
                     if(job.type==='full_sync') await processarSyncCompleto(job);
                     else if(job.type==='price_sync') await processarPrecosEscala(job);
                     else if(job.type==='freight_sync') await processarFretesEscala(job);
+                    else if(job.type==='price_update_mass') await processarAtualizacaoPrecosMassaV36(job);
+                    else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
                     const retry=Number(job.attempts||0)<4;
@@ -5053,6 +5757,508 @@ app.delete('/api/v27/sku-pricing/:sku',async(req,res)=>{
     }
 });
 
+
+/* =========================================================
+   ROTAS V36 — PREÇOS EM MASSA
+========================================================= */
+
+app.post('/api/scale/price-update/start',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const entrada=Array.isArray(req.body?.items)?req.body.items:[];
+
+        const mapa=new Map();
+        for(const x of entrada){
+            const id=String(x?.id||'').trim();
+            const price=Number(x?.price);
+            if(id && Number.isFinite(price) && price>0){
+                mapa.set(id,{id,price:Number(price.toFixed(2))});
+            }
+        }
+
+        const items=[...mapa.values()];
+        if(!items.length)return respostaErro(res,400,'Nenhum anúncio válido para atualizar.');
+        if(items.length>120000)return respostaErro(res,400,'Limite de segurança: até 120.000 anúncios por execução.');
+
+        const ativo=await dbQuery(`
+          SELECT id,seller_id,type,status,progress_current,progress_total,processed,errors,
+                 cursor,message,result,created_at,updated_at,finished_at
+          FROM ml_jobs
+          WHERE seller_id=$1 AND type='price_update_mass'
+            AND status IN ('queued','running')
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+
+        if(ativo.rows.length){
+            return res.status(202).json({
+                sucesso:true,
+                job:ativo.rows[0],
+                retomado:true,
+                mensagem:'Já existe uma atualização de preços em andamento. O painel continuará acompanhando esse processo.'
+            });
+        }
+
+        const job=await criarJob(me.id,'price_update_mass',{
+            version:'v36',
+            items
+        });
+
+        const jr=await dbQuery(`
+          UPDATE ml_jobs SET
+            progress_total=$2,
+            progress_current=0,
+            processed=0,
+            errors=0,
+            cursor='0',
+            message=$3,
+            result='{}'::jsonb,
+            updated_at=NOW()
+          WHERE id=$1
+          RETURNING id,seller_id,type,status,progress_current,progress_total,processed,
+                    errors,cursor,message,result,created_at,updated_at,finished_at
+        `,[job.id,items.length,
+           `Atualização preparada: ${items.length.toLocaleString('pt-BR')} anúncio(s).`]);
+
+        res.status(202).json({
+            sucesso:true,
+            job:jr.rows[0],
+            retomado:false,
+            total:items.length,
+            mensagem:'Atualização de preços enviada para a fila persistente do servidor.'
+        });
+    }catch(e){
+        console.error('[PRICE UPDATE MASS START V36]',e);
+        respostaErro(res,500,'Erro ao iniciar atualização de preços: '+e.message);
+    }
+});
+
+app.get('/api/scale/price-update/:jobId/errors',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const limit=Math.min(500,Math.max(20,Number(req.query.limit||100)));
+        const offset=Math.max(0,Number(req.query.offset||0));
+
+        const [total,rows]=await Promise.all([
+            dbQuery(`
+              SELECT COUNT(*)::int total
+              FROM ml_price_update_errors
+              WHERE job_id=$1 AND seller_id=$2
+            `,[req.params.jobId,me.id]),
+            dbQuery(`
+              SELECT item_id id,requested_price,failure_type,message_pt,
+                     technical_message,http_status,code,attempts
+              FROM ml_price_update_errors
+              WHERE job_id=$1 AND seller_id=$2
+              ORDER BY updated_at DESC,item_id
+              LIMIT $3 OFFSET $4
+            `,[req.params.jobId,me.id,limit,offset])
+        ]);
+
+        res.json({
+            sucesso:true,
+            total:Number(total.rows[0]?.total||0),
+            limit,offset,
+            erros:rows.rows
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao carregar falhas da atualização: '+e.message);
+    }
+});
+
+/* =========================================================
+   ROTAS V36 — CRIAÇÃO EM MASSA
+========================================================= */
+
+app.get('/api/v36/criar/status',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+        res.json({
+            sucesso:true,
+            seller_id:me.id,
+            user_product_seller:up,
+            modo:up?'user_products':'legacy',
+            mensagem:up
+              ? 'Conta no novo modelo User Products: variações serão publicadas como itens da mesma família.'
+              : 'Conta no modelo legado: variações podem ser enviadas no array variations quando a categoria permitir.'
+        });
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
+});
+
+app.get('/api/v36/criar/categorias',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    const q=String(req.query.q||'').trim();
+    if(!q)return respostaErro(res,400,'Informe o produto para sugerir categorias.');
+
+    try{
+        const r=await mlFetch(
+            `${ML_API}/sites/MLB/domain_discovery/search?limit=8&q=${encodeURIComponent(q)}`,
+            token
+        );
+        const d=await jsonSeguro(r);
+        if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));
+
+        res.json({
+            sucesso:true,
+            categorias:(Array.isArray(d)?d:[]).map(x=>({
+                category_id:x.category_id,
+                category_name:x.category_name,
+                domain_id:x.domain_id,
+                domain_name:x.domain_name,
+                attributes:Array.isArray(x.attributes)?x.attributes:[]
+            }))
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao sugerir categoria: '+e.message);
+    }
+});
+
+app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    const id=String(req.params.id||'').trim();
+
+    try{
+        const [ar,cr]=await Promise.all([
+            mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}/attributes`,token),
+            mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}`,token)
+        ]);
+        const attrs=await jsonSeguro(ar);
+        const categoria=await jsonSeguro(cr);
+
+        if(!ar.ok)return respostaErro(res,ar.status,formatarErroMercadoLivre(attrs));
+
+        const lista=(Array.isArray(attrs)?attrs:[]).map(a=>({
+            id:a.id,
+            name:a.name,
+            value_type:a.value_type,
+            values:Array.isArray(a.values)?a.values.slice(0,100):[],
+            required:Boolean(a?.tags?.required),
+            allow_variations:Boolean(a?.tags?.allow_variations),
+            variation_attribute:Boolean(a?.tags?.variation_attribute),
+            child_pk:Boolean(a?.tags?.child_pk),
+            parent_pk:Boolean(a?.tags?.parent_pk),
+            read_only:Boolean(a?.tags?.read_only)
+        }));
+
+        res.json({
+            sucesso:true,
+            categoria:cr.ok?categoria:null,
+            atributos:lista,
+            obrigatorios:lista.filter(a=>a.required),
+            variacoes:lista.filter(a=>a.allow_variations||a.child_pk)
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao consultar atributos: '+e.message);
+    }
+});
+
+app.post('/api/v36/criar/ia/conteudo',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const produto=String(req.body?.produto||'').trim();
+    const detalhes=String(req.body?.detalhes||'').trim();
+    const quantidade=Math.min(500,Math.max(1,Number(req.body?.quantidade||1)));
+    const limite=Math.min(60,Math.max(30,Number(req.body?.limite||60)));
+    const categoryId=String(req.body?.category_id||'').trim();
+
+    if(!produto)return respostaErro(res,400,'Informe o produto.');
+
+    try{
+        let atributosCategoria=[];
+        if(categoryId){
+            const ar=await mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/attributes`,token);
+            const ad=await jsonSeguro(ar);
+            if(ar.ok && Array.isArray(ad)){
+                atributosCategoria=ad
+                  .filter(a=>a?.tags?.required || a?.attribute_group_id==='MAIN')
+                  .slice(0,35)
+                  .map(a=>({id:a.id,name:a.name,value_type:a.value_type,values:(a.values||[]).slice(0,30)}));
+            }
+        }
+
+        const titulos=[];
+        const batch=40;
+        let tentativas=0;
+
+        while(titulos.length<quantidade && tentativas<Math.ceil(quantidade/batch)+3){
+            const faltam=Math.min(batch,quantidade-titulos.length);
+            const txt=await chamarGeminiTexto(
+              `Produto: ${produto}
+Detalhes reais fornecidos pelo vendedor:
+${detalhes||'(nenhum detalhe adicional)'}
+
+Crie ${faltam} títulos diferentes para anúncio no Mercado Livre Brasil.
+Cada título deve ter no máximo ${limite} caracteres.
+Não invente marca, modelo, material, voltagem, quantidade, certificação ou acessório.
+Não use emojis.
+Retorne SOMENTE JSON: {"titulos":["..."]}.`,
+              'Você cria títulos claros, naturais e comerciais para marketplace. Use somente fatos fornecidos pelo vendedor.'
+            );
+
+            const obj=extrairJsonIA(txt);
+            for(const t of (Array.isArray(obj?.titulos)?obj.titulos:[])){
+                const limpo=limitarTituloV36(t,limite);
+                if(limpo && !titulos.some(x=>x.toLowerCase()===limpo.toLowerCase())){
+                    titulos.push(limpo);
+                }
+                if(titulos.length>=quantidade)break;
+            }
+            tentativas++;
+        }
+
+        const ficha=await chamarGeminiTexto(
+          `Produto: ${produto}
+Detalhes reais:
+${detalhes||'(nenhum detalhe adicional)'}
+
+Atributos possíveis/úteis da categoria:
+${JSON.stringify(atributosCategoria)}
+
+Retorne SOMENTE JSON no formato:
+{
+  "descricao":"texto simples profissional em português do Brasil",
+  "atributos":[{"id":"ID","value_name":"valor"}]
+}
+
+Regras:
+- só preencha atributos cuja informação esteja explicitamente disponível nos dados do produto;
+- nunca invente marca, GTIN, homologação, modelo, material, dimensão ou certificação;
+- descrição em texto simples, sem HTML, sem telefone, link ou promessa falsa.`,
+          'Você prepara conteúdo fiel e estruturado para uma publicação de marketplace.'
+        );
+
+        const fichaObj=extrairJsonIA(ficha);
+
+        res.json({
+            sucesso:true,
+            titulos:titulos.slice(0,quantidade),
+            descricao:String(fichaObj?.descricao||''),
+            atributos:Array.isArray(fichaObj?.atributos)?fichaObj.atributos:[]
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.post('/api/v36/criar/ia/imagem',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const prompt=String(req.body?.prompt||'').trim();
+    const quantidade=Math.min(6,Math.max(1,Number(req.body?.quantidade||1)));
+    if(!prompt)return respostaErro(res,400,'Informe o produto ou briefing da imagem.');
+
+    try{
+        const pictures=[];
+        for(let i=0;i<quantidade;i++){
+            const img=await gerarImagemGeminiV36(prompt);
+            const pic=await enviarImagemMercadoLivreV36(token,img);
+            pictures.push(pic);
+        }
+        res.json({sucesso:true,pictures});
+    }catch(e){
+        respostaErro(res,500,'Erro ao gerar/enviar imagem: '+e.message);
+    }
+});
+
+app.post('/api/v36/criar/validar',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+        const cfg=req.body?.config||{};
+        const varCfg=cfg.variations||{};
+        const sample=montarPayloadPublicacaoV36(cfg,{
+            familyIndex:0,
+            variationIndex:0,
+            userProductSeller:up
+        });
+
+        if(up && varCfg.enabled){
+            // No novo modelo, cada variação será um item separado na mesma família.
+            delete sample.variations;
+        }
+
+        const vr=await mlFetch(`${ML_API}/items/validate`,token,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(sample)
+        });
+        const vd=await jsonSeguro(vr);
+
+        res.status(vr.ok?200:vr.status).json({
+            sucesso:vr.ok,
+            modo:up?'user_products':'legacy',
+            validacao:vd,
+            erro:vr.ok?null:formatarErroMercadoLivre(vd)
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao validar publicação: '+e.message);
+    }
+});
+
+app.post('/api/v36/criar/publicar',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const cfg=req.body?.config||{};
+        const titles=Array.isArray(cfg.titles)?cfg.titles.map(x=>limitarTituloV36(x,60)).filter(Boolean):[];
+        const quantity=Math.min(2000,Math.max(1,Number(cfg.quantity||titles.length||1)));
+
+        if(!String(cfg.category_id||'').trim())return respostaErro(res,400,'Escolha uma categoria.');
+        if(!(Number(cfg.price)>0))return respostaErro(res,400,'Informe um preço válido.');
+        if(!titles.length)return respostaErro(res,400,'Gere ou informe pelo menos um título/nome de família.');
+        if(titles.length<quantity)return respostaErro(res,400,`Existem ${titles.length} título(s), mas foram solicitados ${quantity} anúncio(s). Gere todos os títulos antes de publicar.`);
+
+        const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).filter(Boolean);
+        if(!pictureIds.length){
+            return respostaErro(res,400,'Adicione pelo menos uma imagem antes de publicar.');
+        }
+
+        const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+        const varCfg=cfg.variations||{};
+
+        if(varCfg.enabled){
+            const ar=await mlFetch(`${ML_API}/categories/${encodeURIComponent(cfg.category_id)}/attributes`,token);
+            const ad=await jsonSeguro(ar);
+            if(!ar.ok)return respostaErro(res,ar.status,formatarErroMercadoLivre(ad));
+
+            const attr=(Array.isArray(ad)?ad:[]).find(a=>String(a.id)===String(varCfg.attribute_id));
+            const permitido=up
+              ? Boolean(attr?.tags?.child_pk || attr?.tags?.allow_variations)
+              : Boolean(attr?.tags?.allow_variations);
+
+            if(!permitido){
+                return respostaErro(res,400,'O atributo escolhido não pode ser usado como variação nessa categoria.');
+            }
+
+            if(!Array.isArray(varCfg.values) || !varCfg.values.filter(Boolean).length){
+                return respostaErro(res,400,'Informe os valores das variações.');
+            }
+        }
+
+        const ativo=await dbQuery(`
+          SELECT id,seller_id,type,status,progress_current,progress_total,processed,
+                 errors,cursor,message,result,created_at,updated_at,finished_at
+          FROM ml_jobs
+          WHERE seller_id=$1 AND type='mass_create'
+            AND status IN ('queued','running')
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+
+        if(ativo.rows.length){
+            return res.status(202).json({
+                sucesso:true,
+                job:ativo.rows[0],
+                retomado:true,
+                mensagem:'Já existe uma criação em massa em andamento.'
+            });
+        }
+
+        cfg.titles=titles.slice(0,quantity);
+        cfg.quantity=quantity;
+        cfg.picture_ids=pictureIds;
+
+        const varCount=(cfg?.variations?.enabled && up)
+          ? Math.min(
+              Math.max(1,Number(cfg.variations.count||1)),
+              Math.max(1,(cfg.variations.values||[]).filter(Boolean).length)
+            )
+          : 1;
+        const total=quantity*varCount;
+
+        const job=await criarJob(me.id,'mass_create',{
+            version:'v36',
+            config:cfg
+        });
+
+        const jr=await dbQuery(`
+          UPDATE ml_jobs SET
+            progress_total=$2,
+            progress_current=0,
+            processed=0,
+            errors=0,
+            cursor='0',
+            message=$3,
+            result=$4::jsonb,
+            updated_at=NOW()
+          WHERE id=$1
+          RETURNING id,seller_id,type,status,progress_current,progress_total,processed,
+                    errors,cursor,message,result,created_at,updated_at,finished_at
+        `,[
+            job.id,total,
+            `Criação em massa preparada: ${total.toLocaleString('pt-BR')} item(ns).`,
+            JSON.stringify({mode:up?'user_products':'legacy',families:quantity,items_total:total})
+        ]);
+
+        res.status(202).json({
+            sucesso:true,
+            job:jr.rows[0],
+            modo:up?'user_products':'legacy',
+            total,
+            mensagem:up&&varCfg.enabled
+              ? `No modelo User Products, ${quantity} família(s) com ${varCount} variação(ões) gerarão ${total} item(ns).`
+              : `${total} anúncio(s) enviado(s) para a fila de criação.`
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao iniciar criação em massa: '+e.message);
+    }
+});
+
+app.get('/api/v36/criar/jobs/:jobId/resultados',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const limit=Math.min(500,Math.max(20,Number(req.query.limit||100)));
+        const offset=Math.max(0,Number(req.query.offset||0));
+
+        const [total,rows]=await Promise.all([
+            dbQuery(`SELECT COUNT(*)::int total FROM ml_mass_create_results WHERE job_id=$1 AND seller_id=$2`,
+              [req.params.jobId,me.id]),
+            dbQuery(`
+              SELECT seq,family_seq,variation_seq,title_requested,item_id,permalink,
+                     success,message,technical_message
+              FROM ml_mass_create_results
+              WHERE job_id=$1 AND seller_id=$2
+              ORDER BY seq
+              LIMIT $3 OFFSET $4
+            `,[req.params.jobId,me.id,limit,offset])
+        ]);
+
+        res.json({
+            sucesso:true,
+            total:Number(total.rows[0]?.total||0),
+            resultados:rows.rows,
+            limit,offset
+        });
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
+});
+
 app.get('/api/scale/status',async(req,res)=>{
     if(!db)return res.json({sucesso:true,database:false,worker:false,mensagem:'Configure DATABASE_URL para ativar o modo 90k.'});
     try{
@@ -5226,7 +6432,17 @@ app.post('/api/scale/sync',async(req,res)=>{
 
 app.get('/api/scale/jobs/:id',async(req,res)=>{
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
-    try{const r=await dbQuery(`SELECT * FROM ml_jobs WHERE id=$1`,[req.params.id]);if(!r.rows.length)return respostaErro(res,404,'Job não encontrado.');res.json({sucesso:true,job:r.rows[0]})}catch(e){respostaErro(res,500,e.message)}
+    try{
+        const r=await dbQuery(`
+          SELECT id,seller_id,type,status,progress_current,progress_total,processed,
+                 errors,cursor,message,attempts,result,available_at,locked_at,
+                 created_at,updated_at,finished_at
+          FROM ml_jobs
+          WHERE id=$1
+        `,[req.params.id]);
+        if(!r.rows.length)return respostaErro(res,404,'Job não encontrado.');
+        res.json({sucesso:true,job:r.rows[0]});
+    }catch(e){respostaErro(res,500,e.message)}
 });
 
 app.get('/api/scale/anuncios',async(req,res)=>{
