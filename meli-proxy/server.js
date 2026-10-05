@@ -256,7 +256,7 @@ app.get('/api/version', (req, res) => {
     res.json({
         ok: true,
         service: 'ML Hub Pro',
-        version: 'ml-hub-pro-v44-cloudflare-images',
+        version: 'ml-hub-pro-v45-cloudflare-1080-cache-delete-images',
         oauth_callback: '/auth/callback',
         manual_credentials: '/api/oauth/manual-credentials'
     });
@@ -5140,8 +5140,8 @@ async function gerarImagemCloudflareV44(prompt,referenceImages=[]){
         try{
             const form=new mod.FormData();
             form.append('prompt',promptFinal);
-            form.append('width','1024');
-            form.append('height','1024');
+            form.append('width','1080');
+            form.append('height','1080');
             form.append('guidance','3.5');
 
             refs.forEach((img,i)=>{
@@ -5215,17 +5215,17 @@ async function gerarImagemCloudflareV44(prompt,referenceImages=[]){
 }
 
 const CENAS_IMAGENS_V38=[
-    {chave:'capa',titulo:'Capa',prompt:`Use a foto de referência para manter exatamente o mesmo produto. Gere uma imagem quadrada para capa de anúncio do Mercado Livre. Mostre somente o produto principal centralizado, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d'água, sem textos promocionais e sem inventar acessórios.`},
-    {chave:'angulo',titulo:'Ângulo complementar',prompt:`Use a foto de referência. Gere uma imagem quadrada mostrando o mesmo produto em ângulo complementar, fundo branco limpo e visual profissional de e-commerce, preservando formato, cor e acabamento reais.`},
-    {chave:'detalhe',titulo:'Close de detalhe',prompt:`Use a foto de referência. Gere uma imagem quadrada com close-up de detalhe do mesmo produto, destacando textura, material ou acabamento realmente visível, com fundo claro e composição comercial.`},
-    {chave:'uso1',titulo:'Aplicação 1',prompt:`Use a foto de referência e os detalhes fornecidos. Gere uma imagem quadrada com uma pessoa usando o mesmo produto em contexto real e natural, sem alterar a aparência do item, focada em demonstrar aplicação e utilidade.`},
-    {chave:'uso2',titulo:'Aplicação 2',prompt:`Use a foto de referência. Gere outra cena quadrada de uso do mesmo produto em ambiente real, mostrando um benefício prático e ajudando o comprador a compreender a utilização.`},
-    {chave:'kit',titulo:'Conteúdo da embalagem',prompt:`Use a foto de referência. Gere uma imagem quadrada estilo flat lay mostrando o produto e somente os itens inclusos que estejam visíveis ou informados. Se os acessórios não forem conhecidos, não invente itens.`},
-    {chave:'ficha',titulo:'Ficha técnica',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e uma ficha visual em português, com textos curtos, técnicos e claros apenas sobre fatos confirmados pelo vendedor ou claramente visíveis. Não invente medidas, materiais ou especificações.`},
-    {chave:'medidas',titulo:'Proporção / dimensões',prompt:`Use a foto de referência. Gere uma imagem quadrada que ajude a compreender proporção e escala. Só use números de medidas se eles tiverem sido fornecidos; caso contrário, não invente dimensões.`},
-    {chave:'beneficios',titulo:'Benefícios',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e de 3 a 5 benefícios em português baseados apenas em características reais ou informadas, com foco em clareza e conversão.`},
-    {chave:'seo',titulo:'Destaques de compra',prompt:`Use a foto de referência. Gere uma arte quadrada com o produto em destaque e textos curtos em português com termos de uso e diferenciais reais, em estilo marketplace limpo e voltado para conversão.`},
-    {chave:'lifestyle',titulo:'Lifestyle final',prompt:`Use a foto de referência. Gere uma imagem quadrada lifestyle comercial mostrando o mesmo produto em ambiente bonito e realista, preservando fielmente formato, cor e características visuais.`}
+    {chave:'capa',titulo:'Capa premium',prompt:`Use a foto de referência para manter exatamente o mesmo produto. Gere uma imagem 1080x1080 para capa premium de anúncio do Mercado Livre. Fundo branco puro obrigatório, produto fiel e centralizado, iluminação de estúdio, sombra suave, brilho/controlado, composição mais elaborada e elegante, visual de alta conversão, sem poluição, sem pessoas, sem marcas d'água e com o mínimo possível de texto.`},
+    {chave:'angulo',titulo:'Ângulo complementar',prompt:`Use a foto de referência. Gere uma imagem 1080x1080 mostrando o mesmo produto em ângulo complementar, com fundo branco limpo, iluminação profissional e aparência fiel ao item real.`},
+    {chave:'detalhe',titulo:'Close de detalhe',prompt:`Use a foto de referência. Gere uma imagem 1080x1080 com close-up de detalhe do mesmo produto, destacando textura, material ou acabamento realmente visível, com fundo claro e composição comercial.`},
+    {chave:'uso1',titulo:'Aplicação 1',prompt:`Use a foto de referência e os detalhes fornecidos. Gere uma imagem 1080x1080 de aplicação do produto em uso real. A cena deve estar perfeita, sem mãos deformadas, sem dedos extras, sem erros anatômicos. Se houver risco de erro anatômico, prefira mostrar apenas mãos corretas ou uma aplicação indireta do produto, sempre com resultado visual perfeito.`},
+    {chave:'uso2',titulo:'Aplicação 2',prompt:`Use a foto de referência. Gere outra imagem 1080x1080 de uso do mesmo produto em ambiente real, mostrando benefício prático e contexto de utilização. A cena deve ser correta e natural; se a aplicação com pessoas não ficar perfeita, mostre o uso com enquadramento seguro e sem deformações.`},
+    {chave:'kit',titulo:'Conteúdo da embalagem',prompt:`Use a foto de referência. Gere uma imagem 1080x1080 estilo flat lay mostrando o produto e somente os itens inclusos que estejam visíveis ou claramente informados. Se os acessórios não forem conhecidos, não invente itens.`},
+    {chave:'ficha',titulo:'Ficha técnica',prompt:`Use a foto de referência. Gere uma arte 1080x1080 com o mesmo produto e uma ficha visual em português, com textos curtos, técnicos e claros apenas sobre fatos confirmados pelo vendedor ou claramente visíveis. Não invente medidas, materiais ou especificações.`},
+    {chave:'medidas',titulo:'Proporção / dimensões',prompt:`Use a foto de referência. Gere uma imagem 1080x1080 que ajude a compreender proporção e escala. Só use números de medidas se eles tiverem sido fornecidos; caso contrário, não invente dimensões.`},
+    {chave:'beneficios',titulo:'Benefícios',prompt:`Use a foto de referência. Gere uma arte 1080x1080 com o mesmo produto e de 3 a 5 benefícios em português baseados apenas em características reais ou informadas, com foco em clareza e conversão.`},
+    {chave:'seo',titulo:'Destaques de compra',prompt:`Use a foto de referência. Gere uma arte 1080x1080 com o produto em destaque e textos curtos em português com termos de uso e diferenciais reais, em estilo marketplace limpo e voltado para conversão. Evite excesso de texto.`},
+    {chave:'lifestyle',titulo:'Lifestyle final',prompt:`Use a foto de referência. Gere uma imagem 1080x1080 lifestyle comercial mostrando o mesmo produto em ambiente bonito e realista, preservando fielmente formato, cor e características visuais.`}
 ];
 
 async function gerarPacote11ImagensV37({token,produto,detalhes,referenceImages=[]}){
@@ -6990,6 +6990,48 @@ app.get('/api/v36/criar/jobs/:jobId/resultados',async(req,res)=>{
 
 
 
+
+const cacheAnaliseCriacaoV45=new Map();
+const cacheKeywordsCriacaoV45=new Map();
+
+function nowV45(){return Date.now();}
+function limparCacheExpiradoV45(cache,ttlMs){
+    const limite=nowV45()-ttlMs;
+    for(const [k,v] of cache.entries()){
+        if(Number(v?.created_at||0)<limite)cache.delete(k);
+    }
+}
+function assinaturaImagensV45(referenceImages=[]){
+    return (Array.isArray(referenceImages)?referenceImages:[])
+      .slice(0,4)
+      .map(img=>`${String(img||'').length}:${String(img||'').slice(0,48)}`)
+      .join('|');
+}
+function chaveCacheV45(prefix,obj){
+    const raw=JSON.stringify(obj||{});
+    return `${prefix}:${Buffer.from(raw).toString('base64').slice(0,1800)}`;
+}
+async function buscarContextoMarketplaceV45(token,produto,detalhes=''){
+    const q=String(produto||detalhes||'').trim();
+    if(!q)return [];
+    try{
+        const r=await mlFetch(`${ML_API}/sites/MLB/search?q=${encodeURIComponent(q)}&limit=8`,token);
+        const d=await jsonSeguro(r);
+        if(!r.ok)return [];
+        return (Array.isArray(d?.results)?d.results:[]).slice(0,6).map(x=>(
+            {id:x.id,title:String(x.title||''),price:Number(x.price||0),condition:String(x.condition||''),thumbnail:String(x.thumbnail||''),permalink:String(x.permalink||'')}
+        ));
+    }catch(e){return [];}
+}
+function resumirContextoMarketplaceV45(lista=[]){
+    return (Array.isArray(lista)?lista:[]).slice(0,5).map((x,i)=>{
+        const partes=[`${i+1}. ${x.title||'Produto similar'}`];
+        if(x.condition)partes.push(`condição: ${x.condition}`);
+        if(Number.isFinite(Number(x.price))&&Number(x.price)>0)partes.push(`preço: R$ ${Number(x.price).toFixed(2)}`);
+        return partes.join(' | ');
+    }).join('\n');
+}
+
 /* =========================================================
    ROTAS V37 — CRIAÇÃO COM FOTO, 11 IMAGENS E MULTICATEGORIA
 ========================================================= */
@@ -7000,26 +7042,39 @@ app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
 
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
-    const quantidade=Math.min(500,Math.max(1,Number(req.body?.quantidade||1)));
+    const quantidade=Math.min(1000,Math.max(1,Number(req.body?.quantidade||1)));
     const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
     const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
 
     if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie pelo menos uma foto.');
 
     try{
-        const categorias=[];
-        for(const categoryId of categoryIds){
-            const [cr,ar]=await Promise.all([
-                mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}`,token),
-                mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/attributes`,token)
-            ]);
-            const cat=await jsonSeguro(cr);
-            const attrs=await jsonSeguro(ar);
-            if(cr.ok && ar.ok){
+        limparCacheExpiradoV45(cacheAnaliseCriacaoV45,1000*60*60*12);
+        const cacheKey=chaveCacheV45('analise',{
+            produto,
+            detalhes,
+            quantidade,
+            categoryIds,
+            refs:assinaturaImagensV45(referenceImages)
+        });
+        const cached=cacheAnaliseCriacaoV45.get(cacheKey);
+        if(cached?.data){
+            return res.json({...cached.data,cache:true,cache_source:'memory'});
+        }
+
+        const categorias=(await Promise.all(categoryIds.map(async(categoryId)=>{
+            try{
+                const [cr,ar]=await Promise.all([
+                    mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}`,token),
+                    mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/attributes`,token)
+                ]);
+                const cat=await jsonSeguro(cr);
+                const attrs=await jsonSeguro(ar);
+                if(!(cr.ok && ar.ok))return null;
                 const categoryPath=Array.isArray(cat?.path_from_root)&&cat.path_from_root.length
                   ? cat.path_from_root.map(p=>p?.name).filter(Boolean).join(' > ')
                   : String(cat?.name||categoryId);
-                categorias.push({
+                return {
                     category_id:categoryId,
                     category_name:String(cat?.name||categoryId),
                     category_path:categoryPath,
@@ -7032,9 +7087,9 @@ app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
                         required:Boolean(a?.tags?.required),
                         values:Array.isArray(a.values)?a.values.slice(0,40).map(v=>({id:v.id,name:v.name})):[ ]
                     }))
-                });
-            }
-        }
+                };
+            }catch(e){return null;}
+        }))).filter(Boolean);
 
         const prompt=`
 Analise as fotos do produto enviadas pelo vendedor e os detalhes abaixo.
@@ -7063,15 +7118,16 @@ A partir das imagens e do texto, gere SOMENTE JSON no formato:
 Regras:
 - Cada título deve ter no máximo 60 caracteres.
 - Gere títulos focados em conversão, SEO e palavras-chave relevantes.
+- Gere títulos variados, objetivos e naturais, sem repetir o mesmo começo em todos.
 - Não invente marca, modelo, voltagem, quantidade, material, medidas, certificações ou acessórios que não estejam visíveis ou claramente informados.
 - A descrição deve ser em português do Brasil, profissional, robusta, detalhada e voltada para vendas.
-- A descrição deve ter introdução comercial, resumo do produto, principais benefícios, aplicações/como usar, diferenciais, itens inclusos (somente se forem reais), cuidados/recomendações quando fizer sentido e um fechamento vendedor.
-- Prefira uma descrição mais completa, normalmente entre 900 e 2500 caracteres, em texto simples e bem organizada.
-- Em keywords, gere até 30 termos úteis.
+- A descrição deve ser MAIS COMPLETA, normalmente entre 1500 e 3500 caracteres, em texto simples e muito bem organizada.
+- Estrutura esperada da descrição: introdução comercial forte, resumo do produto, principais benefícios, aplicações / formas de uso, diferenciais, itens inclusos (somente se forem reais), orientações ou cuidados quando fizer sentido, e fechamento vendedor.
+- Em keywords, gere até 35 termos úteis.
 - Em categorias.attributes, preencha o máximo possível de atributos principais e secundários que possam ser inferidos com segurança pela imagem e pelo texto.
 - Priorize primeiro atributos obrigatórios, depois atributos altamente relevantes e depois atributos secundários relevantes.
 - Se uma categoria exigir atributos que não podem ser inferidos com segurança, simplesmente não preencha esses campos.
-- Para image_prompt, escreva um prompt completo para gerar imagens comerciais desse produto.
+- Para image_prompt, escreva um prompt completo para gerar imagens comerciais desse produto com foco em conversão e clareza.
 
 Abaixo seguem os atributos das categorias, para você sugerir preenchimento automático quando possível:
 ${JSON.stringify(categorias)}
@@ -7079,7 +7135,7 @@ ${JSON.stringify(categorias)}
 
         const obj=await chamarGeminiJsonVisionV37(prompt,referenceImages);
         const titulos=(Array.isArray(obj?.titulos)?obj.titulos:[]).map(t=>limitarTituloV36(t,60)).filter(Boolean).slice(0,quantidade);
-        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,30);
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,35);
 
         const categoriasOut=categorias.map(c=>({
             category_id:c.category_id,
@@ -7090,7 +7146,7 @@ ${JSON.stringify(categorias)}
             atributos:c.atributos
         }));
 
-        res.json({
+        const payload={
             sucesso:true,
             produto_detectado:String(obj?.produto_detectado||produto||''),
             resumo:String(obj?.resumo||''),
@@ -7099,12 +7155,13 @@ ${JSON.stringify(categorias)}
             descricao:String(obj?.descricao||''),
             image_prompt:String(obj?.image_prompt||produto||''),
             categorias:categoriasOut
-        });
+        };
+        cacheAnaliseCriacaoV45.set(cacheKey,{created_at:nowV45(),data:payload});
+        res.json(payload);
     }catch(e){
         respostaErro(res,500,'Erro ao analisar o produto com IA: '+e.message);
     }
 });
-
 
 app.post('/api/v38/criar/ia/keywords',async(req,res)=>{
     const token=obterToken(req);
@@ -7115,15 +7172,22 @@ app.post('/api/v38/criar/ia/keywords',async(req,res)=>{
     const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
     if(!produto&&!detalhes)return respostaErro(res,400,'Informe o produto ou os detalhes para buscar palavras-chave.');
 
-    const prompt=`Faça uma pesquisa na Web/Google sobre como compradores procuram este tipo de produto no Brasil e identifique termos comerciais recorrentes e relevantes para SEO de marketplace.\n\nProduto: ${produto||'(não informado)'}\nDetalhes reais: ${detalhes||'(não informado)'}\nCategorias Mercado Livre: ${categoryIds.join(', ')||'não informadas'}\n\nRetorne SOMENTE JSON no formato {"keywords":["..."],"observacao":"..."}. Gere até 30 palavras-chave ou frases curtas de intenção de compra. Não invente marca ou especificações. Não invente volume numérico de busca; se não houver dado público de volume, apenas priorize relevância e recorrência dos termos encontrados.`;
+    const prompt=`Faça uma pesquisa na Web/Google sobre como compradores procuram este tipo de produto no Brasil e identifique termos comerciais recorrentes e relevantes para SEO de marketplace.
+
+Produto: ${produto||'(não informado)'}
+Detalhes reais: ${detalhes||'(não informado)'}
+Categorias Mercado Livre: ${categoryIds.join(', ')||'não informadas'}
+
+Retorne SOMENTE JSON no formato {"keywords":["..."],"observacao":"..."}. Gere até 35 palavras-chave ou frases curtas de intenção de compra. Não invente marca ou especificações. Não invente volume numérico de busca; se não houver dado público de volume, apenas priorize relevância e recorrência dos termos encontrados.`;
 
     try{
-        // Pesquisa Google via Gemini pode consumir cota/faturamento. Como o painel
-        // precisa continuar utilizável no modo gratuito, ela fica desativada por
-        // padrão. Para habilitar conscientemente no Render, use:
-        // GEMINI_GOOGLE_SEARCH_ENABLED=true
+        limparCacheExpiradoV45(cacheKeywordsCriacaoV45,1000*60*60*12);
+        const cacheKey=chaveCacheV45('keywords',{produto,detalhes,categoryIds});
+        const cached=cacheKeywordsCriacaoV45.get(cacheKey);
+        if(cached?.data)return res.json({...cached.data,cache:true,cache_source:'memory'});
+
         const permitirPesquisaWeb=String(process.env.GEMINI_GOOGLE_SEARCH_ENABLED||'false').toLowerCase()==='true';
-        let fonte=permitirPesquisaWeb?'Pesquisa Google via Gemini':'Gemini (modo gratuito, sem Pesquisa Google)';
+        let fonte=permitirPesquisaWeb?'Pesquisa Google via Gemini':'Gemini (modo rápido com cache local do servidor)';
         let texto='';
         let pesquisaWeb=false;
         if(permitirPesquisaWeb){
@@ -7143,8 +7207,10 @@ app.post('/api/v38/criar/ia/keywords',async(req,res)=>{
             texto=await chamarGeminiTexto(prompt,'Você é especialista em SEO para marketplace brasileiro. Retorne somente JSON válido com palavras-chave relevantes e não invente volume de busca.');
         }
         const obj=extrairJsonIA(texto);
-        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,30);
-        res.json({sucesso:true,keywords,fonte,pesquisa_web:pesquisaWeb,observacao:String(obj?.observacao||'')});
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,35);
+        const payload={sucesso:true,keywords,fonte,pesquisa_web:pesquisaWeb,observacao:String(obj?.observacao||'')};
+        cacheKeywordsCriacaoV45.set(cacheKey,{created_at:nowV45(),data:payload});
+        res.json(payload);
     }catch(e){
         respostaErro(res,e.status||500,'Erro ao buscar palavras-chave: '+e.message);
     }
@@ -7167,8 +7233,19 @@ app.post('/api/v38/criar/ia/imagem-item',async(req,res)=>{
 
     try{
         const cena=CENAS_IMAGENS_V38[index];
+        const similares=await buscarContextoMarketplaceV45(token,produto,detalhes);
+        const contextoMercado=resumirContextoMarketplaceV45(similares);
         const prompt=`Produto: ${produto||'Produto sem nome informado'}
 Detalhes reais informados: ${detalhes||'Nenhum detalhe adicional.'}
+Contexto visual de marketplace encontrado para este mesmo tipo de produto:
+${contextoMercado||'Nenhum contexto adicional encontrado.'}
+
+Diretrizes extras:
+- Preserve fielmente o produto das fotos enviadas.
+- Gere sempre em proporção quadrada 1080x1080.
+- As imagens de aplicação devem ser anatomicamente corretas, sem mãos deformadas e sem erro visual.
+- A inspiração do marketplace serve apenas para melhorar composição, clareza e conversão, nunca para trocar o produto real.
+
 ${cena.prompt}`;
 
         const img=await gerarImagemCloudflareV44(prompt,referenceImages);
@@ -7187,7 +7264,8 @@ ${cena.prompt}`;
                 url:pic.url,
                 model:img.model,
                 provider:'cloudflare'
-            }
+            },
+            referencias_encontradas:similares.length
         });
     }catch(e){
         const msg=String(e?.message||e);
