@@ -809,6 +809,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <span>Pós-venda</span>
         </button>
 
+        <button class="painel-sidebar-v24-item" data-aba="criar-massa" onclick="mudarAba('criar-massa')">
+            <span class="painel-sidebar-v24-icone">✚</span>
+            <span>Criar anúncios em massa</span>
+        </button>
+
         <div class="painel-sidebar-v24-divisor"></div>
 
         <button class="painel-sidebar-v24-item painel-sidebar-v24-voltar" onclick="mudarAba('inicio')">
@@ -2465,6 +2470,192 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 <!-- =====================================================
      RECLAMAÇÕES / DEVOLUÇÕES / DENÚNCIAS
 ===================================================== -->
+
+<!-- =====================================================
+     V36 — CRIAR ANÚNCIOS EM MASSA
+===================================================== -->
+<section id="secao-criar-massa" class="hidden space-y-6">
+
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+        <div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-emerald-400 font-bold">Publicação & IA</div>
+            <h1 class="text-2xl font-black text-white mt-1">Criar anúncios em massa</h1>
+            <p class="text-xs text-slate-500 mt-1 max-w-4xl">
+                Prepare títulos, categoria, ficha técnica, descrição, imagens e variações; valide no Mercado Livre e só publique depois da sua confirmação.
+            </p>
+        </div>
+        <div id="criar-modo-v36" class="panel rounded-xl px-4 py-3 text-xs text-slate-400">
+            Verificando modelo de publicação...
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div class="panel rounded-2xl p-5 xl:col-span-2">
+            <div class="text-sm font-black text-white">1. Produto e geração com IA</div>
+            <div class="text-[11px] text-slate-500 mt-1">A IA só deve usar fatos que você informar. Títulos são limitados a 60 caracteres.</div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Produto base</label>
+                    <input id="criar-produto-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Ex.: Aparador de pelos recarregável dourado">
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Características reais / informações do produto</label>
+                    <textarea id="criar-detalhes-v36" rows="5" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Material, cor, voltagem, itens inclusos, medidas, modelo, marca se houver, benefícios reais..."></textarea>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Quantidade de anúncios / famílias</label>
+                    <input id="criar-qtd-v36" type="number" min="1" max="500" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Limite do título</label>
+                    <input value="60 caracteres" readonly class="w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-400">
+                </div>
+            </div>
+
+            <button onclick="gerarConteudoCriacaoV36()" class="mt-5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">
+                ✦ Gerar títulos, descrição e características com IA
+            </button>
+        </div>
+
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">Configuração comercial</div>
+            <div class="grid grid-cols-2 gap-3 mt-5">
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Preço R$</label>
+                    <input id="criar-preco-v36" type="number" step="0.01" value="99.90" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Estoque</label>
+                    <input id="criar-estoque-v36" type="number" min="1" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Publicação</label>
+                    <select id="criar-listing-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="gold_special">Clássico</option>
+                        <option value="gold_pro">Premium</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Condição</label>
+                    <select id="criar-condicao-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="new">Novo</option>
+                        <option value="used">Usado</option>
+                        <option value="not_specified">Não especificado</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Prefixo SKU (modelo legado)</label>
+                    <input id="criar-sku-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white" placeholder="Ex.: APARADOR">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+                <div class="text-sm font-black text-white">2. Categoria e ficha técnica</div>
+                <div class="text-[11px] text-slate-500 mt-1">Use o preditor oficial do Mercado Livre e preencha os atributos obrigatórios.</div>
+            </div>
+            <button onclick="sugerirCategoriaV36()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">
+                Sugerir categorias
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-5">
+            <select id="criar-categoria-select-v36" onchange="selecionarCategoriaV36()" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
+                <option value="">Escolha uma categoria sugerida</option>
+            </select>
+            <input id="criar-categoria-id-v36" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Ou informe o ID, ex.: MLB1234">
+            <button onclick="carregarAtributosCategoriaV36()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl px-4 py-3">Carregar atributos</button>
+        </div>
+
+        <div id="criar-atributos-v36" class="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">3. Variações</div>
+            <div class="text-[11px] text-slate-500 mt-1">
+                No novo modelo User Products, as variações são itens separados da mesma família. No modelo legado, o painel usa o array de variações.
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
+                <select id="criar-variacao-enabled-v36" onchange="alternarVariacoesV36()" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
+                    <option value="0">Sem variações</option>
+                    <option value="1">Com variações</option>
+                </select>
+                <input id="criar-variacao-qtd-v36" type="number" min="1" max="50" value="2" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                <select id="criar-variacao-atributo-v36" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" disabled>
+                    <option value="">Carregue uma categoria primeiro</option>
+                </select>
+                <textarea id="criar-variacao-valores-v36" rows="5" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" placeholder="Um valor por linha, ex.:\nPreto\nBranco\nDourado" disabled></textarea>
+            </div>
+        </div>
+
+        <div class="panel rounded-2xl p-5">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <div class="text-sm font-black text-white">4. Imagens com IA</div>
+                    <div class="text-[11px] text-slate-500 mt-1">A imagem gerada é enviada ao CDN do Mercado Livre antes da publicação.</div>
+                </div>
+                <input id="criar-imagem-qtd-v36" type="number" min="1" max="6" value="1" class="w-20 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+            </div>
+
+            <textarea id="criar-imagem-prompt-v36" rows="4" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Descreva fielmente como o produto deve aparecer."></textarea>
+
+            <button onclick="gerarImagensCriacaoV36()" class="mt-4 bg-purple-500 hover:bg-purple-400 text-white text-xs font-black px-4 py-2.5 rounded-xl">
+                ✦ Gerar e enviar imagem(ns)
+            </button>
+
+            <div id="criar-imagens-preview-v36" class="grid grid-cols-3 gap-3 mt-4"></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">5. Títulos / nomes de família</div>
+            <div class="text-[11px] text-slate-500 mt-1">Um por linha. Você pode revisar e editar antes de publicar.</div>
+            <textarea id="criar-titulos-v36" rows="12" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+        </div>
+
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">6. Descrição</div>
+            <div class="text-[11px] text-slate-500 mt-1">Texto simples, conforme o formato aceito pelo Mercado Livre.</div>
+            <textarea id="criar-descricao-v36" rows="12" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div>
+                <div class="text-sm font-black text-white">7. Validar e publicar</div>
+                <div id="criar-validacao-v36" class="text-[11px] text-slate-500 mt-1">Valide um exemplo antes de iniciar a criação em massa.</div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="validarCriacaoV36()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl">Validar no Mercado Livre</button>
+                <button onclick="publicarCriacaoV36()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">Publicar em massa</button>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <div class="flex justify-between text-xs">
+                <span id="criar-job-msg-v36" class="text-slate-400">Aguardando publicação.</span>
+                <span id="criar-job-pct-v36" class="font-black text-white">0%</span>
+            </div>
+            <div class="h-3 bg-slate-800 rounded-full overflow-hidden mt-2">
+                <div id="criar-job-bar-v36" class="h-full bg-emerald-400 transition-all" style="width:0%"></div>
+            </div>
+            <div id="criar-resultados-v36" class="mt-4 max-h-80 overflow-y-auto divide-y divide-slate-800 border border-slate-800 rounded-xl hidden"></div>
+        </div>
+    </div>
+
+</section>
+
 <section id="secao-reclamacoes" class="hidden space-y-6">
   <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
     <div><div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-bold">Pós-venda e risco</div><h1 class="text-2xl font-black text-white mt-1">Central de Reclamações</h1><p class="text-xs text-slate-500 mt-1">Analise contexto, mensagens, anexos e impacto antes de responder. A IA prepara uma defesa para sua revisão — nunca envia sozinha.</p></div>
@@ -4039,6 +4230,7 @@ function mudarAba(aba) {
         'atendimento',
         'pedidos',
         'reclamacoes',
+        'criar-massa',
         'integracoes',
         'oportunidades',
         'qualidade',
@@ -4103,6 +4295,7 @@ function mudarAba(aba) {
     // Carregamento automático dos módulos profissionais.
     if (aba === 'central' && typeof carregarCentralPro === 'function') carregarCentralPro();
     if (aba === 'reclamacoes' && typeof carregarReclamacoesPro === 'function') carregarReclamacoesPro();
+    if (aba === 'criar-massa' && typeof carregarCriacaoMassaV36 === 'function') carregarCriacaoMassaV36();
     if (aba === 'integracoes' && typeof carregarIntegracoesPro === 'function') carregarIntegracoesPro();
     if (aba === 'oportunidades' && typeof carregarOportunidades === 'function') carregarOportunidades();
     if (aba === 'operacao' && typeof carregarOperacaoV2 === 'function') carregarOperacaoV2(1);
@@ -9722,6 +9915,737 @@ document.addEventListener('DOMContentLoaded',()=>{
         const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
         if(id)acompanharJobSyncV26(tipo,id);
     });
+});
+</script>
+
+
+<script>
+/* =========================================================
+   V36 — PREÇOS 90K+ + CRIAÇÃO EM MASSA
+========================================================= */
+
+let priceUpdateJobV36=null;
+let priceUpdateTimerV36=null;
+let criarEstadoV36={
+    modo:null,
+    userProductSeller:false,
+    atributos:[],
+    variacoes:[],
+    pictures:[],
+    jobId:null
+};
+let criarTimerV36=null;
+
+function traduzirTipoFalhaV36(tipo){
+    const mapa={
+        temporario:'Limite ou instabilidade temporária',
+        bloqueio:'Alteração bloqueada pelo Mercado Livre',
+        autenticacao:'Problema de autorização',
+        permissao:'Sem permissão',
+        validacao:'Regra de validação',
+        erro:'Erro'
+    };
+    return mapa[String(tipo||'erro')]||'Erro';
+}
+
+async function carregarFalhasPrecoV36(jobId){
+    try{
+        const token=obterToken();
+        const r=await fetch(`${RENDER_URL}/api/scale/price-update/${encodeURIComponent(jobId)}/errors?limit=200&_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)return;
+
+        const lista=document.getElementById('atualizacao-erros-lista-v31');
+        const details=document.getElementById('atualizacao-erros-detalhes-v31');
+        const ultimo=document.getElementById('atualizacao-ultimo-erro-v31');
+        const ultimoTexto=document.getElementById('atualizacao-ultimo-erro-texto-v31');
+
+        if(!lista||!details)return;
+
+        const erros=Array.isArray(d.erros)?d.erros:[];
+        if(!erros.length){
+            lista.innerHTML='';
+            details.classList.add('hidden');
+            if(ultimo)ultimo.classList.add('hidden');
+            return;
+        }
+
+        details.classList.remove('hidden');
+        lista.innerHTML=erros.map(e=>`
+          <div class="p-3">
+            <div class="flex flex-col md:flex-row md:justify-between gap-2">
+              <div>
+                <div class="text-[10px] font-black text-white">${escapeHtml(e.id)}</div>
+                <div class="text-[10px] text-red-300 mt-1">${escapeHtml(traduzirTipoFalhaV36(e.failure_type))}</div>
+              </div>
+              <div class="text-[10px] text-slate-500">${moeda(Number(e.requested_price||0))}</div>
+            </div>
+            <div class="text-[10px] text-slate-200 mt-2">${escapeHtml(e.message_pt||'Falha sem detalhe.')}</div>
+            ${(e.http_status||e.code)
+              ? `<div class="text-[9px] text-slate-600 mt-1">Detalhe técnico: ${e.http_status?`HTTP ${escapeHtml(e.http_status)}`:''}${e.code?` · ${escapeHtml(e.code)}`:''} · ${Number(e.attempts||0)} tentativa(s)</div>`
+              : ''}
+          </div>
+        `).join('');
+
+        const primeira=erros[0];
+        if(ultimo)ultimo.classList.remove('hidden');
+        if(ultimoTexto){
+            ultimoTexto.textContent=`${primeira.id}: ${primeira.message_pt||'Falha sem detalhe.'}`;
+        }
+    }catch(e){
+        console.warn('[FALHAS PREÇO V36]',e);
+    }
+}
+
+async function acompanharAtualizacaoPrecosV36(jobId){
+    clearTimeout(priceUpdateTimerV36);
+    const token=obterToken();
+    if(!token)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const j=d.job||{};
+        const total=Number(j.progress_total||0);
+        const atual=Number(j.progress_current||0);
+        const sucessos=Number(j.result?.success||0);
+        const falhas=Number(j.errors||j.result?.failed||0);
+        const pct=total?Math.min(100,Math.round((atual/total)*100)):0;
+
+        atualizarPainelProgressoV31({
+            total,
+            processados:atual,
+            sucessos,
+            falhas,
+            texto:j.message||'Atualizando preços...',
+            estado:j.status==='failed'?'error':'running'
+        });
+
+        const botao=document.getElementById('btn-atualizar-precos-v31');
+        if(botao){
+            const rodando=['queued','running'].includes(j.status);
+            botao.disabled=rodando;
+            botao.textContent=rodando?'Atualizando no servidor...':'↗ Atualizar preços';
+            botao.classList.toggle('opacity-60',rodando);
+        }
+
+        if(falhas>0 && (atual%500===0 || ['completed','failed'].includes(j.status))){
+            carregarFalhasPrecoV36(jobId);
+        }
+
+        if(['queued','running'].includes(j.status)){
+            localStorage.setItem('mlHubPro_price_update_job_v36',String(jobId));
+            priceUpdateTimerV36=setTimeout(()=>acompanharAtualizacaoPrecosV36(jobId),1200);
+            return;
+        }
+
+        localStorage.removeItem('mlHubPro_price_update_job_v36');
+        priceUpdateJobV36=null;
+
+        await carregarFalhasPrecoV36(jobId);
+
+        if(j.status==='completed'){
+            atualizarPainelProgressoV31({
+                total,
+                processados:total,
+                sucessos,
+                falhas,
+                texto:j.message||'Atualização concluída.'
+            });
+
+            // Não baixa tudo: força apenas o delta dos preços alterados.
+            if(typeof invalidarCacheAnunciosV30==='function')invalidarCacheAnunciosV30();
+
+            setTimeout(()=>{
+                if(abaAtualAtiva==='atualizacao' && typeof carregarAtualizacaoEscalaV21==='function'){
+                    carregarAtualizacaoEscalaV21().catch(()=>{});
+                }
+            },500);
+        }else{
+            atualizarPainelProgressoV31({
+                total,
+                processados:atual,
+                sucessos,
+                falhas,
+                texto:j.message||'Atualização interrompida.',
+                estado:'error'
+            });
+        }
+    }catch(e){
+        atualizarPainelProgressoV31({
+            total:1,processados:0,sucessos:0,falhas:1,
+            texto:'Erro ao acompanhar atualização: '+e.message,
+            estado:'error'
+        });
+        priceUpdateTimerV36=setTimeout(()=>acompanharAtualizacaoPrecosV36(jobId),3000);
+    }
+}
+
+// Substitui o envio em lotes pelo navegador.
+// Agora um único job persistente processa tudo no servidor.
+atualizarPrecosMassaApi=async function(){
+    if(priceUpdateJobV36)return;
+
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const selecionados=[...document.querySelectorAll('#tabela-atualizacao .check-item:checked:not(:disabled)')];
+    if(!selecionados.length){
+        alert('Nenhum anúncio atualizável está selecionado.');
+        return;
+    }
+
+    if(!confirm(`Enviar ${selecionados.length.toLocaleString('pt-BR')} anúncio(s) para a fila de atualização? Você pode sair desta tela e o servidor continuará o trabalho.`))return;
+
+    const mapa=new Map(atualItensV21.map(x=>[String(x.id),x]));
+    const items=[];
+
+    for(const check of selecionados){
+        const item=mapa.get(String(check.value));
+        if(!item || item.price_update_allowed===false)continue;
+
+        const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
+        if(!calc?.foraDaMargem)continue;
+
+        items.push({
+            id:String(item.id),
+            price:Number(calc.preco.toFixed(2))
+        });
+    }
+
+    if(!items.length){
+        alert('Nenhum anúncio válido ficou na fila depois das validações.');
+        return;
+    }
+
+    prepararProgressoAtualizacaoV31(items.length);
+    atualizarPainelProgressoV31({
+        total:items.length,
+        processados:0,
+        sucessos:0,
+        falhas:0,
+        texto:`Enviando ${items.length.toLocaleString('pt-BR')} anúncio(s) para a fila persistente...`
+    });
+
+    const botao=document.getElementById('btn-atualizar-precos-v31');
+    if(botao){
+        botao.disabled=true;
+        botao.textContent='Preparando...';
+        botao.classList.add('opacity-60');
+    }
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/price-update/start`,{
+            method:'POST',
+            headers:{
+                Authorization:token,
+                'Content-Type':'application/json'
+            },
+            body:JSON.stringify({items})
+        });
+
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const jobId=d.job?.id;
+        if(!jobId)throw new Error('O servidor não retornou o ID do trabalho.');
+
+        priceUpdateJobV36=String(jobId);
+        localStorage.setItem('mlHubPro_price_update_job_v36',String(jobId));
+        acompanharAtualizacaoPrecosV36(jobId);
+    }catch(e){
+        priceUpdateJobV36=null;
+        if(botao){
+            botao.disabled=false;
+            botao.textContent='↗ Atualizar preços';
+            botao.classList.remove('opacity-60');
+        }
+        atualizarPainelProgressoV31({
+            total:items.length,
+            processados:0,
+            sucessos:0,
+            falhas:1,
+            texto:'Não foi possível iniciar: '+e.message,
+            estado:'error'
+        });
+    }
+};
+
+/* =========================================================
+   CRIAÇÃO EM MASSA
+========================================================= */
+
+function valorElV36(id){
+    return document.getElementById(id)?.value??'';
+}
+
+function listaLinhasV36(id){
+    return String(valorElV36(id)||'')
+      .split(/\r?\n/)
+      .map(x=>x.trim())
+      .filter(Boolean);
+}
+
+async function carregarCriacaoMassaV36(){
+    const token=obterToken();
+    if(!token)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/status?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(r.ok){
+            criarEstadoV36.modo=d.modo;
+            criarEstadoV36.userProductSeller=Boolean(d.user_product_seller);
+            const el=document.getElementById('criar-modo-v36');
+            if(el){
+                el.innerHTML=d.user_product_seller
+                  ? '<span class="text-emerald-400 font-black">User Products ativo</span><div class="text-[10px] text-slate-500 mt-1">Variações serão itens da mesma família; o Mercado Livre gera o título final.</div>'
+                  : '<span class="text-yellow-400 font-black">Modelo legado</span><div class="text-[10px] text-slate-500 mt-1">Variações serão publicadas no array variations quando permitido.</div>';
+            }
+        }
+    }catch(e){}
+
+    const jobId=localStorage.getItem('mlHubPro_mass_create_job_v36');
+    if(jobId)acompanharCriacaoV36(jobId);
+}
+
+async function sugerirCategoriaV36(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const produto=String(valorElV36('criar-produto-v36')).trim();
+    if(!produto)return alert('Informe o produto primeiro.');
+
+    mostrarLoading('Consultando o preditor de categorias do Mercado Livre...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/categorias?q=${encodeURIComponent(produto)}`,{
+            headers:{Authorization:token}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const sel=document.getElementById('criar-categoria-select-v36');
+        sel.innerHTML='<option value="">Escolha uma categoria sugerida</option>'+
+          (d.categorias||[]).map(c=>`<option value="${escapeHtml(c.category_id)}">${escapeHtml(c.category_name)} · ${escapeHtml(c.category_id)}</option>`).join('');
+
+        if(d.categorias?.[0]){
+            sel.value=d.categorias[0].category_id;
+            document.getElementById('criar-categoria-id-v36').value=d.categorias[0].category_id;
+            await carregarAtributosCategoriaV36();
+        }
+    }catch(e){
+        alert('Erro ao sugerir categoria: '+e.message);
+    }finally{
+        esconderLoading();
+    }
+}
+
+function selecionarCategoriaV36(){
+    const sel=document.getElementById('criar-categoria-select-v36');
+    const id=String(sel?.value||'');
+    if(id){
+        document.getElementById('criar-categoria-id-v36').value=id;
+        carregarAtributosCategoriaV36();
+    }
+}
+
+async function carregarAtributosCategoriaV36(){
+    const token=obterToken();
+    if(!token)return;
+
+    const id=String(valorElV36('criar-categoria-id-v36')).trim();
+    if(!id)return alert('Informe ou escolha uma categoria.');
+
+    mostrarLoading('Carregando ficha técnica da categoria...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/categorias/${encodeURIComponent(id)}/atributos`,{
+            headers:{Authorization:token}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        criarEstadoV36.atributos=Array.isArray(d.atributos)?d.atributos:[];
+        criarEstadoV36.variacoes=Array.isArray(d.variacoes)?d.variacoes:[];
+
+        const box=document.getElementById('criar-atributos-v36');
+        const importantes=criarEstadoV36.atributos
+          .filter(a=>a.required || ['BRAND','MODEL','ITEM_CONDITION','GTIN'].includes(String(a.id)))
+          .slice(0,30);
+
+        box.innerHTML=importantes.map(a=>`
+          <div class="rounded-xl border ${a.required?'border-yellow-400/30':'border-slate-800'} bg-slate-950/60 p-3">
+            <label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-500'}">
+              ${escapeHtml(a.name||a.id)} ${a.required?'· obrigatório':''}
+            </label>
+            ${
+              Array.isArray(a.values)&&a.values.length
+              ? `<select data-attr-id="${escapeHtml(a.id)}" data-attr-name="${escapeHtml(a.name||a.id)}" class="criar-attr-v36 w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                   <option value="">Selecione...</option>
+                   ${a.values.slice(0,100).map(v=>`<option value="${escapeHtml(v.id||'')}" data-name="${escapeHtml(v.name||'')}">${escapeHtml(v.name||v.id)}</option>`).join('')}
+                 </select>`
+              : `<input data-attr-id="${escapeHtml(a.id)}" data-attr-name="${escapeHtml(a.name||a.id)}" class="criar-attr-v36 w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor">`
+            }
+          </div>
+        `).join('');
+
+        const varSel=document.getElementById('criar-variacao-atributo-v36');
+        varSel.innerHTML='<option value="">Escolha o atributo da variação</option>'+
+          criarEstadoV36.variacoes.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name||a.id)} · ${escapeHtml(a.id)}</option>`).join('');
+
+        alternarVariacoesV36();
+    }catch(e){
+        alert('Erro ao carregar atributos: '+e.message);
+    }finally{
+        esconderLoading();
+    }
+}
+
+function aplicarAtributosIaV36(lista){
+    const map=new Map((lista||[]).map(x=>[String(x.id),x]));
+    document.querySelectorAll('.criar-attr-v36').forEach(el=>{
+        const x=map.get(String(el.dataset.attrId||''));
+        if(!x)return;
+
+        if(el.tagName==='SELECT'){
+            const options=[...el.options];
+            const alvo=options.find(o=>
+                String(o.value)===String(x.value_id||'') ||
+                String(o.dataset.name||'').toLowerCase()===String(x.value_name||'').toLowerCase()
+            );
+            if(alvo)el.value=alvo.value;
+        }else if(x.value_name){
+            el.value=x.value_name;
+        }
+    });
+}
+
+async function gerarConteudoCriacaoV36(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const produto=String(valorElV36('criar-produto-v36')).trim();
+    if(!produto)return alert('Informe o produto.');
+
+    const quantidade=Math.min(500,Math.max(1,Number(valorElV36('criar-qtd-v36')||1)));
+    const category_id=String(valorElV36('criar-categoria-id-v36')).trim();
+
+    mostrarLoading(`Gerando ${quantidade} título(s), descrição e ficha técnica com IA...`);
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/ia/conteudo`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({
+                produto,
+                detalhes:String(valorElV36('criar-detalhes-v36')).trim(),
+                quantidade,
+                limite:60,
+                category_id
+            })
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        document.getElementById('criar-titulos-v36').value=(d.titulos||[]).join('\n');
+        document.getElementById('criar-descricao-v36').value=d.descricao||'';
+
+        if(!valorElV36('criar-imagem-prompt-v36')){
+            document.getElementById('criar-imagem-prompt-v36').value=
+              `${produto}. ${String(valorElV36('criar-detalhes-v36')).trim()}`;
+        }
+
+        aplicarAtributosIaV36(d.atributos||[]);
+
+        if((d.titulos||[]).length<quantidade){
+            alert(`A IA gerou ${(d.titulos||[]).length} título(s) únicos de ${quantidade}. Revise e complete antes de publicar.`);
+        }
+    }catch(e){
+        alert('Erro na geração com IA: '+e.message);
+    }finally{
+        esconderLoading();
+    }
+}
+
+function alternarVariacoesV36(){
+    const ativo=String(valorElV36('criar-variacao-enabled-v36'))==='1';
+    ['criar-variacao-qtd-v36','criar-variacao-atributo-v36','criar-variacao-valores-v36'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el)el.disabled=!ativo;
+    });
+}
+
+async function gerarImagensCriacaoV36(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const prompt=String(valorElV36('criar-imagem-prompt-v36')).trim() ||
+      String(valorElV36('criar-produto-v36')).trim();
+    if(!prompt)return alert('Informe o produto ou o briefing da imagem.');
+
+    const quantidade=Math.min(6,Math.max(1,Number(valorElV36('criar-imagem-qtd-v36')||1)));
+
+    mostrarLoading(`Gerando e enviando ${quantidade} imagem(ns)...`);
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/ia/imagem`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({prompt,quantidade})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        criarEstadoV36.pictures=d.pictures||[];
+
+        const box=document.getElementById('criar-imagens-preview-v36');
+        box.innerHTML=criarEstadoV36.pictures.map(p=>`
+          <div class="rounded-xl border border-slate-700 overflow-hidden bg-white aspect-square flex items-center justify-center">
+            ${p.url?`<img src="${escapeHtml(p.url)}" class="w-full h-full object-contain">`:`<div class="text-xs text-slate-700">${escapeHtml(p.id)}</div>`}
+          </div>
+        `).join('');
+    }catch(e){
+        alert(e.message);
+    }finally{
+        esconderLoading();
+    }
+}
+
+function lerAtributosCriacaoV36(){
+    const out=[];
+
+    document.querySelectorAll('.criar-attr-v36').forEach(el=>{
+        const id=String(el.dataset.attrId||'').trim();
+        if(!id)return;
+
+        if(el.tagName==='SELECT'){
+            const opt=el.options[el.selectedIndex];
+            if(!el.value)return;
+            out.push({
+                id,
+                value_id:String(el.value),
+                value_name:String(opt?.dataset?.name||opt?.textContent||'').trim()
+            });
+        }else{
+            const value=String(el.value||'').trim();
+            if(value)out.push({id,value_name:value});
+        }
+    });
+
+    return out;
+}
+
+function configCriacaoV36(){
+    const titles=listaLinhasV36('criar-titulos-v36').map(t=>t.slice(0,60));
+    const enabled=String(valorElV36('criar-variacao-enabled-v36'))==='1';
+    const varSelect=document.getElementById('criar-variacao-atributo-v36');
+    const varOpt=varSelect?.options[varSelect.selectedIndex];
+
+    return {
+        product_name:String(valorElV36('criar-produto-v36')).trim(),
+        quantity:Math.max(1,Number(valorElV36('criar-qtd-v36')||titles.length||1)),
+        titles,
+        category_id:String(valorElV36('criar-categoria-id-v36')).trim(),
+        price:Number(valorElV36('criar-preco-v36')||0),
+        stock:Math.max(1,Number(valorElV36('criar-estoque-v36')||1)),
+        listing_type_id:String(valorElV36('criar-listing-v36')||'gold_special'),
+        condition:String(valorElV36('criar-condicao-v36')||'new'),
+        sku_prefix:String(valorElV36('criar-sku-v36')).trim(),
+        description:String(valorElV36('criar-descricao-v36')).trim(),
+        picture_ids:(criarEstadoV36.pictures||[]).map(p=>p.id),
+        attributes:lerAtributosCriacaoV36(),
+        variations:{
+            enabled,
+            count:Math.max(1,Number(valorElV36('criar-variacao-qtd-v36')||1)),
+            attribute_id:String(varSelect?.value||''),
+            attribute_name:String(varOpt?.textContent||'').split('·')[0].trim(),
+            values:listaLinhasV36('criar-variacao-valores-v36')
+        }
+    };
+}
+
+async function validarCriacaoV36(){
+    const token=obterToken();
+    if(!token){solicitarToken();return false}
+
+    const cfg=configCriacaoV36();
+    const out=document.getElementById('criar-validacao-v36');
+
+    if(!cfg.titles.length){
+        out.textContent='Gere ou informe pelo menos um título.';
+        out.className='text-[11px] text-red-400 mt-1';
+        return false;
+    }
+
+    try{
+        out.textContent='Validando exemplo no Mercado Livre...';
+        out.className='text-[11px] text-yellow-400 mt-1';
+
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/validar`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({config:cfg})
+        });
+        const d=await r.json().catch(()=>({}));
+
+        if(!r.ok || !d.sucesso){
+            out.textContent='Validação recusada: '+(d.erro||`HTTP ${r.status}`);
+            out.className='text-[11px] text-red-400 mt-1';
+            return false;
+        }
+
+        out.textContent=`✓ Exemplo validado no Mercado Livre · modo ${d.modo==='user_products'?'User Products':'legado'}.`;
+        out.className='text-[11px] text-emerald-400 mt-1';
+        return true;
+    }catch(e){
+        out.textContent='Erro ao validar: '+e.message;
+        out.className='text-[11px] text-red-400 mt-1';
+        return false;
+    }
+}
+
+async function publicarCriacaoV36(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+
+    const cfg=configCriacaoV36();
+    const ok=await validarCriacaoV36();
+    if(!ok)return;
+
+    if(!confirm(`Confirma a criação em massa de ${cfg.quantity.toLocaleString('pt-BR')} anúncio(s)/família(s)?`))return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/publicar`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({config:cfg})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const jobId=d.job?.id;
+        if(!jobId)throw new Error('O servidor não retornou o ID da criação.');
+
+        criarEstadoV36.jobId=String(jobId);
+        localStorage.setItem('mlHubPro_mass_create_job_v36',String(jobId));
+
+        const msg=document.getElementById('criar-job-msg-v36');
+        if(msg)msg.textContent=d.mensagem||'Criação iniciada.';
+
+        acompanharCriacaoV36(jobId);
+    }catch(e){
+        alert('Erro ao iniciar publicação: '+e.message);
+    }
+}
+
+async function carregarResultadosCriacaoV36(jobId){
+    const token=obterToken();
+    if(!token)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/jobs/${encodeURIComponent(jobId)}/resultados?limit=200&_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)return;
+
+        const box=document.getElementById('criar-resultados-v36');
+        const rows=d.resultados||[];
+        if(!box)return;
+
+        if(!rows.length){
+            box.classList.add('hidden');
+            return;
+        }
+
+        box.classList.remove('hidden');
+        box.innerHTML=rows.map(x=>`
+          <div class="p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[10px] font-black ${x.success?'text-emerald-400':'text-red-400'}">
+                  ${x.success?'✓ Criado':'✗ Falhou'} · ${escapeHtml(x.title_requested||'Anúncio')}
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1">${escapeHtml(x.message||'')}</div>
+                ${x.technical_message?`<div class="text-[9px] text-red-300 mt-1">${escapeHtml(x.technical_message)}</div>`:''}
+              </div>
+              ${x.item_id?`<a href="${escapeHtml(x.permalink||'#')}" target="_blank" class="text-[10px] text-blue-400 font-bold">${escapeHtml(x.item_id)}</a>`:''}
+            </div>
+          </div>
+        `).join('');
+    }catch(e){}
+}
+
+async function acompanharCriacaoV36(jobId){
+    clearTimeout(criarTimerV36);
+    const token=obterToken();
+    if(!token)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{
+            cache:'no-store',
+            headers:{Authorization:token}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const j=d.job||{};
+        const total=Number(j.progress_total||0);
+        const atual=Number(j.progress_current||0);
+        const pct=total?Math.min(100,Math.round((atual/total)*100)):0;
+
+        const bar=document.getElementById('criar-job-bar-v36');
+        const pctEl=document.getElementById('criar-job-pct-v36');
+        const msg=document.getElementById('criar-job-msg-v36');
+
+        if(bar)bar.style.width=`${pct}%`;
+        if(pctEl)pctEl.textContent=`${pct}%`;
+        if(msg)msg.textContent=j.message||'Processando criação...';
+
+        if(atual%20===0 || ['completed','failed'].includes(j.status)){
+            carregarResultadosCriacaoV36(jobId);
+        }
+
+        if(['queued','running'].includes(j.status)){
+            localStorage.setItem('mlHubPro_mass_create_job_v36',String(jobId));
+            criarTimerV36=setTimeout(()=>acompanharCriacaoV36(jobId),1500);
+            return;
+        }
+
+        localStorage.removeItem('mlHubPro_mass_create_job_v36');
+        criarEstadoV36.jobId=null;
+        await carregarResultadosCriacaoV36(jobId);
+
+        if(j.status==='completed'){
+            if(typeof invalidarCacheAnunciosV30==='function')invalidarCacheAnunciosV30();
+        }
+    }catch(e){
+        const msg=document.getElementById('criar-job-msg-v36');
+        if(msg)msg.textContent='Erro ao acompanhar: '+e.message;
+        criarTimerV36=setTimeout(()=>acompanharCriacaoV36(jobId),3000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+    const priceJob=localStorage.getItem('mlHubPro_price_update_job_v36');
+    if(priceJob){
+        priceUpdateJobV36=String(priceJob);
+        acompanharAtualizacaoPrecosV36(priceJob);
+    }
+
+    const createJob=localStorage.getItem('mlHubPro_mass_create_job_v36');
+    if(createJob){
+        criarEstadoV36.jobId=String(createJob);
+    }
 });
 </script>
 
