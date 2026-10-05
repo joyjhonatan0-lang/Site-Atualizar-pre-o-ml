@@ -2618,7 +2618,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">4. Fotos do anúncio geradas</div>
-            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As demais imagens são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
+            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As 11 imagens são geradas pela Cloudflare Workers AI em formato quadrado; as demais são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
             <div class="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <div class="flex items-center justify-between gap-3 text-[10px]">
                     <span id="criar-imagens-status-v40" class="text-slate-400">Aguardando geração das imagens.</span>
@@ -2627,7 +2627,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <div class="h-2 bg-slate-800 rounded-full overflow-hidden mt-2">
                     <div id="criar-imagens-bar-v40" class="h-full bg-purple-500 transition-all" style="width:0%"></div>
                 </div>
-                <div class="text-[9px] text-slate-600 mt-2">Primeiro o painel tenta o Gemini. Se a cota de imagens não estiver disponível, ele cria automaticamente um kit visual gratuito a partir das fotos que você enviou, sem inventar características do produto.</div>
+                <div class="text-[9px] text-slate-600 mt-2">Primeiro o painel usa a Cloudflare Workers AI para gerar as imagens. Se a cota diária terminar, ele mantém o que já foi gerado e completa o restante com um kit visual baseado nas fotos reais enviadas.</div>
             </div>
             <div id="criar-imagens-preview-v37" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-4"></div>
             <div class="mt-4">
@@ -10315,6 +10315,7 @@ let criarEstadoV36={
     atributos:[],
     variacoes:[],
     pictures:[],
+    cloudflareReferenceImages:[],
     jobId:null
 };
 let criarTimerV36=null;
@@ -11076,6 +11077,7 @@ async function carregarFotosReferenciaV37(ev){
     try{
         const files=[...(ev?.target?.files||[])].slice(0,8);
         criarEstadoV37.referenceImages=[];
+    criarEstadoV37.cloudflareReferenceImages=[];
         for(const file of files){
             criarEstadoV37.referenceImages.push(await lerArquivoDataUrlV37(file));
         }
@@ -11379,6 +11381,36 @@ async function gerarKeywordsV38(){
     }finally{esconderLoading();}
 }
 
+
+async function redimensionarReferenciaCloudflareV44(src,maxDim=480){
+    const img=await carregarImagemCanvasV40(src);
+    const escala=Math.min(1,maxDim/Math.max(img.width,img.height));
+    const w=Math.max(1,Math.round(img.width*escala));
+    const h=Math.max(1,Math.round(img.height*escala));
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,w,h);
+    ctx.drawImage(img,0,0,w,h);
+    return canvas.toDataURL('image/jpeg',0.90);
+}
+
+async function prepararReferenciasCloudflareV44(){
+    const refs=(criarEstadoV37.referenceImages||[]).slice(0,4);
+    if(!refs.length)return [];
+    if(Array.isArray(criarEstadoV37.cloudflareReferenceImages) &&
+       criarEstadoV37.cloudflareReferenceImages.length===refs.length){
+        return criarEstadoV37.cloudflareReferenceImages;
+    }
+    const out=[];
+    for(let i=0;i<refs.length;i++){
+        out.push(await redimensionarReferenciaCloudflareV44(refs[i],480));
+    }
+    criarEstadoV37.cloudflareReferenceImages=out;
+    return out;
+}
+
 function atualizarProgressoImagensV40(atual,msg,tipo='normal'){
     const total=11;
     const pct=Math.max(0,Math.min(100,Math.round((Number(atual||0)/total)*100)));
@@ -11448,7 +11480,7 @@ async function gerarFallbackRestanteV40(token,porIndice,inicio=0){
     const total=11;
     for(let idx=inicio;idx<total;idx++){
         if(porIndice.has(idx))continue;
-        atualizarProgressoImagensV40(porIndice.size,`Gemini sem cota de imagem. Criando composição visual gratuita ${idx+1}/${total} a partir das suas fotos...`,'aviso');
+        atualizarProgressoImagensV40(porIndice.size,`Cloudflare sem cota disponível. Criando composição visual gratuita ${idx+1}/${total} a partir das suas fotos...`,'aviso');
         const dataUrl=await criarComposicaoFallbackV40(idx);
         const r=await fetch(`${RENDER_URL}/api/v40/criar/imagem-upload`,{
             method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
@@ -11467,69 +11499,157 @@ async function gerarFallbackRestanteV40(token,porIndice,inicio=0){
 async function gerarPackImagensV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
+
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    if(!produto&&!criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto de referência.');
+    if(!produto&&!criarEstadoV37.referenceImages.length){
+        return alert('Informe o produto ou envie uma foto de referência.');
+    }
 
     const total=11;
-    const porIndice=new Map((criarEstadoV37.pictures||[]).map((p,pos)=>[Number.isFinite(Number(p.index))?Number(p.index):pos,p]));
+    const porIndice=new Map(
+        (criarEstadoV37.pictures||[]).map((p,pos)=>[
+            Number.isFinite(Number(p.index))?Number(p.index):pos,p
+        ])
+    );
+
     let ultimoErro='';
     let usouFallback=false;
-    atualizarProgressoImagensV40(porIndice.size,'Iniciando geração das imagens...');
+    atualizarProgressoImagensV40(porIndice.size,'Preparando as fotos de referência para a Cloudflare...');
 
     try{
+        const refsCloudflare=await prepararReferenciasCloudflareV44();
+
         for(let idx=0;idx<total;idx++){
             if(porIndice.has(idx))continue;
+
             let sucesso=false;
             for(let tentativa=1;tentativa<=5&&!sucesso;tentativa++){
-                atualizarProgressoImagensV40(porIndice.size,`Gemini: gerando imagem ${idx+1}/${total} · tentativa ${tentativa}/5...`);
+                atualizarProgressoImagensV40(
+                    porIndice.size,
+                    `Cloudflare AI: gerando imagem ${idx+1}/${total} · tentativa ${tentativa}/5...`
+                );
+
                 const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/imagem-item`,{
-                    method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
-                    body:JSON.stringify({index:idx,produto,detalhes,reference_images:criarEstadoV37.referenceImages})
+                    method:'POST',
+                    headers:{
+                        Authorization:token,
+                        'Content-Type':'application/json'
+                    },
+                    body:JSON.stringify({
+                        index:idx,
+                        produto,
+                        detalhes,
+                        reference_images:refsCloudflare
+                    })
                 });
+
                 const d=await r.json().catch(()=>({}));
+
                 if(r.ok&&d.picture){
                     porIndice.set(idx,d.picture);
-                    criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
-                    renderImagensGeradasV37();gerarUrlsFotosV37();renderPlanilhaPreviewV37();
-                    atualizarProgressoImagensV40(porIndice.size,`${porIndice.size}/${total} imagens geradas pelo Gemini.`,'normal');
+                    criarEstadoV37.pictures=[...porIndice.values()]
+                        .sort((a,b)=>Number(a.index||0)-Number(b.index||0));
+
+                    renderImagensGeradasV37();
+                    gerarUrlsFotosV37();
+                    renderPlanilhaPreviewV37();
+
+                    atualizarProgressoImagensV40(
+                        porIndice.size,
+                        `${porIndice.size}/${total} imagens geradas pela Cloudflare e enviadas ao Mercado Livre.`
+                    );
+
                     sucesso=true;
-                    // Evita atingir o limite por minuto fazendo 11 chamadas em sequência muito rápida.
-                    if(idx<total-1)await new Promise(resolve=>setTimeout(resolve,7000));
+
+                    // Pequeno intervalo para reduzir picos de limite sem deixar o processo lento.
+                    if(idx<total-1){
+                        await new Promise(resolve=>setTimeout(resolve,900));
+                    }
                     break;
                 }
+
                 ultimoErro=d.erro||`HTTP ${r.status}`;
+
                 if(d.quota_unavailable){
                     usouFallback=true;
+                    atualizarProgressoImagensV40(
+                        porIndice.size,
+                        `${ultimoErro} Completando o pacote com as fotos reais enviadas...`,
+                        'aviso'
+                    );
                     await gerarFallbackRestanteV40(token,porIndice,idx);
                     sucesso=true;
                     idx=total;
                     break;
                 }
+
                 if(d.retryable&&tentativa<5){
-                    const espera=Math.max(12000,Math.min(60000,Number(d.retry_after||0)*1000 || [15000,25000,40000,55000][tentativa-1]));
-                    atualizarProgressoImagensV40(porIndice.size,`Limite temporário do Gemini. Aguardando ${Math.ceil(espera/1000)}s e tentando novamente...`,'aviso');
+                    const espera=Math.max(
+                        3000,
+                        Math.min(
+                            30000,
+                            Number(d.retry_after||0)*1000 ||
+                            [3500,6000,9000,14000][tentativa-1]
+                        )
+                    );
+                    atualizarProgressoImagensV40(
+                        porIndice.size,
+                        `Cloudflare temporariamente ocupada. Nova tentativa em ${Math.ceil(espera/1000)}s...`,
+                        'aviso'
+                    );
                     await new Promise(resolve=>setTimeout(resolve,espera));
                     continue;
                 }
+
                 break;
             }
+
             if(!sucesso)break;
         }
 
-        criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
-        renderImagensGeradasV37();gerarUrlsFotosV37();renderPlanilhaPreviewV37();
+        criarEstadoV37.pictures=[...porIndice.values()]
+            .sort((a,b)=>Number(a.index||0)-Number(b.index||0));
+
+        renderImagensGeradasV37();
+        gerarUrlsFotosV37();
+        renderPlanilhaPreviewV37();
 
         if(criarEstadoV37.pictures.length>=total){
-            atualizarProgressoImagensV40(total,usouFallback?'11 imagens prontas. A cota do Gemini não estava disponível; as restantes foram montadas automaticamente com suas fotos.':'As 11 imagens foram geradas e enviadas para o Mercado Livre.','ok');
-            alert(usouFallback?'As 11 imagens estão prontas. Como a API de imagens do Gemini não tinha cota disponível, o painel completou o pacote com composições visuais gratuitas feitas a partir das fotos que você enviou.':'As 11 imagens foram geradas e enviadas para o Mercado Livre com sucesso.');
+            atualizarProgressoImagensV40(
+                total,
+                usouFallback
+                    ? '11 imagens prontas. A cota da Cloudflare terminou e o pacote foi completado com suas fotos reais.'
+                    : 'As 11 imagens foram geradas pela Cloudflare e enviadas para o Mercado Livre.',
+                'ok'
+            );
+
+            alert(
+                usouFallback
+                    ? 'As 11 imagens estão prontas. Parte delas foi criada pela Cloudflare e, após o limite disponível, o painel completou o restante usando as fotos reais enviadas.'
+                    : 'As 11 imagens foram geradas pela Cloudflare Workers AI e enviadas ao Mercado Livre com sucesso. As URLs já estão disponíveis no painel.'
+            );
         }else{
-            atualizarProgressoImagensV40(criarEstadoV37.pictures.length,`Geração pausada: ${ultimoErro||'erro desconhecido'}`,'erro');
-            alert(`Foram concluídas ${criarEstadoV37.pictures.length} de ${total} imagens. ${ultimoErro}\n\nAs imagens concluídas foram mantidas. Clique novamente para continuar.`);
+            atualizarProgressoImagensV40(
+                criarEstadoV37.pictures.length,
+                `Geração pausada: ${ultimoErro||'erro desconhecido'}`,
+                'erro'
+            );
+            alert(
+                `Foram concluídas ${criarEstadoV37.pictures.length} de ${total} imagens. ${ultimoErro}\n\n`+
+                'As imagens concluídas foram mantidas. Clique novamente em “Gerar / continuar” para retomar exatamente da próxima imagem.'
+            );
         }
     }catch(e){
-        atualizarProgressoImagensV40(porIndice.size,`Erro: ${e.message}`,'erro');
-        alert(`A geração foi pausada depois de ${porIndice.size} imagem(ns): ${e.message}\n\nNada foi perdido. Clique novamente para continuar.`);
+        atualizarProgressoImagensV40(
+            porIndice.size,
+            `Erro: ${e.message}`,
+            'erro'
+        );
+        alert(
+            `A geração foi pausada depois de ${porIndice.size} imagem(ns): ${e.message}\n\n`+
+            'Nada foi perdido. Clique novamente para continuar.'
+        );
     }
 }
 
