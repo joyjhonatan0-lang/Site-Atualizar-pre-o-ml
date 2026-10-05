@@ -7340,7 +7340,19 @@ app.get('/api/scale/anuncios-restritos',async(req,res)=>{
                  status,listing_type_id,category_id,thumbnail,permalink,
                  ml_updated_at last_updated,synced_at last_synced,
                  raw->'sub_status' sub_status,
-                 raw->'tags' tags
+                 raw->'tags' tags,
+                 CASE
+                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%waiting_for_patch%' THEN 'O Mercado Livre detectou uma infração no anúncio. É necessário corrigir a publicação para que ela possa voltar a ficar ativa.'
+                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%forbidden%' THEN 'O anúncio foi desativado pelo Mercado Livre por uma moderação e não pode ser reativado.'
+                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%held%' THEN 'O anúncio está oculto enquanto passa por uma revisão manual do Mercado Livre.'
+                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%pending_documentation%' THEN 'O Mercado Livre solicitou documentação relacionada à moderação ou denúncia.'
+                   WHEN status='paused' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%picture_downloading_pending%' THEN 'O anúncio está pausado enquanto o Mercado Livre processa uma imagem informada por URL.'
+                   WHEN status='paused' THEN 'O anúncio está pausado no Mercado Livre.'
+                   WHEN status='inactive' THEN 'O anúncio está inativo no Mercado Livre.'
+                   WHEN status='closed' THEN 'O anúncio foi finalizado no Mercado Livre.'
+                   WHEN status='under_review' THEN 'O anúncio está em revisão pelo Mercado Livre.'
+                   ELSE 'Motivo ainda não informado pelo Mercado Livre.'
+                 END motivo_pt
           FROM ml_items
           WHERE ${cond}
           ORDER BY
@@ -7357,6 +7369,135 @@ app.get('/api/scale/anuncios-restritos',async(req,res)=>{
             itens:rows.rows
         });
     }catch(e){respostaErro(res,500,'Erro ao carregar anúncios com status especial: '+e.message)}
+});
+
+
+/* V41 — motivo real em português + exclusão selecionada de anúncios restritos. */
+function textoSemHtmlV41(v){
+    return String(v||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g,' ').trim();
+}
+function substatusArrayV41(v){
+    if(Array.isArray(v))return v.map(x=>String(x).toLowerCase());
+    if(v&&typeof v==='object')return Object.values(v).map(x=>String(x).toLowerCase());
+    const s=String(v||'').toLowerCase();return s?s.split(',').map(x=>x.trim()).filter(Boolean):[];
+}
+function motivoFallbackV41(item={}){
+    const st=String(item.status||'').toLowerCase();
+    const subs=substatusArrayV41(item.sub_status||item?.raw?.sub_status);
+    const has=x=>subs.some(s=>s.includes(x));
+    if(has('waiting_for_patch'))return 'O Mercado Livre detectou uma infração no anúncio. É necessário corrigir a publicação para que ela possa voltar a ficar ativa.';
+    if(has('forbidden'))return 'O anúncio foi desativado pelo Mercado Livre por uma moderação e não pode ser reativado.';
+    if(has('held'))return 'O anúncio está oculto enquanto passa por uma revisão manual do Mercado Livre.';
+    if(has('pending_documentation'))return 'O Mercado Livre solicitou documentação relacionada a uma moderação ou denúncia. O anúncio ficará oculto até a análise terminar.';
+    if(has('suspended_for_prevention'))return 'O anúncio foi suspenso preventivamente durante uma análise de segurança ou risco do Mercado Livre.';
+    if(has('suspended'))return 'O anúncio foi suspenso durante uma análise de segurança ou risco do Mercado Livre.';
+    if(has('picture_downloading_pending'))return 'O anúncio está pausado enquanto o Mercado Livre processa uma imagem informada por URL.';
+    if(has('paused_by_seller'))return 'O anúncio foi pausado pelo vendedor.';
+    if(has('out_of_stock'))return 'O anúncio foi pausado por falta de estoque.';
+    if(has('expired'))return 'O anúncio foi finalizado porque chegou ao fim do período de publicação.';
+    if(st==='under_review')return 'O anúncio está em revisão pelo Mercado Livre.';
+    if(st==='inactive')return 'O anúncio está inativo no Mercado Livre.';
+    if(st==='paused')return 'O anúncio está pausado no Mercado Livre.';
+    if(st==='closed')return 'O anúncio foi finalizado no Mercado Livre.';
+    return 'O Mercado Livre não informou um motivo detalhado para este anúncio.';
+}
+async function consultarMotivoRealV41(itemId,token,itemFallback={}){
+    try{
+        const ref=`${String(itemId)}-ITM`;
+        const r=await mlFetch(`${ML_API}/moderations/last_moderation/${encodeURIComponent(ref)}?language=PT`,token);
+        const d=await jsonSeguro(r);
+        if(!r.ok)return {id:String(itemId),reason:motivoFallbackV41(itemFallback),remedy:'',name:'',http:r.status};
+        const arr=Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]);
+        const mod=arr[0]||{};
+        const words=Array.isArray(mod?.wordings)?mod.wordings:[];
+        const reason=words.find(w=>String(w?.type||'').toUpperCase()==='REASON')?.value||'';
+        const remedy=words.find(w=>String(w?.type||'').toUpperCase()==='REMEDY')?.value||'';
+        return {id:String(itemId),reason:textoSemHtmlV41(reason)||motivoFallbackV41(itemFallback),remedy:textoSemHtmlV41(remedy),name:String(mod?.name||''),http:r.status};
+    }catch(e){
+        return {id:String(itemId),reason:motivoFallbackV41(itemFallback),remedy:'',name:'',erro:e.message};
+    }
+}
+
+app.post('/api/v41/anuncios-restritos/motivos',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,25);
+        if(!ids.length)return res.json({sucesso:true,itens:[]});
+        const q=await dbQuery(`SELECT item_id id,status,raw->'sub_status' sub_status,raw FROM ml_items WHERE seller_id=$1 AND item_id=ANY($2::text[])`,[me.id,ids]);
+        const mapa=new Map(q.rows.map(x=>[String(x.id),x]));
+        const itens=(await mapLimitV21(ids,4,async id=>consultarMotivoRealV41(id,token,mapa.get(String(id))||{}))).filter(Boolean);
+        res.set('Cache-Control','no-store');
+        res.json({sucesso:true,itens});
+    }catch(e){respostaErro(res,500,'Erro ao consultar os motivos reais: '+e.message)}
+});
+
+function erroExclusaoPtV41(status,d){
+    const raw=String(d?.message||d?.error||d?.cause?.[0]?.message||d?.cause?.[0]?.code||formatarErroMercadoLivre(d)||'').trim();
+    const code=String(d?.error||d?.cause?.[0]?.code||'').toLowerCase();
+    if(status===404)return 'O anúncio não foi encontrado no Mercado Livre. Ele pode já ter sido excluído.';
+    if(status===401)return 'A sessão do Mercado Livre expirou ou o token não é válido.';
+    if(status===403||code.includes('forbidden'))return 'O Mercado Livre não autorizou excluir este anúncio com a credencial atual.';
+    if(/sold|sale/i.test(raw))return 'O Mercado Livre não permitiu excluir este anúncio por causa do histórico de vendas ou de uma regra comercial aplicada ao item.';
+    if(/under.?review|moderation/i.test(raw))return 'O anúncio está sob moderação. O Mercado Livre não permitiu concluir a exclusão neste momento.';
+    if(/not.?modifiable|cannot update|not allowed/i.test(raw))return 'O Mercado Livre bloqueou a alteração deste anúncio no estado atual.';
+    return raw?`Mercado Livre: ${raw}`:`O Mercado Livre recusou a exclusão (HTTP ${status}).`;
+}
+async function putItemV41(itemId,token,body){
+    const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(itemId)}`,token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await jsonSeguro(r);return {ok:r.ok,status:r.status,data:d};
+}
+async function excluirItemRestritoV41(itemId,token,sellerId){
+    const id=String(itemId||'').trim();
+    if(!id)return {id,sucesso:false,erro:'ID do anúncio inválido.'};
+    try{
+        const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}`,token);
+        const item=await jsonSeguro(r);
+        if(!r.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(r.status,item)};
+        if(String(item?.seller_id||'')!==String(sellerId))return {id,sucesso:false,erro:'Este anúncio não pertence à conta Mercado Livre conectada.'};
+        const status=String(item?.status||'').toLowerCase();
+        const allowed=new Set(['paused','inactive','closed','under_review']);
+        if(!allowed.has(status))return {id,sucesso:false,erro:`O anúncio está com status ${status||'desconhecido'} e não pertence à lista permitida para exclusão nesta tela.`};
+        const subs=substatusArrayV41(item?.sub_status);
+        const proibido=status==='under_review'&&subs.some(s=>s.includes('forbidden'));
+
+        // Em forbidden, a documentação permite exclusão direta. Nos demais, fecha antes quando necessário.
+        if(proibido){
+            const del=await putItemV41(id,token,{deleted:true});
+            if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+        }else{
+            if(status!=='closed'){
+                const close=await putItemV41(id,token,{status:'closed'});
+                if(!close.ok){
+                    // Alguns estados moderados aceitam somente a exclusão direta.
+                    const direto=await putItemV41(id,token,{deleted:true});
+                    if(!direto.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(direto.status,direto.data)};
+                }else{
+                    const del=await putItemV41(id,token,{deleted:true});
+                    if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+                }
+            }else{
+                const del=await putItemV41(id,token,{deleted:true});
+                if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+            }
+        }
+        try{await dbQuery(`DELETE FROM ml_items WHERE seller_id=$1 AND item_id=$2`,[sellerId,id])}catch(_){ }
+        return {id,sucesso:true};
+    }catch(e){return {id,sucesso:false,erro:'Erro ao excluir o anúncio: '+e.message}}
+}
+
+app.post('/api/v41/anuncios-restritos/excluir-lote',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const me=await usuarioML(token);
+        const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,50);
+        if(!ids.length)return respostaErro(res,400,'Nenhum anúncio selecionado para exclusão.');
+        const resultados=(await mapLimitV21(ids,3,async id=>excluirItemRestritoV41(id,token,me.id))).filter(Boolean);
+        const excluidos=resultados.filter(x=>x.sucesso).length;
+        const falhas=resultados.length-excluidos;
+        res.json({sucesso:true,total:resultados.length,excluidos,falhas,resultados});
+    }catch(e){respostaErro(res,500,'Erro ao excluir anúncios selecionados: '+e.message)}
 });
 
 /* V32 — somente anúncios alterados desde o último cursor. */
