@@ -2521,7 +2521,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
             <div class="flex flex-wrap gap-3 mt-5">
                 <button onclick="gerarConteudoCriacaoV37()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">✦ Gerar títulos, descrição e características com IA</button>
-                <button onclick="gerarPackImagensV37()" class="bg-purple-500 hover:bg-purple-400 text-white font-black text-xs px-5 py-3 rounded-xl">🖼 Gerar as 11 imagens do anúncio</button>
+                <button onclick="gerarPackImagensV37()" class="bg-purple-500 hover:bg-purple-400 text-white font-black text-xs px-5 py-3 rounded-xl">🖼 Gerar / continuar as 11 imagens do anúncio</button>
                 <button onclick="gerarUrlsFotosV37()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-3 rounded-xl">🔗 Gerar URL das fotos</button>
             </div>
         </div>
@@ -2558,7 +2558,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </div>
                 <div class="col-span-2">
                     <label class="text-[9px] font-bold uppercase text-slate-500">Palavras-chave</label>
-                    <textarea id="criar-keywords-v37" rows="4" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="As palavras-chave serão sugeridas pela IA."></textarea>
+                    <textarea id="criar-keywords-v37" rows="4" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="Clique no botão abaixo para a IA pesquisar e sugerir as palavras-chave."></textarea>
+                    <div class="flex flex-wrap items-center gap-2 mt-3">
+                        <button onclick="gerarKeywordsV38()" class="bg-sky-600 hover:bg-sky-500 text-white font-black text-[11px] px-4 py-2 rounded-xl">🔎 Buscar palavras-chave com IA</button>
+                        <span id="criar-keywords-status-v38" class="text-[10px] text-slate-500">Busca focada em SEO e intenção de compra. Pesquisa Web é opcional no servidor.</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -10770,7 +10774,7 @@ async function sugerirCategoriaV37(){
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
         criarEstadoV37.sugestões=Array.isArray(d.categorias)?d.categorias:[];
         const sel=document.getElementById('criar-categoria-select-v37');
-        sel.innerHTML='<option value="">Escolha uma categoria sugerida</option>'+criarEstadoV37.sugestões.map(c=>`<option value="${textoEscapeV37(c.category_id)}">${textoEscapeV37(c.category_name)} · ${textoEscapeV37(c.category_id)}</option>`).join('');
+        sel.innerHTML='<option value="">Escolha uma categoria sugerida</option>'+criarEstadoV37.sugestões.map(c=>`<option value="${textoEscapeV37(c.category_id)}">${textoEscapeV37(c.category_path||c.category_name)} · ${textoEscapeV37(c.category_id)}</option>`).join('');
         if(criarEstadoV37.sugestões[0])sel.value=criarEstadoV37.sugestões[0].category_id;
     }catch(e){
         alert('Erro ao sugerir categorias: '+e.message);
@@ -10784,15 +10788,23 @@ async function adicionarCategoriaSelecionadaV37(){
     const id=String(sel?.value||'').trim();
     if(!id)return alert('Escolha uma categoria para adicionar.');
     if(criarEstadoV37.selectedCategories.some(c=>c.category_id===id))return;
-    mostrarLoading('Carregando atributos da categoria...');
+    mostrarLoading('Carregando categoria, subcategorias e características...');
     try{
         const r=await fetch(`${RENDER_URL}/api/v36/criar/categorias/${encodeURIComponent(id)}/atributos`,{headers:{Authorization:token}});
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
         const sug=(criarEstadoV37.sugestões||[]).find(x=>String(x.category_id)===id);
+        const path=Array.isArray(d?.categoria?.path_from_root)&&d.categoria.path_from_root.length
+          ? d.categoria.path_from_root.map(p=>p?.name).filter(Boolean).join(' > ')
+          : String(sug?.category_path||sug?.category_name||d?.categoria?.name||id);
+        const leaf=Array.isArray(d?.categoria?.path_from_root)&&d.categoria.path_from_root.length
+          ? String(d.categoria.path_from_root[d.categoria.path_from_root.length-1]?.name||d?.categoria?.name||id)
+          : String(sug?.category_leaf_name||sug?.category_name||d?.categoria?.name||id);
         criarEstadoV37.selectedCategories.push({
             category_id:id,
             category_name:String(sug?.category_name||d?.categoria?.name||id),
+            category_path:path,
+            category_leaf_name:leaf,
             atributos:Array.isArray(d.atributos)?d.atributos:[],
             values:{}
         });
@@ -10825,20 +10837,33 @@ function renderCategoriasSelecionadasV37(){
     const chips=document.getElementById('criar-categorias-selecionadas-v37');
     const forms=document.getElementById('criar-categorias-form-v37');
     if(!chips||!forms)return;
-    chips.innerHTML=criarEstadoV37.selectedCategories.map(c=>`
-        <div class="inline-flex items-center gap-2 rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-[11px] text-white">
-            <span>${textoEscapeV37(c.category_name)}</span>
-            <span class="text-slate-500">${textoEscapeV37(c.category_id)}</span>
-            <button onclick="removerCategoriaV37('${textoEscapeV37(c.category_id)}')" class="text-red-400 font-black">×</button>
-        </div>
-    `).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
+
+    chips.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
+        const path=String(c.category_path||c.category_name||c.category_id||'');
+        const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
+        return `<div class="rounded-2xl bg-slate-900 border border-slate-700 px-4 py-3 text-[11px] text-white min-w-[280px]">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <div class="font-black text-white">${textoEscapeV37(c.category_name)}</div>
+                    <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
+                    <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">ID: ${textoEscapeV37(c.category_id)}</div>
+                </div>
+                <button onclick="removerCategoriaV37('${textoEscapeV37(c.category_id)}')" class="text-red-400 font-black text-lg leading-none">×</button>
+            </div>
+        </div>`;
+    }).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
 
     forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
-        const attrs=(c.atributos||[]).filter(a=>a.required || ['BRAND','MODEL','ITEM_CONDITION','GENDER','SIZE_GRID_ID','COLOR','MAIN_COLOR','FABRIC_DESIGN','SIZE'].includes(String(a.id))).slice(0,30);
+        const attrs=(c.atributos||[]).filter(a=>a.required || ['BRAND','MODEL','ITEM_CONDITION','GENDER','SIZE_GRID_ID','COLOR','MAIN_COLOR','FABRIC_DESIGN','SIZE'].includes(String(a.id))).slice(0,40);
+        const path=String(c.category_path||c.category_name||c.category_id||'');
+        const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
         return `
         <div class="panel rounded-2xl p-4">
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
-            <div class="text-[10px] text-slate-500 mt-1">Preencha ou revise as características obrigatórias e relevantes.</div>
+            <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
+            <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
+            <div class="text-[10px] text-slate-500 mt-2">Preencha ou revise as características obrigatórias e relevantes.</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                 ${attrs.map(a=>{
                     const current=c.values?.[a.id]||{};
@@ -10928,7 +10953,14 @@ async function gerarConteudoCriacaoV37(){
         document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
 
         const categorias=Array.isArray(d.categorias)?d.categorias:[];
-        categorias.forEach(c=>aplicarSugestoesCategoriaV37(c.category_id,c.suggested_attributes||[]));
+        categorias.forEach(c=>{
+            const local=criarEstadoV37.selectedCategories.find(x=>String(x.category_id)===String(c.category_id));
+            if(local){
+                if(c.category_path)local.category_path=String(c.category_path);
+                if(c.category_leaf_name)local.category_leaf_name=String(c.category_leaf_name);
+            }
+            aplicarSugestoesCategoriaV37(c.category_id,c.suggested_attributes||[]);
+        });
         renderCategoriasSelecionadasV37();
 
         if(!document.getElementById('criar-detalhes-v37').value && d.resumo){
@@ -10944,33 +10976,96 @@ async function gerarConteudoCriacaoV37(){
     }finally{esconderLoading();}
 }
 
+async function gerarKeywordsV38(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
+    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
+    if(!produto&&!detalhes)return alert('Informe o produto ou os detalhes para pesquisar palavras-chave.');
+    const status=document.getElementById('criar-keywords-status-v38');
+    if(status){status.textContent='Pesquisando termos de compra e SEO...';status.className='text-[10px] text-yellow-400';}
+    mostrarLoading('Pesquisando palavras-chave e termos de compra...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/keywords`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({produto,detalhes,category_ids:criarEstadoV37.selectedCategories.map(c=>c.category_id)})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
+        if(status){
+            status.textContent=d.pesquisa_web?`✓ Palavras-chave pesquisadas na Web com IA (${d.fonte||'Google Search'}).`:`✓ Palavras-chave geradas pela IA. A pesquisa Web não estava disponível e o fallback foi usado.`;
+            status.className='text-[10px] text-emerald-400';
+        }
+    }catch(e){
+        if(status){status.textContent='Não foi possível buscar as palavras-chave agora.';status.className='text-[10px] text-red-400';}
+        alert('Erro ao buscar palavras-chave: '+e.message);
+    }finally{esconderLoading();}
+}
+
 async function gerarPackImagensV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto de referência.');
-    mostrarLoading('Gerando as 11 imagens do anúncio...');
+    if(!produto&&!criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto de referência.');
+
+    const total=11;
+    const porIndice=new Map((criarEstadoV37.pictures||[]).map((p,pos)=>[Number.isFinite(Number(p.index))?Number(p.index):pos,p]));
+    let ultimoErro='';
+
     try{
-        const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/imagens-pack`,{
-            method:'POST',
-            headers:{Authorization:token,'Content-Type':'application/json'},
-            body:JSON.stringify({produto,detalhes,reference_images:criarEstadoV37.referenceImages})
-        });
-        const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-        criarEstadoV37.pictures=Array.isArray(d.pictures)?d.pictures:[];
+        for(let idx=0;idx<total;idx++){
+            if(porIndice.has(idx))continue;
+            let sucesso=false;
+            for(let tentativa=1;tentativa<=3&&!sucesso;tentativa++){
+                mostrarLoading(`Gerando imagem ${idx+1} de ${total} · tentativa ${tentativa}/3...`);
+                const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/imagem-item`,{
+                    method:'POST',
+                    headers:{Authorization:token,'Content-Type':'application/json'},
+                    body:JSON.stringify({index:idx,produto,detalhes,reference_images:criarEstadoV37.referenceImages})
+                });
+                const d=await r.json().catch(()=>({}));
+                if(r.ok&&d.picture){
+                    porIndice.set(idx,d.picture);
+                    criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
+                    renderImagensGeradasV37();
+                    gerarUrlsFotosV37();
+                    renderPlanilhaPreviewV37();
+                    sucesso=true;
+                    break;
+                }
+                ultimoErro=d.erro||`HTTP ${r.status}`;
+                if(d.retryable&&tentativa<3){
+                    mostrarLoading(`Limite temporário do Gemini. Aguardando para continuar a imagem ${idx+1}/${total}...`);
+                    await new Promise(resolve=>setTimeout(resolve,tentativa===1?5000:9000));
+                    continue;
+                }
+                break;
+            }
+            if(!sucesso)break;
+        }
+
+        criarEstadoV37.pictures=[...porIndice.values()].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
         renderImagensGeradasV37();
         gerarUrlsFotosV37();
         renderPlanilhaPreviewV37();
+
+        if(criarEstadoV37.pictures.length>=total){
+            alert('As 11 imagens foram geradas e enviadas para o Mercado Livre com sucesso.');
+        }else{
+            alert(`Foram geradas ${criarEstadoV37.pictures.length} de ${total} imagens. ${ultimoErro||'O Gemini atingiu um limite temporário.'}\n\nAs imagens já geradas foram mantidas. Clique novamente em “Gerar / continuar” para retomar exatamente da próxima imagem.`);
+        }
     }catch(e){
-        alert('Erro ao gerar imagens: '+e.message);
+        alert(`A geração foi pausada depois de ${porIndice.size} imagem(ns): ${e.message}\n\nNada foi perdido. Clique novamente para continuar.`);
     }finally{esconderLoading();}
 }
 
 function renderImagensGeradasV37(){
     const box=document.getElementById('criar-imagens-preview-v37'); if(!box)return;
-    box.innerHTML=(criarEstadoV37.pictures||[]).map((p,i)=>`
+    const lista=[...(criarEstadoV37.pictures||[])].sort((a,b)=>Number(a.index||0)-Number(b.index||0));
+    box.innerHTML=lista.map((p,i)=>`
         <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
             <div class="aspect-square bg-white flex items-center justify-center overflow-hidden">${p.url?`<img src="${p.url}" class="w-full h-full object-cover">`:'<div class="text-xs text-slate-700">Sem preview</div>'}</div>
             <div class="px-2 py-2 text-[10px] text-white">
