@@ -8282,6 +8282,9 @@ async function carregarGestaoEscala(page=1,{silencioso=false}={}){
         atualizarPaginacaoGestao();
       }
     }
+    // V43: enquanto o usuário está na Gestão, prepara silenciosamente uma única
+    // cópia completa para a Simulação. Depois disso a Simulação abre do cache local.
+    if(typeof aquecerCacheSimulacaoV43==='function')aquecerCacheSimulacaoV43();
   }catch(e){alert(e.message)}finally{gestaoCarregando=false;if(!silencioso)esconderLoading()}
 }
 
@@ -8372,7 +8375,7 @@ let simFiltroRenderKeyV30='';
 let atualFiltroRenderKeyV30='';
 
 /* V32 — snapshot persistente dos anúncios no navegador. */
-const CACHE_DB_V32='mlHubProAnunciosV35';
+const CACHE_DB_V32='mlHubProAnunciosV43';
 const STORE_ITENS_V32='itens';
 const STORE_META_V32='meta';
 let dbCachePromiseV32=null;
@@ -8482,7 +8485,7 @@ async function sincronizarMudancasV32({forcar=false,mostrarProgresso=false}={}){
         let totalConta=masterAnunciosV32.length,alterados=0,primeira=true;
 
         while(true){
-            const p=new URLSearchParams({after_ts:afterTs,after_id:afterId,limit:'1000'});
+            const p=new URLSearchParams({after_ts:afterTs,after_id:afterId,limit:'5000'});
             const r=await fetch(`${RENDER_URL}/api/scale/anuncios/changes?${p.toString()}&_=${Date.now()}`,{
                 cache:'no-store',headers:{Authorization:token,Accept:'application/json'}
             });
@@ -8518,7 +8521,7 @@ async function sincronizarMudancasV32({forcar=false,mostrarProgresso=false}={}){
             await idbLimparV32();masterAnunciosV32=[];masterMapV32=new Map();
             let ts='1970-01-01T00:00:00.000Z',iid='';
             while(true){
-                const p=new URLSearchParams({after_ts:ts,after_id:iid,limit:'1000'});
+                const p=new URLSearchParams({after_ts:ts,after_id:iid,limit:'5000'});
                 const r=await fetch(`${RENDER_URL}/api/scale/anuncios/changes?${p.toString()}&_=${Date.now()}`,{
                     cache:'no-store',headers:{Authorization:token,Accept:'application/json'}
                 });
@@ -8900,37 +8903,147 @@ function agendarSyncBackgroundV42(){
     },80);
 }
 
+
+/* V43 — a Simulação usa um snapshot completo persistido da Gestão.
+   Ele é construído uma única vez em lotes de até 5.000 registros e depois
+   somente recebe deltas de anúncios novos/alterados. */
+let prepararCacheCompletoPromiseV43=null;
+let simRenderTokenV43=0;
+
+async function reconstruirCacheCompletoV43({mostrarProgresso=false}={}){
+    if(prepararCacheCompletoPromiseV43)return prepararCacheCompletoPromiseV43;
+
+    prepararCacheCompletoPromiseV43=(async()=>{
+        const token=obterToken();
+        if(!token)throw new Error('Token não disponível.');
+
+        await idbLimparV32();
+        masterAnunciosV32=[];
+        masterMapV32=new Map();
+        masterCarregadoV32=true;
+
+        let ts='1970-01-01T00:00:00.000Z';
+        let iid='';
+        let totalConta=0;
+        let sellerId='';
+        let maxSyncedAt=null;
+
+        while(true){
+            const p=new URLSearchParams({after_ts:ts,after_id:iid,limit:'5000'});
+            const r=await fetch(`${RENDER_URL}/api/scale/anuncios/changes?${p.toString()}&_=${Date.now()}`,{
+                cache:'no-store',headers:{Authorization:token,Accept:'application/json'}
+            });
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`Erro HTTP ${r.status} ao preparar a base completa de anúncios.`);
+
+            sellerId=String(d.seller_id||sellerId||'');
+            totalConta=Number(d.total_conta||totalConta||0);
+            maxSyncedAt=d.max_synced_at||maxSyncedAt||null;
+            await aplicarMudancasV32(Array.isArray(d.itens)?d.itens:[]);
+
+            const c=d.next_cursor||{};
+            ts=c.after_ts||ts;
+            iid=c.after_id||iid;
+
+            await idbSalvarMetaV32({
+                key:'sync',seller_id:sellerId,after_ts:ts,after_id:iid,
+                total_conta:totalConta,max_synced_at:maxSyncedAt,
+                checked_at:Date.now(),snapshot_version:43
+            });
+
+            if(mostrarProgresso){
+                const el=document.getElementById('loading-text');
+                if(el)el.innerText=`Preparando a Simulação uma única vez... ${Math.min(masterAnunciosV32.length,totalConta||masterAnunciosV32.length).toLocaleString('pt-BR')}/${Number(totalConta||masterAnunciosV32.length).toLocaleString('pt-BR')}`;
+            }
+
+            if(!d.has_more)break;
+        }
+
+        ultimaVerificacaoDeltaV32=Date.now();
+        simFiltroRenderKeyV30='';
+        atualFiltroRenderKeyV30='';
+        anunciosEscalaCacheV30.clear();
+        return {total:masterAnunciosV32.length,total_conta:totalConta};
+    })();
+
+    try{return await prepararCacheCompletoPromiseV43}
+    finally{prepararCacheCompletoPromiseV43=null}
+}
+
+async function cacheCompletoV43(){
+    await carregarMasterLocalV32();
+    try{
+        const meta=await idbMetaV32('sync');
+        const esperado=Number(meta?.total_conta||0);
+        return Boolean(meta?.snapshot_version===43 && esperado>0 && masterAnunciosV32.length===esperado);
+    }catch(e){return false}
+}
+
+function aquecerCacheSimulacaoV43(){
+    setTimeout(async()=>{
+        try{
+            if(await cacheCompletoV43())return;
+            await reconstruirCacheCompletoV43({mostrarProgresso:false});
+        }catch(e){
+            console.warn('[CACHE SIMULAÇÃO V43]',e.message);
+        }
+    },150);
+}
+
+function linhaSimulacaoV43(item){
+    const p=parametrosSimV21(item),sid=safeIdV21(item.id);
+    const calc=calcularSimulacaoV21(item,p);
+    simResultadosPorIdV21[item.id]=calc;
+    const tipo=item.listing_type_id==='gold_pro'?'Premium':'Clássico';
+
+    return `
+      <tr>
+        <td class="p-3 font-mono">${escapeHtml(item.id)}</td>
+        <td class="p-3 font-mono">
+          ${escapeHtml(item.sku)}
+          ${regraSkuV27(item)?'<div class="text-[9px] text-emerald-600 font-black mt-1">BASE SKU</div>':''}
+        </td>
+        <td class="p-3 max-w-[220px] truncate">${escapeHtml(item.title)}</td>
+        <td class="p-3 font-bold">${moeda(item.price)}</td>
+        <td class="p-3">${moeda(item.shipping_cost)}</td>
+        <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
+        <td class="p-3">${tipo}</td>
+        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
+        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
+        <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
+        <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
+        <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>
+      </tr>`;
+}
+
 async function buscarTodosAnunciosEscalaV29(tipo='simulacao',{forcar=false}={}){
     await carregarMasterLocalV32();
-    const primeiraCarga=!masterAnunciosV32.length;
+    const completo=await cacheCompletoV43();
 
-    if(primeiraCarga){
-        mostrarLoading('Preparando os anúncios pela primeira vez...');
+    if(!completo){
+        mostrarLoading('Preparando todos os anúncios da Gestão uma única vez...');
         try{
-            const delta=await sincronizarMudancasV32({forcar:true,mostrarProgresso:true});
-            const itens=listaMasterFiltradaV32();
-            return {
-                itens,total:itens.length,total_conta:masterAnunciosV32.length,
-                alterados:Number(delta?.alterados||0),cache:false
-            };
+            await reconstruirCacheCompletoV43({mostrarProgresso:true});
         }finally{
             esconderLoading();
         }
     }
 
-    // V42: exibe imediatamente o snapshot persistido no navegador. A checagem
-    // de mudanças acontece depois e nunca bloqueia a abertura da página.
-    const itens=listaMasterFiltradaV32();
     if(forcar){
         const delta=await sincronizarMudancasV32({forcar:true,mostrarProgresso:false});
+        const itensAtualizados=listaMasterFiltradaV32();
         return {
-            itens:listaMasterFiltradaV32(),
-            total:listaMasterFiltradaV32().length,
+            itens:itensAtualizados,total:itensAtualizados.length,
             total_conta:masterAnunciosV32.length,
             alterados:Number(delta?.alterados||0),cache:false
         };
     }
 
+    // Depois da primeira preparação, abre imediatamente do IndexedDB.
+    // A verificação de anúncios novos/alterados acontece em segundo plano.
+    const itens=listaMasterFiltradaV32();
     agendarSyncBackgroundV42();
     return {itens,total:itens.length,total_conta:masterAnunciosV32.length,alterados:0,cache:true};
 }
@@ -8939,40 +9052,46 @@ function renderizarSimulacaoCompletaV29(itens){
     const tbody=document.getElementById('tabela-simulacao');
     if(!tbody)return;
 
+    const token=++simRenderTokenV43;
     if(!itens.length){
         tbody.innerHTML='<tr><td colspan="14" class="p-10 text-center text-slate-500">Nenhum anúncio encontrado para este filtro.</td></tr>';
         return;
     }
 
-    const html=itens.map(item=>{
-        const p=parametrosSimV21(item),sid=safeIdV21(item.id);
-        const calc=calcularSimulacaoV21(item,p);
-        simResultadosPorIdV21[item.id]=calc;
-        const tipo=item.listing_type_id==='gold_pro'?'Premium':'Clássico';
+    // Todos os anúncios já estão carregados em memória/cache. O DOM é montado
+    // em blocos para a página não congelar mesmo com dezenas de milhares de itens.
+    tbody.innerHTML='';
+    let pos=0;
+    const PRIMEIRO_BLOCO=220;
+    const BLOCO=320;
 
-        return `
-          <tr>
-            <td class="p-3 font-mono">${escapeHtml(item.id)}</td>
-            <td class="p-3 font-mono">
-              ${escapeHtml(item.sku)}
-              ${regraSkuV27(item)?'<div class="text-[9px] text-emerald-600 font-black mt-1">BASE SKU</div>':''}
-            </td>
-            <td class="p-3 max-w-[220px] truncate">${escapeHtml(item.title)}</td>
-            <td class="p-3 font-bold">${moeda(item.price)}</td>
-            <td class="p-3">${moeda(item.shipping_cost)}</td>
-            <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
-            <td class="p-3">${tipo}</td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
-            <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
-            <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
-            <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>
-          </tr>`;
-    }).join('');
+    const inserir=(quantidade)=>{
+        if(token!==simRenderTokenV43)return false;
+        const fim=Math.min(itens.length,pos+quantidade);
+        let html='';
+        for(;pos<fim;pos++)html+=linhaSimulacaoV43(itens[pos]);
+        if(html)tbody.insertAdjacentHTML('beforeend',html);
+        return pos<itens.length;
+    };
 
-    tbody.innerHTML=html;
+    const continuar=()=>{
+        if(token!==simRenderTokenV43)return;
+        if(!inserir(BLOCO))return;
+        if('requestIdleCallback' in window){
+            requestIdleCallback(continuar,{timeout:120});
+        }else{
+            setTimeout(continuar,0);
+        }
+    };
+
+    inserir(PRIMEIRO_BLOCO);
+    if(pos<itens.length){
+        if('requestIdleCallback' in window){
+            requestIdleCallback(continuar,{timeout:80});
+        }else{
+            setTimeout(continuar,0);
+        }
+    }
 }
 
 function statusHtmlAtualizacaoV31(id){
@@ -9215,7 +9334,7 @@ async function carregarSimulacaoEscalaV21(page=1){
             const delta=n?` · ${n.toLocaleString('pt-BR')} alteração(ões) aplicada(s)`:' · sem alterações novas';
             info.textContent=filtroEscalaV21.valor
               ? `Filtro: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s)${delta}`
-              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) da Gestão carregados${delta}.`;
+              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) da Gestão carregados e salvos no navegador${delta}.`;
         }
     }catch(e){alert(e.message)}
     finally{simCarregandoV21=false}
