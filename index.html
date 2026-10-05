@@ -8313,6 +8313,24 @@ let baseSkuCarregadaV27=false;
 let skuDisponiveisV27=[];
 let skuLinhaSeqV27=0;
 
+/* V34 — identifica se a Base Financeira mudou.
+   Isso permite atualizar somente os cálculos quando custo/margem do SKU mudarem,
+   sem recarregar todos os anúncios. */
+let baseSkuFingerprintV34='';
+
+function fingerprintBaseSkuV34(){
+    return JSON.stringify(
+        Object.entries(baseSkuV27)
+            .sort(([a],[b])=>a.localeCompare(b))
+            .map(([sku,regra])=>[
+                sku,
+                Number(regra?.custo||0),
+                Number(regra?.margem||0),
+                regra?.updated_at||null
+            ])
+    );
+}
+
 function normalizarSkuV27(v){
     return String(v||'').trim().toLowerCase();
 }
@@ -8394,6 +8412,10 @@ function parametrosSimV21(item){
       ? Number(item.commission_percentage)
       : null;
 
+    const temBase=Boolean(regra);
+    const custoBase=temBase ? Number(regra.custo||0) : null;
+    const margemBase=temBase ? Number(regra.margem||0) : null;
+
     return {
         taxa:Number(
           salvo.taxa ??
@@ -8402,9 +8424,25 @@ function parametrosSimV21(item){
           taxaApi ??
           (premium?17:12)
         ),
-        custo:Number(salvo.custo ?? simMassaV21.custo ?? regra?.custo ?? 10),
+
+        /* V34:
+           Se o SKU existe na Base Financeira, custo e margem SEMPRE vêm dela.
+           Campo individual e preenchimento em massa só valem para SKU sem base. */
+        custo:Number(
+          temBase
+            ? custoBase
+            : (salvo.custo ?? simMassaV21.custo ?? 10)
+        ),
+
         imposto:Number(salvo.imposto ?? simMassaV21.imposto ?? 0),
-        lucro:Number(salvo.lucro ?? simMassaV21.lucro ?? regra?.margem ?? 12)
+
+        lucro:Number(
+          temBase
+            ? margemBase
+            : (salvo.lucro ?? simMassaV21.lucro ?? 12)
+        ),
+
+        origemBaseSku:temBase
     };
 }
 
@@ -8440,6 +8478,17 @@ function calcularSimulacaoV21(item,p){
 
 function safeIdV21(v){return String(v||'').replace(/[^a-zA-Z0-9_-]/g,'_')}
 
+function atributosBaseSkuV34(item,campo){
+    const regra=regraSkuV27(item);
+    if(!regra)return '';
+
+    const rotulo=campo==='custo'
+      ? `Custo definido na Base Financeira: R$ ${Number(regra.custo||0).toFixed(2).replace('.',',')}`
+      : `Margem definida na Base Financeira: ${Number(regra.margem||0).toFixed(2).replace('.',',')}%`;
+
+    return `readonly title="${escapeHtml(rotulo)}" class="input-simulacao w-${campo==='custo'?'20':'16'} !border-emerald-400 !bg-emerald-50 !text-emerald-800 cursor-not-allowed"`;
+}
+
 function montarTabelaSimulacaoV21(itens){
     const tbody=document.getElementById('tabela-simulacao');if(!tbody)return;
     tbody.innerHTML='';
@@ -8464,9 +8513,9 @@ function montarTabelaSimulacaoV21(itens){
           <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
           <td class="p-3">${tipo}</td>
           <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-20"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
           <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
           <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
           <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
           <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>`;
@@ -8477,17 +8526,46 @@ function montarTabelaSimulacaoV21(itens){
 function recalcularV21(id){
     const item=simItensV21.find(x=>String(x.id)===String(id))||atualItensV21.find(x=>String(x.id)===String(id));
     if(!item)return;
+
     const sid=safeIdV21(id);
+    const base=regraSkuV27(item);
+    const atuais=parametrosSimV21(item);
+
     const p={
-        taxa:parseFloat(document.getElementById(`taxa_${sid}`)?.value ?? parametrosSimV21(item).taxa)||0,
-        custo:parseFloat(document.getElementById(`custo_${sid}`)?.value ?? parametrosSimV21(item).custo)||0,
-        imposto:parseFloat(document.getElementById(`imposto_${sid}`)?.value ?? parametrosSimV21(item).imposto)||0,
-        lucro:parseFloat(document.getElementById(`lucro_${sid}`)?.value ?? parametrosSimV21(item).lucro)||0
+        taxa:parseFloat(document.getElementById(`taxa_${sid}`)?.value ?? atuais.taxa)||0,
+
+        // SKU cadastrado na Base Financeira não pode ser sobrescrito por valor antigo/manual.
+        custo:base
+          ? Number(base.custo||0)
+          : (parseFloat(document.getElementById(`custo_${sid}`)?.value ?? atuais.custo)||0),
+
+        imposto:parseFloat(document.getElementById(`imposto_${sid}`)?.value ?? atuais.imposto)||0,
+
+        lucro:base
+          ? Number(base.margem||0)
+          : (parseFloat(document.getElementById(`lucro_${sid}`)?.value ?? atuais.lucro)||0)
     };
+
     simParametrosPorIdV21[id]=p;
-    const calc=calcularSimulacaoV21(item,p);simResultadosPorIdV21[id]=calc;
-    const np=document.getElementById(`novo_preco_${sid}`),ls=document.getElementById(`lucro_sim_${sid}`),mr=document.getElementById(`margem_real_${sid}`);
-    if(np)np.innerText=moeda(calc.preco);if(ls)ls.innerText=moeda(calc.lucroLiquido);if(mr)mr.innerText=calc.margem.toFixed(2)+'%';
+
+    // Mantém os campos visuais sincronizados com a Base Financeira.
+    if(base){
+        const custoEl=document.getElementById(`custo_${sid}`);
+        const lucroEl=document.getElementById(`lucro_${sid}`);
+        if(custoEl)custoEl.value=Number(base.custo||0);
+        if(lucroEl)lucroEl.value=Number(base.margem||0);
+    }
+
+    const calc=calcularSimulacaoV21(item,p);
+    simResultadosPorIdV21[id]=calc;
+
+    const np=document.getElementById(`novo_preco_${sid}`);
+    const ls=document.getElementById(`lucro_sim_${sid}`);
+    const mr=document.getElementById(`margem_real_${sid}`);
+
+    if(np)np.innerText=moeda(calc.preco);
+    if(ls)ls.innerText=moeda(calc.lucroLiquido);
+    if(mr)mr.innerText=calc.margem.toFixed(2)+'%';
 }
 
 async function buscarTodosAnunciosEscalaV29(tipo='simulacao',{forcar=false}={}){
@@ -8534,9 +8612,9 @@ function renderizarSimulacaoCompletaV29(itens){
             <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
             <td class="p-3">${tipo}</td>
             <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-20"></td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
             <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
-            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+            <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
             <td id="novo_preco_${sid}" class="p-3 bg-emerald-50 font-black text-emerald-800">${moeda(calc.preco)}</td>
             <td id="lucro_sim_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-700">${moeda(calc.lucroLiquido)}</td>
             <td id="margem_real_${sid}" class="p-3 bg-emerald-50 font-bold text-emerald-900">${calc.margem.toFixed(2)}%</td>
@@ -8745,7 +8823,7 @@ async function carregarSimulacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     simCarregandoV21=true;
     try{
-        await carregarBaseSkuV27();
+        const baseInfo=await carregarBaseSkuV27(true);
         const resultado=await buscarTodosAnunciosEscalaV29('simulacao');
         const chave=chaveFiltroEscalaV30();
         simPaginaV21=1;simPaginasV21=1;simTotalV21=Number(resultado.total||0);simItensV21=resultado.itens;
@@ -8753,6 +8831,7 @@ async function carregarSimulacaoEscalaV21(page=1){
         const precisaRenderizar=
           simFiltroRenderKeyV30!==chave ||
           Number(resultado.alterados||0)>0 ||
+          Boolean(baseInfo?.mudou) ||
           !document.querySelector('#tabela-simulacao tr');
 
         if(precisaRenderizar){
@@ -8799,7 +8878,7 @@ async function carregarAtualizacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     atualCarregandoV21=true;
     try{
-        await carregarBaseSkuV27();
+        const baseInfo=await carregarBaseSkuV27(true);
         const resultado=await buscarTodosAnunciosEscalaV29('atualizacao');
         const chave=chaveFiltroEscalaV30();
         atualPaginaV21=1;atualPaginasV21=1;atualTotalV21=Number(resultado.total||0);atualItensV21=resultado.itens;
@@ -8807,6 +8886,7 @@ async function carregarAtualizacaoEscalaV21(page=1){
         const precisaRenderizar=
           atualFiltroRenderKeyV30!==chave ||
           Number(resultado.alterados||0)>0 ||
+          Boolean(baseInfo?.mudou) ||
           !document.querySelector('#tabela-atualizacao tr');
 
         if(precisaRenderizar){
@@ -9159,9 +9239,14 @@ function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedi
    V27 — BASE DE CUSTO E MARGEM POR SKU
 ========================================================= */
 async function carregarBaseSkuV27(force=false){
-    if(baseSkuCarregadaV27&&!force)return;
+    if(baseSkuCarregadaV27&&!force){
+        return {mudou:false,fingerprint:baseSkuFingerprintV34};
+    }
+
     const token=obterToken();
-    if(!token)return;
+    if(!token)return {mudou:false,fingerprint:baseSkuFingerprintV34};
+
+    const fingerprintAntes=baseSkuFingerprintV34||fingerprintBaseSkuV34();
 
     const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing?_=${Date.now()}`,{
         cache:'no-store',
@@ -9185,6 +9270,12 @@ async function carregarBaseSkuV27(force=false){
 
     skuDisponiveisV27=Array.isArray(d.skus_disponiveis)?d.skus_disponiveis:[];
     baseSkuCarregadaV27=true;
+
+    const fingerprintDepois=fingerprintBaseSkuV34();
+    const mudou=fingerprintAntes!==fingerprintDepois;
+    baseSkuFingerprintV34=fingerprintDepois;
+
+    return {mudou,fingerprint:fingerprintDepois};
 }
 
 function anunciosSkuV27(sku){
@@ -9316,8 +9407,15 @@ async function removerLinhaSkuV27(rowId){
             if(!r.ok)throw new Error(d.erro||'Erro ao remover SKU.');
 
             delete baseSkuV27[normalizarSkuV27(skuOriginal)];
+            baseSkuFingerprintV34=fingerprintBaseSkuV34();
+            simFiltroRenderKeyV30='';
+            atualFiltroRenderKeyV30='';
+
             row.remove();
             renderBaseSkuV27();
+
+            if(simItensV21.length)renderizarSimulacaoCompletaV29(simItensV21);
+            if(atualItensV21.length)renderizarAtualizacaoCompletaV29(atualItensV21);
         }catch(e){
             alert(e.message);
         }
@@ -9369,7 +9467,12 @@ async function salvarBaseSkuV27(){
         // Limpa edições temporárias para a nova base passar a valer imediatamente.
         Object.keys(simParametrosPorIdV21).forEach(k=>delete simParametrosPorIdV21[k]);
         baseSkuCarregadaV27=false;
+        baseSkuFingerprintV34='';
         await carregarBaseSkuV27(true);
+
+        simFiltroRenderKeyV30='';
+        atualFiltroRenderKeyV30='';
+
         renderBaseSkuV27();
 
         const st=document.getElementById('sku-base-status-v27');
