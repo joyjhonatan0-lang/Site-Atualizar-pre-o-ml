@@ -4879,58 +4879,118 @@ async function chamarGeminiJsonVisionV37(prompt,referenceImages=[]){
     throw ultimoErro||new Error('Falha ao analisar o produto com IA.');
 }
 
+function erroQuotaImagemSemFaturamentoV40(status,msg){
+    if(Number(status)!==429)return false;
+    const t=String(msg||'').toLowerCase();
+    return /free[_ ]?tier|not available.*free|billing|billed|payment|quota[^\n]*limit[^\n]*0|limit[^\n]*0|quota[^\n]*0/.test(t);
+}
+
+function extrairImagemInteracaoGeminiV40(payload){
+    const d=payload?.interaction||payload||{};
+    if(d?.output_image?.data){
+        return {data:d.output_image.data,mime:d.output_image.mime_type||d.output_image.mimeType||'image/png'};
+    }
+    for(const step of (Array.isArray(d?.steps)?d.steps:[])){
+        if(step?.type!=='model_output')continue;
+        for(const part of (Array.isArray(step?.content)?step.content:[])){
+            if(part?.type==='image'&&part?.data){
+                return {data:part.data,mime:part.mime_type||part.mimeType||'image/png'};
+            }
+        }
+    }
+    return null;
+}
+
+function montarInputInteracaoImagemV40(prompt,referenceImages=[]){
+    const input=[{type:'text',text:String(prompt||'')}];
+    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,8)){
+        const img=parseDataUrlV37(ref);
+        if(img?.data){
+            input.push({type:'image',mime_type:img.mime||'image/png',data:img.data});
+        }
+    }
+    return input;
+}
+
 async function gerarImagemGeminiV37(prompt,referenceImages=[]){
     const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
-    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
+    if(!apiKey){
+        const e=new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
+        e.status=503; throw e;
+    }
 
     const modelos=modelosGeminiImagemV39();
     let ultimoErro=null;
     const promptFinal=String(prompt||'').trim()+
-      '\n\nRequisitos obrigatórios da imagem: gerar em formato quadrado 1:1, pensado para 1080x1080, alta nitidez, qualidade profissional para marketplace brasileiro, sem marcas d\'água e sem conteúdo impróprio.';
+      '\n\nRequisitos obrigatórios: imagem quadrada 1:1, resolução 1K (aprox. 1024x1024, adequada para uso em 1080x1080), alta nitidez, qualidade profissional de marketplace, sem marcas d\'água visuais adicionadas pelo layout, preservando fielmente o produto das fotos de referência.';
 
     for(const model of modelos){
         for(let tentativa=1;tentativa<=4;tentativa++){
+            let r=null,d={};
             try{
-                const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-                const r=await fetch(url,{
+                r=await fetch(GEMINI_INTERACTIONS_URL,{
                     method:'POST',
-                    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+                    headers:{
+                        'Content-Type':'application/json',
+                        'x-goog-api-key':apiKey,
+                        'Api-Revision':'2026-05-20'
+                    },
                     body:JSON.stringify({
-                        contents:[{parts:montarPartesGeminiV38(promptFinal,referenceImages)}],
-                        generationConfig:{
-                            responseModalities:['IMAGE']
+                        model,
+                        input:montarInputInteracaoImagemV40(promptFinal,referenceImages),
+                        store:false,
+                        response_format:{
+                            type:'image',
+                            mime_type:'image/png',
+                            aspect_ratio:'1:1',
+                            image_size:'1K'
                         }
                     })
                 });
-                const d=await r.json().catch(()=>({}));
+                d=await r.json().catch(()=>({}));
+
                 if(r.ok){
-                    const outParts=d?.candidates?.[0]?.content?.parts||[];
-                    const imagePart=outParts.find(p=>p?.inlineData?.data||p?.inline_data?.data);
-                    const inline=imagePart?.inlineData||imagePart?.inline_data;
-                    if(!inline?.data){ultimoErro=new Error('O Gemini respondeu sem uma imagem utilizável.');break;}
+                    const out=extrairImagemInteracaoGeminiV40(d);
+                    if(!out?.data){
+                        ultimoErro=new Error('O Gemini respondeu sem uma imagem utilizável.');
+                        ultimoErro.status=502;
+                        break;
+                    }
                     return {
-                        buffer:Buffer.from(inline.data,'base64'),
-                        mime:String(inline.mimeType||inline.mime_type||'image/png'),
+                        buffer:Buffer.from(out.data,'base64'),
+                        mime:String(out.mime||'image/png'),
                         model
                     };
                 }
 
                 const bruto=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
-                ultimoErro=new Error(erroGeminiImagemAmigavelV38(r.status,bruto));
+                const semFaturamento=erroQuotaImagemSemFaturamentoV40(r.status,bruto);
+                const e=new Error(
+                    semFaturamento
+                      ? 'A cota de geração de imagens do projeto Gemini não está disponível. A API de imagens do Gemini não possui nível gratuito para esses modelos; habilite faturamento para gerar imagens com IA. O painel pode usar o modo visual gratuito com as fotos enviadas.'
+                      : erroGeminiImagemAmigavelV38(r.status,bruto)
+                );
+                e.status=r.status;
+                e.quotaUnavailable=semFaturamento;
+                e.retryAfter=Number(r.headers.get('retry-after')||0);
+                e.technical=bruto;
+                ultimoErro=e;
+
+                if(semFaturamento)throw e;
                 if((r.status===400||r.status===404)&&erroModeloGeminiV38(bruto))break;
                 if(erroGeminiTransitorio(r.status)){
                     if(tentativa<4){
-                        const retryAfter=Number(r.headers.get('retry-after')||0);
-                        const espera=retryAfter>0?Math.min(15000,retryAfter*1000):[2500,5000,8500][tentativa-1];
-                        await esperarGemini(espera||10000);
+                        const espera=e.retryAfter>0?Math.min(60000,e.retryAfter*1000):[8000,16000,30000][tentativa-1];
+                        await esperarGemini(espera||30000);
                         continue;
                     }
                     break;
                 }
                 break;
             }catch(e){
+                if(e?.quotaUnavailable)throw e;
                 ultimoErro=e;
-                if(tentativa<4){await esperarGemini([1800,3500,6500][tentativa-1]||8000);continue;}
+                if(tentativa<4){await esperarGemini([5000,12000,22000][tentativa-1]||25000);continue;}
             }
         }
     }
@@ -6842,8 +6902,46 @@ app.post('/api/v38/criar/ia/imagem-item',async(req,res)=>{
         });
     }catch(e){
         const msg=String(e?.message||e);
-        const retryable=/limite|demanda|tempor|429|503|504/i.test(msg);
-        res.status(retryable?429:500).json({sucesso:false,erro:msg,retryable,index});
+        const quotaUnavailable=Boolean(e?.quotaUnavailable);
+        const retryable=!quotaUnavailable && (Number(e?.status)===429 || Number(e?.status)===503 || Number(e?.status)===504 || /limite|demanda|tempor/i.test(msg));
+        const status=quotaUnavailable?429:(Number(e?.status)|| (retryable?429:500));
+        res.status(status).json({
+            sucesso:false,
+            erro:msg,
+            retryable,
+            quota_unavailable:quotaUnavailable,
+            retry_after:Number(e?.retryAfter||0),
+            technical_error:String(e?.technical||''),
+            index
+        });
+    }
+});
+
+
+app.post('/api/v40/criar/imagem-upload',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    try{
+        const parsed=parseDataUrlV37(req.body?.image_data_url);
+        if(!parsed?.data)return respostaErro(res,400,'Imagem em data URL inválida.');
+        const buffer=Buffer.from(parsed.data,'base64');
+        if(!buffer.length)return respostaErro(res,400,'Imagem vazia.');
+        if(buffer.length>12*1024*1024)return respostaErro(res,413,'A imagem ultrapassa 12 MB.');
+        const pic=await enviarImagemMercadoLivreV36(token,{buffer,mime:parsed.mime||'image/png',model:'fallback-visual-v40'});
+        res.json({
+            sucesso:true,
+            picture:{
+                index:Number(req.body?.index||0),
+                tipo:String(req.body?.tipo||'fallback'),
+                titulo:String(req.body?.titulo||'Imagem visual'),
+                id:pic.id,
+                url:pic.url,
+                model:'fallback-visual-v40',
+                fallback:true
+            }
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao enviar a imagem visual ao Mercado Livre: '+e.message);
     }
 });
 
@@ -7203,6 +7301,62 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
         res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
     }catch(e){respostaErro(res,500,e.message)}
+});
+
+
+/* V40 — anúncios pausados, inativos, finalizados pelo ML e em revisão. */
+app.get('/api/scale/anuncios-restritos',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const sellerId=me.id;
+        const limit=Math.min(5000,Math.max(100,Number(req.query.limit||2000)));
+        const offset=Math.max(0,Number(req.query.offset||0));
+        const filtro=String(req.query.status||'').trim().toLowerCase();
+        const validos=new Set(['paused','inactive','closed','under_review']);
+        const params=[sellerId];
+        let cond=`seller_id=$1 AND status IN ('paused','inactive','closed','under_review')`;
+        // "closed + deleted" é exclusão feita pelo seller; o usuário pediu para não listar excluídos.
+        cond+=` AND NOT (status='closed' AND LOWER(COALESCE(raw::text,'')) LIKE '%\"deleted\"%')`;
+        if(filtro&&validos.has(filtro)){
+            params.push(filtro);
+            cond+=` AND status=$${params.length}`;
+        }
+
+        const [totais,total]=await Promise.all([
+            dbQuery(`SELECT
+                COUNT(*) FILTER (WHERE status='paused')::int pausados,
+                COUNT(*) FILTER (WHERE status='inactive')::int inativos,
+                COUNT(*) FILTER (WHERE status='under_review')::int revisao,
+                COUNT(*) FILTER (WHERE status='closed' AND LOWER(COALESCE(raw::text,'')) NOT LIKE '%\"deleted\"%')::int finalizados
+              FROM ml_items WHERE seller_id=$1`,[sellerId]),
+            dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${cond}`,params)
+        ]);
+
+        const queryParams=[...params,limit,offset];
+        const rows=await dbQuery(`
+          SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,
+                 status,listing_type_id,category_id,thumbnail,permalink,
+                 ml_updated_at last_updated,synced_at last_synced,
+                 raw->'sub_status' sub_status,
+                 raw->'tags' tags
+          FROM ml_items
+          WHERE ${cond}
+          ORDER BY
+            CASE status WHEN 'under_review' THEN 1 WHEN 'inactive' THEN 2 WHEN 'paused' THEN 3 WHEN 'closed' THEN 4 ELSE 5 END,
+            ml_updated_at DESC NULLS LAST,item_id
+          LIMIT $${queryParams.length-1} OFFSET $${queryParams.length}
+        `,queryParams);
+
+        res.json({
+            sucesso:true,
+            total:Number(total.rows[0]?.total||0),
+            offset,limit,
+            totais:totais.rows[0]||{pausados:0,inativos:0,revisao:0,finalizados:0},
+            itens:rows.rows
+        });
+    }catch(e){respostaErro(res,500,'Erro ao carregar anúncios com status especial: '+e.message)}
 });
 
 /* V32 — somente anúncios alterados desde o último cursor. */
