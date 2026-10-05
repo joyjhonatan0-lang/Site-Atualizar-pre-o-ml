@@ -256,7 +256,7 @@ app.get('/api/version', (req, res) => {
     res.json({
         ok: true,
         service: 'ML Hub Pro',
-        version: 'ml-hub-pro-v38-gemini-seo-categorias',
+        version: 'ml-hub-pro-v44-cloudflare-images',
         oauth_callback: '/auth/callback',
         manual_credentials: '/api/oauth/manual-credentials'
     });
@@ -5028,6 +5028,192 @@ async function gerarImagemGeminiV37(prompt,referenceImages=[]){
     throw ultimoErro||new Error('Falha ao gerar imagem com IA.');
 }
 
+
+/* =========================================================
+   V44 — CLOUDFLARE WORKERS AI PARA GERAÇÃO DE IMAGENS
+   - Provedor primário de imagens: FLUX.2 klein 4B
+   - Até 4 imagens de referência por chamada
+   - Saída 1024x1024
+   - Retry automático para indisponibilidade temporária
+========================================================= */
+
+function configCloudflareImagemV44(){
+    return {
+        accountId:String(process.env.CLOUDFLARE_ACCOUNT_ID||'').trim(),
+        token:String(process.env.CLOUDFLARE_AI_TOKEN||'').trim(),
+        model:String(process.env.CLOUDFLARE_IMAGE_MODEL||'@cf/black-forest-labs/flux-2-klein-4b').trim()
+    };
+}
+
+function cloudflareImagemConfiguradoV44(){
+    const c=configCloudflareImagemV44();
+    return Boolean(c.accountId && c.token && c.model);
+}
+
+function extrairErroCloudflareV44(payload,status){
+    const erros=Array.isArray(payload?.errors)?payload.errors:[];
+    const primeiro=erros[0]||{};
+    const code=Number(primeiro?.code||payload?.code||0);
+    const msg=String(
+        primeiro?.message||
+        payload?.error?.message||
+        payload?.message||
+        `Cloudflare Workers AI HTTP ${status}`
+    ).trim();
+
+    let amigavel=msg;
+    let retryable=[408,429,500,502,503,504].includes(Number(status));
+    let quotaUnavailable=false;
+
+    if(Number(status)===401){
+        amigavel='O token da Cloudflare foi recusado. Confira CLOUDFLARE_AI_TOKEN no Render.';
+        retryable=false;
+    }else if(Number(status)===403 && code===5035){
+        amigavel='Este modelo da Cloudflare exige um plano pago para esta conta. Troque CLOUDFLARE_IMAGE_MODEL por um modelo permitido no plano atual.';
+        retryable=false;
+        quotaUnavailable=true;
+    }else if(Number(status)===403){
+        amigavel='A Cloudflare recusou a permissão. Confira se o token possui Workers AI Read e Workers AI Edit e se pertence ao mesmo Account ID configurado no Render.';
+        retryable=false;
+    }else if(Number(status)===404 || code===3042 || code===5007){
+        amigavel='O modelo configurado na Cloudflare não foi encontrado. Confira CLOUDFLARE_IMAGE_MODEL no Render.';
+        retryable=false;
+    }else if(Number(status)===413 || code===3006){
+        amigavel='As imagens de referência ficaram grandes demais para a Cloudflare. O painel reduz as referências automaticamente; tente novamente.';
+        retryable=false;
+    }else if(code===3036){
+        amigavel='A cota gratuita diária do Workers AI foi utilizada. Ela volta a ficar disponível após a renovação diária da Cloudflare.';
+        retryable=false;
+        quotaUnavailable=true;
+    }else if(code===3040){
+        amigavel='A Cloudflare está temporariamente sem capacidade para gerar a imagem. O sistema tentará novamente automaticamente.';
+        retryable=true;
+    }else if(Number(status)===429){
+        amigavel='A Cloudflare limitou temporariamente as solicitações. O sistema tentará novamente automaticamente.';
+        retryable=true;
+    }
+
+    const e=new Error(amigavel);
+    e.status=Number(status)||500;
+    e.code=code||0;
+    e.retryable=retryable;
+    e.quotaUnavailable=quotaUnavailable;
+    e.technical=msg;
+    return e;
+}
+
+function extrairImagemCloudflareV44(payload){
+    const candidatos=[
+        payload?.result?.image,
+        payload?.image,
+        payload?.result?.output?.image,
+        payload?.result?.data?.image
+    ];
+    for(const x of candidatos){
+        if(typeof x==='string' && x.trim())return x.trim();
+    }
+    return '';
+}
+
+async function gerarImagemCloudflareV44(prompt,referenceImages=[]){
+    const cfg=configCloudflareImagemV44();
+    if(!cfg.accountId || !cfg.token){
+        const e=new Error('Configure CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_AI_TOKEN no Render para gerar imagens.');
+        e.status=503;
+        e.retryable=false;
+        throw e;
+    }
+
+    const refs=(Array.isArray(referenceImages)?referenceImages:[])
+        .map(parseDataUrlV37)
+        .filter(Boolean)
+        .slice(0,4);
+
+    const mod=await import('node-fetch');
+    const url=`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(cfg.accountId)}/ai/run/${cfg.model}`;
+    const promptFinal=String(prompt||'').trim()+
+      '\n\nUse as imagens de referência como fonte principal da aparência do produto. Preserve formato, cor, acabamento, acessórios realmente visíveis e identidade visual do item. Não invente marca, modelo, acessórios ou especificações. Saída quadrada profissional para marketplace.';
+
+    let ultimoErro=null;
+
+    for(let tentativa=1;tentativa<=5;tentativa++){
+        try{
+            const form=new mod.FormData();
+            form.append('prompt',promptFinal);
+            form.append('width','1024');
+            form.append('height','1024');
+            form.append('guidance','3.5');
+
+            refs.forEach((img,i)=>{
+                const blob=new mod.Blob(
+                    [Buffer.from(img.data,'base64')],
+                    {type:img.mime||'image/jpeg'}
+                );
+                const ext=/png/i.test(img.mime||'')?'png':'jpg';
+                form.append(`input_image_${i}`,blob,`referencia-${i+1}.${ext}`);
+            });
+
+            const r=await mod.default(url,{
+                method:'POST',
+                headers:{Authorization:`Bearer ${cfg.token}`},
+                body:form
+            });
+
+            const contentType=String(r.headers.get('content-type')||'').toLowerCase();
+
+            if(r.ok && contentType.startsWith('image/')){
+                const ab=await r.arrayBuffer();
+                const buffer=Buffer.from(ab);
+                if(!buffer.length)throw new Error('A Cloudflare respondeu com uma imagem vazia.');
+                return {buffer,mime:contentType.split(';')[0]||'image/png',model:cfg.model,provider:'cloudflare'};
+            }
+
+            let d={};
+            try{ d=await r.json(); }
+            catch{
+                const txt=await r.text().catch(()=> '');
+                d={message:txt};
+            }
+
+            if(r.ok){
+                const b64=extrairImagemCloudflareV44(d);
+                if(!b64){
+                    const e=new Error('A Cloudflare respondeu sem uma imagem utilizável.');
+                    e.status=502;
+                    throw e;
+                }
+                return {
+                    buffer:Buffer.from(b64,'base64'),
+                    mime:'image/png',
+                    model:cfg.model,
+                    provider:'cloudflare'
+                };
+            }
+
+            const e=extrairErroCloudflareV44(d,r.status);
+            const retryAfter=Number(r.headers.get('retry-after')||0);
+            e.retryAfter=retryAfter;
+            ultimoErro=e;
+
+            if(!e.retryable || tentativa>=5)throw e;
+
+            const espera=retryAfter>0
+                ? Math.min(30000,retryAfter*1000)
+                : [2500,5000,8500,12000][tentativa-1]||15000;
+            await esperarGemini(espera);
+        }catch(e){
+            ultimoErro=e;
+            if(e?.quotaUnavailable || e?.retryable===false || tentativa>=5)throw e;
+            if(tentativa<5){
+                await esperarGemini([1800,3500,6500,10000][tentativa-1]||12000);
+                continue;
+            }
+        }
+    }
+
+    throw ultimoErro||new Error('Falha ao gerar imagem com Cloudflare Workers AI.');
+}
+
 const CENAS_IMAGENS_V38=[
     {chave:'capa',titulo:'Capa',prompt:`Use a foto de referência para manter exatamente o mesmo produto. Gere uma imagem quadrada para capa de anúncio do Mercado Livre. Mostre somente o produto principal centralizado, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d'água, sem textos promocionais e sem inventar acessórios.`},
     {chave:'angulo',titulo:'Ângulo complementar',prompt:`Use a foto de referência. Gere uma imagem quadrada mostrando o mesmo produto em ângulo complementar, fundo branco limpo e visual profissional de e-commerce, preservando formato, cor e acabamento reais.`},
@@ -6970,36 +7156,67 @@ app.post('/api/v38/criar/ia/imagem-item',async(req,res)=>{
 
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
-    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[])
+        .filter(Boolean)
+        .slice(0,4);
     const index=Math.max(0,Math.min(CENAS_IMAGENS_V38.length-1,Number(req.body?.index||0)));
-    if(!produto&&!referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
+
+    if(!produto&&!referenceImages.length){
+        return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
+    }
 
     try{
         const cena=CENAS_IMAGENS_V38[index];
-        const prompt=`Produto: ${produto||'Produto sem nome informado'}\nDetalhes reais informados: ${detalhes||'Nenhum detalhe adicional.'}\n${cena.prompt}`;
-        const img=await gerarImagemGeminiV37(prompt,referenceImages);
+        const prompt=`Produto: ${produto||'Produto sem nome informado'}
+Detalhes reais informados: ${detalhes||'Nenhum detalhe adicional.'}
+${cena.prompt}`;
+
+        const img=await gerarImagemCloudflareV44(prompt,referenceImages);
         const pic=await enviarImagemMercadoLivreV36(token,img);
+
         res.json({
             sucesso:true,
+            provedor:'cloudflare',
             index,
             total:CENAS_IMAGENS_V38.length,
-            picture:{index,tipo:cena.chave,titulo:cena.titulo,id:pic.id,url:pic.url,model:img.model}
+            picture:{
+                index,
+                tipo:cena.chave,
+                titulo:cena.titulo,
+                id:pic.id,
+                url:pic.url,
+                model:img.model,
+                provider:'cloudflare'
+            }
         });
     }catch(e){
         const msg=String(e?.message||e);
+        const retryable=Boolean(e?.retryable) || [408,429,500,502,503,504].includes(Number(e?.status));
         const quotaUnavailable=Boolean(e?.quotaUnavailable);
-        const retryable=!quotaUnavailable && (Number(e?.status)===429 || Number(e?.status)===503 || Number(e?.status)===504 || /limite|demanda|tempor/i.test(msg));
-        const status=quotaUnavailable?429:(Number(e?.status)|| (retryable?429:500));
-        res.status(status).json({
+
+        res.status(Number(e?.status)||500).json({
             sucesso:false,
+            provedor:'cloudflare',
             erro:msg,
-            retryable,
+            retryable:retryable&&!quotaUnavailable,
             quota_unavailable:quotaUnavailable,
             retry_after:Number(e?.retryAfter||0),
             technical_error:String(e?.technical||''),
+            cloudflare_code:Number(e?.code||0),
             index
         });
     }
+});
+
+app.get('/api/v44/cloudflare/status',(req,res)=>{
+    const cfg=configCloudflareImagemV44();
+    res.json({
+        sucesso:true,
+        configurado:Boolean(cfg.accountId&&cfg.token),
+        model:cfg.model,
+        account_id_configurado:Boolean(cfg.accountId),
+        token_configurado:Boolean(cfg.token)
+    });
 });
 
 
