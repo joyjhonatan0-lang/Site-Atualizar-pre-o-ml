@@ -256,7 +256,7 @@ app.get('/api/version', (req, res) => {
     res.json({
         ok: true,
         service: 'ML Hub Pro',
-        version: 'oauth-pkce-refresh-v2',
+        version: 'ml-hub-pro-v38-gemini-seo-categorias',
         oauth_callback: '/auth/callback',
         manual_credentials: '/api/oauth/manual-credentials'
     });
@@ -3233,16 +3233,18 @@ app.get('/api/v9/claims/:id/attachments/:file',async(req,res)=>{
 const GEMINI_INTERACTIONS_URL='https://generativelanguage.googleapis.com/v1beta/interactions';
 
 function modelosGeminiDisponiveis(){
-    // Priorizamos modelos estáveis e menos sujeitos a pico.
-    // GEMINI_MODEL continua opcional para você escolher manualmente no Render.
+    // Modelos atuais documentados pela API Gemini. Se o Render ainda tiver
+    // GEMINI_MODEL antigo, ele é tentado primeiro e o fallback continua
+    // automaticamente para os modelos atuais quando necessário.
     const configurado=String(process.env.GEMINI_MODEL||'').trim();
     const modelos=[
       configurado,
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
       'gemini-3.6-flash',
       'gemini-3.5-flash-lite',
       'gemini-3.5-flash',
-      'gemini-3.8-flash'
+      'gemini-3.1-flash-lite'
     ].filter(Boolean);
     return [...new Set(modelos)];
 }
@@ -3278,7 +3280,7 @@ function erroGeminiTransitorio(status){
     return status===408 || status===429 || status===500 || status===502 || status===503 || status===504;
 }
 
-async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=null}){
+async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=null,tools=[]}){
     const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
     if(!apiKey){
         const e=new Error('IA não configurada. Adicione GEMINI_API_KEY nas variáveis de ambiente do Render.');
@@ -3299,6 +3301,7 @@ async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=
 
             const body={model,input,store:false};
             if(systemInstruction)body.system_instruction=systemInstruction;
+            if(Array.isArray(tools)&&tools.length)body.tools=tools;
             if(responseSchema){
                 body.response_format={
                     type:'text',
@@ -3350,7 +3353,7 @@ async function chamarGeminiInteracao({input,systemInstruction='',responseSchema=
 
                 // Modelo indisponível/incompatível: pula diretamente para o próximo.
                 if((r.status===400||r.status===404) &&
-                   /model|modelo|not found|not supported|unsupported|unknown|does not exist/i.test(String(d?.error?.message||d?.message||''))){
+                   /model|modelo|not found|not supported|unsupported|unknown|does not exist|no longer available|not available/i.test(String(d?.error?.message||d?.message||''))){
                     break;
                 }
 
@@ -4778,13 +4781,47 @@ function parseDataUrlV37(dataUrl){
     return {mime:m[1],data:m[2]};
 }
 
-async function chamarGeminiJsonVisionV37(prompt,referenceImages=[]){
-    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
-    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para usar a IA com imagem.');
+function modelosGeminiVisionV38(){
+    const configurados=[
+        String(process.env.GEMINI_VISION_MODEL||'').trim(),
+        String(process.env.GEMINI_MODEL||'').trim()
+    ].filter(Boolean);
+    return [...new Set([
+        ...configurados,
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite'
+    ])];
+}
 
-    const model=String(process.env.GEMINI_VISION_MODEL||process.env.GEMINI_MODEL||'gemini-2.5-flash').trim();
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+function modelosGeminiImagemV38(){
+    const configurado=String(process.env.GEMINI_IMAGE_MODEL||'').trim();
+    return [...new Set([
+        configurado,
+        'gemini-3.1-flash-image',
+        'gemini-3.1-flash-lite-image',
+        'gemini-3-pro-image',
+        'gemini-2.5-flash-image'
+    ].filter(Boolean))];
+}
 
+function erroModeloGeminiV38(msg){
+    return /model|modelo|not found|not supported|unsupported|unknown|does not exist|no longer available|not available/i.test(String(msg||''));
+}
+
+function erroGeminiImagemAmigavelV38(status,msg){
+    const texto=String(msg||'').trim();
+    if(status===401||status===403)return 'A chave GEMINI_API_KEY não tem permissão para gerar imagens. Confira o projeto no Google AI Studio.';
+    if(status===429)return 'O limite temporário de geração de imagens do Gemini foi atingido. O sistema tentou novamente automaticamente; clique de novo depois para continuar exatamente de onde parou.';
+    if(status===503||status===504)return 'O Gemini está com alta demanda para imagens. O sistema tentou novamente automaticamente; você pode continuar a geração depois.';
+    if(erroModeloGeminiV38(texto))return 'O modelo de imagem configurado não está disponível. O sistema tentou os modelos atuais automaticamente.';
+    return texto||`Gemini HTTP ${status}`;
+}
+
+function montarPartesGeminiV38(prompt,referenceImages=[]){
     const parts=[{text:String(prompt||'')}];
     for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,4)){
         const img=parseDataUrlV37(ref);
@@ -4792,138 +4829,137 @@ async function chamarGeminiJsonVisionV37(prompt,referenceImages=[]){
             parts.push({inlineData:{mimeType:img.mime||'image/png',data:img.data}});
         }
     }
+    return parts;
+}
 
-    const r=await fetch(url,{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
-        body:JSON.stringify({
-            contents:[{parts}],
-            generationConfig:{
-                temperature:0.4,
-                responseMimeType:'application/json'
+async function chamarGeminiJsonVisionV37(prompt,referenceImages=[]){
+    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
+    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para usar a IA com imagem.');
+
+    const modelos=modelosGeminiVisionV38();
+    let ultimoErro=null;
+
+    for(const model of modelos){
+        for(let tentativa=1;tentativa<=3;tentativa++){
+            try{
+                const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+                const r=await fetch(url,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+                    body:JSON.stringify({
+                        contents:[{parts:montarPartesGeminiV38(prompt,referenceImages)}],
+                        generationConfig:{temperature:0.35,responseMimeType:'application/json'}
+                    })
+                });
+                const d=await r.json().catch(()=>({}));
+                if(r.ok){
+                    const txt=(d?.candidates?.[0]?.content?.parts||[]).map(p=>p?.text||'').join('\n').trim();
+                    if(!txt){ultimoErro=new Error('O Gemini respondeu sem conteúdo estruturado.');break;}
+                    return extrairJsonIA(txt);
+                }
+
+                const bruto=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
+                ultimoErro=new Error(erroGeminiAmigavel(r.status,d));
+                if((r.status===400||r.status===404)&&erroModeloGeminiV38(bruto))break;
+                if(erroGeminiTransitorio(r.status)){
+                    if(tentativa<3){
+                        const retryAfter=Number(r.headers.get('retry-after')||0);
+                        const espera=retryAfter>0?Math.min(10000,retryAfter*1000):(tentativa===1?1800:4200);
+                        await esperarGemini(espera);
+                        continue;
+                    }
+                    break;
+                }
+                break;
+            }catch(e){
+                ultimoErro=e;
+                if(tentativa<3){await esperarGemini(tentativa===1?1500:3500);continue;}
             }
-        })
-    });
-
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok){
-        const msg=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
-        throw new Error(msg);
+        }
     }
-
-    const partsOut=d?.candidates?.[0]?.content?.parts||[];
-    const txt=partsOut.map(p=>p?.text||'').join('\n').trim();
-    if(!txt)throw new Error('O Gemini respondeu sem conteúdo estruturado.');
-    return extrairJsonIA(txt);
+    throw ultimoErro||new Error('Falha ao analisar o produto com IA.');
 }
 
 async function gerarImagemGeminiV37(prompt,referenceImages=[]){
     const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
     if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
 
-    const model=String(process.env.GEMINI_IMAGE_MODEL||'gemini-3.1-flash-lite-image').trim();
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const parts=[{text:String(prompt||'')}];
-    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,4)){
-        const img=parseDataUrlV37(ref);
-        if(img?.data){
-            parts.push({inlineData:{mimeType:img.mime||'image/png',data:img.data}});
+    const modelos=modelosGeminiImagemV38();
+    let ultimoErro=null;
+
+    for(const model of modelos){
+        for(let tentativa=1;tentativa<=4;tentativa++){
+            try{
+                const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+                const r=await fetch(url,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+                    body:JSON.stringify({
+                        contents:[{parts:montarPartesGeminiV38(prompt,referenceImages)}],
+                        generationConfig:{
+                            responseModalities:['IMAGE'],
+                            responseFormat:{image:{aspectRatio:'1:1'}}
+                        }
+                    })
+                });
+                const d=await r.json().catch(()=>({}));
+                if(r.ok){
+                    const outParts=d?.candidates?.[0]?.content?.parts||[];
+                    const imagePart=outParts.find(p=>p?.inlineData?.data||p?.inline_data?.data);
+                    const inline=imagePart?.inlineData||imagePart?.inline_data;
+                    if(!inline?.data){ultimoErro=new Error('O Gemini respondeu sem uma imagem utilizável.');break;}
+                    return {
+                        buffer:Buffer.from(inline.data,'base64'),
+                        mime:String(inline.mimeType||inline.mime_type||'image/png'),
+                        model
+                    };
+                }
+
+                const bruto=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
+                ultimoErro=new Error(erroGeminiImagemAmigavelV38(r.status,bruto));
+                if((r.status===400||r.status===404)&&erroModeloGeminiV38(bruto))break;
+                if(erroGeminiTransitorio(r.status)){
+                    if(tentativa<4){
+                        const retryAfter=Number(r.headers.get('retry-after')||0);
+                        const espera=retryAfter>0?Math.min(15000,retryAfter*1000):[2500,5000,8500][tentativa-1];
+                        await esperarGemini(espera||10000);
+                        continue;
+                    }
+                    break;
+                }
+                break;
+            }catch(e){
+                ultimoErro=e;
+                if(tentativa<4){await esperarGemini([1800,3500,6500][tentativa-1]||8000);continue;}
+            }
         }
     }
-
-    const r=await fetch(url,{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
-        body:JSON.stringify({
-            contents:[{parts}],
-            generationConfig:{responseModalities:['IMAGE']}
-        })
-    });
-
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok){
-        const msg=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
-        if(r.status===429)throw new Error('O limite do Gemini para imagens foi atingido temporariamente. Aguarde e tente novamente.');
-        throw new Error(msg);
-    }
-
-    const outParts=d?.candidates?.[0]?.content?.parts||[];
-    const imagePart=outParts.find(p=>p?.inlineData?.data||p?.inline_data?.data);
-    const inline=imagePart?.inlineData||imagePart?.inline_data;
-    if(!inline?.data)throw new Error('O Gemini respondeu sem uma imagem utilizável.');
-
-    return {
-        buffer:Buffer.from(inline.data,'base64'),
-        mime:String(inline.mimeType||inline.mime_type||'image/png'),
-        model
-    };
+    throw ultimoErro||new Error('Falha ao gerar imagem com IA.');
 }
 
-async function gerarPacote11ImagensV37({token,produto,detalhes,referenceImages=[]}){
-    const cenas=[
-        {
-            chave:'capa',
-            titulo:'Capa',
-            prompt:`Use a foto de referência para manter o mesmo produto. Gere uma imagem quadrada 1080x1080 para capa de anúncio do Mercado Livre. Mostre somente o produto principal centralizado, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d'água, sem textos promocionais, sem inventar acessórios.`
-        },
-        {
-            chave:'angulo',
-            titulo:'Ângulo complementar',
-            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 mostrando o produto em ângulo 45 graus, fundo branco limpo, visual profissional de e-commerce, destacando acabamento real do produto.`
-        },
-        {
-            chave:'detalhe',
-            titulo:'Close de detalhe',
-            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 com close-up de detalhe do produto, destacando textura, material ou acabamento real, fundo claro e composição comercial.`
-        },
-        {
-            chave:'uso1',
-            titulo:'Aplicação 1',
-            prompt:`Use a foto de referência e os detalhes do produto. Gere uma imagem quadrada 1080x1080 com uma pessoa usando o produto em contexto real, de forma natural, sem exageros, focada em demonstrar aplicação e utilidade.`
-        },
-        {
-            chave:'uso2',
-            titulo:'Aplicação 2',
-            prompt:`Use a foto de referência e gere outra cena de uso do produto em ambiente real, quadrada 1080x1080, mostrando benefício prático do produto e ajudando o comprador a entender como ele é utilizado.`
-        },
-        {
-            chave:'kit',
-            titulo:'Conteúdo da embalagem',
-            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 estilo flat lay mostrando o produto e os itens inclusos na embalagem, organizados, com fundo claro e visual informativo. Não invente itens não mencionados; se não houver acessórios claros, mostre apenas o produto e o que for plausível.`
-        },
-        {
-            chave:'ficha',
-            titulo:'Ficha técnica',
-            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto e uma ficha técnica visual em português, com poucos textos claros, ícones e chamadas curtas explicando o que é o produto, principais especificações e benefícios, sempre sem inventar dados.`
-        },
-        {
-            chave:'medidas',
-            titulo:'Medidas / dimensões',
-            prompt:`Use a foto de referência e gere uma imagem quadrada 1080x1080 mostrando o produto com setas e indicação visual de dimensões/medidas aproximadas, apenas se forem inferíveis ou genéricas. Se não houver medidas confiáveis, faça uma arte de proporção e escala sem números exatos.`
-        },
-        {
-            chave:'beneficios',
-            titulo:'Benefícios',
-            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto e 3 a 5 benefícios em português, com palavras curtas, linguagem de venda e foco em conversão, sem promessas falsas.`
-        },
-        {
-            chave:'seo',
-            titulo:'Palavras-chave / destaque',
-            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto em destaque e textos curtos em português com as principais palavras-chave e usos do produto, em estilo marketplace, limpo e voltado para conversão.`
-        },
-        {
-            chave:'lifestyle',
-            titulo:'Lifestyle final',
-            prompt:`Use a foto de referência e gere uma imagem quadrada 1080x1080 em estilo lifestyle comercial mostrando o produto em ambiente bonito e realista, reforçando confiança e desejo de compra.`
-        }
-    ];
+const CENAS_IMAGENS_V38=[
+    {chave:'capa',titulo:'Capa',prompt:`Use a foto de referência para manter exatamente o mesmo produto. Gere uma imagem quadrada para capa de anúncio do Mercado Livre. Mostre somente o produto principal centralizado, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d'água, sem textos promocionais e sem inventar acessórios.`},
+    {chave:'angulo',titulo:'Ângulo complementar',prompt:`Use a foto de referência. Gere uma imagem quadrada mostrando o mesmo produto em ângulo complementar, fundo branco limpo e visual profissional de e-commerce, preservando formato, cor e acabamento reais.`},
+    {chave:'detalhe',titulo:'Close de detalhe',prompt:`Use a foto de referência. Gere uma imagem quadrada com close-up de detalhe do mesmo produto, destacando textura, material ou acabamento realmente visível, com fundo claro e composição comercial.`},
+    {chave:'uso1',titulo:'Aplicação 1',prompt:`Use a foto de referência e os detalhes fornecidos. Gere uma imagem quadrada com uma pessoa usando o mesmo produto em contexto real e natural, sem alterar a aparência do item, focada em demonstrar aplicação e utilidade.`},
+    {chave:'uso2',titulo:'Aplicação 2',prompt:`Use a foto de referência. Gere outra cena quadrada de uso do mesmo produto em ambiente real, mostrando um benefício prático e ajudando o comprador a compreender a utilização.`},
+    {chave:'kit',titulo:'Conteúdo da embalagem',prompt:`Use a foto de referência. Gere uma imagem quadrada estilo flat lay mostrando o produto e somente os itens inclusos que estejam visíveis ou informados. Se os acessórios não forem conhecidos, não invente itens.`},
+    {chave:'ficha',titulo:'Ficha técnica',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e uma ficha visual em português, com textos curtos apenas sobre fatos confirmados pelo vendedor ou claramente visíveis. Não invente medidas, materiais ou especificações.`},
+    {chave:'medidas',titulo:'Proporção / dimensões',prompt:`Use a foto de referência. Gere uma imagem quadrada que ajude a compreender proporção e escala. Só use números de medidas se eles tiverem sido fornecidos; caso contrário, não invente dimensões.`},
+    {chave:'beneficios',titulo:'Benefícios',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e de 3 a 5 benefícios em português baseados apenas em características reais ou informadas, com foco em clareza e conversão.`},
+    {chave:'seo',titulo:'Destaques de compra',prompt:`Use a foto de referência. Gere uma arte quadrada com o produto em destaque e textos curtos em português com termos de uso e diferenciais reais, em estilo marketplace limpo e voltado para conversão.`},
+    {chave:'lifestyle',titulo:'Lifestyle final',prompt:`Use a foto de referência. Gere uma imagem quadrada lifestyle comercial mostrando o mesmo produto em ambiente bonito e realista, preservando fielmente formato, cor e características visuais.`}
+];
 
+async function gerarPacote11ImagensV37({token,produto,detalhes,referenceImages=[]}){
     const pictures=[];
-    for(const cena of cenas){
+    for(let idx=0;idx<CENAS_IMAGENS_V38.length;idx++){
+        const cena=CENAS_IMAGENS_V38[idx];
         const prompt=`Produto: ${produto||'Produto sem nome informado'}\nDetalhes informados: ${detalhes||'Nenhum detalhe adicional.'}\n${cena.prompt}`;
         const img=await gerarImagemGeminiV37(prompt,referenceImages);
         const pic=await enviarImagemMercadoLivreV36(token,img);
-        pictures.push({tipo:cena.chave,titulo:cena.titulo,id:pic.id,url:pic.url,model:img.model});
+        pictures.push({index:idx,tipo:cena.chave,titulo:cena.titulo,id:pic.id,url:pic.url,model:img.model});
+        if(idx<CENAS_IMAGENS_V38.length-1)await esperarGemini(900);
     }
     return pictures;
 }
@@ -6254,16 +6290,35 @@ app.get('/api/v36/criar/categorias',async(req,res)=>{
         const d=await jsonSeguro(r);
         if(!r.ok)return respostaErro(res,r.status,formatarErroMercadoLivre(d));
 
-        res.json({
-            sucesso:true,
-            categorias:(Array.isArray(d)?d:[]).map(x=>({
+        const base=Array.isArray(d)?d:[];
+        const categorias=await Promise.all(base.map(async x=>{
+            const id=String(x?.category_id||'').trim();
+            let detalhe=null;
+            if(id){
+                try{
+                    const cr=await mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}`,token);
+                    const cd=await jsonSeguro(cr);
+                    if(cr.ok)detalhe=cd;
+                }catch(e){}
+            }
+            const path=Array.isArray(detalhe?.path_from_root)&&detalhe.path_from_root.length
+              ? detalhe.path_from_root.map(p=>p?.name).filter(Boolean).join(' > ')
+              : String(x?.category_name||id);
+            const leaf=Array.isArray(detalhe?.path_from_root)&&detalhe.path_from_root.length
+              ? String(detalhe.path_from_root[detalhe.path_from_root.length-1]?.name||x?.category_name||id)
+              : String(x?.category_name||id);
+            return {
                 category_id:x.category_id,
                 category_name:x.category_name,
+                category_path:path,
+                category_leaf_name:leaf,
                 domain_id:x.domain_id,
                 domain_name:x.domain_name,
                 attributes:Array.isArray(x.attributes)?x.attributes:[]
-            }))
-        });
+            };
+        }));
+
+        res.json({sucesso:true,categorias});
     }catch(e){
         respostaErro(res,500,'Erro ao sugerir categoria: '+e.message);
     }
@@ -6630,9 +6685,16 @@ app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
             const cat=await jsonSeguro(cr);
             const attrs=await jsonSeguro(ar);
             if(cr.ok && ar.ok){
+                const categoryPath=Array.isArray(cat?.path_from_root)&&cat.path_from_root.length
+                  ? cat.path_from_root.map(p=>p?.name).filter(Boolean).join(' > ')
+                  : String(cat?.name||categoryId);
                 categorias.push({
                     category_id:categoryId,
                     category_name:String(cat?.name||categoryId),
+                    category_path:categoryPath,
+                    category_leaf_name:Array.isArray(cat?.path_from_root)&&cat.path_from_root.length
+                      ? String(cat.path_from_root[cat.path_from_root.length-1]?.name||cat?.name||categoryId)
+                      : String(cat?.name||categoryId),
                     atributos:(Array.isArray(attrs)?attrs:[]).map(a=>({
                         id:a.id,
                         name:a.name,
@@ -6688,6 +6750,8 @@ ${JSON.stringify(categorias)}
         const categoriasOut=categorias.map(c=>({
             category_id:c.category_id,
             category_name:c.category_name,
+            category_path:c.category_path,
+            category_leaf_name:c.category_leaf_name,
             suggested_attributes:(Array.isArray(obj?.categorias)?obj.categorias.find(x=>String(x?.category_id||'')===String(c.category_id))?.attributes:[])||[],
             atributos:c.atributos
         }));
@@ -6704,6 +6768,79 @@ ${JSON.stringify(categorias)}
         });
     }catch(e){
         respostaErro(res,500,'Erro ao analisar o produto com IA: '+e.message);
+    }
+});
+
+
+app.post('/api/v38/criar/ia/keywords',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const produto=String(req.body?.produto||'').trim();
+    const detalhes=String(req.body?.detalhes||'').trim();
+    const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
+    if(!produto&&!detalhes)return respostaErro(res,400,'Informe o produto ou os detalhes para buscar palavras-chave.');
+
+    const prompt=`Faça uma pesquisa na Web/Google sobre como compradores procuram este tipo de produto no Brasil e identifique termos comerciais recorrentes e relevantes para SEO de marketplace.\n\nProduto: ${produto||'(não informado)'}\nDetalhes reais: ${detalhes||'(não informado)'}\nCategorias Mercado Livre: ${categoryIds.join(', ')||'não informadas'}\n\nRetorne SOMENTE JSON no formato {"keywords":["..."],"observacao":"..."}. Gere até 30 palavras-chave ou frases curtas de intenção de compra. Não invente marca ou especificações. Não invente volume numérico de busca; se não houver dado público de volume, apenas priorize relevância e recorrência dos termos encontrados.`;
+
+    try{
+        // Pesquisa Google via Gemini pode consumir cota/faturamento. Como o painel
+        // precisa continuar utilizável no modo gratuito, ela fica desativada por
+        // padrão. Para habilitar conscientemente no Render, use:
+        // GEMINI_GOOGLE_SEARCH_ENABLED=true
+        const permitirPesquisaWeb=String(process.env.GEMINI_GOOGLE_SEARCH_ENABLED||'false').toLowerCase()==='true';
+        let fonte=permitirPesquisaWeb?'Pesquisa Google via Gemini':'Gemini (modo gratuito, sem Pesquisa Google)';
+        let texto='';
+        let pesquisaWeb=false;
+        if(permitirPesquisaWeb){
+            try{
+                const gr=await chamarGeminiInteracao({
+                    input:prompt,
+                    systemInstruction:'Você é especialista em SEO para marketplace brasileiro. Use a Pesquisa Google quando ela ajudar. Retorne apenas JSON válido e não invente volume de busca.',
+                    tools:[{type:'google_search'}]
+                });
+                texto=gr.texto;
+                pesquisaWeb=true;
+            }catch(e){
+                fonte='Gemini sem pesquisa web (fallback automático)';
+            }
+        }
+        if(!texto){
+            texto=await chamarGeminiTexto(prompt,'Você é especialista em SEO para marketplace brasileiro. Retorne somente JSON válido com palavras-chave relevantes e não invente volume de busca.');
+        }
+        const obj=extrairJsonIA(texto);
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,30);
+        res.json({sucesso:true,keywords,fonte,pesquisa_web:pesquisaWeb,observacao:String(obj?.observacao||'')});
+    }catch(e){
+        respostaErro(res,e.status||500,'Erro ao buscar palavras-chave: '+e.message);
+    }
+});
+
+app.post('/api/v38/criar/ia/imagem-item',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const produto=String(req.body?.produto||'').trim();
+    const detalhes=String(req.body?.detalhes||'').trim();
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    const index=Math.max(0,Math.min(CENAS_IMAGENS_V38.length-1,Number(req.body?.index||0)));
+    if(!produto&&!referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
+
+    try{
+        const cena=CENAS_IMAGENS_V38[index];
+        const prompt=`Produto: ${produto||'Produto sem nome informado'}\nDetalhes reais informados: ${detalhes||'Nenhum detalhe adicional.'}\n${cena.prompt}`;
+        const img=await gerarImagemGeminiV37(prompt,referenceImages);
+        const pic=await enviarImagemMercadoLivreV36(token,img);
+        res.json({
+            sucesso:true,
+            index,
+            total:CENAS_IMAGENS_V38.length,
+            picture:{index,tipo:cena.chave,titulo:cena.titulo,id:pic.id,url:pic.url,model:img.model}
+        });
+    }catch(e){
+        const msg=String(e?.message||e);
+        const retryable=/limite|demanda|tempor|429|503|504/i.test(msg);
+        res.status(retryable?429:500).json({sucesso:false,erro:msg,retryable,index});
     }
 });
 
