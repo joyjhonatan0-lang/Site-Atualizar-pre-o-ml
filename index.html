@@ -2472,53 +2472,58 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 ===================================================== -->
 
 <!-- =====================================================
-     V36 — CRIAR ANÚNCIOS EM MASSA
+     V37 — CRIAR ANÚNCIOS EM MASSA COM FOTO / SEO / URLS
 ===================================================== -->
 <section id="secao-criar-massa" class="hidden space-y-6">
 
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div>
-            <div class="text-[10px] uppercase tracking-[.16em] text-emerald-400 font-bold">Publicação & IA</div>
+            <div class="text-[10px] uppercase tracking-[.16em] text-emerald-400 font-bold">Publicação, IA e imagens</div>
             <h1 class="text-2xl font-black text-white mt-1">Criar anúncios em massa</h1>
-            <p class="text-xs text-slate-500 mt-1 max-w-4xl">
-                Prepare títulos, categoria, ficha técnica, descrição, imagens e variações; valide no Mercado Livre e só publique depois da sua confirmação.
+            <p class="text-xs text-slate-500 mt-1 max-w-5xl">
+                Envie a foto do produto, gere títulos SEO, descrição, atributos da categoria, 11 imagens do anúncio e acompanhe uma prévia estilo planilha do Mercado Livre antes de publicar.
             </p>
         </div>
-        <div id="criar-modo-v36" class="panel rounded-xl px-4 py-3 text-xs text-slate-400">
+        <div id="criar-modo-v37" class="panel rounded-xl px-4 py-3 text-xs text-slate-400">
             Verificando modelo de publicação...
         </div>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
         <div class="panel rounded-2xl p-5 xl:col-span-2">
-            <div class="text-sm font-black text-white">1. Produto e geração com IA</div>
-            <div class="text-[11px] text-slate-500 mt-1">A IA só deve usar fatos que você informar. Títulos são limitados a 60 caracteres.</div>
+            <div class="text-sm font-black text-white">1. Produto, foto de referência e geração com IA</div>
+            <div class="text-[11px] text-slate-500 mt-1">A imagem enviada será usada para analisar o produto, sugerir SEO e gerar o pacote com 11 fotos do anúncio.</div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
                 <div class="md:col-span-2">
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Produto base</label>
-                    <input id="criar-produto-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Ex.: Aparador de pelos recarregável dourado">
+                    <input id="criar-produto-v37" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Ex.: Tênis casual branco solado reforçado">
                 </div>
-
                 <div class="md:col-span-2">
-                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Características reais / informações do produto</label>
-                    <textarea id="criar-detalhes-v36" rows="5" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Material, cor, voltagem, itens inclusos, medidas, modelo, marca se houver, benefícios reais..."></textarea>
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Detalhes reais do produto</label>
+                    <textarea id="criar-detalhes-v37" rows="5" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Material, cor, público, medidas, marca, acabamento, itens inclusos, diferenciais reais..."></textarea>
                 </div>
-
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Quantidade de anúncios / famílias</label>
-                    <input id="criar-qtd-v36" type="number" min="1" max="500" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
+                    <input id="criar-qtd-v37" type="number" min="1" max="500" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
                 </div>
-
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Limite do título</label>
                     <input value="60 caracteres" readonly class="w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-400">
                 </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Foto(s) do produto</label>
+                    <input id="criar-fotos-input-v37" type="file" accept="image/*" multiple onchange="carregarFotosReferenciaV37(event)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
+                    <div class="text-[10px] text-slate-500 mt-2">Pode enviar até 4 imagens. A primeira foto será a principal para análise e geração.</div>
+                    <div id="criar-fotos-preview-v37" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4"></div>
+                </div>
             </div>
 
-            <button onclick="gerarConteudoCriacaoV36()" class="mt-5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">
-                ✦ Gerar títulos, descrição e características com IA
-            </button>
+            <div class="flex flex-wrap gap-3 mt-5">
+                <button onclick="gerarConteudoCriacaoV37()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">✦ Gerar títulos, descrição e características com IA</button>
+                <button onclick="gerarPackImagensV37()" class="bg-purple-500 hover:bg-purple-400 text-white font-black text-xs px-5 py-3 rounded-xl">🖼 Gerar as 11 imagens do anúncio</button>
+                <button onclick="gerarUrlsFotosV37()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-3 rounded-xl">🔗 Gerar URL das fotos</button>
+            </div>
         </div>
 
         <div class="panel rounded-2xl p-5">
@@ -2526,131 +2531,144 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="grid grid-cols-2 gap-3 mt-5">
                 <div>
                     <label class="text-[9px] font-bold uppercase text-slate-500">Preço R$</label>
-                    <input id="criar-preco-v36" type="number" step="0.01" value="99.90" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                    <input id="criar-preco-v37" type="number" step="0.01" value="99.90" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
                 </div>
                 <div>
                     <label class="text-[9px] font-bold uppercase text-slate-500">Estoque</label>
-                    <input id="criar-estoque-v36" type="number" min="1" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                    <input id="criar-estoque-v37" type="number" min="1" value="10" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
                 </div>
                 <div>
                     <label class="text-[9px] font-bold uppercase text-slate-500">Publicação</label>
-                    <select id="criar-listing-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                    <select id="criar-listing-v37" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
                         <option value="gold_special">Clássico</option>
                         <option value="gold_pro">Premium</option>
                     </select>
                 </div>
                 <div>
                     <label class="text-[9px] font-bold uppercase text-slate-500">Condição</label>
-                    <select id="criar-condicao-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                    <select id="criar-condicao-v37" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
                         <option value="new">Novo</option>
                         <option value="used">Usado</option>
                         <option value="not_specified">Não especificado</option>
                     </select>
                 </div>
                 <div class="col-span-2">
-                    <label class="text-[9px] font-bold uppercase text-slate-500">Prefixo SKU (modelo legado)</label>
-                    <input id="criar-sku-v36" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white" placeholder="Ex.: APARADOR">
+                    <label class="text-[9px] font-bold uppercase text-slate-500">SKU / Prefixo</label>
+                    <input id="criar-sku-v37" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white" placeholder="Ex.: APARADOR ou TENISBRANCO">
+                </div>
+                <div class="col-span-2">
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Palavras-chave</label>
+                    <textarea id="criar-keywords-v37" rows="4" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="As palavras-chave serão sugeridas pela IA."></textarea>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div class="panel rounded-2xl p-5">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-                <div class="text-sm font-black text-white">2. Categoria e ficha técnica</div>
-                <div class="text-[11px] text-slate-500 mt-1">Use o preditor oficial do Mercado Livre e preencha os atributos obrigatórios.</div>
-            </div>
-            <button onclick="sugerirCategoriaV36()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">
-                Sugerir categorias
-            </button>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-5">
-            <select id="criar-categoria-select-v36" onchange="selecionarCategoriaV36()" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
-                <option value="">Escolha uma categoria sugerida</option>
-            </select>
-            <input id="criar-categoria-id-v36" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Ou informe o ID, ex.: MLB1234">
-            <button onclick="carregarAtributosCategoriaV36()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl px-4 py-3">Carregar atributos</button>
-        </div>
-
-        <div id="criar-atributos-v36" class="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
-    </div>
-
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <div class="panel rounded-2xl p-5">
-            <div class="text-sm font-black text-white">3. Variações</div>
-            <div class="text-[11px] text-slate-500 mt-1">
-                No novo modelo User Products, as variações são itens separados da mesma família. No modelo legado, o painel usa o array de variações.
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
-                <select id="criar-variacao-enabled-v36" onchange="alternarVariacoesV36()" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
-                    <option value="0">Sem variações</option>
-                    <option value="1">Com variações</option>
-                </select>
-                <input id="criar-variacao-qtd-v36" type="number" min="1" max="50" value="2" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
-                <select id="criar-variacao-atributo-v36" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" disabled>
-                    <option value="">Carregue uma categoria primeiro</option>
-                </select>
-                <textarea id="criar-variacao-valores-v36" rows="5" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" placeholder="Um valor por linha, ex.:\nPreto\nBranco\nDourado" disabled></textarea>
-            </div>
-        </div>
-
-        <div class="panel rounded-2xl p-5">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <div class="text-sm font-black text-white">4. Imagens com IA</div>
-                    <div class="text-[11px] text-slate-500 mt-1">A imagem gerada é enviada ao CDN do Mercado Livre antes da publicação.</div>
-                </div>
-                <input id="criar-imagem-qtd-v36" type="number" min="1" max="6" value="1" class="w-20 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
-            </div>
-
-            <textarea id="criar-imagem-prompt-v36" rows="4" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" placeholder="Descreva fielmente como o produto deve aparecer."></textarea>
-
-            <button onclick="gerarImagensCriacaoV36()" class="mt-4 bg-purple-500 hover:bg-purple-400 text-white text-xs font-black px-4 py-2.5 rounded-xl">
-                ✦ Gerar e enviar imagem(ns)
-            </button>
-
-            <div id="criar-imagens-preview-v36" class="grid grid-cols-3 gap-3 mt-4"></div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <div class="panel rounded-2xl p-5">
-            <div class="text-sm font-black text-white">5. Títulos / nomes de família</div>
-            <div class="text-[11px] text-slate-500 mt-1">Um por linha. Você pode revisar e editar antes de publicar.</div>
-            <textarea id="criar-titulos-v36" rows="12" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
-        </div>
-
-        <div class="panel rounded-2xl p-5">
-            <div class="text-sm font-black text-white">6. Descrição</div>
-            <div class="text-[11px] text-slate-500 mt-1">Texto simples, conforme o formato aceito pelo Mercado Livre.</div>
-            <textarea id="criar-descricao-v36" rows="12" class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
         </div>
     </div>
 
     <div class="panel rounded-2xl p-5">
         <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div>
-                <div class="text-sm font-black text-white">7. Validar e publicar</div>
-                <div id="criar-validacao-v36" class="text-[11px] text-slate-500 mt-1">Valide um exemplo antes de iniciar a criação em massa.</div>
+                <div class="text-sm font-black text-white">2. Categorias do anúncio</div>
+                <div class="text-[11px] text-slate-500 mt-1">Escolha uma ou várias categorias. A IA sugere e preenche automaticamente as características exigidas por cada uma.</div>
             </div>
-            <div class="flex gap-2">
-                <button onclick="validarCriacaoV36()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl">Validar no Mercado Livre</button>
-                <button onclick="publicarCriacaoV36()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">Publicar em massa</button>
+            <button onclick="sugerirCategoriaV37()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">Sugerir categorias</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 mt-5">
+            <input id="criar-categoria-busca-v37" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white lg:col-span-2" placeholder="Buscar categoria, ex.: Tênis">
+            <select id="criar-categoria-select-v37" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
+                <option value="">Escolha uma categoria sugerida</option>
+            </select>
+            <button onclick="adicionarCategoriaSelecionadaV37()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl px-4 py-3">Adicionar categoria</button>
+        </div>
+
+        <div id="criar-categorias-selecionadas-v37" class="mt-5 flex flex-wrap gap-2"></div>
+        <div id="criar-categorias-form-v37" class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">3. Variações</div>
+            <div class="text-[11px] text-slate-500 mt-1">Configure se o anúncio terá variações e quantas variações deseja por anúncio/família.</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
+                <select id="criar-variacao-enabled-v37" onchange="alternarVariacoesV37()" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
+                    <option value="0">Sem variações</option>
+                    <option value="1">Com variações</option>
+                </select>
+                <input id="criar-variacao-qtd-v37" type="number" min="1" max="50" value="2" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                <select id="criar-variacao-atributo-v37" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" disabled>
+                    <option value="">Escolha o atributo da variação</option>
+                </select>
+                <textarea id="criar-variacao-valores-v37" rows="5" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" placeholder="Um valor por linha, ex.:&#10;Branco&#10;Preto&#10;Azul" disabled></textarea>
+            </div>
+        </div>
+
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">4. Fotos do anúncio geradas</div>
+            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As demais imagens são feitas para aplicação, uso, benefícios e ficha técnica.</div>
+            <div id="criar-imagens-preview-v37" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-4"></div>
+            <div class="mt-4">
+                <label class="text-[9px] font-bold uppercase text-slate-500">URL das fotos do anúncio</label>
+                <textarea id="criar-imagens-urls-v37" rows="5" readonly class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-[11px] text-slate-300" placeholder="Clique em 'Gerar URL das fotos' depois de gerar as 11 imagens."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">5. Títulos / nomes de família</div>
+            <div class="text-[11px] text-slate-500 mt-1">Um por linha, sempre limitado a 60 caracteres e com foco em SEO e conversão.</div>
+            <textarea id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+        </div>
+        <div class="panel rounded-2xl p-5">
+            <div class="text-sm font-black text-white">6. Descrição</div>
+            <div class="text-[11px] text-slate-500 mt-1">Descrição profissional em texto simples, clara e focada em conversão.</div>
+            <textarea id="criar-descricao-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="text-sm font-black text-white">7. Prévia estilo planilha do Mercado Livre</div>
+        <div class="text-[11px] text-slate-500 mt-1">Conforme você preenche título, preço, estoque, SKU, categorias e imagens, a prévia abaixo é atualizada automaticamente.</div>
+        <div class="overflow-auto mt-5 border border-slate-800 rounded-2xl">
+            <table class="w-full min-w-[1200px] text-[11px]">
+                <thead class="bg-slate-900 text-slate-300 uppercase tracking-[.08em]">
+                    <tr>
+                        <th class="px-3 py-3 text-left">Categoria</th>
+                        <th class="px-3 py-3 text-left">Título</th>
+                        <th class="px-3 py-3 text-left">Condição</th>
+                        <th class="px-3 py-3 text-left">Preço</th>
+                        <th class="px-3 py-3 text-left">Estoque</th>
+                        <th class="px-3 py-3 text-left">SKU</th>
+                        <th class="px-3 py-3 text-left">Atributos</th>
+                        <th class="px-3 py-3 text-left">URLs fotos</th>
+                    </tr>
+                </thead>
+                <tbody id="criar-planilha-preview-v37" class="divide-y divide-slate-800 bg-slate-950/40"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel rounded-2xl p-5">
+        <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div>
+                <div class="text-sm font-black text-white">8. Validar e publicar</div>
+                <div id="criar-validacao-v37" class="text-[11px] text-slate-500 mt-1">Valide nas categorias escolhidas antes de iniciar a criação em massa.</div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="validarCriacaoV37()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-3 rounded-xl">Validar no Mercado Livre</button>
+                <button onclick="publicarCriacaoV37()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-5 py-3 rounded-xl">Publicar em massa</button>
             </div>
         </div>
 
         <div class="mt-5">
             <div class="flex justify-between text-xs">
-                <span id="criar-job-msg-v36" class="text-slate-400">Aguardando publicação.</span>
-                <span id="criar-job-pct-v36" class="font-black text-white">0%</span>
+                <span id="criar-job-msg-v37" class="text-slate-400">Aguardando publicação.</span>
+                <span id="criar-job-pct-v37" class="font-black text-white">0%</span>
             </div>
             <div class="h-3 bg-slate-800 rounded-full overflow-hidden mt-2">
-                <div id="criar-job-bar-v36" class="h-full bg-emerald-400 transition-all" style="width:0%"></div>
+                <div id="criar-job-bar-v37" class="h-full bg-emerald-400 transition-all" style="width:0%"></div>
             </div>
-            <div id="criar-resultados-v36" class="mt-4 max-h-80 overflow-y-auto divide-y divide-slate-800 border border-slate-800 rounded-xl hidden"></div>
+            <div id="criar-resultados-v37" class="mt-4 max-h-80 overflow-y-auto divide-y divide-slate-800 border border-slate-800 rounded-xl hidden"></div>
         </div>
     </div>
 
@@ -10646,6 +10664,481 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(createJob){
         criarEstadoV36.jobId=String(createJob);
     }
+});
+</script>
+
+
+<script>
+/* =========================================================
+   V37 — CRIAÇÃO EM MASSA COM FOTO / SEO / URLS / MULTICATEGORIA
+========================================================= */
+window.criarEstadoV37={
+    modo:null,
+    userProductSeller:false,
+    referenceImages:[],
+    selectedCategories:[],
+    pictures:[],
+    jobId:null,
+    jobTimer:null,
+    sugestões:[]
+};
+
+function lerArquivoDataUrlV37(file){
+    return new Promise((resolve,reject)=>{
+        const fr=new FileReader();
+        fr.onload=()=>resolve(String(fr.result||''));
+        fr.onerror=()=>reject(new Error('Não foi possível ler o arquivo.'));
+        fr.readAsDataURL(file);
+    });
+}
+
+function debounceV37(fn,wait=250){
+    let t=null;return function(...args){clearTimeout(t);t=setTimeout(()=>fn.apply(this,args),wait)};
+}
+
+function textoEscapeV37(v){return escapeHtml(String(v??''));}
+
+function bindPreviewListenersV37(){
+    document.querySelectorAll('.campo-preview-v37').forEach(el=>{
+        if(el.dataset.v37bound==='1')return;
+        el.dataset.v37bound='1';
+        el.addEventListener('input',debounceV37(renderPlanilhaPreviewV37,150));
+        el.addEventListener('change',renderPlanilhaPreviewV37);
+    });
+}
+
+async function carregarFotosReferenciaV37(ev){
+    try{
+        const files=[...(ev?.target?.files||[])].slice(0,4);
+        criarEstadoV37.referenceImages=[];
+        for(const file of files){
+            criarEstadoV37.referenceImages.push(await lerArquivoDataUrlV37(file));
+        }
+        renderFotosReferenciaV37();
+        renderPlanilhaPreviewV37();
+    }catch(e){
+        alert('Erro ao carregar fotos: '+e.message);
+    }
+}
+
+function renderFotosReferenciaV37(){
+    const box=document.getElementById('criar-fotos-preview-v37');
+    if(!box)return;
+    box.innerHTML=(criarEstadoV37.referenceImages||[]).map((src,i)=>`
+        <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-950 aspect-square relative">
+            <img src="${src}" class="w-full h-full object-cover">
+            <div class="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] px-2 py-1">Foto ${i+1}</div>
+        </div>
+    `).join('') || '<div class="text-[11px] text-slate-500 col-span-full">Nenhuma foto enviada ainda.</div>';
+}
+
+async function carregarCriacaoMassaV37(){
+    const token=obterToken();
+    bindPreviewListenersV37();
+    if(!token)return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/status?_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({}));
+        if(r.ok){
+            criarEstadoV37.modo=d.modo;
+            criarEstadoV37.userProductSeller=Boolean(d.user_product_seller);
+            const el=document.getElementById('criar-modo-v37');
+            if(el){
+                el.innerHTML=d.user_product_seller
+                  ? '<span class="text-emerald-400 font-black">User Products ativo</span><div class="text-[10px] text-slate-500 mt-1">Variações serão itens separados da mesma família.</div>'
+                  : '<span class="text-yellow-400 font-black">Modelo legado</span><div class="text-[10px] text-slate-500 mt-1">Variações serão publicadas no array variations quando permitido.</div>';
+            }
+        }
+    }catch(e){}
+    const jobId=localStorage.getItem('mlHubPro_mass_create_job_v37');
+    if(jobId)acompanharCriacaoV37(jobId);
+    renderFotosReferenciaV37();
+    renderCategoriasSelecionadasV37();
+    renderPlanilhaPreviewV37();
+}
+window.carregarCriacaoMassaV36=carregarCriacaoMassaV37;
+
+async function sugerirCategoriaV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const termo=String(document.getElementById('criar-categoria-busca-v37')?.value || document.getElementById('criar-produto-v37')?.value || '').trim();
+    if(!termo)return alert('Informe o produto ou o termo da categoria.');
+    mostrarLoading('Buscando categorias...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/categorias?q=${encodeURIComponent(termo)}`,{headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        criarEstadoV37.sugestões=Array.isArray(d.categorias)?d.categorias:[];
+        const sel=document.getElementById('criar-categoria-select-v37');
+        sel.innerHTML='<option value="">Escolha uma categoria sugerida</option>'+criarEstadoV37.sugestões.map(c=>`<option value="${textoEscapeV37(c.category_id)}">${textoEscapeV37(c.category_name)} · ${textoEscapeV37(c.category_id)}</option>`).join('');
+        if(criarEstadoV37.sugestões[0])sel.value=criarEstadoV37.sugestões[0].category_id;
+    }catch(e){
+        alert('Erro ao sugerir categorias: '+e.message);
+    }finally{esconderLoading();}
+}
+
+async function adicionarCategoriaSelecionadaV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const sel=document.getElementById('criar-categoria-select-v37');
+    const id=String(sel?.value||'').trim();
+    if(!id)return alert('Escolha uma categoria para adicionar.');
+    if(criarEstadoV37.selectedCategories.some(c=>c.category_id===id))return;
+    mostrarLoading('Carregando atributos da categoria...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/categorias/${encodeURIComponent(id)}/atributos`,{headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        const sug=(criarEstadoV37.sugestões||[]).find(x=>String(x.category_id)===id);
+        criarEstadoV37.selectedCategories.push({
+            category_id:id,
+            category_name:String(sug?.category_name||d?.categoria?.name||id),
+            atributos:Array.isArray(d.atributos)?d.atributos:[],
+            values:{}
+        });
+        renderCategoriasSelecionadasV37();
+        atualizarAtributosVariacaoV37();
+        renderPlanilhaPreviewV37();
+    }catch(e){
+        alert('Erro ao adicionar categoria: '+e.message);
+    }finally{esconderLoading();}
+}
+
+function removerCategoriaV37(id){
+    criarEstadoV37.selectedCategories=criarEstadoV37.selectedCategories.filter(c=>c.category_id!==id);
+    renderCategoriasSelecionadasV37();
+    atualizarAtributosVariacaoV37();
+    renderPlanilhaPreviewV37();
+}
+
+function aplicarSugestoesCategoriaV37(categoryId,suggestedAttrs=[]){
+    const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId);
+    if(!cat)return;
+    for(const a of (suggestedAttrs||[])){
+        const key=String(a?.id||'').trim();
+        if(!key)continue;
+        cat.values[key]={value_id:a.value_id||'',value_name:a.value_name||''};
+    }
+}
+
+function renderCategoriasSelecionadasV37(){
+    const chips=document.getElementById('criar-categorias-selecionadas-v37');
+    const forms=document.getElementById('criar-categorias-form-v37');
+    if(!chips||!forms)return;
+    chips.innerHTML=criarEstadoV37.selectedCategories.map(c=>`
+        <div class="inline-flex items-center gap-2 rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-[11px] text-white">
+            <span>${textoEscapeV37(c.category_name)}</span>
+            <span class="text-slate-500">${textoEscapeV37(c.category_id)}</span>
+            <button onclick="removerCategoriaV37('${textoEscapeV37(c.category_id)}')" class="text-red-400 font-black">×</button>
+        </div>
+    `).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
+
+    forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
+        const attrs=(c.atributos||[]).filter(a=>a.required || ['BRAND','MODEL','ITEM_CONDITION','GENDER','SIZE_GRID_ID','COLOR','MAIN_COLOR','FABRIC_DESIGN','SIZE'].includes(String(a.id))).slice(0,30);
+        return `
+        <div class="panel rounded-2xl p-4">
+            <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
+            <div class="text-[10px] text-slate-500 mt-1">Preencha ou revise as características obrigatórias e relevantes.</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                ${attrs.map(a=>{
+                    const current=c.values?.[a.id]||{};
+                    if(Array.isArray(a.values)&&a.values.length){
+                        return `<div>
+                            <label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-500'}">${textoEscapeV37(a.name||a.id)}${a.required?' · obrigatório':''}</label>
+                            <select onchange="setCategoriaValorV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                                <option value="">Selecione...</option>
+                                ${a.values.slice(0,120).map(v=>`<option value="${textoEscapeV37(v.id||'')}" data-name="${textoEscapeV37(v.name||'')}" ${String(current.value_id||'')===String(v.id||'') || (!current.value_id&&String(current.value_name||'').toLowerCase()===String(v.name||'').toLowerCase()) ? 'selected':''}>${textoEscapeV37(v.name||v.id)}</option>`).join('')}
+                            </select>
+                        </div>`;
+                    }
+                    return `<div>
+                        <label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-500'}">${textoEscapeV37(a.name||a.id)}${a.required?' · obrigatório':''}</label>
+                        <input value="${textoEscapeV37(current.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor">
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function setCategoriaValorV37(categoryId,attrId,select){
+    const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
+    const opt=select.options[select.selectedIndex];
+    cat.values[attrId]={value_id:String(select.value||''),value_name:String(opt?.dataset?.name||opt?.textContent||'').trim()};
+    atualizarAtributosVariacaoV37();
+    renderPlanilhaPreviewV37();
+}
+function setCategoriaTextoV37(categoryId,attrId,value){
+    const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
+    cat.values[attrId]={value_name:String(value||'').trim()};
+    atualizarAtributosVariacaoV37();
+    renderPlanilhaPreviewV37();
+}
+
+function atualizarAtributosVariacaoV37(){
+    const select=document.getElementById('criar-variacao-atributo-v37');
+    if(!select)return;
+    const map=new Map();
+    criarEstadoV37.selectedCategories.forEach(c=>{
+        (c.atributos||[]).forEach(a=>{
+            if(a.allow_variations || a.variation_attribute || a.child_pk){
+                if(!map.has(a.id))map.set(a.id,a);
+            }
+        });
+    });
+    const current=select.value;
+    select.innerHTML='<option value="">Escolha o atributo da variação</option>'+[...map.values()].map(a=>`<option value="${textoEscapeV37(a.id)}">${textoEscapeV37(a.name||a.id)} · ${textoEscapeV37(a.id)}</option>`).join('');
+    if([...map.keys()].includes(current))select.value=current;
+}
+
+function alternarVariacoesV37(){
+    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    ['criar-variacao-qtd-v37','criar-variacao-atributo-v37','criar-variacao-valores-v37'].forEach(id=>{
+        const el=document.getElementById(id); if(el)el.disabled=!ativo;
+    });
+    renderPlanilhaPreviewV37();
+}
+
+async function gerarConteudoCriacaoV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
+    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
+    const quantidade=Math.min(500,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
+    if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto.');
+    mostrarLoading('Analisando a foto, gerando títulos SEO e preenchendo as características...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({
+                produto,
+                detalhes,
+                quantidade,
+                reference_images:criarEstadoV37.referenceImages,
+                category_ids:criarEstadoV37.selectedCategories.map(c=>c.category_id)
+            })
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        if(d.produto_detectado && !produto)document.getElementById('criar-produto-v37').value=d.produto_detectado;
+        document.getElementById('criar-titulos-v37').value=(d.titulos||[]).join('\n');
+        document.getElementById('criar-descricao-v37').value=d.descricao||'';
+        document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
+
+        const categorias=Array.isArray(d.categorias)?d.categorias:[];
+        categorias.forEach(c=>aplicarSugestoesCategoriaV37(c.category_id,c.suggested_attributes||[]));
+        renderCategoriasSelecionadasV37();
+
+        if(!document.getElementById('criar-detalhes-v37').value && d.resumo){
+            document.getElementById('criar-detalhes-v37').value=d.resumo;
+        }
+
+        if(!document.getElementById('criar-imagens-urls-v37').dataset.prompt && d.image_prompt){
+            document.getElementById('criar-imagens-urls-v37').dataset.prompt=d.image_prompt;
+        }
+        renderPlanilhaPreviewV37();
+    }catch(e){
+        alert('Erro ao gerar conteúdo com IA: '+e.message);
+    }finally{esconderLoading();}
+}
+
+async function gerarPackImagensV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
+    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
+    if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto de referência.');
+    mostrarLoading('Gerando as 11 imagens do anúncio...');
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/imagens-pack`,{
+            method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},
+            body:JSON.stringify({produto,detalhes,reference_images:criarEstadoV37.referenceImages})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        criarEstadoV37.pictures=Array.isArray(d.pictures)?d.pictures:[];
+        renderImagensGeradasV37();
+        gerarUrlsFotosV37();
+        renderPlanilhaPreviewV37();
+    }catch(e){
+        alert('Erro ao gerar imagens: '+e.message);
+    }finally{esconderLoading();}
+}
+
+function renderImagensGeradasV37(){
+    const box=document.getElementById('criar-imagens-preview-v37'); if(!box)return;
+    box.innerHTML=(criarEstadoV37.pictures||[]).map((p,i)=>`
+        <div class="rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
+            <div class="aspect-square bg-white flex items-center justify-center overflow-hidden">${p.url?`<img src="${p.url}" class="w-full h-full object-cover">`:'<div class="text-xs text-slate-700">Sem preview</div>'}</div>
+            <div class="px-2 py-2 text-[10px] text-white">
+                <div class="font-black">${i+1}. ${textoEscapeV37(p.titulo||p.tipo||'Imagem')}</div>
+                <div class="text-slate-500 truncate">${textoEscapeV37(p.id||'')}</div>
+            </div>
+        </div>
+    `).join('') || '<div class="text-[11px] text-slate-500 col-span-full">As imagens geradas aparecerão aqui.</div>';
+}
+
+function gerarUrlsFotosV37(){
+    const urls=(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
+    document.getElementById('criar-imagens-urls-v37').value=urls.join('\n');
+}
+
+function coletarAttributesCategoriaV37(cat){
+    return Object.entries(cat.values||{}).map(([id,v])=>({id,...(v.value_id?{value_id:v.value_id}:{}),...(v.value_name?{value_name:v.value_name}: {})})).filter(x=>x.id && (x.value_id||x.value_name));
+}
+
+function configCriacaoV37(){
+    const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
+    return {
+        product_name:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
+        quantity:Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||titles.length||1)),
+        titles,
+        price:Number(document.getElementById('criar-preco-v37')?.value||0),
+        stock:Math.max(1,Number(document.getElementById('criar-estoque-v37')?.value||1)),
+        listing_type_id:String(document.getElementById('criar-listing-v37')?.value||'gold_special'),
+        condition:String(document.getElementById('criar-condicao-v37')?.value||'new'),
+        sku_prefix:String(document.getElementById('criar-sku-v37')?.value||'').trim(),
+        description:String(document.getElementById('criar-descricao-v37')?.value||'').trim(),
+        picture_ids:(criarEstadoV37.pictures||[]).map(p=>p.id).filter(Boolean),
+        categories:criarEstadoV37.selectedCategories.map(c=>({category_id:c.category_id,category_name:c.category_name,attributes:coletarAttributesCategoriaV37(c)})),
+        variations:{
+            enabled:String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1',
+            count:Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)),
+            attribute_id:String(document.getElementById('criar-variacao-atributo-v37')?.value||''),
+            values:String(document.getElementById('criar-variacao-valores-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean)
+        }
+    };
+}
+
+function renderPlanilhaPreviewV37(){
+    const tbody=document.getElementById('criar-planilha-preview-v37'); if(!tbody)return;
+    const cfg=configCriacaoV37();
+    const titles=cfg.titles.length?cfg.titles:[cfg.product_name||'Título do anúncio'];
+    const urls=(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
+    const cats=cfg.categories.length?cfg.categories:[{category_id:'',category_name:'Sem categoria',attributes:[]}];
+    const rows=[];
+    cats.forEach(cat=>{
+        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,idx)=>{
+            rows.push({
+                category:cat.category_name || cat.category_id || 'Sem categoria',
+                title,
+                condition:cfg.condition,
+                price:cfg.price,
+                stock:cfg.stock,
+                sku:cfg.sku_prefix?`${cfg.sku_prefix}-${String(idx+1).padStart(3,'0')}`:'',
+                attrs:(cat.attributes||[]).map(a=>`${a.id}: ${a.value_name||a.value_id||''}`).join(' | '),
+                urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
+            });
+        });
+    });
+    tbody.innerHTML=rows.map(r=>`
+        <tr class="align-top">
+            <td class="px-3 py-3 text-slate-200">${textoEscapeV37(r.category)}</td>
+            <td class="px-3 py-3 text-white font-medium">${textoEscapeV37(r.title)}</td>
+            <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.condition)}</td>
+            <td class="px-3 py-3 text-emerald-400">${textoEscapeV37(moeda(Number(r.price||0)))}</td>
+            <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.stock)}</td>
+            <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.sku)}</td>
+            <td class="px-3 py-3 text-slate-400">${textoEscapeV37(r.attrs || '-')}</td>
+            <td class="px-3 py-3 text-sky-400 break-all">${textoEscapeV37(r.urls || '-')}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="8" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
+}
+
+async function validarCriacaoV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return false}
+    const cfg=configCriacaoV37();
+    const out=document.getElementById('criar-validacao-v37');
+    if(!cfg.categories.length){out.textContent='Adicione pelo menos uma categoria.';out.className='text-[11px] text-red-400 mt-1';return false;}
+    if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um título.';out.className='text-[11px] text-red-400 mt-1';return false;}
+    try{
+        out.textContent='Validando nas categorias selecionadas...'; out.className='text-[11px] text-yellow-400 mt-1';
+        const r=await fetch(`${RENDER_URL}/api/v37/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok || !d.sucesso){
+            const detalhes=(d.resultados||[]).map(x=>`${x.category_name}: ${x.erro||'erro'}`).join(' | ');
+            out.textContent='Validação recusada: '+(detalhes||d.erro||`HTTP ${r.status}`);
+            out.className='text-[11px] text-red-400 mt-1';
+            return false;
+        }
+        out.textContent=`✓ Categorias validadas com sucesso (${(d.resultados||[]).length}).`;
+        out.className='text-[11px] text-emerald-400 mt-1';
+        return true;
+    }catch(e){
+        out.textContent='Erro ao validar: '+e.message; out.className='text-[11px] text-red-400 mt-1'; return false;
+    }
+}
+
+async function publicarCriacaoV37(){
+    const token=obterToken();
+    if(!token){solicitarToken();return}
+    const cfg=configCriacaoV37();
+    const ok=await validarCriacaoV37(); if(!ok)return;
+    if(!confirm(`Confirma a criação em massa em ${cfg.categories.length} categoria(s)?`))return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v37/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        const jobId=d.job?.id; if(!jobId)throw new Error('O servidor não retornou o ID da criação.');
+        criarEstadoV37.jobId=String(jobId); localStorage.setItem('mlHubPro_mass_create_job_v37',String(jobId));
+        document.getElementById('criar-job-msg-v37').textContent=d.mensagem||'Criação iniciada.';
+        acompanharCriacaoV37(jobId);
+    }catch(e){ alert('Erro ao iniciar publicação: '+e.message); }
+}
+
+async function carregarResultadosCriacaoV37(jobId){
+    const token=obterToken(); if(!token)return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v36/criar/jobs/${encodeURIComponent(jobId)}/resultados?limit=200&_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({})); if(!r.ok)return;
+        const box=document.getElementById('criar-resultados-v37'); if(!box)return;
+        const rows=d.resultados||[]; if(!rows.length){box.classList.add('hidden');return;}
+        box.classList.remove('hidden');
+        box.innerHTML=rows.map(x=>`
+          <div class="p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[10px] font-black ${x.success?'text-emerald-400':'text-red-400'}">${x.success?'✓ Criado':'✗ Falhou'} · ${textoEscapeV37(x.title_requested||'Anúncio')}</div>
+                <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(x.message||'')}</div>
+                ${x.technical_message?`<div class="text-[9px] text-red-300 mt-1">${textoEscapeV37(x.technical_message)}</div>`:''}
+              </div>
+              ${x.item_id?`<a href="${textoEscapeV37(x.permalink||'#')}" target="_blank" class="text-[10px] text-blue-400 font-bold">${textoEscapeV37(x.item_id)}</a>`:''}
+            </div>
+          </div>`).join('');
+    }catch(e){}
+}
+
+async function acompanharCriacaoV37(jobId){
+    clearTimeout(criarEstadoV37.jobTimer);
+    const token=obterToken(); if(!token)return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({})); if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        const j=d.job||{}; const total=Number(j.progress_total||0); const atual=Number(j.progress_current||0); const pct=total?Math.min(100,Math.round((atual/total)*100)):0;
+        const bar=document.getElementById('criar-job-bar-v37'), pctEl=document.getElementById('criar-job-pct-v37'), msg=document.getElementById('criar-job-msg-v37');
+        if(bar)bar.style.width=`${pct}%`; if(pctEl)pctEl.textContent=`${pct}%`; if(msg)msg.textContent=j.message||'Processando criação...';
+        if(atual%10===0 || ['completed','failed'].includes(j.status))carregarResultadosCriacaoV37(jobId);
+        if(['queued','running'].includes(j.status)){
+            localStorage.setItem('mlHubPro_mass_create_job_v37',String(jobId));
+            criarEstadoV37.jobTimer=setTimeout(()=>acompanharCriacaoV37(jobId),1500);
+            return;
+        }
+        localStorage.removeItem('mlHubPro_mass_create_job_v37');
+        criarEstadoV37.jobId=null;
+        await carregarResultadosCriacaoV37(jobId);
+        if(j.status==='completed' && typeof invalidarCacheAnunciosV30==='function')invalidarCacheAnunciosV30();
+    }catch(e){
+        const msg=document.getElementById('criar-job-msg-v37'); if(msg)msg.textContent='Erro ao acompanhar: '+e.message;
+        criarEstadoV37.jobTimer=setTimeout(()=>acompanharCriacaoV37(jobId),3000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(()=>{try{bindPreviewListenersV37();renderPlanilhaPreviewV37();}catch(e){}},300);
 });
 </script>
 
