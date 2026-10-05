@@ -612,18 +612,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <!-- MENU -->
 
                 <nav
-                    class="
-                        flex
-                        items-center
-                        gap-1
-                        p-1
-                        bg-slate-950/80
-                        border
-                        border-slate-800
-                        rounded-xl
-                        w-fit
-                        overflow-x-auto
-                    "
+                    class="hidden"
                 >
 
                     <button
@@ -2514,7 +2503,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <div class="md:col-span-2">
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Foto(s) do produto</label>
                     <input id="criar-fotos-input-v37" type="file" accept="image/*" multiple onchange="carregarFotosReferenciaV37(event)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
-                    <div class="text-[10px] text-slate-500 mt-2">Pode enviar até 4 imagens. A primeira foto será a principal para análise e geração.</div>
+                    <div class="text-[10px] text-slate-500 mt-2">Pode enviar até 8 imagens. A primeira foto será a principal para análise e geração.</div>
                     <div id="criar-fotos-preview-v37" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4"></div>
                 </div>
             </div>
@@ -2608,7 +2597,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">4. Fotos do anúncio geradas</div>
-            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As demais imagens são feitas para aplicação, uso, benefícios e ficha técnica.</div>
+            <div class="text-[11px] text-slate-500 mt-1">A capa sempre é gerada com fundo branco. As demais imagens são feitas para aplicação, uso, benefícios, diferenciais, ficha técnica e contexto de uso do produto.</div>
             <div id="criar-imagens-preview-v37" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-4"></div>
             <div class="mt-4">
                 <label class="text-[9px] font-bold uppercase text-slate-500">URL das fotos do anúncio</label>
@@ -2625,8 +2614,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         </div>
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">6. Descrição</div>
-            <div class="text-[11px] text-slate-500 mt-1">Descrição profissional em texto simples, clara e focada em conversão.</div>
-            <textarea id="criar-descricao-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+            <div class="text-[11px] text-slate-500 mt-1">Descrição profissional robusta, detalhada, clara e focada em conversão, aplicação e benefícios do produto.</div>
+            <textarea id="criar-descricao-v37" rows="18" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
         </div>
     </div>
 
@@ -10713,7 +10702,7 @@ function bindPreviewListenersV37(){
 
 async function carregarFotosReferenciaV37(ev){
     try{
-        const files=[...(ev?.target?.files||[])].slice(0,4);
+        const files=[...(ev?.target?.files||[])].slice(0,8);
         criarEstadoV37.referenceImages=[];
         for(const file of files){
             criarEstadoV37.referenceImages.push(await lerArquivoDataUrlV37(file));
@@ -10833,6 +10822,16 @@ function aplicarSugestoesCategoriaV37(categoryId,suggestedAttrs=[]){
     }
 }
 
+function ordenarAtributosCategoriaV37(lista=[]){
+    const prioridadeIds=['BRAND','MODEL','ITEM_CONDITION','GTIN','COLOR','MAIN_COLOR','MATERIAL','UNITS_PER_PACK','NET_WEIGHT','VOLUME_CAPACITY','VOLTAGE','IS_WATERPROOF','POWER_TYPE','SIZE','GENDER','SIZE_GRID_ID','FABRIC_DESIGN'];
+    return [...(Array.isArray(lista)?lista:[])].filter(a=>!a?.read_only).sort((a,b)=>{
+        const pa=(a?.required?0:prioridadeIds.includes(String(a?.id||''))?1:2);
+        const pb=(b?.required?0:prioridadeIds.includes(String(b?.id||''))?1:2);
+        if(pa!==pb)return pa-pb;
+        return String(a?.name||a?.id||'').localeCompare(String(b?.name||b?.id||''),'pt-BR');
+    });
+}
+
 function renderCategoriasSelecionadasV37(){
     const chips=document.getElementById('criar-categorias-selecionadas-v37');
     const forms=document.getElementById('criar-categorias-form-v37');
@@ -10855,29 +10854,33 @@ function renderCategoriasSelecionadasV37(){
     }).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
 
     forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
-        const attrs=(c.atributos||[]).filter(a=>a.required || ['BRAND','MODEL','ITEM_CONDITION','GENDER','SIZE_GRID_ID','COLOR','MAIN_COLOR','FABRIC_DESIGN','SIZE'].includes(String(a.id))).slice(0,40);
+        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]).slice(0,180);
         const path=String(c.category_path||c.category_name||c.category_id||'');
         const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
+        const obrigatorios=attrs.filter(a=>a.required).length;
+        const relevantes=attrs.length-obrigatorios;
         return `
         <div class="panel rounded-2xl p-4">
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
-            <div class="text-[10px] text-slate-500 mt-2">Preencha ou revise as características obrigatórias e relevantes.</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+            <div class="text-[10px] text-slate-500 mt-2">Preencha ou revise todas as características principais e secundárias relevantes. Obrigatórios: ${obrigatorios} · adicionais: ${relevantes}.</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 max-h-[820px] overflow-y-auto pr-1">
                 ${attrs.map(a=>{
                     const current=c.values?.[a.id]||{};
+                    const labelClass=a.required?'text-yellow-400':'text-slate-500';
+                    const badge=a.required?' · obrigatório':(a.allow_variations||a.variation_attribute||a.child_pk?' · variação':'');
                     if(Array.isArray(a.values)&&a.values.length){
                         return `<div>
-                            <label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-500'}">${textoEscapeV37(a.name||a.id)}${a.required?' · obrigatório':''}</label>
+                            <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
                             <select onchange="setCategoriaValorV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
                                 <option value="">Selecione...</option>
-                                ${a.values.slice(0,120).map(v=>`<option value="${textoEscapeV37(v.id||'')}" data-name="${textoEscapeV37(v.name||'')}" ${String(current.value_id||'')===String(v.id||'') || (!current.value_id&&String(current.value_name||'').toLowerCase()===String(v.name||'').toLowerCase()) ? 'selected':''}>${textoEscapeV37(v.name||v.id)}</option>`).join('')}
+                                ${a.values.slice(0,150).map(v=>`<option value="${textoEscapeV37(v.id||'')}" data-name="${textoEscapeV37(v.name||'')}" ${String(current.value_id||'')===String(v.id||'') || (!current.value_id&&String(current.value_name||'').toLowerCase()===String(v.name||'').toLowerCase()) ? 'selected':''}>${textoEscapeV37(v.name||v.id)}</option>`).join('')}
                             </select>
                         </div>`;
                     }
                     return `<div>
-                        <label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-500'}">${textoEscapeV37(a.name||a.id)}${a.required?' · obrigatório':''}</label>
+                        <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
                         <input value="${textoEscapeV37(current.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor">
                     </div>`;
                 }).join('')}
@@ -10931,7 +10934,7 @@ async function gerarConteudoCriacaoV37(){
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
     const quantidade=Math.min(500,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
     if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto.');
-    mostrarLoading('Analisando a foto, gerando títulos SEO e preenchendo as características...');
+    mostrarLoading('Analisando a foto, gerando títulos SEO, descrição robusta e preenchendo os atributos...');
     try{
         const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
             method:'POST',
