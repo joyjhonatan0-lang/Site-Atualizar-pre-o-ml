@@ -159,14 +159,52 @@ async function jsonSeguro(response) {
     }
 }
 
+function traduzirErroMercadoLivreV46(causa={}) {
+    const code=String(causa?.code||causa?.error||'').trim();
+    const msg=String(causa?.message||'').trim();
+    const ref=Array.isArray(causa?.references)?causa.references.join(', '):String(causa?.references||'');
+    const mapa={
+        'item.attributes.missing_required':'Falta uma característica obrigatória para esta categoria.',
+        'item.attribute.missing_conditional_required':'Falta uma característica obrigatória/condicional para esta categoria.',
+        'item.attributes.invalid_length':'Uma característica ultrapassou o tamanho máximo permitido.',
+        'item.price.invalid':'O preço informado não é aceito pelo Mercado Livre.',
+        'item.pictures.max':'A quantidade de fotos ultrapassa o limite permitido nesta categoria.',
+        'item.listing_type_id.requiresPictures':'O tipo de publicação escolhido exige pelo menos uma foto.',
+        'item.category_id.invalid':'A categoria escolhida não é válida para esta publicação.',
+        'item.category_id.no_listings_allowed':'O Mercado Livre não permite novas publicações nesta categoria.',
+        'item.title.invalid':'O nome/título da publicação não é válido para esta categoria.',
+        'item.family_name.invalid':'O nome da família não é válido para o modelo User Products.',
+        'item.attributes.invalid':'Uma ou mais características informadas não são aceitas nesta categoria.',
+        'item.attribute.invalid':'Uma característica informada não é aceita nesta categoria.',
+        'item.attribute.product_identifier.invalid':'O código universal do produto é inválido.',
+        'item.attribute.product_identifier.invalid_by_domain_catalog':'O código universal informado pertence a outro produto/categoria.',
+        'validation_error':'O Mercado Livre recusou um ou mais campos da publicação.'
+    };
+    let pt=mapa[code]||'';
+    if(!pt){
+        if(/missing required|required attribute|not present/i.test(msg))pt='Falta uma característica obrigatória para publicar.';
+        else if(/picture.*max|max.*picture/i.test(msg))pt='Há mais fotos do que a categoria permite.';
+        else if(/invalid length|maximum length/i.test(msg))pt='Um campo ultrapassou o tamanho máximo permitido.';
+        else if(/validation error/i.test(msg))pt='O Mercado Livre recusou um ou mais campos da publicação.';
+        else pt=msg||code||'Erro não detalhado pelo Mercado Livre.';
+    }
+    const detalhe=[];
+    if(ref)detalhe.push(`Campo/referência: ${ref}`);
+    if(code)detalhe.push(`Código: ${code}`);
+    return detalhe.length?`${pt} ${detalhe.join(' · ')}`:pt;
+}
+
 function formatarErroMercadoLivre(data) {
-    return (
-        data?.message ||
-        data?.error ||
-        data?.cause?.[0]?.message ||
-        data?.cause?.[0]?.code ||
-        JSON.stringify(data)
-    );
+    const causas=Array.isArray(data?.cause)?data.cause:[];
+    if(causas.length){
+        return causas.map(c=>traduzirErroMercadoLivreV46(c)).filter(Boolean).join(' | ');
+    }
+    const base=String(data?.message||data?.error||'').trim();
+    if(base){
+        if(/validation error/i.test(base))return 'O Mercado Livre recusou um ou mais campos da publicação. Veja os campos obrigatórios e os detalhes da validação.';
+        return base;
+    }
+    try{return JSON.stringify(data)}catch(e){return 'Erro não detalhado pelo Mercado Livre.'}
 }
 
 // Consulta de frete usada SOMENTE pela rota /api/sincronizar-fretes.
@@ -256,7 +294,7 @@ app.get('/api/version', (req, res) => {
     res.json({
         ok: true,
         service: 'ML Hub Pro',
-        version: 'ml-hub-pro-v45-cloudflare-1080-cache-delete-images',
+        version: 'ml-hub-pro-v46-visible-specs-fast-ai-safe-publish',
         oauth_callback: '/auth/callback',
         manual_credentials: '/api/oauth/manual-credentials'
     });
@@ -3237,9 +3275,11 @@ function modelosGeminiDisponiveis(){
     // GEMINI_MODEL antigo, ele é tentado primeiro e o fallback continua
     // automaticamente para os modelos atuais quando necessário.
     const configurado=String(process.env.GEMINI_MODEL||'').trim();
+    const rapido=String(process.env.GEMINI_FAST_MODEL||'').trim();
     const modelos=[
-      configurado,
+      rapido,
       'gemini-3.8-flash',
+      configurado,
       'gemini-3.7-flash',
       'gemini-3.6-flash',
       'gemini-3.5-flash-lite',
@@ -5355,8 +5395,21 @@ async function processarCriacaoMassaV37(job){
         const familyIndex=Math.floor(rem/varCount);
         const variationIndex=rem%varCount;
         const category=categories[categoryIndex];
-        const payload=montarPayloadPublicacaoV37(cfg,{familyIndex,variationIndex,userProductSeller,category});
+        const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex,variationIndex,userProductSeller,category});
+        const payload=prepared.payload;
         const titleRequested=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
+
+        if(prepared.faltantes.length){
+            const msg=`Faltam características obrigatórias: ${prepared.faltantes.map(x=>x.name).join(', ')}`;
+            await gravarResultadoCriacaoV36(job.id,job.seller_id,{
+                seq,family_seq:familyIndex,variation_seq:variationIndex,
+                title_requested:`[${category.category_name}] ${titleRequested}`,
+                success:false,message:msg,technical_message:msg
+            });
+            erros++;
+            seq++;
+            continue;
+        }
 
         const pr=await mlPostComRetryV36(`${ML_API}/items`,token,payload,4);
         if(pr?.ok && pr?.data?.id){
@@ -6583,6 +6636,223 @@ app.get('/api/scale/price-update/:jobId/errors',async(req,res)=>{
     }
 });
 
+
+/* =========================================================
+   V46 — ATRIBUTOS VISÍVEIS + PUBLICAÇÃO SEGURA
+========================================================= */
+const cacheCategoriaV46=new Map();
+
+function normalizarTextoBuscaV46(v=''){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+}
+
+function extrairAtributosOutputV46(payload){
+    const out=[];
+    const seen=new Set();
+    const walk=(node,ctx={group_label:'Características',group_relevance:999})=>{
+        if(!node)return;
+        if(Array.isArray(node))return node.forEach(x=>walk(x,ctx));
+        if(typeof node!=='object')return;
+        const label=String(node.label||node.name||ctx.group_label||'Características');
+        const relevance=Number.isFinite(Number(node.relevance))?Number(node.relevance):ctx.group_relevance;
+        const next={group_label:label,group_relevance:relevance};
+        if(Array.isArray(node.attributes)){
+            for(const a of node.attributes){
+                const id=String(a?.id||'').trim();
+                if(!id||seen.has(id))continue;
+                seen.add(id);
+                out.push({id,group_label:ctx.group_label||label,group_relevance:ctx.group_relevance,output_order:out.length});
+            }
+        }
+        if(Array.isArray(node.groups))node.groups.forEach(g=>walk(g,{group_label:String(g?.label||g?.name||label),group_relevance:Number.isFinite(Number(g?.relevance))?Number(g.relevance):relevance}));
+        if(Array.isArray(node.components))node.components.forEach(c=>walk(c,next));
+        if(Array.isArray(node.content))node.content.forEach(c=>walk(c,next));
+    };
+    walk(payload,{group_label:'Características',group_relevance:999});
+    return out;
+}
+
+function mapAtributoDefV46(a={}){
+    return {
+        id:String(a.id||''),
+        name:String(a.name||a.id||''),
+        value_type:String(a.value_type||'string'),
+        value_max_length:Number(a.value_max_length||0)||null,
+        values:Array.isArray(a.values)?a.values.slice(0,150).map(v=>({id:v?.id??'',name:String(v?.name||'')})):[],
+        required:Boolean(a?.tags?.required),
+        conditional_required:Boolean(a?.tags?.conditional_required),
+        allow_variations:Boolean(a?.tags?.allow_variations),
+        variation_attribute:Boolean(a?.tags?.variation_attribute),
+        child_pk:Boolean(a?.tags?.child_pk),
+        parent_pk:Boolean(a?.tags?.parent_pk),
+        read_only:Boolean(a?.tags?.read_only),
+        hidden:Boolean(a?.tags?.hidden||a?.tags?.vip_hidden),
+        hierarchy:String(a?.hierarchy||''),
+        attribute_group_id:String(a?.attribute_group_id||''),
+        attribute_group_name:String(a?.attribute_group_name||'')
+    };
+}
+
+async function obterCategoriaV46(token,categoryId,{force=false}={}){
+    const id=String(categoryId||'').trim();
+    if(!id)throw new Error('Categoria não informada.');
+    const hit=cacheCategoriaV46.get(id);
+    if(!force&&hit&&Date.now()-hit.created_at<6*60*60*1000)return hit.data;
+
+    const urls=[
+        `${ML_API}/categories/${encodeURIComponent(id)}`,
+        `${ML_API}/categories/${encodeURIComponent(id)}/attributes`,
+        `${ML_API}/categories/${encodeURIComponent(id)}/technical_specs/output`
+    ];
+    const rr=await Promise.all(urls.map(async u=>{
+        try{const r=await mlFetch(u,token);return {ok:r.ok,status:r.status,data:await jsonSeguro(r)}}catch(e){return {ok:false,status:500,data:{message:e.message}}}
+    }));
+    if(!rr[0].ok)throw new Error(formatarErroMercadoLivre(rr[0].data)||`Categoria ${id} indisponível.`);
+    if(!rr[1].ok)throw new Error(formatarErroMercadoLivre(rr[1].data)||`Atributos da categoria ${id} indisponíveis.`);
+
+    const categoria=rr[0].data||{};
+    const defs=(Array.isArray(rr[1].data)?rr[1].data:[]).map(mapAtributoDefV46);
+    const defMap=new Map(defs.map(a=>[a.id,a]));
+    const outputMeta=rr[2].ok?extrairAtributosOutputV46(rr[2].data):[];
+    const metaMap=new Map(outputMeta.map(x=>[x.id,x]));
+
+    let visiveis=[];
+    if(outputMeta.length){
+        visiveis=outputMeta.map(meta=>{
+            const d=defMap.get(meta.id)||{id:meta.id,name:meta.id,value_type:'string',values:[],read_only:false};
+            return {...d,...meta,visible_to_buyer:true};
+        }).filter(a=>!a.read_only);
+    }else{
+        visiveis=defs.filter(a=>!a.read_only&&!a.hidden&&(a.required||['MAIN','DFLT'].includes(String(a.attribute_group_id||''))))
+            .map((a,i)=>({...a,group_label:a.attribute_group_name||'Características',group_relevance:a.required?1:2,output_order:i,visible_to_buyer:true}));
+    }
+
+    // Caso um atributo seja obrigatório para publicar mas não apareça no output,
+    // ele continua conhecido pelo servidor, porém não polui a tela do vendedor.
+    const required=defs.filter(a=>a.required&&!a.read_only);
+    const data={
+        categoria,
+        defs,
+        defMap,
+        visiveis,
+        required,
+        settings:categoria?.settings||{},
+        max_pictures_per_item:Number(categoria?.settings?.max_pictures_per_item||0)||null,
+        listing_allowed:categoria?.settings?.listing_allowed!==false
+    };
+    cacheCategoriaV46.set(id,{created_at:Date.now(),data});
+    return data;
+}
+
+function sanitizarValorAtributoV46(attr,def){
+    if(!attr?.id||!def||def.read_only)return null;
+    const id=String(attr.id);
+    let valueId=attr.value_id!=null?String(attr.value_id).trim():'';
+    let valueName=attr.value_name!=null?String(attr.value_name).trim():'';
+    const valores=Array.isArray(def.values)?def.values:[];
+
+    if(valores.length){
+        let match=null;
+        if(valueId)match=valores.find(v=>String(v.id)===valueId)||null;
+        if(!match&&valueName){
+            const alvo=normalizarTextoBuscaV46(valueName);
+            match=valores.find(v=>normalizarTextoBuscaV46(v.name)===alvo)||null;
+        }
+        if(match)return {id,value_id:String(match.id||''),value_name:String(match.name||'')};
+        if(String(def.value_type)==='list'||String(def.value_type)==='boolean')return null;
+    }
+
+    if(!valueName)return null;
+    if(['BRAND','MODEL'].includes(id)){
+        // Evita keyword stuffing em Marca/Modelo, que costuma causar baixa qualidade
+        // e pode provocar recusas de validação.
+        valueName=valueName.split(/[\n,;|]/)[0].trim();
+        if(valueName.split(/\s+/).length>8)valueName=valueName.split(/\s+/).slice(0,8).join(' ');
+    }
+    const max=Number(def.value_max_length||0);
+    if(max>0&&valueName.length>max)valueName=valueName.slice(0,max).trim();
+    if(!valueName)return null;
+    return {id,value_name:valueName};
+}
+
+async function prepararPayloadPublicacaoV46(token,cfg,opts){
+    const category=opts.category||{};
+    const meta=await obterCategoriaV46(token,category.category_id);
+    if(!meta.listing_allowed){
+        const e=new Error(`A categoria ${category.category_name||category.category_id} não permite novas publicações.`);
+        e.code='category_listing_not_allowed';throw e;
+    }
+    const payload=montarPayloadPublicacaoV37(cfg,opts);
+    const defMap=meta.defMap;
+    const attrs=[];
+    const seen=new Set();
+    for(const a of (Array.isArray(payload.attributes)?payload.attributes:[])){
+        const id=String(a?.id||'');
+        if(!id||seen.has(id))continue;
+        const clean=sanitizarValorAtributoV46(a,defMap.get(id));
+        if(clean){attrs.push(clean);seen.add(id);}
+    }
+    payload.attributes=attrs;
+
+    const maxPics=Number(meta.max_pictures_per_item||0);
+    if(maxPics>0&&Array.isArray(payload.pictures)&&payload.pictures.length>maxPics){
+        payload.pictures=payload.pictures.slice(0,maxPics);
+        if(Array.isArray(payload.variations)){
+            const ids=payload.pictures.map(p=>p.id).filter(Boolean);
+            payload.variations=payload.variations.map(v=>({...v,picture_ids:(v.picture_ids||[]).filter(id=>ids.includes(id)).slice(0,maxPics)}));
+        }
+    }
+
+    const enviados=new Set(payload.attributes.map(a=>a.id));
+    const faltantes=meta.required
+      .filter(d=>!enviados.has(d.id))
+      .filter(d=>!['ITEM_CONDITION'].includes(d.id))
+      .map(d=>({id:d.id,name:d.name}));
+
+    return {payload,meta,faltantes,maxPics};
+}
+
+function detalhesValidacaoV46(data){
+    const causas=Array.isArray(data?.cause)?data.cause:[];
+    if(!causas.length)return [formatarErroMercadoLivre(data)];
+    return causas.map(traduzirErroMercadoLivreV46);
+}
+
+function expandirTitulosSeoV46({produto='',keywords=[],sementes=[],quantidade=1,limite=60}){
+    const clean=x=>String(x||'').replace(/\s+/g,' ').trim();
+    const out=[];const seen=new Set();
+    const add=x=>{x=clean(x).slice(0,limite).trim();if(x.length>=8&&!seen.has(x.toLowerCase())){seen.add(x.toLowerCase());out.push(x)}};
+    sementes.forEach(add);
+    const base=clean(produto);
+    const kws=(Array.isArray(keywords)?keywords:[]).map(clean).filter(Boolean).slice(0,30);
+    const padroes=[
+      (a,b)=>`${a} ${b}`,
+      (a,b)=>`${b} ${a}`,
+      (a,b)=>`${a} ${b} Profissional`,
+      (a,b)=>`${a} ${b} Premium`,
+      (a,b)=>`${a} ${b} Completo`,
+      (a,b)=>`${a} ${b} Prático`,
+      (a,b)=>`${a} ${b} Uso Diário`,
+      (a,b)=>`${a} ${b} Alta Precisão`
+    ];
+    for(let i=0;out.length<quantidade&&i<5000;i++){
+        const k1=kws[i%Math.max(1,kws.length)]||'';
+        const k2=kws[(i+7)%Math.max(1,kws.length)]||'';
+        const a=base||k1||'Produto';
+        const b=clean([k1,k2].filter(Boolean).join(' '));
+        add(padroes[i%padroes.length](a,b));
+    }
+    const baseRepeticao=[...out];
+    if(baseRepeticao.length){
+        let i=0;
+        while(out.length<quantidade){
+            out.push(baseRepeticao[i%baseRepeticao.length]);
+            i++;
+        }
+    }
+    return out.slice(0,quantidade);
+}
+
 /* =========================================================
    ROTAS V36 — CRIAÇÃO EM MASSA
 ========================================================= */
@@ -6661,37 +6931,20 @@ app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
     const id=String(req.params.id||'').trim();
 
     try{
-        const [ar,cr]=await Promise.all([
-            mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}/attributes`,token),
-            mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}`,token)
-        ]);
-        const attrs=await jsonSeguro(ar);
-        const categoria=await jsonSeguro(cr);
-
-        if(!ar.ok)return respostaErro(res,ar.status,formatarErroMercadoLivre(attrs));
-
-        const lista=(Array.isArray(attrs)?attrs:[]).map(a=>({
-            id:a.id,
-            name:a.name,
-            value_type:a.value_type,
-            values:Array.isArray(a.values)?a.values.slice(0,100):[],
-            required:Boolean(a?.tags?.required),
-            allow_variations:Boolean(a?.tags?.allow_variations),
-            variation_attribute:Boolean(a?.tags?.variation_attribute),
-            child_pk:Boolean(a?.tags?.child_pk),
-            parent_pk:Boolean(a?.tags?.parent_pk),
-            read_only:Boolean(a?.tags?.read_only)
-        }));
-
+        const meta=await obterCategoriaV46(token,id,{force:String(req.query.force||'')==='1'});
         res.json({
             sucesso:true,
-            categoria:cr.ok?categoria:null,
-            atributos:lista,
-            obrigatorios:lista.filter(a=>a.required),
-            variacoes:lista.filter(a=>a.allow_variations||a.child_pk)
+            categoria:meta.categoria,
+            atributos:meta.visiveis,
+            atributos_visiveis:meta.visiveis,
+            obrigatorios_publicacao:meta.required.map(a=>({id:a.id,name:a.name,required:true})),
+            max_pictures_per_item:meta.max_pictures_per_item,
+            listing_allowed:meta.listing_allowed,
+            variacoes:meta.visiveis.filter(a=>a.allow_variations||a.child_pk),
+            fonte:'technical_specs/output'
         });
     }catch(e){
-        respostaErro(res,500,'Erro ao consultar atributos: '+e.message);
+        respostaErro(res,500,'Erro ao consultar as características exibidas ao comprador: '+e.message);
     }
 });
 
@@ -7043,108 +7296,99 @@ app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
     const quantidade=Math.min(1000,Math.max(1,Number(req.body?.quantidade||1)));
-    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,1);
     const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
 
     if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie pelo menos uma foto.');
 
     try{
-        limparCacheExpiradoV45(cacheAnaliseCriacaoV45,1000*60*60*12);
-        const cacheKey=chaveCacheV45('analise',{
-            produto,
-            detalhes,
-            quantidade,
-            categoryIds,
-            refs:assinaturaImagensV45(referenceImages)
+        limparCacheExpiradoV45(cacheAnaliseCriacaoV45,1000*60*60*24);
+        const cacheKey=chaveCacheV45('analise-v46',{
+            produto,detalhes,categoryIds,refs:assinaturaImagensV45(referenceImages)
         });
         const cached=cacheAnaliseCriacaoV45.get(cacheKey);
         if(cached?.data){
-            return res.json({...cached.data,cache:true,cache_source:'memory'});
+            const base=cached.data;
+            const titulos=expandirTitulosSeoV46({produto:base.produto_detectado||produto,keywords:base.keywords,sementes:base.titulos_semente||base.titulos,quantidade,limite:60});
+            return res.json({...base,titulos,cache:true,cache_source:'server-memory'});
         }
 
-        const categorias=(await Promise.all(categoryIds.map(async(categoryId)=>{
+        const categorias=(await Promise.all(categoryIds.map(async id=>{
             try{
-                const [cr,ar]=await Promise.all([
-                    mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}`,token),
-                    mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/attributes`,token)
-                ]);
-                const cat=await jsonSeguro(cr);
-                const attrs=await jsonSeguro(ar);
-                if(!(cr.ok && ar.ok))return null;
-                const categoryPath=Array.isArray(cat?.path_from_root)&&cat.path_from_root.length
-                  ? cat.path_from_root.map(p=>p?.name).filter(Boolean).join(' > ')
-                  : String(cat?.name||categoryId);
+                const meta=await obterCategoriaV46(token,id);
                 return {
-                    category_id:categoryId,
-                    category_name:String(cat?.name||categoryId),
-                    category_path:categoryPath,
-                    category_leaf_name:Array.isArray(cat?.path_from_root)&&cat.path_from_root.length
-                      ? String(cat.path_from_root[cat.path_from_root.length-1]?.name||cat?.name||categoryId)
-                      : String(cat?.name||categoryId),
-                    atributos:(Array.isArray(attrs)?attrs:[]).map(a=>({
-                        id:a.id,
-                        name:a.name,
-                        required:Boolean(a?.tags?.required),
-                        values:Array.isArray(a.values)?a.values.slice(0,40).map(v=>({id:v.id,name:v.name})):[ ]
-                    }))
+                    category_id:id,
+                    category_name:String(meta.categoria?.name||id),
+                    category_path:Array.isArray(meta.categoria?.path_from_root)&&meta.categoria.path_from_root.length?meta.categoria.path_from_root.map(p=>p?.name).filter(Boolean).join(' > '):String(meta.categoria?.name||id),
+                    category_leaf_name:Array.isArray(meta.categoria?.path_from_root)&&meta.categoria.path_from_root.length?String(meta.categoria.path_from_root.at(-1)?.name||meta.categoria?.name||id):String(meta.categoria?.name||id),
+                    atributos:meta.visiveis.map(a=>({id:a.id,name:a.name,value_type:a.value_type,value_max_length:a.value_max_length,required:a.required,values:(a.values||[]).slice(0,30)}))
                 };
             }catch(e){return null;}
         }))).filter(Boolean);
 
+        const sementesQtd=Math.min(24,Math.max(10,Math.min(quantidade,24)));
         const prompt=`
-Analise as fotos do produto enviadas pelo vendedor e os detalhes abaixo.
+Gere conteúdo comercial para Mercado Livre em português do Brasil usando SOMENTE fatos visíveis/informados.
+Produto: ${produto||'(identifique pela foto)'}
+Detalhes reais: ${detalhes||'(não informados)'}
+Categorias: ${categorias.map(c=>`${c.category_name} (${c.category_id})`).join(', ')||'nenhuma'}
 
-Produto informado: ${produto||'(não informado)'}
-Detalhes adicionais: ${detalhes||'(não informado)'}
-Quantidade de títulos desejada: ${quantidade}
-Categorias selecionadas: ${categorias.map(c=>`${c.category_name} (${c.category_id})`).join(', ')||'nenhuma'}
-
-A partir das imagens e do texto, gere SOMENTE JSON no formato:
+Retorne SOMENTE JSON:
 {
-  "produto_detectado":"...",
-  "resumo":"...",
-  "keywords":["..."],
-  "titulos":["..."],
-  "descricao":"...",
-  "image_prompt":"...",
-  "categorias":[
-    {
-      "category_id":"...",
-      "attributes":[{"id":"...","value_name":"..."}]
-    }
-  ]
+ "produto_detectado":"...",
+ "resumo":"...",
+ "keywords":["..."],
+ "titulos":["..."],
+ "descricao":"...",
+ "image_prompt":"...",
+ "categorias":[{"category_id":"...","attributes":[{"id":"...","value_name":"..."}]}]
 }
 
-Regras:
-- Cada título deve ter no máximo 60 caracteres.
-- Gere títulos focados em conversão, SEO e palavras-chave relevantes.
-- Gere títulos variados, objetivos e naturais, sem repetir o mesmo começo em todos.
-- Não invente marca, modelo, voltagem, quantidade, material, medidas, certificações ou acessórios que não estejam visíveis ou claramente informados.
-- A descrição deve ser em português do Brasil, profissional, robusta, detalhada e voltada para vendas.
-- A descrição deve ser MAIS COMPLETA, normalmente entre 1500 e 3500 caracteres, em texto simples e muito bem organizada.
-- Estrutura esperada da descrição: introdução comercial forte, resumo do produto, principais benefícios, aplicações / formas de uso, diferenciais, itens inclusos (somente se forem reais), orientações ou cuidados quando fizer sentido, e fechamento vendedor.
-- Em keywords, gere até 35 termos úteis.
-- Em categorias.attributes, preencha o máximo possível de atributos principais e secundários que possam ser inferidos com segurança pela imagem e pelo texto.
-- Priorize primeiro atributos obrigatórios, depois atributos altamente relevantes e depois atributos secundários relevantes.
-- Se uma categoria exigir atributos que não podem ser inferidos com segurança, simplesmente não preencha esses campos.
-- Para image_prompt, escreva um prompt completo para gerar imagens comerciais desse produto com foco em conversão e clareza.
+Regras essenciais:
+- Gere ${sementesQtd} títulos-semente diferentes, cada um com no máximo 60 caracteres. O servidor criará as demais variações localmente até chegar a ${quantidade}.
+- Títulos: Produto + característica real + termo de busca, naturais, sem promessas falsas e sem keyword stuffing.
+- Descrição: profissional e robusta, normalmente 1500 a 3500 caracteres, com introdução, resumo, benefícios, aplicações, diferenciais, itens inclusos apenas quando reais, cuidados e fechamento comercial.
+- Keywords: até 35 termos realmente relacionados.
+- Preencha SOMENTE as características listadas abaixo, pois são as que aparecem para o comprador na ficha técnica da categoria.
+- BRAND/Marca deve ser somente a marca real e curta. Nunca coloque lista de palavras-chave em Marca.
+- MODEL/Modelo deve ser somente o modelo real e curto. Nunca coloque lista de palavras-chave em Modelo.
+- Se não houver informação segura para uma característica, NÃO a invente e não a retorne.
 
-Abaixo seguem os atributos das categorias, para você sugerir preenchimento automático quando possível:
-${JSON.stringify(categorias)}
+Características visíveis por categoria:
+${JSON.stringify(categorias.map(c=>({category_id:c.category_id,atributos:c.atributos})))}
         `;
 
-        const obj=await chamarGeminiJsonVisionV37(prompt,referenceImages);
-        const titulos=(Array.isArray(obj?.titulos)?obj.titulos:[]).map(t=>limitarTituloV36(t,60)).filter(Boolean).slice(0,quantidade);
-        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,35);
+        let obj;
+        // Caminho rápido: se o usuário já informou produto + detalhes, não reenviamos imagem pesada.
+        if(produto && detalhes.length>=12){
+            const texto=await chamarGeminiTexto(prompt,'Você é especialista em anúncios de marketplace. Retorne somente JSON válido. Seja preciso, curto no raciocínio e completo no resultado.');
+            obj=extrairJsonIA(texto);
+        }else{
+            obj=await chamarGeminiJsonVisionV37(prompt,referenceImages);
+        }
 
-        const categoriasOut=categorias.map(c=>({
-            category_id:c.category_id,
-            category_name:c.category_name,
-            category_path:c.category_path,
-            category_leaf_name:c.category_leaf_name,
-            suggested_attributes:(Array.isArray(obj?.categorias)?obj.categorias.find(x=>String(x?.category_id||'')===String(c.category_id))?.attributes:[])||[],
-            atributos:c.atributos
-        }));
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,35);
+        const sementes=(Array.isArray(obj?.titulos)?obj.titulos:[]).map(t=>limitarTituloV36(t,60)).filter(Boolean).slice(0,24);
+        const titulos=expandirTitulosSeoV46({produto:String(obj?.produto_detectado||produto||''),keywords,sementes,quantidade,limite:60});
+
+        const categoriasOut=categorias.map(c=>{
+            const defs=new Map(c.atributos.map(a=>[a.id,a]));
+            const raw=(Array.isArray(obj?.categorias)?obj.categorias.find(x=>String(x?.category_id||'')===String(c.category_id))?.attributes:[])||[];
+            const suggested=[];
+            for(const a of raw){
+                const def=defs.get(String(a?.id||''));
+                const clean=sanitizarValorAtributoV46(a,def);
+                if(clean)suggested.push(clean);
+            }
+            return {
+                category_id:c.category_id,
+                category_name:c.category_name,
+                category_path:c.category_path,
+                category_leaf_name:c.category_leaf_name,
+                suggested_attributes:suggested,
+                atributos:c.atributos
+            };
+        });
 
         const payload={
             sucesso:true,
@@ -7152,14 +7396,16 @@ ${JSON.stringify(categorias)}
             resumo:String(obj?.resumo||''),
             keywords,
             titulos,
+            titulos_semente:sementes,
             descricao:String(obj?.descricao||''),
             image_prompt:String(obj?.image_prompt||produto||''),
-            categorias:categoriasOut
+            categorias:categoriasOut,
+            modo_rapido:true
         };
         cacheAnaliseCriacaoV45.set(cacheKey,{created_at:nowV45(),data:payload});
         res.json(payload);
     }catch(e){
-        respostaErro(res,500,'Erro ao analisar o produto com IA: '+e.message);
+        respostaErro(res,500,'Erro ao gerar títulos, descrição e características: '+e.message);
     }
 });
 
@@ -7355,23 +7601,48 @@ app.post('/api/v37/criar/validar',async(req,res)=>{
 
         const resultados=[];
         for(const category of categories){
-            const sample=montarPayloadPublicacaoV37(cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
-            if(up && cfg?.variations?.enabled) delete sample.variations;
-            const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
-            const vd=await jsonSeguro(vr);
-            resultados.push({
-                category_id:category.category_id,
-                category_name:category.category_name,
-                sucesso:vr.ok,
-                validacao:vd,
-                erro:vr.ok?null:formatarErroMercadoLivre(vd)
-            });
+            try{
+                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
+                const sample=prepared.payload;
+                if(up && cfg?.variations?.enabled) delete sample.variations;
+
+                if(prepared.faltantes.length){
+                    resultados.push({
+                        category_id:category.category_id,
+                        category_name:category.category_name,
+                        sucesso:false,
+                        erro:`Faltam características obrigatórias para publicar: ${prepared.faltantes.map(x=>x.name).join(', ')}.`,
+                        detalhes:prepared.faltantes.map(x=>`Preencha ${x.name} (${x.id}).`),
+                        campos_faltando:prepared.faltantes,
+                        fotos_enviadas:sample.pictures?.length||0,
+                        limite_fotos:prepared.maxPics
+                    });
+                    continue;
+                }
+
+                const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
+                const vd=await jsonSeguro(vr);
+                resultados.push({
+                    category_id:category.category_id,
+                    category_name:category.category_name,
+                    sucesso:vr.ok,
+                    validacao:vd,
+                    erro:vr.ok?null:formatarErroMercadoLivre(vd),
+                    detalhes:vr.ok?[]:detalhesValidacaoV46(vd),
+                    fotos_enviadas:sample.pictures?.length||0,
+                    limite_fotos:prepared.maxPics
+                });
+            }catch(e){
+                resultados.push({category_id:category.category_id,category_name:category.category_name,sucesso:false,erro:e.message,detalhes:[e.message]});
+            }
         }
 
-        res.status(resultados.every(x=>x.sucesso)?200:400).json({
-            sucesso:resultados.every(x=>x.sucesso),
+        const ok=resultados.every(x=>x.sucesso);
+        res.status(ok?200:400).json({
+            sucesso:ok,
             modo:up?'user_products':'legacy',
-            resultados
+            resultados,
+            erro:ok?null:resultados.filter(x=>!x.sucesso).map(x=>`${x.category_name}: ${x.erro}`).join(' | ')
         });
     }catch(e){
         respostaErro(res,500,'Erro ao validar publicação: '+e.message);
@@ -7400,12 +7671,45 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
 
         const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
         const varCfg=cfg.variations||{};
-
         if(varCfg.enabled){
             if(!varCfg.attribute_id)return respostaErro(res,400,'Escolha o atributo das variações.');
             if(!Array.isArray(varCfg.values) || !varCfg.values.filter(Boolean).length){
                 return respostaErro(res,400,'Informe os valores das variações.');
             }
+        }
+
+        // Pré-valida uma amostra em TODAS as categorias antes de abrir o job.
+        // Assim a fila não começa condenada por um campo inválido.
+        const errosValidacao=[];
+        const categoriasLimpas=[];
+        let maxPicsGlobal=pictureIds.length;
+        for(const category of categories){
+            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
+            if(prepared.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,prepared.maxPics);
+            if(prepared.faltantes.length){
+                errosValidacao.push(`${category.category_name}: faltam ${prepared.faltantes.map(x=>x.name).join(', ')}`);
+                continue;
+            }
+            const sample=prepared.payload;
+            if(up&&varCfg.enabled)delete sample.variations;
+            const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
+            const vd=await jsonSeguro(vr);
+            if(!vr.ok){
+                errosValidacao.push(`${category.category_name}: ${formatarErroMercadoLivre(vd)}`);
+                continue;
+            }
+            categoriasLimpas.push({
+                ...category,
+                attributes:prepared.payload.attributes
+            });
+        }
+        if(errosValidacao.length){
+            return res.status(400).json({
+                sucesso:false,
+                erro:'A publicação ainda possui campos que o Mercado Livre recusou.',
+                detalhes:errosValidacao,
+                mensagem_pt:errosValidacao.join(' | ')
+            });
         }
 
         const ativo=await dbQuery(`
@@ -7420,15 +7724,15 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
 
         cfg.titles=titles.slice(0,quantity);
         cfg.quantity=quantity;
-        cfg.picture_ids=pictureIds;
-        cfg.categories=categories;
+        cfg.picture_ids=pictureIds.slice(0,Math.max(1,maxPicsGlobal));
+        cfg.categories=categoriasLimpas;
 
         const varCount=(cfg?.variations?.enabled && up)
           ? Math.min(Math.max(1,Number(cfg.variations.count||1)),Math.max(1,(cfg.variations.values||[]).filter(Boolean).length))
           : 1;
-        const total=quantity*categories.length*varCount;
+        const total=quantity*categoriasLimpas.length*varCount;
 
-        const job=await criarJob(me.id,'mass_create_v37',{version:'v37',config:cfg});
+        const job=await criarJob(me.id,'mass_create_v37',{version:'v46',config:cfg});
         const jr=await dbQuery(`
           UPDATE ml_jobs SET
             progress_total=$2,
@@ -7441,14 +7745,15 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
             updated_at=NOW()
           WHERE id=$1
           RETURNING id,seller_id,type,status,progress_current,progress_total,processed,errors,cursor,message,result,created_at,updated_at,finished_at
-        `,[job.id,total,`Criação em massa preparada: ${total.toLocaleString('pt-BR')} item(ns).`,JSON.stringify({mode:up?'user_products':'legacy',families:quantity,categories:categories.length,items_total:total})]);
+        `,[job.id,total,`Criação em massa preparada: ${total.toLocaleString('pt-BR')} item(ns).`,JSON.stringify({mode:up?'user_products':'legacy',families:quantity,categories:categoriasLimpas.length,items_total:total})]);
 
         res.status(202).json({
             sucesso:true,
             job:jr.rows[0],
             modo:up?'user_products':'legacy',
             total,
-            mensagem:`${categories.length} categoria(s) × ${quantity} anúncio(s)/família(s)${up&&varCfg.enabled?` × ${varCount} variação(ões)`:''}.`
+            fotos_por_anuncio:cfg.picture_ids.length,
+            mensagem:`${categoriasLimpas.length} categoria(s) × ${quantity} anúncio(s)/família(s)${up&&varCfg.enabled?` × ${varCount} variação(ões)`:''}.`
         });
     }catch(e){
         respostaErro(res,500,'Erro ao iniciar criação em massa: '+e.message);
