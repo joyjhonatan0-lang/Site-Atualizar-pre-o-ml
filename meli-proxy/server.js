@@ -3674,7 +3674,29 @@ async function upsertItensDb(sellerId, itens) {
                 ),
 
                 raw=EXCLUDED.raw,
-                synced_at=NOW()
+                synced_at=CASE WHEN
+                    ml_items.title IS DISTINCT FROM EXCLUDED.title OR
+                    ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
+                    ml_items.price IS DISTINCT FROM EXCLUDED.price OR
+                    ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
+                    ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
+                    ml_items.status IS DISTINCT FROM EXCLUDED.status OR
+                    ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
+                    ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
+                    ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
+                    ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
+                    ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
+                    ml_items.sale_fee IS DISTINCT FROM (
+                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                           THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
+                    ) OR
+                    ml_items.commission_percentage IS DISTINCT FROM (
+                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                           THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
+                    )
+                  THEN NOW()
+                  ELSE ml_items.synced_at
+                END
             `,v);
         }
 
@@ -4096,7 +4118,9 @@ async function atualizarPrecosDbLoteV26(sellerId,linhas){
         net_received=GREATEST(0,v.price-m.sale_fee-m.shipping_cost),
         synced_at=NOW()
       FROM (VALUES ${values.join(',')}) AS v(item_id,price)
-      WHERE m.seller_id=$1 AND m.item_id=v.item_id
+      WHERE m.seller_id=$1
+        AND m.item_id=v.item_id
+        AND m.price IS DISTINCT FROM v.price
     `,params);
 }
 
@@ -4332,7 +4356,12 @@ async function atualizarFretesDbLote(sellerId,linhas){
         freight_synced_at=NOW(),
         freight_last_attempt_at=NOW(),
         freight_last_error=NULL,
-        synced_at=NOW()
+        synced_at=CASE
+          WHEN m.shipping_cost IS DISTINCT FROM v.shipping_cost
+            OR m.free_shipping IS DISTINCT FROM v.free_shipping
+          THEN NOW()
+          ELSE m.synced_at
+        END
       FROM (VALUES ${values.join(',')}) AS v(item_id,shipping_cost,free_shipping)
       WHERE m.seller_id=$1 AND m.item_id=v.item_id
     `,params);
@@ -4975,15 +5004,66 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
-        res.json({sucesso:true,pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
+        res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
     }catch(e){respostaErro(res,500,e.message)}
 });
 
+/* V32 — somente anúncios alterados desde o último cursor. */
+app.get('/api/scale/anuncios/changes',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const sellerId=me.id;
+        const limit=Math.min(2000,Math.max(50,Number(req.query.limit||1000)));
+        const rawTs=String(req.query.after_ts||'1970-01-01T00:00:00.000Z');
+        const rawId=String(req.query.after_id||'');
+        const parsed=new Date(rawTs);
+        const afterTs=Number.isNaN(parsed.getTime())?'1970-01-01T00:00:00.000Z':parsed.toISOString();
+
+        const [stats,rows]=await Promise.all([
+            dbQuery(`SELECT COUNT(*)::int total,MAX(synced_at) max_synced_at FROM ml_items WHERE seller_id=$1`,[sellerId]),
+            dbQuery(`
+              SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,
+                     status,listing_type_id,category_id,thumbnail,permalink,
+                     ml_updated_at last_updated,sale_fee::float8 sale_fee,
+                     commission_percentage::float8 commission_percentage,
+                     shipping_cost::float8 shipping_cost,free_shipping,
+                     net_received::float8 net_received,synced_at last_synced
+              FROM ml_items
+              WHERE seller_id=$1
+                AND (synced_at>$2::timestamptz OR (synced_at=$2::timestamptz AND item_id>$3))
+              ORDER BY synced_at ASC,item_id ASC
+              LIMIT $4
+            `,[sellerId,afterTs,rawId,limit])
+        ]);
+
+        const itens=rows.rows;
+        const ultimo=itens[itens.length-1]||null;
+        res.set('Cache-Control','no-store');
+        res.json({
+            sucesso:true,
+            seller_id:String(sellerId),
+            total_conta:Number(stats.rows[0]?.total||0),
+            max_synced_at:stats.rows[0]?.max_synced_at||null,
+            itens,
+            has_more:itens.length===limit,
+            next_cursor:ultimo
+              ? {after_ts:ultimo.last_synced,after_id:String(ultimo.id)}
+              : {after_ts:afterTs,after_id:rawId}
+        });
+    }catch(e){
+        console.error('[ANUNCIOS DELTA V32]',e);
+        respostaErro(res,500,'Erro ao consultar alterações dos anúncios: '+e.message);
+    }
+});
+
 // Substitui o comportamento "só logar": confirma 200 imediatamente e persiste o evento para worker.
-app.post('/api/scale/notifications',async(req,res)=>{
+app.post('/api/scale/notifications' ,async(req,res)=>{
     res.status(200).json({recebido:true});
     if(!db)return;
     try{
