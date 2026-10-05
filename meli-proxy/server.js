@@ -11,7 +11,7 @@ const fetch = (...args) =>
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '25mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 const PORT = process.env.PORT || 3000;
 const ML_API = 'https://api.mercadolibre.com';
@@ -4770,6 +4770,348 @@ async function enviarImagemMercadoLivreV36(token,img){
     };
 }
 
+
+
+function parseDataUrlV37(dataUrl){
+    const m=String(dataUrl||'').match(/^data:([^;]+);base64,(.+)$/);
+    if(!m)return null;
+    return {mime:m[1],data:m[2]};
+}
+
+async function chamarGeminiJsonVisionV37(prompt,referenceImages=[]){
+    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
+    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para usar a IA com imagem.');
+
+    const model=String(process.env.GEMINI_VISION_MODEL||process.env.GEMINI_MODEL||'gemini-2.5-flash').trim();
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+
+    const parts=[{text:String(prompt||'')}];
+    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,4)){
+        const img=parseDataUrlV37(ref);
+        if(img?.data){
+            parts.push({inlineData:{mimeType:img.mime||'image/png',data:img.data}});
+        }
+    }
+
+    const r=await fetch(url,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+        body:JSON.stringify({
+            contents:[{parts}],
+            generationConfig:{
+                temperature:0.4,
+                responseMimeType:'application/json'
+            }
+        })
+    });
+
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+        const msg=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
+        throw new Error(msg);
+    }
+
+    const partsOut=d?.candidates?.[0]?.content?.parts||[];
+    const txt=partsOut.map(p=>p?.text||'').join('\n').trim();
+    if(!txt)throw new Error('O Gemini respondeu sem conteúdo estruturado.');
+    return extrairJsonIA(txt);
+}
+
+async function gerarImagemGeminiV37(prompt,referenceImages=[]){
+    const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
+    if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
+
+    const model=String(process.env.GEMINI_IMAGE_MODEL||'gemini-3.1-flash-lite-image').trim();
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const parts=[{text:String(prompt||'')}];
+    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,4)){
+        const img=parseDataUrlV37(ref);
+        if(img?.data){
+            parts.push({inlineData:{mimeType:img.mime||'image/png',data:img.data}});
+        }
+    }
+
+    const r=await fetch(url,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+        body:JSON.stringify({
+            contents:[{parts}],
+            generationConfig:{responseModalities:['IMAGE']}
+        })
+    });
+
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+        const msg=String(d?.error?.message||d?.message||`Gemini HTTP ${r.status}`);
+        if(r.status===429)throw new Error('O limite do Gemini para imagens foi atingido temporariamente. Aguarde e tente novamente.');
+        throw new Error(msg);
+    }
+
+    const outParts=d?.candidates?.[0]?.content?.parts||[];
+    const imagePart=outParts.find(p=>p?.inlineData?.data||p?.inline_data?.data);
+    const inline=imagePart?.inlineData||imagePart?.inline_data;
+    if(!inline?.data)throw new Error('O Gemini respondeu sem uma imagem utilizável.');
+
+    return {
+        buffer:Buffer.from(inline.data,'base64'),
+        mime:String(inline.mimeType||inline.mime_type||'image/png'),
+        model
+    };
+}
+
+async function gerarPacote11ImagensV37({token,produto,detalhes,referenceImages=[]}){
+    const cenas=[
+        {
+            chave:'capa',
+            titulo:'Capa',
+            prompt:`Use a foto de referência para manter o mesmo produto. Gere uma imagem quadrada 1080x1080 para capa de anúncio do Mercado Livre. Mostre somente o produto principal centralizado, fundo branco puro, iluminação de estúdio, sem pessoas, sem marcas d'água, sem textos promocionais, sem inventar acessórios.`
+        },
+        {
+            chave:'angulo',
+            titulo:'Ângulo complementar',
+            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 mostrando o produto em ângulo 45 graus, fundo branco limpo, visual profissional de e-commerce, destacando acabamento real do produto.`
+        },
+        {
+            chave:'detalhe',
+            titulo:'Close de detalhe',
+            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 com close-up de detalhe do produto, destacando textura, material ou acabamento real, fundo claro e composição comercial.`
+        },
+        {
+            chave:'uso1',
+            titulo:'Aplicação 1',
+            prompt:`Use a foto de referência e os detalhes do produto. Gere uma imagem quadrada 1080x1080 com uma pessoa usando o produto em contexto real, de forma natural, sem exageros, focada em demonstrar aplicação e utilidade.`
+        },
+        {
+            chave:'uso2',
+            titulo:'Aplicação 2',
+            prompt:`Use a foto de referência e gere outra cena de uso do produto em ambiente real, quadrada 1080x1080, mostrando benefício prático do produto e ajudando o comprador a entender como ele é utilizado.`
+        },
+        {
+            chave:'kit',
+            titulo:'Conteúdo da embalagem',
+            prompt:`Use a foto de referência. Gere uma imagem quadrada 1080x1080 estilo flat lay mostrando o produto e os itens inclusos na embalagem, organizados, com fundo claro e visual informativo. Não invente itens não mencionados; se não houver acessórios claros, mostre apenas o produto e o que for plausível.`
+        },
+        {
+            chave:'ficha',
+            titulo:'Ficha técnica',
+            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto e uma ficha técnica visual em português, com poucos textos claros, ícones e chamadas curtas explicando o que é o produto, principais especificações e benefícios, sempre sem inventar dados.`
+        },
+        {
+            chave:'medidas',
+            titulo:'Medidas / dimensões',
+            prompt:`Use a foto de referência e gere uma imagem quadrada 1080x1080 mostrando o produto com setas e indicação visual de dimensões/medidas aproximadas, apenas se forem inferíveis ou genéricas. Se não houver medidas confiáveis, faça uma arte de proporção e escala sem números exatos.`
+        },
+        {
+            chave:'beneficios',
+            titulo:'Benefícios',
+            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto e 3 a 5 benefícios em português, com palavras curtas, linguagem de venda e foco em conversão, sem promessas falsas.`
+        },
+        {
+            chave:'seo',
+            titulo:'Palavras-chave / destaque',
+            prompt:`Use a foto de referência e gere uma arte quadrada 1080x1080 com o produto em destaque e textos curtos em português com as principais palavras-chave e usos do produto, em estilo marketplace, limpo e voltado para conversão.`
+        },
+        {
+            chave:'lifestyle',
+            titulo:'Lifestyle final',
+            prompt:`Use a foto de referência e gere uma imagem quadrada 1080x1080 em estilo lifestyle comercial mostrando o produto em ambiente bonito e realista, reforçando confiança e desejo de compra.`
+        }
+    ];
+
+    const pictures=[];
+    for(const cena of cenas){
+        const prompt=`Produto: ${produto||'Produto sem nome informado'}\nDetalhes informados: ${detalhes||'Nenhum detalhe adicional.'}\n${cena.prompt}`;
+        const img=await gerarImagemGeminiV37(prompt,referenceImages);
+        const pic=await enviarImagemMercadoLivreV36(token,img);
+        pictures.push({tipo:cena.chave,titulo:cena.titulo,id:pic.id,url:pic.url,model:img.model});
+    }
+    return pictures;
+}
+
+function normalizarCategoriasConfigV37(cfg){
+    const lista=Array.isArray(cfg?.categories)?cfg.categories:[];
+    const out=[];
+    const seen=new Set();
+    for(const c of lista){
+        const id=String(c?.category_id||c?.id||'').trim();
+        if(!id||seen.has(id))continue;
+        seen.add(id);
+        out.push({
+            category_id:id,
+            category_name:String(c?.category_name||c?.name||id),
+            attributes:Array.isArray(c?.attributes)?c.attributes:[]
+        });
+    }
+    if(!out.length && String(cfg?.category_id||'').trim()){
+        out.push({category_id:String(cfg.category_id).trim(),category_name:String(cfg.category_name||cfg.category_id),attributes:Array.isArray(cfg?.attributes)?cfg.attributes:[]});
+    }
+    return out;
+}
+
+function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProductSeller=false,category}){
+    const title=limitarTituloV36(cfg.titles?.[familyIndex]||cfg.family_name||cfg.product_name||'',60);
+    const price=Number(cfg.price||0);
+    const stock=Math.max(1,Number(cfg.stock||1));
+    const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).map(String).filter(Boolean);
+    const pictures=pictureIds.map(id=>({id}));
+
+    let attributes=(Array.isArray(category?.attributes)?category.attributes:[])
+      .filter(a=>a?.id && (a?.value_id || a?.value_name))
+      .map(a=>({
+          id:String(a.id),
+          ...(a.value_id?{value_id:String(a.value_id)}:{}),
+          ...(a.value_name?{value_name:String(a.value_name)}:{})
+      }));
+
+    const varCfg=cfg.variations||{};
+    const varValues=Array.isArray(varCfg.values)?varCfg.values.map(String).filter(Boolean):[];
+
+    if(userProductSeller && varCfg.enabled && varValues.length){
+        const value=varValues[variationIndex%varValues.length];
+        attributes=attributes.filter(a=>String(a.id)!==String(varCfg.attribute_id));
+        attributes.push({id:String(varCfg.attribute_id),value_name:value});
+    }
+
+    const base={
+        category_id:String(category?.category_id||cfg.category_id||''),
+        price,
+        currency_id:'BRL',
+        available_quantity:stock,
+        buying_mode:'buy_it_now',
+        listing_type_id:String(cfg.listing_type_id||'gold_special'),
+        condition:String(cfg.condition||'new'),
+        pictures,
+        attributes
+    };
+
+    if(userProductSeller){
+        base.family_name=title;
+    }else{
+        base.title=title;
+        const skuPrefix=String(cfg.sku_prefix||'').trim();
+        if(skuPrefix){
+            const catKey=String(category?.category_id||'').replace(/[^a-zA-Z0-9]/g,'').slice(-6);
+            base.seller_custom_field=`${skuPrefix}-${catKey}-${String(familyIndex+1).padStart(5,'0')}`;
+        }
+        if(varCfg.enabled && varValues.length){
+            const qtd=Math.min(Math.max(1,Number(varCfg.count||varValues.length)),varValues.length);
+            base.available_quantity=stock*qtd;
+            base.variations=varValues.slice(0,qtd).map((value,i)=>({
+                attribute_combinations:[{id:String(varCfg.attribute_id),value_name:String(value)}],
+                price,
+                available_quantity:stock,
+                picture_ids:pictureIds,
+                ...(skuPrefix?{seller_custom_field:`${skuPrefix}-${String(familyIndex+1).padStart(5,'0')}-${String(i+1).padStart(2,'0')}`}:{})
+            }));
+        }
+    }
+    return base;
+}
+
+async function processarCriacaoMassaV37(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para criar anúncios.');
+
+    const cfg=job.payload?.config||{};
+    const categories=normalizarCategoriasConfigV37(cfg);
+    if(!categories.length)throw new Error('Nenhuma categoria foi configurada para a criação em massa.');
+
+    const meRes=await mlFetch(`${ML_API}/users/me`,token);
+    const me=await jsonSeguro(meRes);
+    if(!meRes.ok)throw new Error(formatarErroMercadoLivre(me));
+
+    const userProductSeller=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+    const families=Math.max(1,Number(cfg.quantity||cfg.titles?.length||1));
+    const varValues=Array.isArray(cfg?.variations?.values)?cfg.variations.values.filter(Boolean):[];
+    const varCount=(cfg?.variations?.enabled && userProductSeller)
+      ? Math.min(Math.max(1,Number(cfg.variations.count||varValues.length||1)),Math.max(1,varValues.length))
+      : 1;
+    const perCategory=families*varCount;
+    const total=categories.length*perCategory;
+
+    let seq=Math.max(0,Number(job.cursor||0));
+    let sucessos=Number(job.result?.success||0);
+    let erros=Number(job.errors||0);
+
+    while(seq<total){
+        const existing=await dbQuery(`SELECT success FROM ml_mass_create_results WHERE job_id=$1 AND seq=$2`,[job.id,seq]);
+        if(existing.rows.length){seq++;continue;}
+
+        const categoryIndex=Math.floor(seq/perCategory);
+        const rem=seq%perCategory;
+        const familyIndex=Math.floor(rem/varCount);
+        const variationIndex=rem%varCount;
+        const category=categories[categoryIndex];
+        const payload=montarPayloadPublicacaoV37(cfg,{familyIndex,variationIndex,userProductSeller,category});
+        const titleRequested=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
+
+        const pr=await mlPostComRetryV36(`${ML_API}/items`,token,payload,4);
+        if(pr?.ok && pr?.data?.id){
+            let warning='';
+            const item=pr.data;
+            if(cfg.description){
+                const dr=await mlPostComRetryV36(`${ML_API}/items/${encodeURIComponent(item.id)}/description`,token,{plain_text:String(cfg.description).slice(0,50000)},3);
+                if(!dr?.ok)warning='Anúncio criado, mas a descrição não foi adicionada: '+formatarErroMercadoLivre(dr?.data);
+            }
+            await gravarResultadoCriacaoV36(job.id,job.seller_id,{
+                seq,
+                family_seq:familyIndex,
+                variation_seq:variationIndex,
+                title_requested:`[${category.category_name}] ${titleRequested}`,
+                item_id:item.id,
+                permalink:item.permalink||'',
+                success:true,
+                message:warning||`Anúncio criado com sucesso na categoria ${category.category_name}.`
+            });
+            await upsertItensDb(job.seller_id,[item]);
+            sucessos++;
+        }else{
+            const tecnico=formatarErroMercadoLivre(pr?.data)||`HTTP ${pr?.status||500}`;
+            await gravarResultadoCriacaoV36(job.id,job.seller_id,{
+                seq,
+                family_seq:familyIndex,
+                variation_seq:variationIndex,
+                title_requested:`[${category.category_name}] ${titleRequested}`,
+                success:false,
+                message:`O Mercado Livre recusou a criação deste anúncio na categoria ${category.category_name}. Revise os campos obrigatórios da categoria e os detalhes exibidos.`,
+                technical_message:tecnico
+            });
+            erros++;
+        }
+
+        seq++;
+        const pct=Math.round((seq/total)*100);
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            progress_current=$2,
+            progress_total=$3,
+            errors=$4,
+            cursor=$5,
+            result=$6::jsonb,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,seq,total,erros,String(seq),JSON.stringify({success:sucessos,failed:erros,mode:userProductSeller?'user_products':'legacy',families,categories:categories.length,items_total:total}),`Criação em massa: ${seq.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${sucessos.toLocaleString('pt-BR')} criado(s)`]);
+
+        await esperarV35(180);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        cursor=NULL,
+        processed=$2,
+        progress_current=$2,
+        progress_total=$3,
+        errors=$4,
+        result=$5::jsonb,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,total,total,erros,JSON.stringify({success:sucessos,failed:erros,mode:userProductSeller?'user_products':'legacy',families,categories:categories.length,items_total:total}),`Criação concluída: ${sucessos.toLocaleString('pt-BR')} item(ns) criado(s), ${erros.toLocaleString('pt-BR')} falha(s).`]);
+}
 async function mlPostComRetryV36(url,token,body,maxTentativas=4){
     let ultimo=null;
     for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
@@ -5040,6 +5382,7 @@ async function workerLoop(indice) {
                     else if(job.type==='freight_sync') await processarFretesEscala(job);
                     else if(job.type==='price_update_mass') await processarAtualizacaoPrecosMassaV36(job);
                     else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
+                    else if(job.type==='mass_create_v37') await processarCriacaoMassaV37(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
                     const retry=Number(job.attempts||0)<4;
@@ -6259,6 +6602,240 @@ app.get('/api/v36/criar/jobs/:jobId/resultados',async(req,res)=>{
     }
 });
 
+
+
+/* =========================================================
+   ROTAS V37 — CRIAÇÃO COM FOTO, 11 IMAGENS E MULTICATEGORIA
+========================================================= */
+
+app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const produto=String(req.body?.produto||'').trim();
+    const detalhes=String(req.body?.detalhes||'').trim();
+    const quantidade=Math.min(500,Math.max(1,Number(req.body?.quantidade||1)));
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
+
+    if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie pelo menos uma foto.');
+
+    try{
+        const categorias=[];
+        for(const categoryId of categoryIds){
+            const [cr,ar]=await Promise.all([
+                mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}`,token),
+                mlFetch(`${ML_API}/categories/${encodeURIComponent(categoryId)}/attributes`,token)
+            ]);
+            const cat=await jsonSeguro(cr);
+            const attrs=await jsonSeguro(ar);
+            if(cr.ok && ar.ok){
+                categorias.push({
+                    category_id:categoryId,
+                    category_name:String(cat?.name||categoryId),
+                    atributos:(Array.isArray(attrs)?attrs:[]).map(a=>({
+                        id:a.id,
+                        name:a.name,
+                        required:Boolean(a?.tags?.required),
+                        values:Array.isArray(a.values)?a.values.slice(0,40).map(v=>({id:v.id,name:v.name})):[ ]
+                    }))
+                });
+            }
+        }
+
+        const prompt=`
+Analise as fotos do produto enviadas pelo vendedor e os detalhes abaixo.
+
+Produto informado: ${produto||'(não informado)'}
+Detalhes adicionais: ${detalhes||'(não informado)'}
+Quantidade de títulos desejada: ${quantidade}
+Categorias selecionadas: ${categorias.map(c=>`${c.category_name} (${c.category_id})`).join(', ')||'nenhuma'}
+
+A partir das imagens e do texto, gere SOMENTE JSON no formato:
+{
+  "produto_detectado":"...",
+  "resumo":"...",
+  "keywords":["..."],
+  "titulos":["..."],
+  "descricao":"...",
+  "image_prompt":"...",
+  "categorias":[
+    {
+      "category_id":"...",
+      "attributes":[{"id":"...","value_name":"..."}]
+    }
+  ]
+}
+
+Regras:
+- Cada título deve ter no máximo 60 caracteres.
+- Gere títulos focados em conversão, SEO e palavras-chave relevantes.
+- Não invente marca, modelo, voltagem, quantidade, material, medidas, certificações ou acessórios que não estejam visíveis ou claramente informados.
+- A descrição deve ser em português do Brasil, clara e voltada para vendas.
+- Em keywords, gere até 25 termos úteis.
+- Em categorias.attributes, preencha somente atributos que possam ser inferidos com segurança pela imagem e pelo texto.
+- Se uma categoria exigir atributos que não podem ser inferidos com segurança, simplesmente não preencha esses campos.
+- Para image_prompt, escreva um prompt completo para gerar imagens comerciais desse produto.
+
+Abaixo seguem os atributos das categorias, para você sugerir preenchimento automático quando possível:
+${JSON.stringify(categorias)}
+        `;
+
+        const obj=await chamarGeminiJsonVisionV37(prompt,referenceImages);
+        const titulos=(Array.isArray(obj?.titulos)?obj.titulos:[]).map(t=>limitarTituloV36(t,60)).filter(Boolean).slice(0,quantidade);
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,25);
+
+        const categoriasOut=categorias.map(c=>({
+            category_id:c.category_id,
+            category_name:c.category_name,
+            suggested_attributes:(Array.isArray(obj?.categorias)?obj.categorias.find(x=>String(x?.category_id||'')===String(c.category_id))?.attributes:[])||[],
+            atributos:c.atributos
+        }));
+
+        res.json({
+            sucesso:true,
+            produto_detectado:String(obj?.produto_detectado||produto||''),
+            resumo:String(obj?.resumo||''),
+            keywords,
+            titulos,
+            descricao:String(obj?.descricao||''),
+            image_prompt:String(obj?.image_prompt||produto||''),
+            categorias:categoriasOut
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao analisar o produto com IA: '+e.message);
+    }
+});
+
+app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    const produto=String(req.body?.produto||'').trim();
+    const detalhes=String(req.body?.detalhes||'').trim();
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
+
+    try{
+        const pictures=await gerarPacote11ImagensV37({token,produto,detalhes,referenceImages});
+        res.json({sucesso:true,total:pictures.length,pictures});
+    }catch(e){
+        respostaErro(res,500,'Erro ao gerar as 11 imagens do anúncio: '+e.message);
+    }
+});
+
+app.post('/api/v37/criar/validar',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+        const cfg=req.body?.config||{};
+        const categories=normalizarCategoriasConfigV37(cfg);
+        if(!categories.length)return respostaErro(res,400,'Escolha pelo menos uma categoria.');
+
+        const resultados=[];
+        for(const category of categories){
+            const sample=montarPayloadPublicacaoV37(cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category});
+            if(up && cfg?.variations?.enabled) delete sample.variations;
+            const vr=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
+            const vd=await jsonSeguro(vr);
+            resultados.push({
+                category_id:category.category_id,
+                category_name:category.category_name,
+                sucesso:vr.ok,
+                validacao:vd,
+                erro:vr.ok?null:formatarErroMercadoLivre(vd)
+            });
+        }
+
+        res.status(resultados.every(x=>x.sucesso)?200:400).json({
+            sucesso:resultados.every(x=>x.sucesso),
+            modo:up?'user_products':'legacy',
+            resultados
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao validar publicação: '+e.message);
+    }
+});
+
+app.post('/api/v37/criar/publicar',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const cfg=req.body?.config||{};
+        const categories=normalizarCategoriasConfigV37(cfg);
+        const titles=Array.isArray(cfg.titles)?cfg.titles.map(x=>limitarTituloV36(x,60)).filter(Boolean):[];
+        const quantity=Math.min(5000,Math.max(1,Number(cfg.quantity||titles.length||1)));
+
+        if(!categories.length)return respostaErro(res,400,'Escolha pelo menos uma categoria.');
+        if(!(Number(cfg.price)>0))return respostaErro(res,400,'Informe um preço válido.');
+        if(!titles.length)return respostaErro(res,400,'Gere ou informe pelo menos um título/nome de família.');
+        if(titles.length<quantity)return respostaErro(res,400,`Existem ${titles.length} título(s), mas foram solicitados ${quantity} anúncio(s). Gere todos os títulos antes de publicar.`);
+
+        const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).filter(Boolean);
+        if(!pictureIds.length)return respostaErro(res,400,'Adicione pelo menos uma imagem antes de publicar.');
+
+        const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+        const varCfg=cfg.variations||{};
+
+        if(varCfg.enabled){
+            if(!varCfg.attribute_id)return respostaErro(res,400,'Escolha o atributo das variações.');
+            if(!Array.isArray(varCfg.values) || !varCfg.values.filter(Boolean).length){
+                return respostaErro(res,400,'Informe os valores das variações.');
+            }
+        }
+
+        const ativo=await dbQuery(`
+          SELECT id,seller_id,type,status,progress_current,progress_total,processed,errors,cursor,message,result,created_at,updated_at,finished_at
+          FROM ml_jobs
+          WHERE seller_id=$1 AND type='mass_create_v37' AND status IN ('queued','running')
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+        if(ativo.rows.length){
+            return res.status(202).json({sucesso:true,job:ativo.rows[0],retomado:true,mensagem:'Já existe uma criação em massa em andamento.'});
+        }
+
+        cfg.titles=titles.slice(0,quantity);
+        cfg.quantity=quantity;
+        cfg.picture_ids=pictureIds;
+        cfg.categories=categories;
+
+        const varCount=(cfg?.variations?.enabled && up)
+          ? Math.min(Math.max(1,Number(cfg.variations.count||1)),Math.max(1,(cfg.variations.values||[]).filter(Boolean).length))
+          : 1;
+        const total=quantity*categories.length*varCount;
+
+        const job=await criarJob(me.id,'mass_create_v37',{version:'v37',config:cfg});
+        const jr=await dbQuery(`
+          UPDATE ml_jobs SET
+            progress_total=$2,
+            progress_current=0,
+            processed=0,
+            errors=0,
+            cursor='0',
+            message=$3,
+            result=$4::jsonb,
+            updated_at=NOW()
+          WHERE id=$1
+          RETURNING id,seller_id,type,status,progress_current,progress_total,processed,errors,cursor,message,result,created_at,updated_at,finished_at
+        `,[job.id,total,`Criação em massa preparada: ${total.toLocaleString('pt-BR')} item(ns).`,JSON.stringify({mode:up?'user_products':'legacy',families:quantity,categories:categories.length,items_total:total})]);
+
+        res.status(202).json({
+            sucesso:true,
+            job:jr.rows[0],
+            modo:up?'user_products':'legacy',
+            total,
+            mensagem:`${categories.length} categoria(s) × ${quantity} anúncio(s)/família(s)${up&&varCfg.enabled?` × ${varCount} variação(ões)`:''}.`
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao iniciar criação em massa: '+e.message);
+    }
+});
 app.get('/api/scale/status',async(req,res)=>{
     if(!db)return res.json({sucesso:true,database:false,worker:false,mensagem:'Configure DATABASE_URL para ativar o modo 90k.'});
     try{
