@@ -4201,7 +4201,7 @@ async function enriquecerComissoesV28(sellerId,itens,token){
 
     const concorrencia=Math.max(
       4,
-      Math.min(20,Number(process.env.ML_COMMISSION_CONCURRENCY||12))
+      Math.min(28,Number(process.env.ML_COMMISSION_CONCURRENCY||16))
     );
 
     let cursor=0;
@@ -4282,55 +4282,91 @@ async function processarSyncCompleto(job) {
     let processed=Number(job.processed||0);
     let errors=Number(job.errors||0);
     let total=Number(job.progress_total||0);
-    let ciclos=0;
+    let paginasLidas=0;
     let scanCompleto=false;
     let removidos=0;
 
-    // Mantém uma lista persistente dos IDs vistos neste job.
-    // Se o Render reiniciar, a reconciliação continua segura.
     if(processed===0 && !scrollId){
         await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
     }
 
-    // O Mercado Livre limita a busca a no máximo 100 IDs por chamada.
-    // Agrupamos 50 páginas de 100 como um lote lógico de 5.000 anúncios.
+    // A API de busca entrega no máximo 100 IDs por chamada. A V42 reúne
+    // essas páginas em um lote lógico de até 5.000 e só então processa os
+    // detalhes em paralelo via /items/bulk, preservando o cursor do scan.
     const TAMANHO_LOTE_LOGICO=5000;
+    const MAX_PAGINAS_POR_LOTE=50;
 
-    do {
-        const params=new URLSearchParams({search_type:'scan',limit:'100'});
-        if(scrollId)params.set('scroll_id',scrollId);
+    while(!scanCompleto && paginasLidas<2000){
+        const idsLote=[];
+        let cursorLote=scrollId;
+        let fimEncontrado=false;
+        let paginasNoLote=0;
 
-        const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
-        const sd=await jsonSeguro(sr);
-        if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd));
+        while(idsLote.length<TAMANHO_LOTE_LOGICO && paginasNoLote<MAX_PAGINAS_POR_LOTE && paginasLidas<2000){
+            const params=new URLSearchParams({search_type:'scan',limit:'100'});
+            if(cursorLote)params.set('scroll_id',cursorLote);
 
-        if(total<=0){
-            total=Number(sd?.paging?.total||0);
-            if(total>0){
-                await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
+            const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
+            const sd=await jsonSeguro(sr);
+            if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd)||`Mercado Livre HTTP ${sr.status}`);
+
+            if(total<=0){
+                total=Number(sd?.paging?.total||0);
+                if(total>0){
+                    await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
+                }
+            }
+
+            const ids=Array.isArray(sd.results)?sd.results.map(String).filter(Boolean):[];
+            paginasLidas++;
+            paginasNoLote++;
+
+            if(!ids.length){
+                cursorLote=null;
+                fimEncontrado=true;
+                break;
+            }
+
+            idsLote.push(...ids);
+            cursorLote=sd.scroll_id||null;
+
+            if(!cursorLote){
+                fimEncontrado=true;
+                break;
+            }
+
+            // Atualização visual leve durante a coleta do lote, sem considerar
+            // os itens como processados antes de os detalhes entrarem no banco.
+            if(idsLote.length%1000===0 || idsLote.length>=TAMANHO_LOTE_LOGICO){
+                const loteNumero=Math.floor(processed/TAMANHO_LOTE_LOGICO)+1;
+                await dbQuery(`
+                  UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
+                `,[job.id,
+                   `Preparando lote ${loteNumero.toLocaleString('pt-BR')} · ${idsLote.length.toLocaleString('pt-BR')}/5.000 IDs coletados`]);
             }
         }
 
-        const ids=Array.isArray(sd.results)?sd.results:[];
-        if(!ids.length){
-            scrollId=null;
+        if(!idsLote.length){
             scanCompleto=true;
+            scrollId=null;
             break;
         }
 
-        // Marca IDs vistos antes de buscar detalhes. Uma falha de bulk nunca
-        // fará um anúncio existente ser apagado por engano.
+        const idsUnicos=[...new Set(idsLote)];
+
+        // Marca todos os IDs do lote em uma única operação SQL.
         await dbQuery(`
           INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
           SELECT $1,$2,x
           FROM unnest($3::text[]) AS x
           ON CONFLICT(job_id,item_id) DO NOTHING
-        `,[job.id,job.seller_id,ids.map(String)]);
+        `,[job.id,job.seller_id,idsUnicos]);
 
-        // Usa o bulk atual do Mercado Livre em subgrupos e concorrência controlada.
-        const detalhes=await buscarItensBulkFreteRapido(token,ids);
-        const itens=ids.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
-        errors+=Math.max(0,ids.length-itens.length);
+        // Busca detalhes de todo o lote de 5.000 usando requisições bulk
+        // paralelas e controladas. /items/bulk aceita até 20 IDs por chamada.
+        const detalhes=await buscarItensBulkFreteRapido(token,idsUnicos);
+        const itens=idsUnicos.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+        errors+=Math.max(0,idsUnicos.length-itens.length);
 
         let comissoesConsultadas=0;
         if(itens.length){
@@ -4340,12 +4376,11 @@ async function processarSyncCompleto(job) {
             await upsertItensDb(job.seller_id,enriquecidos.itens);
         }
 
-        processed+=ids.length;
-        scrollId=sd.scroll_id||null;
-        ciclos++;
+        processed+=idsUnicos.length;
+        scrollId=cursorLote;
+        if(fimEncontrado||!scrollId)scanCompleto=true;
 
-        const loteAtual=Math.floor(Math.max(0,processed-1)/TAMANHO_LOTE_LOGICO)+1;
-        const dentroDoLote=((processed-1)%TAMANHO_LOTE_LOGICO)+1;
+        const loteAtual=Math.ceil(processed/TAMANHO_LOTE_LOGICO);
         const totalExibido=total>0?total:processed;
 
         await dbQuery(`
@@ -4364,20 +4399,16 @@ async function processarSyncCompleto(job) {
             total,
             errors,
             scrollId,
-            `Anúncios + comissão: ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · lote ${loteAtual.toLocaleString('pt-BR')} de até 5.000 (${dentroDoLote.toLocaleString('pt-BR')}/5.000) · ${comissoesConsultadas.toLocaleString('pt-BR')} comissão(ões) atualizada(s) nesta página`
+            `Lote ${loteAtual.toLocaleString('pt-BR')} concluído · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} anúncios · até 5.000 por lote · ${comissoesConsultadas.toLocaleString('pt-BR')} comissão(ões) consultada(s)`
         ]);
-
-        // scroll_id expira em poucos minutos: segue sem pausa longa.
-    } while(scrollId && ciclos<2000);
-
-    if(!scrollId)scanCompleto=true;
+    }
 
     if(!scanCompleto){
         throw new Error('A varredura não chegou ao final. A reconciliação de exclusões não foi executada por segurança.');
     }
 
-    // Espelha a conta: se o ID não apareceu na varredura completa atual,
-    // ele foi removido da lista local. O frete dos itens restantes é preservado.
+    // Espelha a conta: IDs que não apareceram na varredura completa são
+    // removidos da base local. Fretes dos itens existentes permanecem intactos.
     const del=await dbQuery(`
       DELETE FROM ml_items m
       WHERE m.seller_id=$1
@@ -4412,7 +4443,7 @@ async function processarSyncCompleto(job) {
         processed,
         finalTotal,
         errors,
-        `Anúncios concluídos: ${processed.toLocaleString('pt-BR')} processado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base por não existirem mais na conta · fretes preservados.`
+        `Anúncios concluídos em lotes de até 5.000: ${processed.toLocaleString('pt-BR')} processado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base por não existirem mais na conta · fretes preservados.`
     ]);
 }
 
@@ -5639,7 +5670,7 @@ async function buscarItensBulkFreteRapido(token,ids){
 
     const mapa={};
     const falhas=new Map();
-    const concorrencia=Math.max(2,Math.min(10,Number(process.env.ML_BULK_CONCURRENCY||6)));
+    const concorrencia=Math.max(4,Math.min(24,Number(process.env.ML_BULK_CONCURRENCY||12)));
     let cursor=0;
 
     async function worker(){
@@ -6059,20 +6090,30 @@ app.get('/api/v27/sku-pricing',async(req,res)=>{
 
     try{
         const me=await usuarioML(token);
+        const includeAvailable=String(req.query?.include_available||'1')!=='0';
 
-        const [regras,skus]=await Promise.all([
-            dbQuery(`
-              SELECT
-                sku,
-                sku_key,
-                cost::float8 AS custo,
-                desired_margin::float8 AS margem,
-                updated_at
-              FROM ml_sku_pricing
-              WHERE seller_id=$1
-              ORDER BY sku_key
-            `,[me.id]),
-            dbQuery(`
+        const regrasPromise=dbQuery(`
+          SELECT
+            sku,
+            sku_key,
+            cost::float8 AS custo,
+            desired_margin::float8 AS margem,
+            updated_at
+          FROM ml_sku_pricing
+          WHERE seller_id=$1
+          ORDER BY sku_key
+        `,[me.id]);
+
+        const versaoPromise=dbQuery(`
+          SELECT
+            COUNT(*)::int AS total,
+            MAX(updated_at) AS max_updated_at
+          FROM ml_sku_pricing
+          WHERE seller_id=$1
+        `,[me.id]);
+
+        const skusPromise=includeAvailable
+          ? dbQuery(`
               SELECT
                 MIN(sku) AS sku,
                 lower(trim(sku)) AS sku_key,
@@ -6084,17 +6125,52 @@ app.get('/api/v27/sku-pricing',async(req,res)=>{
               ORDER BY lower(trim(sku))
               LIMIT 10000
             `,[me.id])
-        ]);
+          : Promise.resolve({rows:[]});
 
-        res.set('Cache-Control','no-store');
+        const [regras,versao,skus]=await Promise.all([regrasPromise,versaoPromise,skusPromise]);
+        const vr=versao.rows[0]||{};
+        const maxAtualizado=vr.max_updated_at?new Date(vr.max_updated_at).toISOString():'0';
+        const version=`${Number(vr.total||0)}:${maxAtualizado}`;
+
+        res.set('Cache-Control','private, max-age=15');
         return res.json({
             sucesso:true,
+            seller_id:String(me.id),
+            version,
             regras:regras.rows,
-            skus_disponiveis:skus.rows
+            skus_disponiveis:skus.rows,
+            include_available:includeAvailable
         });
     }catch(e){
         console.error('[SKU PRICING V27 GET]',e);
         respostaErro(res,500,'Erro ao carregar custos por SKU: '+e.message);
+    }
+});
+
+// V42 — verificação extremamente leve da Base Financeira. A Simulação usa
+// esta rota em segundo plano e só baixa a base inteira quando ela mudou.
+app.get('/api/v42/sku-pricing/version',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const q=await dbQuery(`
+          SELECT COUNT(*)::int AS total, MAX(updated_at) AS max_updated_at
+          FROM ml_sku_pricing
+          WHERE seller_id=$1
+        `,[me.id]);
+        const row=q.rows[0]||{};
+        const maxAtualizado=row.max_updated_at?new Date(row.max_updated_at).toISOString():'0';
+        res.set('Cache-Control','private, max-age=15');
+        return res.json({
+            sucesso:true,
+            seller_id:String(me.id),
+            total:Number(row.total||0),
+            version:`${Number(row.total||0)}:${maxAtualizado}`
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao verificar versão da Base Financeira: '+e.message);
     }
 });
 
@@ -6133,34 +6209,43 @@ app.post('/api/v27/sku-pricing',async(req,res)=>{
 
         if(!normalizadas.length)return respostaErro(res,400,'Nenhum SKU válido para salvar.');
 
-        const client=await db.connect();
-        try{
-            await client.query('BEGIN');
+        const payload=normalizadas.map(r=>({
+            sku:r.sku,
+            sku_key:r.skuKey,
+            custo:r.custo,
+            margem:r.margem
+        }));
 
-            for(const r of normalizadas){
-                await client.query(`
-                  INSERT INTO ml_sku_pricing
-                    (seller_id,sku,sku_key,cost,desired_margin,updated_at)
-                  VALUES($1,$2,$3,$4,$5,NOW())
-                  ON CONFLICT(seller_id,sku_key) DO UPDATE SET
-                    sku=EXCLUDED.sku,
-                    cost=EXCLUDED.cost,
-                    desired_margin=EXCLUDED.desired_margin,
-                    updated_at=NOW()
-                `,[me.id,r.sku,r.skuKey,r.custo,r.margem]);
-            }
+        await dbQuery(`
+          INSERT INTO ml_sku_pricing
+            (seller_id,sku,sku_key,cost,desired_margin,updated_at)
+          SELECT
+            $1::bigint,x.sku,x.sku_key,x.custo,x.margem,NOW()
+          FROM jsonb_to_recordset($2::jsonb) AS x(
+            sku text,
+            sku_key text,
+            custo numeric,
+            margem numeric
+          )
+          ON CONFLICT(seller_id,sku_key) DO UPDATE SET
+            sku=EXCLUDED.sku,
+            cost=EXCLUDED.cost,
+            desired_margin=EXCLUDED.desired_margin,
+            updated_at=NOW()
+        `,[me.id,JSON.stringify(payload)]);
 
-            await client.query('COMMIT');
-        }catch(e){
-            await client.query('ROLLBACK');
-            throw e;
-        }finally{
-            client.release();
-        }
+        const v=await dbQuery(`
+          SELECT COUNT(*)::int AS total, MAX(updated_at) AS max_updated_at
+          FROM ml_sku_pricing WHERE seller_id=$1
+        `,[me.id]);
+        const vr=v.rows[0]||{};
+        const version=`${Number(vr.total||0)}:${vr.max_updated_at?new Date(vr.max_updated_at).toISOString():'0'}`;
 
         return res.json({
             sucesso:true,
             salvos:normalizadas.length,
+            seller_id:String(me.id),
+            version,
             mensagem:`${normalizadas.length} SKU(s) salvo(s) na base de custos e margem.`
         });
     }catch(e){
