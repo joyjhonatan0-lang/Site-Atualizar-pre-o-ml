@@ -1863,7 +1863,6 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <div
             id="atualizacao-progresso-v31"
             class="
-                hidden
                 mt-5
                 pt-5
                 border-t
@@ -1878,7 +1877,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                                 Progresso da atualização
                             </div>
                             <div id="atualizacao-progresso-texto-v31" class="text-xs text-slate-300 mt-1">
-                                Preparando atualização...
+                                Aguardando você clicar em Atualizar preços.
                             </div>
                         </div>
                         <div id="atualizacao-progresso-percent-v31" class="text-xl font-black text-white">
@@ -2020,13 +2019,13 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div id="sync-card-precos-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-blue-400">Preços · lote 1.000</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-blue-400">Leitura de preços · lote 1.000</div>
                         <div id="sync-status-precos-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
                         <div id="sync-bar-precos-v26" class="h-full bg-blue-400 transition-all duration-300" style="width:0%"></div>
                     </div>
-                    <div id="sync-msg-precos-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar preços.</div>
+                    <div id="sync-msg-precos-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar preços para sincronizar a leitura.</div>
                 </div>
 
                 <div id="sync-card-fretes-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
@@ -7940,7 +7939,7 @@ function normalizarItemEscala(i){
     available_quantity:Number(i.available_quantity||0), sold_quantity:Number(i.sold_quantity||0),
     status:i.status||'', listing_type_id:i.listing_type_id||'',
     category_id:i.category_id||'', thumbnail:i.thumbnail||'', permalink:i.permalink||'',
-    last_updated:i.last_updated||null
+    last_updated:i.last_updated||null,last_synced:i.last_synced||null
   };
 }
 
@@ -8072,6 +8071,181 @@ const anunciosEscalaCacheV30=new Map();
 let simFiltroRenderKeyV30='';
 let atualFiltroRenderKeyV30='';
 
+/* V32 — snapshot persistente dos anúncios no navegador. */
+const CACHE_DB_V32='mlHubProAnunciosV32';
+const STORE_ITENS_V32='itens';
+const STORE_META_V32='meta';
+let dbCachePromiseV32=null;
+let masterAnunciosV32=[];
+let masterMapV32=new Map();
+let masterCarregadoV32=false;
+let ultimaVerificacaoDeltaV32=0;
+let deltaPromiseV32=null;
+const DELTA_INTERVALO_V32=30000;
+
+function abrirDbCacheV32(){
+    if(dbCachePromiseV32)return dbCachePromiseV32;
+    dbCachePromiseV32=new Promise((resolve,reject)=>{
+        const req=indexedDB.open(CACHE_DB_V32,1);
+        req.onupgradeneeded=()=>{
+            const db=req.result;
+            if(!db.objectStoreNames.contains(STORE_ITENS_V32))db.createObjectStore(STORE_ITENS_V32,{keyPath:'id'});
+            if(!db.objectStoreNames.contains(STORE_META_V32))db.createObjectStore(STORE_META_V32,{keyPath:'key'});
+        };
+        req.onsuccess=()=>resolve(req.result);
+        req.onerror=()=>reject(req.error||new Error('Não foi possível abrir o cache local.'));
+    });
+    return dbCachePromiseV32;
+}
+
+async function idbTodosV32(store){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(store,'readonly'),req=tx.objectStore(store).getAll();
+        req.onsuccess=()=>resolve(req.result||[]);
+        req.onerror=()=>reject(req.error);
+    });
+}
+async function idbMetaV32(key){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_META_V32,'readonly'),req=tx.objectStore(STORE_META_V32).get(key);
+        req.onsuccess=()=>resolve(req.result||null);
+        req.onerror=()=>reject(req.error);
+    });
+}
+async function idbSalvarMetaV32(obj){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_META_V32,'readwrite');
+        tx.objectStore(STORE_META_V32).put(obj);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+    });
+}
+async function idbSalvarItensV32(itens){
+    if(!itens.length)return;
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_ITENS_V32,'readwrite'),st=tx.objectStore(STORE_ITENS_V32);
+        itens.forEach(x=>st.put(x));
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+    });
+}
+async function idbLimparV32(){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction([STORE_ITENS_V32,STORE_META_V32],'readwrite');
+        tx.objectStore(STORE_ITENS_V32).clear();tx.objectStore(STORE_META_V32).clear();
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+    });
+}
+async function carregarMasterLocalV32(){
+    if(masterCarregadoV32)return;
+    try{
+        const itens=await idbTodosV32(STORE_ITENS_V32);
+        masterAnunciosV32=(itens||[]).map(normalizarItemEscala);
+        masterMapV32=new Map(masterAnunciosV32.map(x=>[String(x.id),x]));
+    }catch(e){
+        console.warn('[CACHE V32]',e);masterAnunciosV32=[];masterMapV32=new Map();
+    }
+    masterCarregadoV32=true;
+}
+function listaMasterFiltradaV32(){
+    const campo=String(filtroEscalaV21.campo||'sku').toLowerCase();
+    const valor=String(filtroEscalaV21.valor||'').trim().toLowerCase();
+    if(!valor)return masterAnunciosV32;
+    if(campo==='mlb')return masterAnunciosV32.filter(x=>String(x.id||'').toLowerCase()===valor);
+    return masterAnunciosV32.filter(x=>String(x.sku||'').trim().toLowerCase()===valor);
+}
+async function aplicarMudancasV32(itens){
+    if(!Array.isArray(itens)||!itens.length)return 0;
+    const normalizados=itens.map(normalizarItemEscala);
+    normalizados.forEach(item=>masterMapV32.set(String(item.id),item));
+    masterAnunciosV32=[...masterMapV32.values()];
+    await idbSalvarItensV32(normalizados);
+    simFiltroRenderKeyV30='';atualFiltroRenderKeyV30='';anunciosEscalaCacheV30.clear();
+    return normalizados.length;
+}
+async function sincronizarMudancasV32({forcar=false,mostrarProgresso=false}={}){
+    await carregarMasterLocalV32();
+    if(!forcar&&masterAnunciosV32.length&&(Date.now()-ultimaVerificacaoDeltaV32)<DELTA_INTERVALO_V32){
+        return {alterados:0,total:masterAnunciosV32.length};
+    }
+    if(deltaPromiseV32)return deltaPromiseV32;
+
+    deltaPromiseV32=(async()=>{
+        const token=obterToken();if(!token)throw new Error('Token não disponível.');
+        let meta=await idbMetaV32('sync');
+        let afterTs=meta?.after_ts||'1970-01-01T00:00:00.000Z';
+        let afterId=meta?.after_id||'';
+        let sellerAnterior=String(meta?.seller_id||'');
+        let totalConta=masterAnunciosV32.length,alterados=0,primeira=true;
+
+        while(true){
+            const p=new URLSearchParams({after_ts:afterTs,after_id:afterId,limit:'1000'});
+            const r=await fetch(`${RENDER_URL}/api/scale/anuncios/changes?${p.toString()}&_=${Date.now()}`,{
+                cache:'no-store',headers:{Authorization:token,Accept:'application/json'}
+            });
+            const d=await r.json().catch(()=>({}));
+            if(!r.ok)throw new Error(d.erro||`Erro HTTP ${r.status} ao consultar alterações.`);
+
+            const sellerAtual=String(d.seller_id||'');
+            totalConta=Number(d.total_conta||0);
+
+            if(primeira&&sellerAnterior&&sellerAtual&&sellerAnterior!==sellerAtual){
+                await idbLimparV32();masterAnunciosV32=[];masterMapV32=new Map();
+                afterTs='1970-01-01T00:00:00.000Z';afterId='';sellerAnterior='';meta=null;primeira=false;continue;
+            }
+
+            alterados+=await aplicarMudancasV32(Array.isArray(d.itens)?d.itens:[]);
+            const cursor=d.next_cursor||{};
+            afterTs=cursor.after_ts||afterTs;afterId=cursor.after_id||afterId;
+
+            await idbSalvarMetaV32({
+                key:'sync',seller_id:sellerAtual,after_ts:afterTs,after_id:afterId,
+                total_conta:totalConta,checked_at:Date.now()
+            });
+
+            if(mostrarProgresso&&totalConta){
+                const el=document.getElementById('loading-text');
+                if(el)el.innerText=`Sincronizando anúncios... ${Math.min(masterAnunciosV32.length,totalConta).toLocaleString('pt-BR')}/${totalConta.toLocaleString('pt-BR')}`;
+            }
+
+            sellerAnterior=sellerAtual;if(!d.has_more)break;primeira=false;
+        }
+
+        if(totalConta&&masterAnunciosV32.length!==totalConta){
+            await idbLimparV32();masterAnunciosV32=[];masterMapV32=new Map();
+            let ts='1970-01-01T00:00:00.000Z',iid='';
+            while(true){
+                const p=new URLSearchParams({after_ts:ts,after_id:iid,limit:'1000'});
+                const r=await fetch(`${RENDER_URL}/api/scale/anuncios/changes?${p.toString()}&_=${Date.now()}`,{
+                    cache:'no-store',headers:{Authorization:token,Accept:'application/json'}
+                });
+                const d=await r.json().catch(()=>({}));
+                if(!r.ok)throw new Error(d.erro||`Erro HTTP ${r.status} ao reconstruir cache.`);
+                alterados+=await aplicarMudancasV32(Array.isArray(d.itens)?d.itens:[]);
+                const c=d.next_cursor||{};ts=c.after_ts||ts;iid=c.after_id||iid;
+                await idbSalvarMetaV32({
+                    key:'sync',seller_id:String(d.seller_id||''),after_ts:ts,after_id:iid,
+                    total_conta:Number(d.total_conta||0),checked_at:Date.now()
+                });
+                if(mostrarProgresso){
+                    const el=document.getElementById('loading-text');
+                    if(el)el.innerText=`Preparando cache local... ${masterAnunciosV32.length.toLocaleString('pt-BR')}/${Number(d.total_conta||0).toLocaleString('pt-BR')}`;
+                }
+                if(!d.has_more)break;
+            }
+        }
+
+        ultimaVerificacaoDeltaV32=Date.now();
+        return {alterados,total:masterAnunciosV32.length};
+    })();
+
+    try{return await deltaPromiseV32}
+    finally{deltaPromiseV32=null}
+}
+
 function chaveFiltroEscalaV30(){
     const campo=String(filtroEscalaV21.campo||'sku').trim().toLowerCase();
     const valor=String(filtroEscalaV21.valor||'').trim().toLowerCase();
@@ -8102,22 +8276,23 @@ function invalidarCacheAnunciosV30(){
     anunciosEscalaCacheV30.clear();
     simFiltroRenderKeyV30='';
     atualFiltroRenderKeyV30='';
+    ultimaVerificacaoDeltaV32=0;
 }
 
 function atualizarPrecoNoCacheV30(id,preco){
-    const alvo=String(id);
-    const novo=Number(preco);
-
+    const alvo=String(id),novo=Number(preco);
     for(const cache of anunciosEscalaCacheV30.values()){
-        const item=cache.itens.find(x=>String(x.id)===alvo);
-        if(item)item.price=novo;
+        const item=cache.itens.find(x=>String(x.id)===alvo);if(item)item.price=novo;
     }
-
-    const simItem=simItensV21.find(x=>String(x.id)===alvo);
-    if(simItem)simItem.price=novo;
-
-    const atualItem=atualItensV21.find(x=>String(x.id)===alvo);
-    if(atualItem)atualItem.price=novo;
+    const master=masterMapV32.get(alvo);
+    if(master){
+        master.price=novo;
+        master.net_received=Math.max(0,novo-Number(master.sale_fee||0)-Number(master.shipping_cost||0));
+        master.last_synced=new Date().toISOString();
+        idbSalvarItensV32([master]).catch(e=>console.warn('[CACHE PREÇO V32]',e));
+    }
+    const simItem=simItensV21.find(x=>String(x.id)===alvo);if(simItem)simItem.price=novo;
+    const atualItem=atualItensV21.find(x=>String(x.id)===alvo);if(atualItem)atualItem.price=novo;
 }
 
 const simParametrosPorIdV21={};
@@ -8248,13 +8423,17 @@ function calcularSimulacaoV21(item,p){
     const valorTaxa=novoPreco*(taxa/100),valorImposto=novoPreco*(imposto/100);
     const lucroLiquido=novoPreco-custo-valorTaxa-valorImposto-freteAplicado;
     const margem=novoPreco>0?(lucroLiquido/novoPreco)*100:0;
+
+    const taxaAtual=precoAtual*(taxa/100);
+    const impostoAtual=precoAtual*(imposto/100);
+    const lucroAtual=precoAtual-custo-taxaAtual-impostoAtual-freteAtual;
+    const margemAtual=precoAtual>0?(lucroAtual/precoAtual)*100:0;
+    const diferencaMargem=Math.abs(margemAtual-lucro);
+
     return {
-        preco:novoPreco,
-        freteSimulado:freteAplicado,
-        usouReferencia7890:podeReferencia,
-        lucroLiquido,
-        margem,
-        foraDaMargem:Math.abs(novoPreco-precoAtual)>0.05
+        preco:novoPreco,freteSimulado:freteAplicado,usouReferencia7890:podeReferencia,
+        lucroLiquido,margem,margemAtual,margemDesejada:lucro,diferencaMargem,
+        foraDaMargem:diferencaMargem>0.05
     };
 }
 
@@ -8311,61 +8490,19 @@ function recalcularV21(id){
 }
 
 async function buscarTodosAnunciosEscalaV29(tipo='simulacao',{forcar=false}={}){
-    const token=obterToken();
-    if(!token)throw new Error('Token não disponível.');
-
-    if(!forcar){
-        const cache=obterCacheEscalaV30();
-        if(cache){
-            const info=document.getElementById(tipo==='simulacao'?'sim-filtro-info':'atual-filtro-info');
-            if(info){
-                info.textContent=`Usando ${cache.itens.length.toLocaleString('pt-BR')} anúncio(s) já carregados.`;
-            }
-            return {
-                itens:cache.itens,
-                total:cache.total,
-                cache:true
-            };
-        }
+    await carregarMasterLocalV32();
+    const primeiraCarga=!masterAnunciosV32.length;
+    if(primeiraCarga)mostrarLoading('Carregando todos os anúncios pela primeira vez...');
+    try{
+        const delta=await sincronizarMudancasV32({forcar:forcar||primeiraCarga,mostrarProgresso:primeiraCarga});
+        const itens=listaMasterFiltradaV32();
+        return {
+            itens,total:itens.length,total_conta:masterAnunciosV32.length,
+            alterados:Number(delta?.alterados||0),cache:!primeiraCarga
+        };
+    }finally{
+        if(primeiraCarga)esconderLoading();
     }
-
-    const todos=[];
-    let pagina=1;
-    let paginas=1;
-    let total=0;
-    const limite=1000;
-
-    do{
-        const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${queryEscalaV21(pagina,limite)}&_=${Date.now()}`,{
-            cache:'no-store',
-            headers:{Authorization:token,Accept:'application/json'}
-        });
-        const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.erro||`Erro HTTP ${r.status} ao carregar anúncios.`);
-
-        const lote=(d.itens||[]).map(normalizarItemEscala);
-        todos.push(...lote);
-
-        total=Number(d.total||todos.length);
-        paginas=Math.max(1,Number(d.paginas||1));
-
-        const carregados=Math.min(todos.length,total||todos.length);
-        const info=document.getElementById(tipo==='simulacao'?'sim-filtro-info':'atual-filtro-info');
-        if(info){
-            info.textContent=`Carregando lista completa... ${carregados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} anúncio(s)`;
-        }
-
-        const loadingText=document.getElementById('loading-text');
-        if(loadingText){
-            loadingText.innerText=`Carregando todos os anúncios... ${carregados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`;
-        }
-
-        pagina++;
-    }while(pagina<=paginas);
-
-    const resultado={itens:todos,total,cache:false};
-    salvarCacheEscalaV30(resultado);
-    return resultado;
 }
 
 function renderizarSimulacaoCompletaV29(itens){
@@ -8583,7 +8720,10 @@ function renderizarAtualizacaoCompletaV29(itens){
             <td id="situacao_${sid}" class="p-4">${
                 bloqueado
                   ? '<span class="px-2.5 py-1 rounded-lg bg-emerald-400/10 text-emerald-400 font-bold text-[10px]">Atualizado</span>'
-                  : '<span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span>'
+                  : `<div>
+                       <span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span>
+                       <div class="text-[9px] text-slate-500 mt-1">${calc.margemAtual.toFixed(2)}% → ${calc.margemDesejada.toFixed(2)}%</div>
+                     </div>`
             }</td>
             <td id="status_api_${sid}" class="p-4 min-w-[300px]">${statusHtmlAtualizacaoV31(item.id)}</td>
           </tr>`);
@@ -8601,61 +8741,34 @@ function renderizarAtualizacaoCompletaV29(itens){
 
 async function carregarSimulacaoEscalaV21(page=1){
     if(simCarregandoV21)return;
-
-    const token=obterToken();
-    if(!token){solicitarToken();return}
-
-    const chave=chaveFiltroEscalaV30();
-
-    // Já está montada com o mesmo filtro: não busca e não renderiza de novo.
-    if(simFiltroRenderKeyV30===chave && simItensV21.length){
-        const info=document.getElementById('sim-filtro-info');
-        if(info){
-            info.textContent=filtroEscalaV21.valor
-              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) já carregados`
-              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) já carregados.`;
-        }
-        return;
-    }
-
+    const token=obterToken();if(!token){solicitarToken();return}
     simCarregandoV21=true;
-    const cacheExistente=obterCacheEscalaV30();
-
-    if(!cacheExistente){
-        mostrarLoading('Carregando todos os anúncios para simulação...');
-    }
-
     try{
         await carregarBaseSkuV27();
-
         const resultado=await buscarTodosAnunciosEscalaV29('simulacao');
-        simPaginaV21=1;
-        simPaginasV21=1;
-        simTotalV21=Number(resultado.total||0);
-        simItensV21=resultado.itens;
+        const chave=chaveFiltroEscalaV30();
+        simPaginaV21=1;simPaginasV21=1;simTotalV21=Number(resultado.total||0);simItensV21=resultado.itens;
 
-        if(!resultado.cache){
-            const loadingText=document.getElementById('loading-text');
-            if(loadingText)loadingText.innerText=`Montando simulação completa com ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s)...`;
-            await new Promise(resolve=>setTimeout(resolve,30));
+        const precisaRenderizar=
+          simFiltroRenderKeyV30!==chave ||
+          Number(resultado.alterados||0)>0 ||
+          !document.querySelector('#tabela-simulacao tr');
+
+        if(precisaRenderizar){
+            renderizarSimulacaoCompletaV29(simItensV21);
+            simFiltroRenderKeyV30=chave;
         }
-
-        renderizarSimulacaoCompletaV29(simItensV21);
-        simFiltroRenderKeyV30=chave;
 
         const info=document.getElementById('sim-filtro-info');
         if(info){
-            const origem=resultado.cache?' · dados já carregados':'';
+            const n=Number(resultado.alterados||0);
+            const delta=n?` · ${n.toLocaleString('pt-BR')} alteração(ões) aplicada(s)`:' · sem alterações novas';
             info.textContent=filtroEscalaV21.valor
-              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s)${origem}`
-              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) carregados em lista única${origem}.`;
+              ? `Filtro: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${simItensV21.length.toLocaleString('pt-BR')} anúncio(s)${delta}`
+              : `${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) da Gestão carregados${delta}.`;
         }
-    }catch(e){
-        alert(e.message);
-    }finally{
-        simCarregandoV21=false;
-        if(!cacheExistente)esconderLoading();
-    }
+    }catch(e){alert(e.message)}
+    finally{simCarregandoV21=false}
 }
 // Compatibilidade: paginação foi removida na V29.
 function atualizarPaginacaoSimV21(){}
@@ -8682,64 +8795,42 @@ function montarTabelaAtualizacaoV21(itens){
 
 async function carregarAtualizacaoEscalaV21(page=1){
     if(atualCarregandoV21)return;
-
-    const token=obterToken();
-    if(!token){solicitarToken();return}
-
-    const chave=chaveFiltroEscalaV30();
-
-    // Já está montada com o mesmo filtro: abre instantaneamente.
-    if(atualFiltroRenderKeyV30===chave && atualItensV21.length){
-        const qtdAtualizar=document.querySelectorAll('#tabela-atualizacao .check-item').length;
-        const info=document.getElementById('atual-filtro-info');
-        if(info){
-            info.textContent=filtroEscalaV21.valor
-              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${qtdAtualizar.toLocaleString('pt-BR')} anúncio(s) precisam de atualização`
-              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) já analisados · ${qtdAtualizar.toLocaleString('pt-BR')} precisam de atualização.`;
-        }
-        return;
-    }
-
+    const token=obterToken();if(!token){solicitarToken();return}
     atualCarregandoV21=true;
-    const cacheExistente=obterCacheEscalaV30();
-
-    if(!cacheExistente){
-        mostrarLoading('Carregando todos os anúncios para atualização...');
-    }
-
     try{
         await carregarBaseSkuV27();
-
-        // Usa a mesma lista completa que a Simulação já carregou.
         const resultado=await buscarTodosAnunciosEscalaV29('atualizacao');
-        atualPaginaV21=1;
-        atualPaginasV21=1;
-        atualTotalV21=Number(resultado.total||0);
-        atualItensV21=resultado.itens;
+        const chave=chaveFiltroEscalaV30();
+        atualPaginaV21=1;atualPaginasV21=1;atualTotalV21=Number(resultado.total||0);atualItensV21=resultado.itens;
 
-        if(!resultado.cache){
-            const loadingText=document.getElementById('loading-text');
-            if(loadingText)loadingText.innerText=`Verificando margem de ${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s)...`;
-            await new Promise(resolve=>setTimeout(resolve,30));
+        const precisaRenderizar=
+          atualFiltroRenderKeyV30!==chave ||
+          Number(resultado.alterados||0)>0 ||
+          !document.querySelector('#tabela-atualizacao tr');
+
+        if(precisaRenderizar){
+            renderizarAtualizacaoCompletaV29(atualItensV21);
+            atualFiltroRenderKeyV30=chave;
         }
 
-        renderizarAtualizacaoCompletaV29(atualItensV21);
-        atualFiltroRenderKeyV30=chave;
+        const qtdAtualizar=atualItensV21.reduce((acc,item)=>{
+            const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
+            return acc+(calc.foraDaMargem?1:0);
+        },0);
+
+        const c=document.getElementById('contador-atualizacao');
+        if(c)c.textContent=qtdAtualizar.toLocaleString('pt-BR');
 
         const info=document.getElementById('atual-filtro-info');
-        const qtdAtualizar=document.querySelectorAll('#tabela-atualizacao .check-item').length;
         if(info){
-            const origem=resultado.cache?' · usando dados já carregados':'';
+            const n=Number(resultado.alterados||0);
+            const delta=n?` · ${n.toLocaleString('pt-BR')} alteração(ões) aplicada(s)`:' · sem alterações novas';
             info.textContent=filtroEscalaV21.valor
-              ? `Filtro ativo: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${qtdAtualizar.toLocaleString('pt-BR')} anúncio(s) precisam de atualização${origem}`
-              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) analisados · ${qtdAtualizar.toLocaleString('pt-BR')} precisam de atualização${origem}.`;
+              ? `Filtro: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${qtdAtualizar.toLocaleString('pt-BR')} com margem diferente${delta}`
+              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) analisados · ${qtdAtualizar.toLocaleString('pt-BR')} com margem diferente da desejada${delta}.`;
         }
-    }catch(e){
-        alert(e.message);
-    }finally{
-        atualCarregandoV21=false;
-        if(!cacheExistente)esconderLoading();
-    }
+    }catch(e){alert(e.message)}
+    finally{atualCarregandoV21=false}
 }
 // Compatibilidade: paginação foi removida na V29.
 function atualizarPaginacaoAtualV21(){}
