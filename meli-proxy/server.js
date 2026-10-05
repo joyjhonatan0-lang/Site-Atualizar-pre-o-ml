@@ -1003,120 +1003,365 @@ app.post('/api/atualizar-preco', async (req, res) => {
 });
 
 /* =========================================================
+   V35 — ATUALIZAÇÃO DE PREÇOS ROBUSTA
+========================================================= */
+
+const esperarV35 = ms => new Promise(resolve => setTimeout(resolve, ms));
+let precoCooldownAteV35 = 0;
+
+function statusItemPtV35(status){
+    const mapa={
+        active:'ativo',
+        paused:'pausado',
+        closed:'encerrado/finalizado',
+        inactive:'inativo',
+        under_review:'em revisão pelo Mercado Livre',
+        payment_required:'aguardando regularização de pagamento'
+    };
+    return mapa[String(status||'').toLowerCase()]||String(status||'desconhecido');
+}
+
+function motivoBloqueioStatusV35(status){
+    const st=String(status||'').toLowerCase();
+
+    if(st==='under_review'){
+        return 'O anúncio está em revisão pelo Mercado Livre. Enquanto a revisão não terminar, o preço não pode ser alterado pela API.';
+    }
+    if(st==='closed'){
+        return 'O anúncio está encerrado/finalizado no Mercado Livre. Anúncios encerrados não permitem alteração de preço.';
+    }
+    if(st==='paused'){
+        return 'O anúncio está pausado. O Mercado Livre não permite alterar o preço desse anúncio por este processo enquanto ele estiver pausado.';
+    }
+    if(st==='inactive'){
+        return 'O anúncio está inativo. O preço não pode ser alterado enquanto ele estiver nesse estado.';
+    }
+    if(st==='payment_required'){
+        return 'O anúncio está bloqueado aguardando regularização de pagamento. O preço não pode ser alterado enquanto esse bloqueio existir.';
+    }
+
+    return `O anúncio está com status "${statusItemPtV35(status)}" e o Mercado Livre não permite alterar o preço nesse estado.`;
+}
+
+function traduzirErroPrecoV35({httpStatus,codigo,mensagem,itemStatus,dynamicPricing=false}){
+    const code=String(codigo||'').toLowerCase();
+    const msg=String(mensagem||'');
+    const lower=msg.toLowerCase();
+    const status=String(itemStatus||'').toLowerCase();
+
+    if(httpStatus===429 || code==='too_many_requests' || lower.includes('too many requests') || lower.includes('quota exceeded')){
+        return {
+            tipo:'temporario',
+            retryable:true,
+            mensagem:'O Mercado Livre limitou temporariamente a quantidade de alterações de preço. O sistema aguardou e tentou novamente automaticamente, mas o limite ainda estava ativo. Aguarde alguns minutos e tente somente os anúncios restantes.'
+        };
+    }
+
+    if(dynamicPricing || lower.includes('dynamic pricing')){
+        return {
+            tipo:'bloqueio',
+            retryable:false,
+            mensagem:'Este anúncio está com Automatização de Preços configurada no Mercado Livre. O Mercado Livre bloqueia a alteração manual do preço pela API enquanto essa automatização estiver ativa.'
+        };
+    }
+
+    if(code==='item.price.not_modifiable' || lower.includes('cannot update item') || lower.includes('price.not_modifiable')){
+        if(status){
+            return {
+                tipo:'bloqueio',
+                retryable:false,
+                mensagem:motivoBloqueioStatusV35(status)
+            };
+        }
+
+        const statusMatch=lower.match(/status\s*:\s*([a-z_]+)/i);
+        if(statusMatch?.[1]){
+            return {
+                tipo:'bloqueio',
+                retryable:false,
+                mensagem:motivoBloqueioStatusV35(statusMatch[1])
+            };
+        }
+
+        return {
+            tipo:'bloqueio',
+            retryable:false,
+            mensagem:'O Mercado Livre bloqueou a edição do preço deste anúncio. Isso pode acontecer quando o anúncio está em revisão, encerrado, inativo ou possui uma regra de preço que impede edição pela API.'
+        };
+    }
+
+    if(httpStatus===401 || code==='unauthorized' || code==='invalid_token'){
+        return {
+            tipo:'autenticacao',
+            retryable:false,
+            mensagem:'A autorização da conta do Mercado Livre expirou ou não é válida. Reconecte a conta antes de tentar atualizar os preços.'
+        };
+    }
+
+    if(httpStatus===403 || code==='forbidden'){
+        return {
+            tipo:'permissao',
+            retryable:false,
+            mensagem:'O Mercado Livre recusou a alteração porque a conta ou o aplicativo não possui permissão para editar esse anúncio.'
+        };
+    }
+
+    if(httpStatus===404 || code==='not_found' || code==='item_not_found'){
+        return {
+            tipo:'bloqueio',
+            retryable:false,
+            mensagem:'O anúncio não foi encontrado pelo Mercado Livre ou não pertence mais à conta conectada.'
+        };
+    }
+
+    if([500,502,503,504].includes(Number(httpStatus))){
+        return {
+            tipo:'temporario',
+            retryable:true,
+            mensagem:'O Mercado Livre apresentou uma instabilidade temporária ao alterar este preço. O sistema tentou novamente automaticamente, mas a API continuou indisponível.'
+        };
+    }
+
+    if(httpStatus===400){
+        return {
+            tipo:'validacao',
+            retryable:false,
+            mensagem:'O Mercado Livre recusou esse novo preço por uma regra de validação do anúncio. Verifique o estado do anúncio, promoções ativas, automatização de preços e os limites permitidos para o valor.'
+        };
+    }
+
+    return {
+        tipo:'erro',
+        retryable:false,
+        mensagem:msg
+            ? `O Mercado Livre recusou a atualização. Detalhe recebido: ${msg}`
+            : 'O Mercado Livre recusou a atualização do preço sem informar um motivo detalhado.'
+    };
+}
+
+async function esperarCooldownPrecoV35(){
+    const restante=precoCooldownAteV35-Date.now();
+    if(restante>0)await esperarV35(restante);
+}
+
+async function atualizarPrecoItemV35(item,token,meta={}){
+    const maxTentativas=Math.max(3,Math.min(6,Number(process.env.ML_PRICE_UPDATE_RETRIES||5)));
+    let ultimo=null;
+
+    for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+        await esperarCooldownPrecoV35();
+
+        try{
+            const mlRes=await mlFetch(
+                `${ML_API}/items/${item.id}`,
+                token,
+                {
+                    method:'PUT',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({price:Number(item.price)})
+                }
+            );
+
+            const mlData=await jsonSeguro(mlRes);
+
+            const warning=(Array.isArray(mlData?.warnings)?mlData.warnings:[])
+                .find(w=>String(w?.code||'').toLowerCase()==='item.price.not_modifiable');
+
+            if(mlRes.ok && !warning){
+                return {
+                    id:item.id,
+                    sucesso:true,
+                    requested_price:Number(item.price),
+                    price:Number(mlData?.price ?? item.price),
+                    http_status:mlRes.status,
+                    tentativas:tentativa
+                };
+            }
+
+            const codigo=
+                warning?.code ||
+                mlData?.cause?.[0]?.code ||
+                mlData?.error ||
+                null;
+
+            const mensagemOriginal=
+                warning?.message ||
+                mlData?.message ||
+                formatarErroMercadoLivre(mlData) ||
+                `HTTP ${mlRes.status}`;
+
+            const traduzido=traduzirErroPrecoV35({
+                httpStatus:mlRes.status,
+                codigo,
+                mensagem:mensagemOriginal,
+                itemStatus:meta.status,
+                dynamicPricing:Boolean(meta.dynamicPricing)
+            });
+
+            ultimo={
+                id:item.id,
+                sucesso:false,
+                requested_price:Number(item.price),
+                http_status:mlRes.status,
+                codigo,
+                erro:traduzido.mensagem,
+                erro_tecnico:mensagemOriginal,
+                tipo_falha:traduzido.tipo,
+                retryable:Boolean(traduzido.retryable),
+                tentativas:tentativa
+            };
+
+            if(!traduzido.retryable || tentativa>=maxTentativas){
+                return ultimo;
+            }
+
+            const retryAfter=Number(mlRes.headers.get('retry-after')||0);
+            const espera=retryAfter>0
+                ? Math.min(30000,retryAfter*1000)
+                : Math.min(15000,1200*Math.pow(2,tentativa-1));
+
+            if(mlRes.status===429){
+                precoCooldownAteV35=Math.max(precoCooldownAteV35,Date.now()+espera);
+            }
+
+            await esperarV35(espera);
+        }catch(err){
+            ultimo={
+                id:item.id,
+                sucesso:false,
+                requested_price:Number(item.price),
+                http_status:null,
+                codigo:'connection_error',
+                erro:'Houve uma falha temporária de conexão entre o servidor e o Mercado Livre. O sistema tentou novamente automaticamente.',
+                erro_tecnico:String(err?.message||err),
+                tipo_falha:'temporario',
+                retryable:true,
+                tentativas:tentativa
+            };
+
+            if(tentativa>=maxTentativas)return ultimo;
+            await esperarV35(Math.min(10000,1000*Math.pow(2,tentativa-1)));
+        }
+    }
+
+    return ultimo;
+}
+
+/* =========================================================
    5. ROTA ORIGINAL - ATUALIZAÇÃO EM LOTE
 ========================================================= */
 
 app.post('/api/atualizar-precos', async (req, res) => {
-    let token = obterToken(req);
+    const token=obterToken(req);
 
-    if (!token) {
-        return res.status(401).json({
-            erro: "Token não fornecido"
-        });
+    if(!token){
+        return res.status(401).json({erro:'Token não fornecido'});
     }
 
-    const { itens } = req.body;
+    const itens=Array.isArray(req.body?.itens)?req.body.itens:[];
 
-    if (
-        !itens ||
-        !Array.isArray(itens) ||
-        itens.length === 0
-    ) {
+    if(!itens.length){
         return res.status(400).json({
-            erro:
-                "Nenhum item informado para atualização em lote."
+            erro:'Nenhum item informado para atualização em lote.'
         });
     }
 
-    try {
-        const promises =
-            itens.map(
-                async item => {
-                    try {
-                        const mlRes =
-                            await mlFetch(
-                                `${ML_API}/items/${item.id}`,
-                                token,
-                                {
-                                    method:
-                                        'PUT',
-                                    headers: {
-                                        'Content-Type':
-                                            'application/json'
-                                    },
-                                    body:
-                                        JSON.stringify({
-                                            price:
-                                                Number(
-                                                    item.price
-                                                )
-                                        })
-                                }
-                            );
+    try{
+        const metaPorId=new Map();
 
-                        const mlData =
-                            await jsonSeguro(
-                                mlRes
-                            );
+        if(db){
+            try{
+                const ids=itens.map(x=>String(x.id));
+                const r=await dbQuery(`
+                    SELECT item_id,status,raw
+                    FROM ml_items
+                    WHERE item_id=ANY($1::text[])
+                `,[ids]);
 
-                        if (mlRes.ok) {
-                            return {
-                                id: item.id,
-                                sucesso: true,
-                                requested_price: Number(item.price),
-                                price: Number(mlData?.price ?? item.price),
-                                http_status: mlRes.status
-                            };
-                        }
-
-                        return {
-                            id: item.id,
-                            sucesso: false,
-                            requested_price: Number(item.price),
-                            http_status: mlRes.status,
-                            codigo:
-                                mlData?.cause?.[0]?.code ||
-                                mlData?.error ||
-                                null,
-                            erro:
-                                formatarErroMercadoLivre(
-                                    mlData
-                                )
-                        };
-
-                    } catch (err) {
-                        return {
-                            id: item.id,
-                            sucesso: false,
-                            requested_price: Number(item.price),
-                            http_status: null,
-                            codigo: 'connection_error',
-                            erro:
-                                "Erro de conexão: " +
-                                err.message
-                        };
-                    }
+                for(const row of r.rows){
+                    const tags=Array.isArray(row?.raw?.tags)?row.raw.tags:[];
+                    metaPorId.set(String(row.item_id),{
+                        status:String(row.status||''),
+                        dynamicPricing:tags.includes('dynamic_standard_price')
+                    });
                 }
-            );
+            }catch(e){
+                console.warn('[PREÇO V35 META]',e.message);
+            }
+        }
 
-        const resultados =
-            await Promise.all(
-                promises
-            );
+        const resultados=new Array(itens.length);
+        const concorrencia=Math.max(1,Math.min(3,Number(process.env.ML_PRICE_UPDATE_CONCURRENCY||2)));
+        const intervalo=Math.max(250,Math.min(2000,Number(process.env.ML_PRICE_UPDATE_DELAY_MS||450)));
+        let cursor=0;
 
-        // Mantém a base PostgreSQL alinhada imediatamente após alterações de preço.
-        try {
-            if (db) {
-                const sucessoIds=resultados.filter(x=>x?.sucesso).map(x=>String(x.id));
-                const mapaPreco=new Map((itens||[]).map(x=>[String(x.id),Number(x.price||0)]));
-                if(sucessoIds.length){
+        async function worker(){
+            while(true){
+                const idx=cursor++;
+                if(idx>=itens.length)return;
+
+                const item=itens[idx];
+                const meta=metaPorId.get(String(item.id))||{};
+                const status=String(meta.status||'').toLowerCase();
+
+                if(status && status!=='active'){
+                    resultados[idx]={
+                        id:item.id,
+                        sucesso:false,
+                        requested_price:Number(item.price),
+                        http_status:400,
+                        codigo:'item.price.not_modifiable',
+                        erro:motivoBloqueioStatusV35(status),
+                        erro_tecnico:`status:${status}`,
+                        tipo_falha:'bloqueio',
+                        retryable:false,
+                        bloqueado:true,
+                        tentativas:0
+                    };
+                    continue;
+                }
+
+                if(meta.dynamicPricing){
+                    resultados[idx]={
+                        id:item.id,
+                        sucesso:false,
+                        requested_price:Number(item.price),
+                        http_status:400,
+                        codigo:'item.price.not_modifiable',
+                        erro:'Este anúncio está com Automatização de Preços configurada no Mercado Livre. O preço não pode ser alterado manualmente pela API enquanto essa automatização estiver ativa.',
+                        erro_tecnico:'dynamic_standard_price',
+                        tipo_falha:'bloqueio',
+                        retryable:false,
+                        bloqueado:true,
+                        tentativas:0
+                    };
+                    continue;
+                }
+
+                resultados[idx]=await atualizarPrecoItemV35(item,token,meta);
+                await esperarV35(intervalo);
+            }
+        }
+
+        await Promise.all(
+            Array.from({length:Math.min(concorrencia,itens.length)},()=>worker())
+        );
+
+        try{
+            if(db){
+                const sucessos=resultados.filter(x=>x?.sucesso);
+                const mapaPreco=new Map(itens.map(x=>[String(x.id),Number(x.price||0)]));
+
+                if(sucessos.length){
                     const params=[];
                     const values=[];
-                    sucessoIds.forEach(id=>{
+
+                    sucessos.forEach(x=>{
                         const base=params.length;
-                        params.push(id,mapaPreco.get(id));
+                        params.push(String(x.id),mapaPreco.get(String(x.id)));
                         values.push(`($${base+1}::text,$${base+2}::numeric)`);
                     });
+
                     await dbQuery(`
                         UPDATE ml_items AS m SET
                           price=v.price,
@@ -1129,19 +1374,24 @@ app.post('/api/atualizar-precos', async (req, res) => {
                     `,params);
                 }
             }
-        } catch (e) {
+        }catch(e){
             console.warn('[DB PREÇOS]',e.message);
         }
 
         res.json({
-            resultados
+            sucesso:true,
+            resultados,
+            resumo:{
+                total:resultados.length,
+                atualizados:resultados.filter(x=>x?.sucesso).length,
+                bloqueados:resultados.filter(x=>x?.bloqueado).length,
+                temporarios:resultados.filter(x=>!x?.sucesso&&x?.tipo_falha==='temporario').length,
+                falhas:resultados.filter(x=>!x?.sucesso).length
+            }
         });
-
-    } catch (e) {
+    }catch(err){
         res.status(500).json({
-            erro:
-                "Erro no servidor ao processar lote: " +
-                e.message
+            erro:'Erro ao atualizar preços: '+err.message
         });
     }
 });
@@ -5004,7 +5254,18 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced,
+        CASE WHEN status='active' AND NOT (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN true ELSE false END price_update_allowed,
+        CASE
+          WHEN status='under_review' THEN 'O anúncio está em revisão pelo Mercado Livre. O preço não pode ser alterado enquanto a revisão não terminar.'
+          WHEN status='closed' THEN 'O anúncio está encerrado/finalizado. O preço não pode ser alterado nesse estado.'
+          WHEN status='paused' THEN 'O anúncio está pausado e não está disponível para alteração de preço por este processo.'
+          WHEN status='inactive' THEN 'O anúncio está inativo e não permite alteração de preço.'
+          WHEN status<>'active' THEN 'O status atual do anúncio não permite alteração de preço pela API.'
+          WHEN (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN 'O anúncio possui Automatização de Preços configurada no Mercado Livre e a edição manual pela API está bloqueada.'
+          ELSE NULL
+        END price_update_block_reason
+        FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
         res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
@@ -5033,7 +5294,17 @@ app.get('/api/scale/anuncios/changes',async(req,res)=>{
                      ml_updated_at last_updated,sale_fee::float8 sale_fee,
                      commission_percentage::float8 commission_percentage,
                      shipping_cost::float8 shipping_cost,free_shipping,
-                     net_received::float8 net_received,synced_at last_synced
+                     net_received::float8 net_received,synced_at last_synced,
+                     CASE WHEN status='active' AND NOT (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN true ELSE false END price_update_allowed,
+                     CASE
+                       WHEN status='under_review' THEN 'O anúncio está em revisão pelo Mercado Livre. O preço não pode ser alterado enquanto a revisão não terminar.'
+                       WHEN status='closed' THEN 'O anúncio está encerrado/finalizado. O preço não pode ser alterado nesse estado.'
+                       WHEN status='paused' THEN 'O anúncio está pausado e não está disponível para alteração de preço por este processo.'
+                       WHEN status='inactive' THEN 'O anúncio está inativo e não permite alteração de preço.'
+                       WHEN status<>'active' THEN 'O status atual do anúncio não permite alteração de preço pela API.'
+                       WHEN (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN 'O anúncio possui Automatização de Preços configurada no Mercado Livre e a edição manual pela API está bloqueada.'
+                       ELSE NULL
+                     END price_update_block_reason
               FROM ml_items
               WHERE seller_id=$1
                 AND (synced_at>$2::timestamptz OR (synced_at=$2::timestamptz AND item_id>$3))
