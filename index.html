@@ -3290,6 +3290,9 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                             <div id="atualizacao-progresso-texto-v31" class="text-xs text-slate-300 mt-1">
                                 Aguardando você clicar em Atualizar preços.
                             </div>
+                            <div class="text-[9px] text-slate-500 mt-1">
+                                Proteção contra limite do Mercado Livre ativa: o sistema reduz a velocidade e tenta novamente automaticamente quando a API limita as solicitações.
+                            </div>
                         </div>
                         <div id="atualizacao-progresso-percent-v31" class="text-xl font-black text-white">
                             0%
@@ -7940,7 +7943,9 @@ function normalizarItemEscala(i){
     available_quantity:Number(i.available_quantity||0), sold_quantity:Number(i.sold_quantity||0),
     status:i.status||'', listing_type_id:i.listing_type_id||'',
     category_id:i.category_id||'', thumbnail:i.thumbnail||'', permalink:i.permalink||'',
-    last_updated:i.last_updated||null,last_synced:i.last_synced||null
+    last_updated:i.last_updated||null,last_synced:i.last_synced||null,
+    price_update_allowed:i.price_update_allowed!==false,
+    price_update_block_reason:i.price_update_block_reason||''
   };
 }
 
@@ -8073,7 +8078,7 @@ let simFiltroRenderKeyV30='';
 let atualFiltroRenderKeyV30='';
 
 /* V32 — snapshot persistente dos anúncios no navegador. */
-const CACHE_DB_V32='mlHubProAnunciosV32';
+const CACHE_DB_V32='mlHubProAnunciosV35';
 const STORE_ITENS_V32='itens';
 const STORE_META_V32='meta';
 let dbCachePromiseV32=null;
@@ -8650,14 +8655,18 @@ function statusHtmlAtualizacaoV31(id){
     }
 
     const motivo=String(status.motivo||'O Mercado Livre não aceitou a atualização.');
-    const codigo=status.codigo?` · ${String(status.codigo)}`:'';
-    const http=status.http_status?`HTTP ${status.http_status}${codigo}`:(status.codigo?String(status.codigo):'Falha');
+    const temporario=status.tipo_falha==='temporario';
+    const bloqueio=status.tipo_falha==='bloqueio';
+    const titulo=temporario?'⏳ Limite/instabilidade temporária':(bloqueio?'⛔ Alteração bloqueada':'✗ Não atualizado');
+    const cor=temporario?'text-amber-400':(bloqueio?'text-orange-400':'text-red-400');
 
     return `
-      <div class="max-w-[380px]">
-        <div class="text-red-400 font-black text-[10px]">✗ Não atualizado</div>
-        <div class="text-[9px] text-red-300 mt-1">${escapeHtml(http)}</div>
-        <div class="text-[10px] text-slate-300 mt-1 whitespace-normal break-words">${escapeHtml(motivo)}</div>
+      <div class="max-w-[420px]">
+        <div class="${cor} font-black text-[10px]">${titulo}</div>
+        <div class="text-[10px] text-slate-200 mt-1 whitespace-normal break-words">${escapeHtml(motivo)}</div>
+        ${(status.http_status||status.codigo)
+          ? `<div class="text-[9px] text-slate-600 mt-1">Detalhe técnico: ${status.http_status?`HTTP ${escapeHtml(status.http_status)}`:''}${status.codigo?` · ${escapeHtml(status.codigo)}`:''}</div>`
+          : ''}
       </div>`;
 }
 
@@ -8694,7 +8703,7 @@ function atualizarPainelProgressoV31({total=0,processados=0,sucessos=0,falhas=0,
     if(rest)rest.textContent=Math.max(0,Number(total||0)-Number(processados||0)).toLocaleString('pt-BR');
 }
 
-function registrarErroAtualizacaoV31({id,titulo='',sku='',preco=0,motivo='',http_status=null,codigo=null}){
+function registrarErroAtualizacaoV31({id,titulo='',sku='',preco=0,motivo='',http_status=null,codigo=null,tipo_falha='erro'}){
     const item={
         id:String(id||''),
         titulo:String(titulo||''),
@@ -8702,7 +8711,8 @@ function registrarErroAtualizacaoV31({id,titulo='',sku='',preco=0,motivo='',http
         preco:Number(preco||0),
         motivo:String(motivo||'Falha não detalhada.'),
         http_status:http_status||null,
-        codigo:codigo||null
+        codigo:codigo||null,
+        tipo_falha:String(tipo_falha||'erro')
     };
 
     errosAtualizacaoV31.push(item);
@@ -8728,9 +8738,12 @@ function registrarErroAtualizacaoV31({id,titulo='',sku='',preco=0,motivo='',http
               </div>
               <div class="text-[10px] text-slate-500">${moeda(item.preco)}</div>
             </div>
-            <div class="text-[10px] text-red-300 mt-2 break-words">
-              ${item.http_status?`HTTP ${escapeHtml(item.http_status)} · `:''}${item.codigo?`${escapeHtml(item.codigo)} · `:''}${escapeHtml(item.motivo)}
+            <div class="text-[10px] text-red-200 mt-2 break-words">
+              ${escapeHtml(item.motivo)}
             </div>
+            ${(item.http_status||item.codigo)
+              ? `<div class="text-[9px] text-slate-600 mt-1">Detalhe técnico: ${item.http_status?`HTTP ${escapeHtml(item.http_status)}`:''}${item.codigo?` · ${escapeHtml(item.codigo)}`:''}</div>`
+              : ''}
           </div>`);
     }
 }
@@ -8776,14 +8789,23 @@ function renderizarAtualizacaoCompletaV29(itens){
         simResultadosPorIdV21[item.id]=calc;
         if(!calc.foraDaMargem)continue;
 
-        contador++;
+        if(item.price_update_allowed!==false)contador++;
         const sid=safeIdV21(item.id);
 
         const st=statusAtualizacaoV31.get(String(item.id));
-        const bloqueado=st?.estado==='sucesso';
+        const bloqueioMercadoLivre=item.price_update_allowed===false;
+        const jaAtualizado=st?.estado==='sucesso';
+        const bloqueado=jaAtualizado||bloqueioMercadoLivre;
+
+        const statusInicial=bloqueioMercadoLivre && !st
+          ? `<div class="max-w-[420px]">
+               <div class="text-orange-400 font-black text-[10px]">⛔ Não pode ser atualizado</div>
+               <div class="text-[10px] text-slate-200 mt-1">${escapeHtml(item.price_update_block_reason||'O estado atual do anúncio não permite alteração de preço.')}</div>
+             </div>`
+          : statusHtmlAtualizacaoV31(item.id);
 
         linhas.push(`
-          <tr id="linha_atualizacao_${sid}">
+          <tr id="linha_atualizacao_${sid}" class="${bloqueioMercadoLivre?'opacity-70':''}">
             <td class="p-4"><input type="checkbox" value="${escapeHtml(item.id)}" ${bloqueado?'':'checked'} ${bloqueado?'disabled':''} class="check-item accent-yellow-400 w-4 h-4"></td>
             <td class="p-4">
               <div class="flex items-center gap-3 min-w-[280px]">
@@ -8797,14 +8819,16 @@ function renderizarAtualizacaoCompletaV29(itens){
             <td id="preco_atual_${sid}" class="p-4 font-bold text-white">${moeda(item.price)}</td>
             <td id="novo_preco_${sid}_atualizacao" class="p-4 font-black text-emerald-400">${moeda(calc.preco)}</td>
             <td id="situacao_${sid}" class="p-4">${
-                bloqueado
+                jaAtualizado
                   ? '<span class="px-2.5 py-1 rounded-lg bg-emerald-400/10 text-emerald-400 font-bold text-[10px]">Atualizado</span>'
-                  : `<div>
+                  : bloqueioMercadoLivre
+                    ? '<span class="px-2.5 py-1 rounded-lg bg-orange-400/10 text-orange-400 font-bold text-[10px]">Bloqueado pelo ML</span>'
+                    : `<div>
                        <span class="px-2.5 py-1 rounded-lg bg-amber-400/10 text-amber-400 font-bold text-[10px]">Fora da margem</span>
                        <div class="text-[9px] text-slate-500 mt-1">${calc.margemAtual.toFixed(2)}% → ${calc.margemDesejada.toFixed(2)}%</div>
                      </div>`
             }</td>
-            <td id="status_api_${sid}" class="p-4 min-w-[300px]">${statusHtmlAtualizacaoV31(item.id)}</td>
+            <td id="status_api_${sid}" class="p-4 min-w-[320px]">${statusInicial}</td>
           </tr>`);
     }
 
@@ -8894,10 +8918,16 @@ async function carregarAtualizacaoEscalaV21(page=1){
             atualFiltroRenderKeyV30=chave;
         }
 
-        const qtdAtualizar=atualItensV21.reduce((acc,item)=>{
+        const contagemAtualizacao=atualItensV21.reduce((acc,item)=>{
             const calc=calcularSimulacaoV21(item,parametrosSimV21(item));
-            return acc+(calc.foraDaMargem?1:0);
-        },0);
+            if(!calc.foraDaMargem)return acc;
+            acc.fora++;
+            if(item.price_update_allowed===false)acc.bloqueados++;
+            else acc.atualizaveis++;
+            return acc;
+        },{fora:0,atualizaveis:0,bloqueados:0});
+
+        const qtdAtualizar=contagemAtualizacao.atualizaveis;
 
         const c=document.getElementById('contador-atualizacao');
         if(c)c.textContent=qtdAtualizar.toLocaleString('pt-BR');
@@ -8908,7 +8938,7 @@ async function carregarAtualizacaoEscalaV21(page=1){
             const delta=n?` · ${n.toLocaleString('pt-BR')} alteração(ões) aplicada(s)`:' · sem alterações novas';
             info.textContent=filtroEscalaV21.valor
               ? `Filtro: ${filtroEscalaV21.campo.toUpperCase()} = ${filtroEscalaV21.valor} · ${qtdAtualizar.toLocaleString('pt-BR')} com margem diferente${delta}`
-              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) analisados · ${qtdAtualizar.toLocaleString('pt-BR')} com margem diferente da desejada${delta}.`;
+              : `${atualItensV21.length.toLocaleString('pt-BR')} anúncio(s) analisados · ${contagemAtualizacao.fora.toLocaleString('pt-BR')} fora da margem · ${contagemAtualizacao.atualizaveis.toLocaleString('pt-BR')} atualizáveis · ${contagemAtualizacao.bloqueados.toLocaleString('pt-BR')} bloqueados pelo Mercado Livre${delta}.`;
         }
     }catch(e){alert(e.message)}
     finally{atualCarregandoV21=false}
@@ -9027,7 +9057,8 @@ atualizarPrecosMassaApi=async function(){
                         estado:'erro',
                         motivo,
                         http_status:resposta?.status||null,
-                        codigo:null
+                        codigo:null,
+                        tipo_falha:'temporario'
                     });
                     atualizarStatusLinhaV31(item.id);
 
@@ -9102,7 +9133,9 @@ atualizarPrecosMassaApi=async function(){
                         estado:'erro',
                         motivo,
                         http_status:resultado.http_status||null,
-                        codigo:resultado.codigo||null
+                        codigo:resultado.codigo||null,
+                        tipo_falha:resultado.tipo_falha||'erro',
+                        tentativas:resultado.tentativas||0
                     });
                     atualizarStatusLinhaV31(item.id);
 
@@ -9113,7 +9146,8 @@ atualizarPrecosMassaApi=async function(){
                         preco:item.price,
                         motivo,
                         http_status:resultado.http_status||null,
-                        codigo:resultado.codigo||null
+                        codigo:resultado.codigo||null,
+                        tipo_falha:resultado.tipo_falha||'erro'
                     });
                 }
             }
@@ -9128,8 +9162,8 @@ atualizarPrecosMassaApi=async function(){
                 texto:`${processados.toLocaleString('pt-BR')} de ${itens.length.toLocaleString('pt-BR')} processados · ${ok.toLocaleString('pt-BR')} atualizados · ${erros.toLocaleString('pt-BR')} falha(s)`
             });
 
-            // Dá tempo para a barra e os status das linhas serem pintados na tela.
-            await new Promise(resolve=>setTimeout(resolve,30));
+            // Dá tempo para a barra ser pintada e reduz rajadas entre lotes.
+            await new Promise(resolve=>setTimeout(resolve,650));
         }
 
         atualizarPainelProgressoV31({
