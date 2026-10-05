@@ -2632,8 +2632,14 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             </div>
             <div id="criar-imagens-preview-v37" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mt-4"></div>
             <div class="mt-4">
-                <label class="text-[9px] font-bold uppercase text-slate-500">URL das fotos do anúncio</label>
-                <textarea id="criar-imagens-urls-v37" rows="5" readonly class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-[11px] text-slate-300" placeholder="Clique em 'Gerar URL das fotos' depois de gerar as 11 imagens."></textarea>
+                <label class="text-[9px] font-bold uppercase text-slate-500">URL das fotos geradas</label>
+                <textarea id="criar-imagens-urls-v37" rows="5" readonly class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-[11px] text-slate-300" placeholder="Clique em 'Gerar URL das fotos' depois de gerar as imagens."></textarea>
+            </div>
+            <div class="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                <label class="text-[9px] font-black uppercase text-amber-400">URLs manuais das fotos — opcional</label>
+                <div class="text-[10px] text-slate-500 mt-1">Se você preencher este campo, estas URLs serão usadas no anúncio no lugar das imagens geradas. Aceita uma URL por linha ou o formato [url1,url2,url3]. As URLs precisam ser públicas e acessíveis pelo Mercado Livre.</div>
+                <textarea id="criar-imagens-urls-manual-v47" rows="5" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-amber-500/30 rounded-xl px-4 py-3 text-[11px] text-white" placeholder="https://meusite.com/foto1.jpg&#10;https://meusite.com/foto2.jpg"></textarea>
+                <div id="criar-imagens-urls-manual-status-v47" class="text-[9px] text-slate-600 mt-2">Nenhuma URL manual informada; o painel usará as imagens geradas.</div>
             </div>
         </div>
     </div>
@@ -11793,6 +11799,31 @@ function coletarAttributesCategoriaV37(cat){
     return Object.entries(cat.values||{}).map(([id,v])=>({id,...(v.value_id?{value_id:v.value_id}:{}),...(v.value_name?{value_name:v.value_name}: {})})).filter(x=>x.id && (x.value_id||x.value_name));
 }
 
+
+function urlsManuaisFotosV47(){
+    const campo=document.getElementById('criar-imagens-urls-manual-v47');
+    const texto=String(campo?.value||'');
+    const encontrados=texto.match(/https?:\/\/[^\s,\]\)]+/gi)||[];
+    const urls=[];const seen=new Set();
+    for(const raw of encontrados){
+        const url=String(raw||'').trim().replace(/[;]+$/,'');
+        if(!url||seen.has(url))continue;
+        try{
+            const u=new URL(url);
+            if(!['http:','https:'].includes(u.protocol))continue;
+            seen.add(url);urls.push(url);
+        }catch{}
+    }
+    const status=document.getElementById('criar-imagens-urls-manual-status-v47');
+    if(status){
+        status.textContent=urls.length
+          ? `${urls.length} URL(s) manual(is) válida(s). Elas substituirão as imagens geradas na publicação.`
+          : 'Nenhuma URL manual informada; o painel usará as imagens geradas.';
+        status.className=urls.length?'text-[9px] text-amber-300 mt-2':'text-[9px] text-slate-600 mt-2';
+    }
+    return urls;
+}
+
 function configCriacaoV37(){
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
     return {
@@ -11806,6 +11837,7 @@ function configCriacaoV37(){
         sku_prefix:String(document.getElementById('criar-sku-v37')?.value||'').trim(),
         description:String(document.getElementById('criar-descricao-v37')?.value||'').trim(),
         picture_ids:(criarEstadoV37.pictures||[]).map(p=>p.id).filter(Boolean),
+        picture_sources_manual:urlsManuaisFotosV47(),
         categories:criarEstadoV37.selectedCategories.map(c=>({category_id:c.category_id,category_name:c.category_name,attributes:coletarAttributesCategoriaV37(c)})),
         variations:{
             enabled:String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1',
@@ -11820,7 +11852,8 @@ function renderPlanilhaPreviewV37(){
     const tbody=document.getElementById('criar-planilha-preview-v37'); if(!tbody)return;
     const cfg=configCriacaoV37();
     const titles=cfg.titles.length?cfg.titles:[cfg.product_name||'Título do anúncio'];
-    const urls=(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
+    const urlsManuais=urlsManuaisFotosV47();
+    const urls=urlsManuais.length?urlsManuais:(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
     const cats=cfg.categories.length?cfg.categories:[{category_id:'',category_name:'Sem categoria',attributes:[]}];
     const rows=[];
     cats.forEach(cat=>{
