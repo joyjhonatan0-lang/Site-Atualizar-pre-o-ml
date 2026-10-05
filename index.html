@@ -388,6 +388,22 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 }
 </style>
 
+
+<style id="mlhub-performance-v42">
+/* V42 — renderização leve para listas grandes. Mantém lista contínua sem paginação. */
+#tabela-simulacao tr,
+#tabela-atualizacao tr,
+#tabela-gestao tr,
+#claims-lista > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 68px;
+}
+#tabela-simulacao,
+#tabela-atualizacao {
+    contain: layout style;
+}
+</style>
+
 </head>
 
 <body
@@ -3079,24 +3095,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                         w-24
                     "
                 >
-
-                <div class="flex flex-col gap-1 min-w-[96px]">
-                    <label for="massa-taxa" class="text-[9px] uppercase tracking-[.08em] text-slate-500 font-black">
-                        Taxa geral %
-                    </label>
-                    <input
-                        type="number"
-                        step="0.1"
-                        id="massa-taxa"
-                        placeholder="Opcional"
-                        class="
-                            input-simulacao
-                            w-full
-                        "
-                    >
-                </div>
-
-                <div class="flex flex-col gap-1 min-w-[118px]">
+<div class="flex flex-col gap-1 min-w-[118px]">
                     <label for="massa-taxa-premium" class="text-[9px] uppercase tracking-[.08em] text-amber-500 font-black">
                         Taxa Premium %
                     </label>
@@ -5702,11 +5701,6 @@ function aplicarEmMassa() {
     const custoMassa =
         document.getElementById(
             'massa-custo'
-        ).value;
-
-    const taxaMassa =
-        document.getElementById(
-            'massa-taxa'
         ).value;
 
     const impostoMassa =
@@ -8387,7 +8381,7 @@ let masterMapV32=new Map();
 let masterCarregadoV32=false;
 let ultimaVerificacaoDeltaV32=0;
 let deltaPromiseV32=null;
-const DELTA_INTERVALO_V32=30000;
+const DELTA_INTERVALO_V32=180000;
 
 function abrirDbCacheV32(){
     if(dbCachePromiseV32)return dbCachePromiseV32;
@@ -8873,20 +8867,72 @@ function recalcularV21(id){
     if(mr)mr.innerText=calc.margem.toFixed(2)+'%';
 }
 
+let syncBackgroundV42Agendado=false;
+
+function atualizarTelaAposDeltaV42(alterados=0){
+    if(!alterados)return;
+    const aba=String(window.abaAtualAtiva||localStorage.getItem('mlHubPro_abaAtual_v1')||'');
+    if(aba==='simulacao'){
+        simItensV21=listaMasterFiltradaV32();
+        renderizarSimulacaoCompletaV29(simItensV21);
+        simFiltroRenderKeyV30=chaveFiltroEscalaV30();
+        const info=document.getElementById('sim-filtro-info');
+        if(info)info.textContent=`${simItensV21.length.toLocaleString('pt-BR')} anúncio(s) carregados · ${alterados.toLocaleString('pt-BR')} alteração(ões) sincronizada(s) em segundo plano.`;
+    }else if(aba==='atualizacao'){
+        atualItensV21=listaMasterFiltradaV32();
+        renderizarAtualizacaoCompletaV29(atualItensV21);
+        atualFiltroRenderKeyV30=chaveFiltroEscalaV30();
+    }
+}
+
+function agendarSyncBackgroundV42(){
+    if(syncBackgroundV42Agendado)return;
+    syncBackgroundV42Agendado=true;
+    setTimeout(async()=>{
+        try{
+            const delta=await sincronizarMudancasV32({forcar:false,mostrarProgresso:false});
+            atualizarTelaAposDeltaV42(Number(delta?.alterados||0));
+        }catch(e){
+            console.warn('[SYNC BACKGROUND V42]',e.message);
+        }finally{
+            syncBackgroundV42Agendado=false;
+        }
+    },80);
+}
+
 async function buscarTodosAnunciosEscalaV29(tipo='simulacao',{forcar=false}={}){
     await carregarMasterLocalV32();
     const primeiraCarga=!masterAnunciosV32.length;
-    if(primeiraCarga)mostrarLoading('Carregando todos os anúncios pela primeira vez...');
-    try{
-        const delta=await sincronizarMudancasV32({forcar:forcar||primeiraCarga,mostrarProgresso:primeiraCarga});
-        const itens=listaMasterFiltradaV32();
-        return {
-            itens,total:itens.length,total_conta:masterAnunciosV32.length,
-            alterados:Number(delta?.alterados||0),cache:!primeiraCarga
-        };
-    }finally{
-        if(primeiraCarga)esconderLoading();
+
+    if(primeiraCarga){
+        mostrarLoading('Preparando os anúncios pela primeira vez...');
+        try{
+            const delta=await sincronizarMudancasV32({forcar:true,mostrarProgresso:true});
+            const itens=listaMasterFiltradaV32();
+            return {
+                itens,total:itens.length,total_conta:masterAnunciosV32.length,
+                alterados:Number(delta?.alterados||0),cache:false
+            };
+        }finally{
+            esconderLoading();
+        }
     }
+
+    // V42: exibe imediatamente o snapshot persistido no navegador. A checagem
+    // de mudanças acontece depois e nunca bloqueia a abertura da página.
+    const itens=listaMasterFiltradaV32();
+    if(forcar){
+        const delta=await sincronizarMudancasV32({forcar:true,mostrarProgresso:false});
+        return {
+            itens:listaMasterFiltradaV32(),
+            total:listaMasterFiltradaV32().length,
+            total_conta:masterAnunciosV32.length,
+            alterados:Number(delta?.alterados||0),cache:false
+        };
+    }
+
+    agendarSyncBackgroundV42();
+    return {itens,total:itens.length,total_conta:masterAnunciosV32.length,alterados:0,cache:true};
 }
 
 function renderizarSimulacaoCompletaV29(itens){
@@ -9147,7 +9193,7 @@ async function carregarSimulacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     simCarregandoV21=true;
     try{
-        const baseInfo=await carregarBaseSkuV27(true);
+        const baseInfo=await carregarBaseSkuRapidaV42();
         const resultado=await buscarTodosAnunciosEscalaV29('simulacao');
         const chave=chaveFiltroEscalaV30();
         simPaginaV21=1;simPaginasV21=1;simTotalV21=Number(resultado.total||0);simItensV21=resultado.itens;
@@ -9182,7 +9228,6 @@ function simIrPaginaV21(){}
 aplicarEmMassa=function(){
     const vals={
       custo:document.getElementById('massa-custo')?.value,
-      taxa:document.getElementById('massa-taxa')?.value,
       taxaPremium:document.getElementById('massa-taxa-premium')?.value,
       taxaClassico:document.getElementById('massa-taxa-classico')?.value,
       imposto:document.getElementById('massa-imposto')?.value,
@@ -9202,7 +9247,7 @@ async function carregarAtualizacaoEscalaV21(page=1){
     const token=obterToken();if(!token){solicitarToken();return}
     atualCarregandoV21=true;
     try{
-        const baseInfo=await carregarBaseSkuV27(true);
+        const baseInfo=await carregarBaseSkuRapidaV42();
         const resultado=await buscarTodosAnunciosEscalaV29('atualizacao');
         const chave=chaveFiltroEscalaV30();
         atualPaginaV21=1;atualPaginasV21=1;atualTotalV21=Number(resultado.total||0);atualItensV21=resultado.itens;
@@ -9572,26 +9617,15 @@ function pedidosIrPaginaV21(delta){const p=pedidosPaginaV21+delta;if(p<1||p>pedi
 /* =========================================================
    V27 — BASE DE CUSTO E MARGEM POR SKU
 ========================================================= */
-async function carregarBaseSkuV27(force=false){
-    if(baseSkuCarregadaV27&&!force){
-        return {mudou:false,fingerprint:baseSkuFingerprintV34};
-    }
+const BASE_SKU_CACHE_KEY_V42='mlHubPro_baseSku_v42';
+let baseSkuSellerIdV42='';
+let baseSkuVersionV42='';
+let baseSkuCheckAtV42=0;
+let baseSkuCheckPromiseV42=null;
 
-    const token=obterToken();
-    if(!token)return {mudou:false,fingerprint:baseSkuFingerprintV34};
-
-    const fingerprintAntes=baseSkuFingerprintV34||fingerprintBaseSkuV34();
-
-    const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing?_=${Date.now()}`,{
-        cache:'no-store',
-        headers:{Authorization:token,Accept:'application/json'}
-    });
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.erro||'Erro ao carregar a base de custos por SKU.');
-
+function aplicarRegrasBaseSkuV42(regras=[]){
     Object.keys(baseSkuV27).forEach(k=>delete baseSkuV27[k]);
-
-    (d.regras||[]).forEach(regra=>{
+    (Array.isArray(regras)?regras:[]).forEach(regra=>{
         const key=normalizarSkuV27(regra.sku_key||regra.sku);
         if(!key)return;
         baseSkuV27[key]={
@@ -9601,15 +9635,130 @@ async function carregarBaseSkuV27(force=false){
             updated_at:regra.updated_at||null
         };
     });
-
-    skuDisponiveisV27=Array.isArray(d.skus_disponiveis)?d.skus_disponiveis:[];
     baseSkuCarregadaV27=true;
+    baseSkuFingerprintV34=fingerprintBaseSkuV34();
+}
+
+function salvarBaseSkuCacheV42(){
+    try{
+        localStorage.setItem(BASE_SKU_CACHE_KEY_V42,JSON.stringify({
+            seller_id:String(baseSkuSellerIdV42||''),
+            version:String(baseSkuVersionV42||''),
+            regras:Object.values(baseSkuV27),
+            saved_at:Date.now()
+        }));
+    }catch(e){console.warn('[BASE SKU CACHE V42]',e)}
+}
+
+async function hidratarBaseSkuCacheV42(){
+    if(baseSkuCarregadaV27)return true;
+    try{
+        const raw=localStorage.getItem(BASE_SKU_CACHE_KEY_V42);
+        if(!raw)return false;
+        const c=JSON.parse(raw);
+        if(!Array.isArray(c?.regras))return false;
+
+        // Evita usar dados de outra conta quando já sabemos o seller atual.
+        let sellerAtual='';
+        try{sellerAtual=String((await idbMetaV32('sync'))?.seller_id||'')}catch(e){}
+        if(sellerAtual&&c?.seller_id&&String(c.seller_id)!==sellerAtual)return false;
+
+        baseSkuSellerIdV42=String(c?.seller_id||sellerAtual||'');
+        baseSkuVersionV42=String(c?.version||'');
+        aplicarRegrasBaseSkuV42(c.regras);
+        return true;
+    }catch(e){
+        console.warn('[BASE SKU HYDRATE V42]',e);
+        return false;
+    }
+}
+
+async function carregarBaseSkuV27(force=false,{includeAvailable=true}={}){
+    if(baseSkuCarregadaV27&&!force){
+        return {mudou:false,fingerprint:baseSkuFingerprintV34,version:baseSkuVersionV42};
+    }
+
+    const token=obterToken();
+    if(!token)return {mudou:false,fingerprint:baseSkuFingerprintV34,version:baseSkuVersionV42};
+
+    const fingerprintAntes=baseSkuFingerprintV34||fingerprintBaseSkuV34();
+    const p=new URLSearchParams({include_available:includeAvailable?'1':'0'});
+    const r=await fetch(`${RENDER_URL}/api/v27/sku-pricing?${p.toString()}`,{
+        headers:{Authorization:token,Accept:'application/json'}
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||'Erro ao carregar a base de custos por SKU.');
+
+    aplicarRegrasBaseSkuV42(d.regras||[]);
+    if(includeAvailable){
+        skuDisponiveisV27=Array.isArray(d.skus_disponiveis)?d.skus_disponiveis:[];
+    }
+    baseSkuSellerIdV42=String(d.seller_id||baseSkuSellerIdV42||'');
+    baseSkuVersionV42=String(d.version||baseSkuVersionV42||'');
 
     const fingerprintDepois=fingerprintBaseSkuV34();
     const mudou=fingerprintAntes!==fingerprintDepois;
     baseSkuFingerprintV34=fingerprintDepois;
+    salvarBaseSkuCacheV42();
 
-    return {mudou,fingerprint:fingerprintDepois};
+    return {mudou,fingerprint:fingerprintDepois,version:baseSkuVersionV42};
+}
+
+async function verificarBaseSkuV42EmBackground(){
+    const agora=Date.now();
+    if(baseSkuCheckPromiseV42)return baseSkuCheckPromiseV42;
+    if(agora-baseSkuCheckAtV42<60000)return {mudou:false};
+    baseSkuCheckAtV42=agora;
+
+    baseSkuCheckPromiseV42=(async()=>{
+        const token=obterToken();
+        if(!token)return {mudou:false};
+        const r=await fetch(`${RENDER_URL}/api/v42/sku-pricing/version`,{
+            headers:{Authorization:token,Accept:'application/json'}
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||'Erro ao verificar a Base Financeira.');
+
+        const seller=String(d.seller_id||'');
+        const version=String(d.version||'');
+        if(baseSkuSellerIdV42&&seller&&seller!==baseSkuSellerIdV42){
+            baseSkuCarregadaV27=false;
+            Object.keys(baseSkuV27).forEach(k=>delete baseSkuV27[k]);
+            baseSkuVersionV42='';
+        }
+
+        if(!baseSkuCarregadaV27 || version!==baseSkuVersionV42){
+            const info=await carregarBaseSkuV27(true,{includeAvailable:false});
+            simFiltroRenderKeyV30='';
+            atualFiltroRenderKeyV30='';
+
+            const aba=String(window.abaAtualAtiva||localStorage.getItem('mlHubPro_abaAtual_v1')||'');
+            if(aba==='simulacao'&&simItensV21.length){
+                renderizarSimulacaoCompletaV29(simItensV21);
+                simFiltroRenderKeyV30=chaveFiltroEscalaV30();
+            }
+            if(aba==='atualizacao'&&atualItensV21.length){
+                renderizarAtualizacaoCompletaV29(atualItensV21);
+                atualFiltroRenderKeyV30=chaveFiltroEscalaV30();
+            }
+            return {mudou:Boolean(info?.mudou)};
+        }
+        return {mudou:false};
+    })();
+
+    try{return await baseSkuCheckPromiseV42}
+    finally{baseSkuCheckPromiseV42=null}
+}
+
+async function carregarBaseSkuRapidaV42(){
+    if(!baseSkuCarregadaV27)await hidratarBaseSkuCacheV42();
+    if(!baseSkuCarregadaV27){
+        return carregarBaseSkuV27(true,{includeAvailable:false});
+    }
+
+    // Não bloqueia a Simulação/Atualização: verifica mudança depois de abrir.
+    setTimeout(()=>verificarBaseSkuV42EmBackground().catch(e=>console.warn('[BASE SKU CHECK V42]',e.message)),50);
+    return {mudou:false,fingerprint:baseSkuFingerprintV34,version:baseSkuVersionV42,cache:true};
 }
 
 function anunciosSkuV27(sku){
@@ -9694,7 +9843,7 @@ function renderBaseSkuV27(){
 async function abrirBaseSkuV27(){
     mostrarLoading('Carregando custos e margens por SKU...');
     try{
-        await carregarBaseSkuV27(true);
+        await carregarBaseSkuV27(true,{includeAvailable:true});
         renderBaseSkuV27();
     }catch(e){
         const tb=document.getElementById('sku-base-tabela-v27');
@@ -9742,6 +9891,9 @@ async function removerLinhaSkuV27(rowId){
 
             delete baseSkuV27[normalizarSkuV27(skuOriginal)];
             baseSkuFingerprintV34=fingerprintBaseSkuV34();
+            baseSkuVersionV42='';
+            baseSkuCheckAtV42=0;
+            salvarBaseSkuCacheV42();
             simFiltroRenderKeyV30='';
             atualFiltroRenderKeyV30='';
 
@@ -9802,7 +9954,10 @@ async function salvarBaseSkuV27(){
         Object.keys(simParametrosPorIdV21).forEach(k=>delete simParametrosPorIdV21[k]);
         baseSkuCarregadaV27=false;
         baseSkuFingerprintV34='';
-        await carregarBaseSkuV27(true);
+        baseSkuVersionV42=String(d.version||'');
+        baseSkuSellerIdV42=String(d.seller_id||baseSkuSellerIdV42||'');
+        baseSkuCheckAtV42=Date.now();
+        await carregarBaseSkuV27(true,{includeAvailable:true});
 
         simFiltroRenderKeyV30='';
         atualFiltroRenderKeyV30='';
@@ -9851,6 +10006,7 @@ mudarAba=function(aba){
 
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
+    hidratarBaseSkuCacheV42().catch(e=>console.warn('[BASE SKU START V42]',e));
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
     const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','anuncios-restritos'];
 
