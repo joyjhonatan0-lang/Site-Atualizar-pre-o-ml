@@ -4797,13 +4797,12 @@ function modelosGeminiVisionV38(){
     ])];
 }
 
-function modelosGeminiImagemV38(){
+function modelosGeminiImagemV39(){
     const configurado=String(process.env.GEMINI_IMAGE_MODEL||'').trim();
     return [...new Set([
         configurado,
         'gemini-3.1-flash-image',
         'gemini-3.1-flash-lite-image',
-        'gemini-3-pro-image',
         'gemini-2.5-flash-image'
     ].filter(Boolean))];
 }
@@ -4823,7 +4822,7 @@ function erroGeminiImagemAmigavelV38(status,msg){
 
 function montarPartesGeminiV38(prompt,referenceImages=[]){
     const parts=[{text:String(prompt||'')}];
-    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,4)){
+    for(const ref of (Array.isArray(referenceImages)?referenceImages:[]).slice(0,8)){
         const img=parseDataUrlV37(ref);
         if(img?.data){
             parts.push({inlineData:{mimeType:img.mime||'image/png',data:img.data}});
@@ -4884,8 +4883,10 @@ async function gerarImagemGeminiV37(prompt,referenceImages=[]){
     const apiKey=String(process.env.GEMINI_API_KEY||'').trim();
     if(!apiKey)throw new Error('Configure GEMINI_API_KEY no Render para gerar imagens.');
 
-    const modelos=modelosGeminiImagemV38();
+    const modelos=modelosGeminiImagemV39();
     let ultimoErro=null;
+    const promptFinal=String(prompt||'').trim()+
+      '\n\nRequisitos obrigatórios da imagem: gerar em formato quadrado 1:1, pensado para 1080x1080, alta nitidez, qualidade profissional para marketplace brasileiro, sem marcas d\'água e sem conteúdo impróprio.';
 
     for(const model of modelos){
         for(let tentativa=1;tentativa<=4;tentativa++){
@@ -4895,10 +4896,9 @@ async function gerarImagemGeminiV37(prompt,referenceImages=[]){
                     method:'POST',
                     headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
                     body:JSON.stringify({
-                        contents:[{parts:montarPartesGeminiV38(prompt,referenceImages)}],
+                        contents:[{parts:montarPartesGeminiV38(promptFinal,referenceImages)}],
                         generationConfig:{
-                            responseModalities:['IMAGE'],
-                            responseFormat:{image:{aspectRatio:'1:1'}}
+                            responseModalities:['IMAGE']
                         }
                     })
                 });
@@ -4944,7 +4944,7 @@ const CENAS_IMAGENS_V38=[
     {chave:'uso1',titulo:'Aplicação 1',prompt:`Use a foto de referência e os detalhes fornecidos. Gere uma imagem quadrada com uma pessoa usando o mesmo produto em contexto real e natural, sem alterar a aparência do item, focada em demonstrar aplicação e utilidade.`},
     {chave:'uso2',titulo:'Aplicação 2',prompt:`Use a foto de referência. Gere outra cena quadrada de uso do mesmo produto em ambiente real, mostrando um benefício prático e ajudando o comprador a compreender a utilização.`},
     {chave:'kit',titulo:'Conteúdo da embalagem',prompt:`Use a foto de referência. Gere uma imagem quadrada estilo flat lay mostrando o produto e somente os itens inclusos que estejam visíveis ou informados. Se os acessórios não forem conhecidos, não invente itens.`},
-    {chave:'ficha',titulo:'Ficha técnica',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e uma ficha visual em português, com textos curtos apenas sobre fatos confirmados pelo vendedor ou claramente visíveis. Não invente medidas, materiais ou especificações.`},
+    {chave:'ficha',titulo:'Ficha técnica',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e uma ficha visual em português, com textos curtos, técnicos e claros apenas sobre fatos confirmados pelo vendedor ou claramente visíveis. Não invente medidas, materiais ou especificações.`},
     {chave:'medidas',titulo:'Proporção / dimensões',prompt:`Use a foto de referência. Gere uma imagem quadrada que ajude a compreender proporção e escala. Só use números de medidas se eles tiverem sido fornecidos; caso contrário, não invente dimensões.`},
     {chave:'beneficios',titulo:'Benefícios',prompt:`Use a foto de referência. Gere uma arte quadrada com o mesmo produto e de 3 a 5 benefícios em português baseados apenas em características reais ou informadas, com foco em clareza e conversão.`},
     {chave:'seo',titulo:'Destaques de compra',prompt:`Use a foto de referência. Gere uma arte quadrada com o produto em destaque e textos curtos em português com termos de uso e diferenciais reais, em estilo marketplace limpo e voltado para conversão.`},
@@ -6670,7 +6670,7 @@ app.post('/api/v37/criar/ia/analisar-produto',async(req,res)=>{
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
     const quantidade=Math.min(500,Math.max(1,Number(req.body?.quantidade||1)));
-    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
     const categoryIds=[...new Set((Array.isArray(req.body?.category_ids)?req.body.category_ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,10);
 
     if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie pelo menos uma foto.');
@@ -6733,9 +6733,12 @@ Regras:
 - Cada título deve ter no máximo 60 caracteres.
 - Gere títulos focados em conversão, SEO e palavras-chave relevantes.
 - Não invente marca, modelo, voltagem, quantidade, material, medidas, certificações ou acessórios que não estejam visíveis ou claramente informados.
-- A descrição deve ser em português do Brasil, clara e voltada para vendas.
-- Em keywords, gere até 25 termos úteis.
-- Em categorias.attributes, preencha somente atributos que possam ser inferidos com segurança pela imagem e pelo texto.
+- A descrição deve ser em português do Brasil, profissional, robusta, detalhada e voltada para vendas.
+- A descrição deve ter introdução comercial, resumo do produto, principais benefícios, aplicações/como usar, diferenciais, itens inclusos (somente se forem reais), cuidados/recomendações quando fizer sentido e um fechamento vendedor.
+- Prefira uma descrição mais completa, normalmente entre 900 e 2500 caracteres, em texto simples e bem organizada.
+- Em keywords, gere até 30 termos úteis.
+- Em categorias.attributes, preencha o máximo possível de atributos principais e secundários que possam ser inferidos com segurança pela imagem e pelo texto.
+- Priorize primeiro atributos obrigatórios, depois atributos altamente relevantes e depois atributos secundários relevantes.
 - Se uma categoria exigir atributos que não podem ser inferidos com segurança, simplesmente não preencha esses campos.
 - Para image_prompt, escreva um prompt completo para gerar imagens comerciais desse produto.
 
@@ -6745,7 +6748,7 @@ ${JSON.stringify(categorias)}
 
         const obj=await chamarGeminiJsonVisionV37(prompt,referenceImages);
         const titulos=(Array.isArray(obj?.titulos)?obj.titulos:[]).map(t=>limitarTituloV36(t,60)).filter(Boolean).slice(0,quantidade);
-        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,25);
+        const keywords=(Array.isArray(obj?.keywords)?obj.keywords:[]).map(x=>String(x).trim()).filter(Boolean).slice(0,30);
 
         const categoriasOut=categorias.map(c=>({
             category_id:c.category_id,
@@ -6822,7 +6825,7 @@ app.post('/api/v38/criar/ia/imagem-item',async(req,res)=>{
 
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
-    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
     const index=Math.max(0,Math.min(CENAS_IMAGENS_V38.length-1,Number(req.body?.index||0)));
     if(!produto&&!referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
 
@@ -6850,7 +6853,7 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
 
     const produto=String(req.body?.produto||'').trim();
     const detalhes=String(req.body?.detalhes||'').trim();
-    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,4);
+    const referenceImages=(Array.isArray(req.body?.reference_images)?req.body.reference_images:[]).filter(Boolean).slice(0,8);
     if(!produto && !referenceImages.length)return respostaErro(res,400,'Informe o produto ou envie uma foto de referência.');
 
     try{
