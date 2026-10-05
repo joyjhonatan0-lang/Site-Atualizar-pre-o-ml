@@ -1860,73 +1860,6 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             </div>
         </div>
 
-        <div
-            id="atualizacao-progresso-v31"
-            class="
-                mt-5
-                pt-5
-                border-t
-                border-slate-800
-            "
-        >
-            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-                <div class="flex-1">
-                    <div class="flex items-center justify-between gap-3">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-[.12em] text-emerald-400 font-black">
-                                Progresso da atualização
-                            </div>
-                            <div id="atualizacao-progresso-texto-v31" class="text-xs text-slate-300 mt-1">
-                                Aguardando você clicar em Atualizar preços.
-                            </div>
-                        </div>
-                        <div id="atualizacao-progresso-percent-v31" class="text-xl font-black text-white">
-                            0%
-                        </div>
-                    </div>
-
-                    <div class="mt-3 h-3 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                            id="atualizacao-progresso-bar-v31"
-                            class="h-full bg-emerald-400 transition-all duration-300"
-                            style="width:0%"
-                        ></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-[420px]">
-                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-                        <div class="text-[9px] uppercase text-slate-500 font-bold">Processados</div>
-                        <div id="atualizacao-processados-v31" class="text-lg font-black text-white">0</div>
-                    </div>
-                    <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                        <div class="text-[9px] uppercase text-emerald-500 font-bold">Atualizados</div>
-                        <div id="atualizacao-sucessos-v31" class="text-lg font-black text-emerald-400">0</div>
-                    </div>
-                    <div class="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
-                        <div class="text-[9px] uppercase text-red-500 font-bold">Falhas</div>
-                        <div id="atualizacao-falhas-v31" class="text-lg font-black text-red-400">0</div>
-                    </div>
-                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-                        <div class="text-[9px] uppercase text-slate-500 font-bold">Restantes</div>
-                        <div id="atualizacao-restantes-v31" class="text-lg font-black text-amber-400">0</div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="atualizacao-ultimo-erro-v31" class="hidden mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-                <div class="text-[9px] uppercase tracking-[.1em] text-red-400 font-black">Último motivo de falha</div>
-                <div id="atualizacao-ultimo-erro-texto-v31" class="text-[11px] text-red-200 mt-1 break-words"></div>
-            </div>
-
-            <details id="atualizacao-erros-detalhes-v31" class="hidden mt-3 rounded-xl border border-slate-800 bg-slate-950/60">
-                <summary class="cursor-pointer px-4 py-3 text-xs font-black text-red-400">
-                    Ver anúncios que não foram atualizados e os motivos
-                </summary>
-                <div id="atualizacao-erros-lista-v31" class="max-h-72 overflow-y-auto border-t border-slate-800 divide-y divide-slate-800"></div>
-            </details>
-        </div>
-
     </div>
 
 
@@ -3336,6 +3269,74 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         </div>
 
     </div>
+
+
+
+        <div
+            id="atualizacao-progresso-v31"
+            class="
+                panel
+                rounded-2xl
+                p-5
+            "
+        >
+            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-[.12em] text-emerald-400 font-black">
+                                Progresso da atualização de preços
+                            </div>
+                            <div id="atualizacao-progresso-texto-v31" class="text-xs text-slate-300 mt-1">
+                                Aguardando você clicar em Atualizar preços.
+                            </div>
+                        </div>
+                        <div id="atualizacao-progresso-percent-v31" class="text-xl font-black text-white">
+                            0%
+                        </div>
+                    </div>
+
+                    <div class="mt-3 h-3 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                            id="atualizacao-progresso-bar-v31"
+                            class="h-full bg-emerald-400 transition-all duration-300"
+                            style="width:0%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-[420px]">
+                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                        <div class="text-[9px] uppercase text-slate-500 font-bold">Processados</div>
+                        <div id="atualizacao-processados-v31" class="text-lg font-black text-white">0</div>
+                    </div>
+                    <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                        <div class="text-[9px] uppercase text-emerald-500 font-bold">Atualizados</div>
+                        <div id="atualizacao-sucessos-v31" class="text-lg font-black text-emerald-400">0</div>
+                    </div>
+                    <div class="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                        <div class="text-[9px] uppercase text-red-500 font-bold">Falhas</div>
+                        <div id="atualizacao-falhas-v31" class="text-lg font-black text-red-400">0</div>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                        <div class="text-[9px] uppercase text-slate-500 font-bold">Restantes</div>
+                        <div id="atualizacao-restantes-v31" class="text-lg font-black text-amber-400">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="atualizacao-ultimo-erro-v31" class="hidden mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <div class="text-[9px] uppercase tracking-[.1em] text-red-400 font-black">Último motivo de falha</div>
+                <div id="atualizacao-ultimo-erro-texto-v31" class="text-[11px] text-red-200 mt-1 break-words"></div>
+            </div>
+
+            <details id="atualizacao-erros-detalhes-v31" class="hidden mt-3 rounded-xl border border-slate-800 bg-slate-950/60">
+                <summary class="cursor-pointer px-4 py-3 text-xs font-black text-red-400">
+                    Ver anúncios que não foram atualizados e os motivos
+                </summary>
+                <div id="atualizacao-erros-lista-v31" class="max-h-72 overflow-y-auto border-t border-slate-800 divide-y divide-slate-800"></div>
+            </details>
+        </div>
 
 
     <div
