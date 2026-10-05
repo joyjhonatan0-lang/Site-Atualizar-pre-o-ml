@@ -7593,7 +7593,7 @@ app.get('/api/scale/anuncios/changes',async(req,res)=>{
     try{
         const me=await usuarioML(token);
         const sellerId=me.id;
-        const limit=Math.min(2000,Math.max(50,Number(req.query.limit||1000)));
+        const limit=Math.min(5000,Math.max(50,Number(req.query.limit||5000)));
         const rawTs=String(req.query.after_ts||'1970-01-01T00:00:00.000Z');
         const rawId=String(req.query.after_id||'');
         const parsed=new Date(rawTs);
