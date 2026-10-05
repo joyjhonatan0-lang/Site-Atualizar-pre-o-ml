@@ -11169,7 +11169,9 @@ async function adicionarCategoriaSelecionadaV37(){
             category_name:String(sug?.category_name||d?.categoria?.name||id),
             category_path:path,
             category_leaf_name:leaf,
-            atributos:Array.isArray(d.atributos)?d.atributos:[],
+            atributos:Array.isArray(d.atributos_visiveis)?d.atributos_visiveis:(Array.isArray(d.atributos)?d.atributos:[]),
+            max_pictures_per_item:Number(d.max_pictures_per_item||0)||null,
+            listing_allowed:d.listing_allowed!==false,
             values:{}
         });
         renderCategoriasSelecionadasV37();
@@ -11198,13 +11200,15 @@ function aplicarSugestoesCategoriaV37(categoryId,suggestedAttrs=[]){
 }
 
 function ordenarAtributosCategoriaV37(lista=[]){
-    const prioridadeIds=['BRAND','MODEL','ITEM_CONDITION','GTIN','COLOR','MAIN_COLOR','MATERIAL','UNITS_PER_PACK','NET_WEIGHT','VOLUME_CAPACITY','VOLTAGE','IS_WATERPROOF','POWER_TYPE','SIZE','GENDER','SIZE_GRID_ID','FABRIC_DESIGN'];
-    return [...(Array.isArray(lista)?lista:[])].filter(a=>!a?.read_only).sort((a,b)=>{
-        const pa=(a?.required?0:prioridadeIds.includes(String(a?.id||''))?1:2);
-        const pb=(b?.required?0:prioridadeIds.includes(String(b?.id||''))?1:2);
-        if(pa!==pb)return pa-pb;
-        return String(a?.name||a?.id||'').localeCompare(String(b?.name||b?.id||''),'pt-BR');
-    });
+    return [...(Array.isArray(lista)?lista:[])]
+      .filter(a=>!a?.read_only && a?.visible_to_buyer!==false)
+      .sort((a,b)=>{
+          const ga=Number(a?.group_relevance??999),gb=Number(b?.group_relevance??999);
+          if(ga!==gb)return ga-gb;
+          const oa=Number(a?.output_order??9999),ob=Number(b?.output_order??9999);
+          if(oa!==ob)return oa-ob;
+          return String(a?.name||a?.id||'').localeCompare(String(b?.name||b?.id||''),'pt-BR');
+      });
 }
 
 function renderCategoriasSelecionadasV37(){
@@ -11229,22 +11233,28 @@ function renderCategoriasSelecionadasV37(){
     }).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
 
     forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
-        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]).slice(0,180);
+        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]).slice(0,90);
         const path=String(c.category_path||c.category_name||c.category_id||'');
         const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
-        const obrigatorios=attrs.filter(a=>a.required).length;
-        const relevantes=attrs.length-obrigatorios;
+        const grupos=[];const map=new Map();
+        attrs.forEach(a=>{
+            const key=String(a.group_label||'Características do produto');
+            if(!map.has(key)){const g={label:key,attrs:[]};map.set(key,g);grupos.push(g)}
+            map.get(key).attrs.push(a);
+        });
         return `
         <div class="panel rounded-2xl p-4">
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
-            <div class="text-[10px] text-slate-500 mt-2">Preencha ou revise todas as características principais e secundárias relevantes. Obrigatórios: ${obrigatorios} · adicionais: ${relevantes}.</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 max-h-[820px] overflow-y-auto pr-1">
-                ${attrs.map(a=>{
+            <div class="text-[10px] text-emerald-400 mt-2">Exibindo somente as características que aparecem para o comprador na ficha técnica do Mercado Livre (${attrs.length}).</div>
+            ${grupos.map(g=>`<div class="mt-5">
+                <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                ${g.attrs.map(a=>{
                     const current=c.values?.[a.id]||{};
-                    const labelClass=a.required?'text-yellow-400':'text-slate-500';
-                    const badge=a.required?' · obrigatório':(a.allow_variations||a.variation_attribute||a.child_pk?' · variação':'');
+                    const labelClass=a.required?'text-yellow-400':'text-slate-400';
+                    const badge=a.required?' · obrigatório':'';
                     if(Array.isArray(a.values)&&a.values.length){
                         return `<div>
                             <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
@@ -11259,7 +11269,8 @@ function renderCategoriasSelecionadasV37(){
                         <input value="${textoEscapeV37(current.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor">
                     </div>`;
                 }).join('')}
-            </div>
+                </div>
+            </div>`).join('')}
         </div>`;
     }).join('');
 }
@@ -11306,10 +11317,9 @@ function alternarVariacoesV37(){
 function chaveCacheConteudoV45(){
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
     const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    const quantidade=Math.min(1000,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
     const categoryIds=(criarEstadoV37.selectedCategories||[]).map(c=>c.category_id).sort();
-    const refs=(criarEstadoV37.referenceImages||[]).slice(0,4).map(x=>`${String(x||'').length}:${String(x||'').slice(0,60)}`);
-    return 'mlhubpro_v45_conteudo_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,quantidade,categoryIds,refs})))).slice(0,400);
+    const refs=(criarEstadoV37.referenceImages||[]).slice(0,1).map(x=>`${String(x||'').length}:${String(x||'').slice(0,60)}`);
+    return 'mlhubpro_v46_conteudo_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,categoryIds,refs})))).slice(0,400);
 }
 function salvarCacheConteudoV45(payload){
     try{localStorage.setItem(chaveCacheConteudoV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
@@ -11381,6 +11391,35 @@ function limparImagensGeradasV45(){
     atualizarProgressoImagensV40(0,'Imagens apagadas do painel. Gere novamente quando quiser.','aviso');
 }
 
+
+function expandirTitulosLocalV46(payload,quantidade){
+    const limite=60;
+    const clean=x=>String(x||'').replace(/\s+/g,' ').trim();
+    const out=[];const seen=new Set();
+    const add=t=>{t=clean(t).slice(0,limite).trim();if(t.length>=8&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t)}};
+    (payload.titulos||payload.titulos_semente||[]).forEach(add);
+    const produto=clean(payload.produto_detectado||document.getElementById('criar-produto-v37')?.value||'Produto');
+    const kws=(payload.keywords||[]).map(clean).filter(Boolean);
+    const sufixos=['Profissional','Premium','Completo','Prático','Uso Diário','Alta Precisão','Recarregável','Compacto'];
+    for(let i=0;out.length<quantidade&&i<5000;i++){
+        const k1=kws[i%Math.max(1,kws.length)]||'';
+        const k2=kws[(i+5)%Math.max(1,kws.length)]||'';
+        add(`${produto} ${k1} ${i%3===0?k2:sufixos[i%sufixos.length]}`);
+        add(`${k1} ${produto} ${sufixos[(i+3)%sufixos.length]}`);
+    }
+    const baseRepeticao=[...out];
+    if(baseRepeticao.length){
+        let i=0;
+        while(out.length<quantidade){out.push(baseRepeticao[i%baseRepeticao.length]);i++;}
+    }
+    return out.slice(0,quantidade);
+}
+async function referenciaRapidaConteudoV46(){
+    const src=(criarEstadoV37.referenceImages||[])[0];
+    if(!src)return [];
+    try{return [await redimensionarReferenciaCloudflareV44(src,420)]}catch(e){return [src]}
+}
+
 async function gerarConteudoCriacaoV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
@@ -11391,25 +11430,28 @@ async function gerarConteudoCriacaoV37(){
 
     const cached=lerCacheConteudoV45();
     if(cached){
-        aplicarConteudoGeradoV45(cached);
+        const d={...cached,titulos:expandirTitulosLocalV46(cached,quantidade)};
+        aplicarConteudoGeradoV45(d);
+        const st=document.getElementById('criar-validacao-v37');
+        if(st){st.textContent='✓ Conteúdo carregado instantaneamente do cache. Só será gerado novamente se produto, detalhes, foto ou categoria mudarem.';st.className='text-[11px] text-emerald-400 mt-1';}
         return;
     }
 
-    mostrarLoading('Analisando a foto, gerando títulos SEO, descrição robusta e preenchendo os atributos...');
+    mostrarLoading('Gerando conteúdo rápido: títulos SEO, descrição e ficha técnica...');
     try{
+        const refs=await referenciaRapidaConteudoV46();
         const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
             method:'POST',
             headers:{Authorization:token,'Content-Type':'application/json'},
             body:JSON.stringify({
-                produto,
-                detalhes,
-                quantidade,
-                reference_images:criarEstadoV37.referenceImages,
+                produto,detalhes,quantidade,
+                reference_images:refs,
                 category_ids:criarEstadoV37.selectedCategories.map(c=>c.category_id)
             })
         });
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        d.titulos=expandirTitulosLocalV46(d,quantidade);
         aplicarConteudoGeradoV45(d);
         salvarCacheConteudoV45(d);
     }catch(e){
@@ -11817,16 +11859,21 @@ async function validarCriacaoV37(){
     if(!cfg.categories.length){out.textContent='Adicione pelo menos uma categoria.';out.className='text-[11px] text-red-400 mt-1';return false;}
     if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um título.';out.className='text-[11px] text-red-400 mt-1';return false;}
     try{
-        out.textContent='Validando nas categorias selecionadas...'; out.className='text-[11px] text-yellow-400 mt-1';
+        out.textContent='Validando os campos no Mercado Livre...'; out.className='text-[11px] text-yellow-400 mt-1';
         const r=await fetch(`${RENDER_URL}/api/v37/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
         if(!r.ok || !d.sucesso){
-            const detalhes=(d.resultados||[]).map(x=>`${x.category_name}: ${x.erro||'erro'}`).join(' | ');
+            const falhas=(d.resultados||[]).filter(x=>!x.sucesso);
+            const detalhes=falhas.map(x=>{
+                const lista=Array.isArray(x.detalhes)&&x.detalhes.length?x.detalhes.join(' / '):(x.erro||'Erro de validação');
+                return `${x.category_name||x.category_id}: ${lista}`;
+            }).join(' | ');
             out.textContent='Validação recusada: '+(detalhes||d.erro||`HTTP ${r.status}`);
             out.className='text-[11px] text-red-400 mt-1';
             return false;
         }
-        out.textContent=`✓ Categorias validadas com sucesso (${(d.resultados||[]).length}).`;
+        const fotos=(d.resultados||[]).map(x=>x.limite_fotos?`${x.category_name}: ${x.fotos_enviadas}/${x.limite_fotos} fotos`:'').filter(Boolean).join(' · ');
+        out.textContent=`✓ Pronto para publicar no Mercado Livre${fotos?' · '+fotos:''}.`;
         out.className='text-[11px] text-emerald-400 mt-1';
         return true;
     }catch(e){
@@ -11843,7 +11890,10 @@ async function publicarCriacaoV37(){
     try{
         const r=await fetch(`${RENDER_URL}/api/v37/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        if(!r.ok){
+            const detalhe=Array.isArray(d.detalhes)&&d.detalhes.length?` ${d.detalhes.join(' | ')}`:'';
+            throw new Error((d.mensagem_pt||d.erro||`HTTP ${r.status}`)+detalhe);
+        }
         const jobId=d.job?.id; if(!jobId)throw new Error('O servidor não retornou o ID da criação.');
         criarEstadoV37.jobId=String(jobId); localStorage.setItem('mlHubPro_mass_create_job_v37',String(jobId));
         document.getElementById('criar-job-msg-v37').textContent=d.mensagem||'Criação iniciada.';
