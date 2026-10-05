@@ -5303,7 +5303,7 @@ function normalizarCategoriasConfigV37(cfg){
 
 
 /* =========================================================
-   V47 — FRETE AUTOMÁTICO + URL MANUAL DE IMAGENS
+   V48 — MERCADO ENVIOS 2 OBRIGATÓRIO + URL MANUAL DE IMAGENS
 ========================================================= */
 const cacheShippingPublicacaoV47=new Map();
 
@@ -5327,10 +5327,10 @@ function normalizarUrlsManuaisV47(valor){
 async function obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{force=false}={}){
     sellerId=String(sellerId||'').trim();
     categoryId=String(categoryId||'').trim();
-    if(!sellerId||!categoryId)throw new Error('Não foi possível identificar vendedor/categoria para configurar o envio.');
+    if(!sellerId||!categoryId)throw new Error('Não foi possível identificar vendedor/categoria para configurar o Mercado Envios.');
 
-    const key=`${sellerId}:${categoryId}`;
-    const ttl=15*60*1000;
+    const key=`${sellerId}:${categoryId}:me2`;
+    const ttl=10*60*1000;
     const cached=cacheShippingPublicacaoV47.get(key);
     if(!force && cached && (Date.now()-cached.at)<ttl)return cached.data;
 
@@ -5342,67 +5342,85 @@ async function obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{fo
     if(!ur.ok)throw new Error('Não foi possível consultar as preferências de envio da conta: '+formatarErroMercadoLivre(ud));
     if(!cr.ok)throw new Error('Não foi possível consultar os modos de envio da categoria: '+formatarErroMercadoLivre(cd));
 
-    const userModes=[...(Array.isArray(ud?.modes)?ud.modes:[])].map(x=>String(x||'').toLowerCase()).filter(Boolean);
+    const userModes=[...new Set((Array.isArray(ud?.modes)?ud.modes:[]).map(x=>String(x||'').toLowerCase()).filter(Boolean))];
     const categoryModes=[...new Set((Array.isArray(cd?.logistics)?cd.logistics:[]).map(x=>String(x?.mode||'').toLowerCase()).filter(Boolean))];
-    const intersection=categoryModes.filter(m=>userModes.includes(m));
+    const me2User=userModes.includes('me2');
+    const me2Category=categoryModes.includes('me2');
 
-    // Mercado Envios 2 é preferido quando conta e categoria permitem.
-    // not_specified vem antes de ME1 para evitar o erro shipping.lost_me1_by_user
-    // em contas que perderam o ME1. Custom fica por último porque pode exigir tabela própria.
-    const priority=['me2','not_specified','me1','custom'];
-    const candidates=priority.filter(m=>intersection.includes(m));
-
-    if(!candidates.length){
-        const e=new Error(`Nenhum modo de envio compatível foi encontrado para esta conta e categoria. Conta: ${userModes.join(', ')||'nenhum'}; categoria: ${categoryModes.join(', ')||'nenhum'}.`);
-        e.code='shipping.no_compatible_mode';
+    // O painel publica EXCLUSIVAMENTE com Mercado Envios 2.
+    // Não existe mais fallback para ME1, not_specified ou custom.
+    if(!me2User){
+        const e=new Error('Sua conta não retornou Mercado Envios 2 (me2) como modo habilitado. Confirme o Mercado Envios na conta antes de publicar.');
+        e.code='shipping.me2_not_enabled_for_user';
+        throw e;
+    }
+    if(!me2Category){
+        const e=new Error('A categoria escolhida não aceita Mercado Envios 2 (me2). Escolha uma categoria compatível com Mercado Envios.');
+        e.code='shipping.me2_not_enabled_for_category';
         throw e;
     }
 
-    const mode=candidates[0];
     const shipping={
-        mode,
-        local_pick_up:Boolean(ud?.local_pick_up),
+        mode:'me2',
+        local_pick_up:false,
         free_shipping:false,
         free_methods:[]
     };
-    const data={mode,candidates,userModes,categoryModes,shipping,restricted:Boolean(cd?.restricted)};
+    const data={
+        mode:'me2',
+        candidates:['me2'],
+        userModes,
+        categoryModes,
+        shipping,
+        restricted:Boolean(cd?.restricted),
+        logistics:Array.isArray(cd?.logistics)?cd.logistics:[]
+    };
     cacheShippingPublicacaoV47.set(key,{at:Date.now(),data});
     return data;
 }
 
 function contemErroModoEnvioV47(data){
     const txt=JSON.stringify(data||{}).toLowerCase();
-    return txt.includes('shipping.lost_me1_by_user') ||
-           txt.includes('shipping') && (txt.includes('mode')||txt.includes('me1')||txt.includes('me2'));
+    return txt.includes('shipping') || txt.includes('me1') || txt.includes('me2');
 }
 
 async function validarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
-    const base={...payload};
-    const candidates=Array.isArray(shippingInfo?.candidates)&&shippingInfo.candidates.length?shippingInfo.candidates:[String(payload?.shipping?.mode||'')].filter(Boolean);
-    let ultimo=null;
-    for(const mode of candidates){
-        const tentativa={...base,shipping:{...(base.shipping||{}),mode}};
-        const r=await mlFetch(`${ML_API}/items/validate`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tentativa)});
-        const d=await jsonSeguro(r);
-        ultimo={response:r,data:d,payload:tentativa,mode};
-        if(r.ok)return ultimo;
-        if(!contemErroModoEnvioV47(d))return ultimo;
-    }
-    return ultimo;
+    // V48: valida somente com ME2. Nunca tenta ME1.
+    const tentativa={
+        ...payload,
+        shipping:{
+            ...(payload?.shipping||{}),
+            ...(shippingInfo?.shipping||{}),
+            mode:'me2',
+            local_pick_up:false,
+            free_shipping:Boolean(payload?.shipping?.free_shipping||false),
+            free_methods:Array.isArray(payload?.shipping?.free_methods)?payload.shipping.free_methods:[]
+        }
+    };
+    const r=await mlFetch(`${ML_API}/items/validate`,token,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(tentativa)
+    });
+    const d=await jsonSeguro(r);
+    return {response:r,data:d,payload:tentativa,mode:'me2'};
 }
 
 async function publicarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
-    const base={...payload};
-    const candidates=Array.isArray(shippingInfo?.candidates)&&shippingInfo.candidates.length?shippingInfo.candidates:[String(payload?.shipping?.mode||'')].filter(Boolean);
-    let ultimo=null;
-    for(const mode of candidates){
-        const tentativa={...base,shipping:{...(base.shipping||{}),mode}};
-        const pr=await mlPostComRetryV36(`${ML_API}/items`,token,tentativa,4);
-        ultimo={...pr,payload:tentativa,mode};
-        if(pr?.ok)return ultimo;
-        if(!contemErroModoEnvioV47(pr?.data))return ultimo;
-    }
-    return ultimo;
+    // V48: publica somente com ME2. Nunca tenta ME1/not_specified/custom.
+    const tentativa={
+        ...payload,
+        shipping:{
+            ...(payload?.shipping||{}),
+            ...(shippingInfo?.shipping||{}),
+            mode:'me2',
+            local_pick_up:false,
+            free_shipping:Boolean(payload?.shipping?.free_shipping||false),
+            free_methods:Array.isArray(payload?.shipping?.free_methods)?payload.shipping.free_methods:[]
+        }
+    };
+    const pr=await mlPostComRetryV36(`${ML_API}/items`,token,tentativa,4);
+    return {...pr,payload:tentativa,mode:'me2'};
 }
 
 function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProductSeller=false,category}){
@@ -6758,26 +6776,38 @@ function normalizarTextoBuscaV46(v=''){
 function extrairAtributosOutputV46(payload){
     const out=[];
     const seen=new Set();
-    const walk=(node,ctx={group_label:'Características',group_relevance:999})=>{
+    const walk=(node,ctx={group_id:'',group_label:'Características',group_relevance:999})=>{
         if(!node)return;
         if(Array.isArray(node))return node.forEach(x=>walk(x,ctx));
         if(typeof node!=='object')return;
         const label=String(node.label||node.name||ctx.group_label||'Características');
         const relevance=Number.isFinite(Number(node.relevance))?Number(node.relevance):ctx.group_relevance;
-        const next={group_label:label,group_relevance:relevance};
+        const groupId=String(node.id||ctx.group_id||'');
+        const next={group_id:groupId,group_label:label,group_relevance:relevance};
         if(Array.isArray(node.attributes)){
             for(const a of node.attributes){
                 const id=String(a?.id||'').trim();
                 if(!id||seen.has(id))continue;
                 seen.add(id);
-                out.push({id,group_label:ctx.group_label||label,group_relevance:ctx.group_relevance,output_order:out.length});
+                out.push({
+                    id,
+                    group_id:String(ctx.group_id||groupId||''),
+                    group_label:ctx.group_label||label,
+                    group_relevance:Number.isFinite(Number(ctx.group_relevance))?Number(ctx.group_relevance):relevance,
+                    attribute_relevance:Number.isFinite(Number(a?.relevance))?Number(a.relevance):999,
+                    output_order:out.length
+                });
             }
         }
-        if(Array.isArray(node.groups))node.groups.forEach(g=>walk(g,{group_label:String(g?.label||g?.name||label),group_relevance:Number.isFinite(Number(g?.relevance))?Number(g.relevance):relevance}));
+        if(Array.isArray(node.groups))node.groups.forEach(g=>walk(g,{
+            group_id:String(g?.id||''),
+            group_label:String(g?.label||g?.name||label),
+            group_relevance:Number.isFinite(Number(g?.relevance))?Number(g.relevance):relevance
+        }));
         if(Array.isArray(node.components))node.components.forEach(c=>walk(c,next));
         if(Array.isArray(node.content))node.content.forEach(c=>walk(c,next));
     };
-    walk(payload,{group_label:'Características',group_relevance:999});
+    walk(payload,{group_id:'',group_label:'Características',group_relevance:999});
     return out;
 }
 
@@ -6800,6 +6830,64 @@ function mapAtributoDefV46(a={}){
         attribute_group_id:String(a?.attribute_group_id||''),
         attribute_group_name:String(a?.attribute_group_name||'')
     };
+}
+
+function selecionarAtributosPrincipaisSecundariosV48(defs=[],outputMeta=[]){
+    const defMap=new Map((defs||[]).map(a=>[String(a.id),a]));
+    const internos=/^(GTIN|GTIN14|EAN|UPC|ISBN|MPN|SELLER_PACKAGE_|PACKAGE_|CATALOG_|EMPTY_GTIN_REASON|EMPTY_GTIN_REASON_CODE)$/i;
+    const lista=(outputMeta||[]).map(meta=>{
+        const d=defMap.get(String(meta.id))||{id:String(meta.id),name:String(meta.id),value_type:'string',values:[],required:false,read_only:false,hidden:false,attribute_group_id:'',attribute_group_name:''};
+        const required=Boolean(d.required);
+        const principal=required || String(d.attribute_group_id||'').toUpperCase()==='MAIN' || String(meta.group_id||'').toUpperCase()==='MAIN';
+        return {...d,...meta,required,display_level:principal?'principal':'secundaria',visible_to_buyer:true};
+    }).filter(a=>!a.read_only&&!a.hidden)
+      .filter(a=>a.required || !internos.test(String(a.id||'')))
+      .sort((a,b)=>Number(a.output_order??9999)-Number(b.output_order??9999));
+
+    // Principais: todas as obrigatórias + atributos MAIN realmente exibidos ao comprador.
+    const principais=[];const sec=[];const seen=new Set();
+    const add=(dest,a)=>{const id=String(a.id||'');if(!id||seen.has(id))return;seen.add(id);dest.push(a)};
+    for(const a of lista){if(a.display_level==='principal')add(principais,a)}
+
+    // Secundárias: somente as primeiras características de maior relevância visual.
+    // Evita dezenas de campos técnicos que não são necessários para o vendedor preencher.
+    for(const a of lista){
+        if(seen.has(String(a.id||'')))continue;
+        const attrRel=Number(a.attribute_relevance??999);
+        const groupRel=Number(a.group_relevance??999);
+        if(attrRel<=2 || groupRel<=2 || sec.length<8)add(sec,{...a,display_level:'secundaria'});
+        if(sec.length>=12)break;
+    }
+
+    // Limite visual: mantém todos os obrigatórios e no máximo 12 secundários.
+    // Se uma categoria tiver muitos MAIN opcionais, exibe no máximo 12 deles além dos obrigatórios.
+    const obrigatorios=principais.filter(a=>a.required);
+    // Se algum campo obrigatório não vier no technical_specs/output, ele ainda aparece
+    // como principal para que o vendedor consiga preencher e publicar sem bloqueio.
+    for(const d of (defs||[])){
+        const id=String(d?.id||'');
+        if(!id||!d?.required||d?.read_only||d?.hidden)continue;
+        if(!obrigatorios.some(a=>String(a.id)===id)){
+            obrigatorios.push({
+                ...d,
+                group_id:'MAIN',
+                group_label:'Características principais',
+                group_relevance:1,
+                attribute_relevance:1,
+                output_order:-1,
+                display_level:'principal',
+                visible_to_buyer:true
+            });
+        }
+    }
+    const mainOpcionais=principais.filter(a=>!a.required).slice(0,12);
+    const saida=[];const finalSeen=new Set();
+    for(const a of [...obrigatorios,...mainOpcionais,...sec]){
+        const id=String(a.id||'');
+        if(!id||finalSeen.has(id))continue;
+        finalSeen.add(id);saida.push(a);
+    }
+    return saida;
 }
 
 async function obterCategoriaV46(token,categoryId,{force=false}={}){
@@ -6827,13 +6915,19 @@ async function obterCategoriaV46(token,categoryId,{force=false}={}){
 
     let visiveis=[];
     if(outputMeta.length){
-        visiveis=outputMeta.map(meta=>{
-            const d=defMap.get(meta.id)||{id:meta.id,name:meta.id,value_type:'string',values:[],read_only:false};
-            return {...d,...meta,visible_to_buyer:true};
-        }).filter(a=>!a.read_only);
+        visiveis=selecionarAtributosPrincipaisSecundariosV48(defs,outputMeta);
     }else{
-        visiveis=defs.filter(a=>!a.read_only&&!a.hidden&&(a.required||['MAIN','DFLT'].includes(String(a.attribute_group_id||''))))
-            .map((a,i)=>({...a,group_label:a.attribute_group_name||'Características',group_relevance:a.required?1:2,output_order:i,visible_to_buyer:true}));
+        const fallbackMeta=defs
+          .filter(a=>!a.read_only&&!a.hidden)
+          .map((a,i)=>({
+              id:a.id,
+              group_id:String(a.attribute_group_id||''),
+              group_label:a.attribute_group_name||'Características',
+              group_relevance:a.required?1:2,
+              attribute_relevance:a.required?1:2,
+              output_order:i
+          }));
+        visiveis=selecionarAtributosPrincipaisSecundariosV48(defs,fallbackMeta);
     }
 
     // Caso um atributo seja obrigatório para publicar mas não apareça no output,
@@ -6910,11 +7004,15 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
       ? await obterPreferenciasEnvioPublicacaoV47(token,sellerId,category.category_id)
       : null;
     if(shippingInfo){
-        const preferred=String(category?.shipping_mode||'').toLowerCase();
-        const mode=(preferred&&shippingInfo.candidates.includes(preferred))?preferred:shippingInfo.mode;
-        payload.shipping={...shippingInfo.shipping,mode};
-        shippingInfo.mode=mode;
-        shippingInfo.candidates=[mode,...shippingInfo.candidates.filter(x=>x!==mode)];
+        payload.shipping={
+            ...shippingInfo.shipping,
+            mode:'me2',
+            local_pick_up:false,
+            free_shipping:false,
+            free_methods:[]
+        };
+        shippingInfo.mode='me2';
+        shippingInfo.candidates=['me2'];
     }
 
     const maxPics=Number(meta.max_pictures_per_item||0);
@@ -7064,7 +7162,8 @@ app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
             max_pictures_per_item:meta.max_pictures_per_item,
             listing_allowed:meta.listing_allowed,
             variacoes:meta.visiveis.filter(a=>a.allow_variations||a.child_pk),
-            fonte:'technical_specs/output'
+            fonte:'technical_specs/output-principais-secundarias',
+            criterio:'Somente características principais, obrigatórias e até 12 secundárias exibidas ao comprador.'
         });
     }catch(e){
         respostaErro(res,500,'Erro ao consultar as características exibidas ao comprador: '+e.message);
@@ -7826,7 +7925,7 @@ app.post('/api/v37/criar/publicar',async(req,res)=>{
                 continue;
             }
             // Salva o modo que efetivamente passou na validação para o worker usar a mesma configuração.
-            category.shipping_mode=validacao.mode||prepared.shippingInfo?.mode||null;
+            category.shipping_mode='me2';
             categoriasLimpas.push({
                 ...category,
                 attributes:prepared.payload.attributes
