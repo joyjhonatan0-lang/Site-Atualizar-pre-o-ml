@@ -5310,7 +5310,7 @@ function normalizarCategoriasConfigV37(cfg){
 
 
 /* =========================================================
-   V49 — MERCADO ENVIOS DEFINITIVO + URL MANUAL DE IMAGENS
+   V50 — MERCADO ENVIOS 2 FIXO + URL MANUAL DE IMAGENS
 ========================================================= */
 const cacheShippingPublicacaoV47=new Map();
 
@@ -5380,7 +5380,12 @@ async function obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{fo
         categoryModes,
         shipping,
         restricted:Boolean(cd?.restricted),
-        logistics:Array.isArray(cd?.logistics)?cd.logistics:[]
+        logistics:Array.isArray(cd?.logistics)?cd.logistics:[],
+        category_dimensions:cd?.dimensions||null,
+        category_me2_restrictions:cd?.me2_restrictions||null,
+        user_option:ud?.option??null,
+        user_tags:Array.isArray(ud?.tags)?ud.tags:[],
+        user_logistics:Array.isArray(ud?.logistics)?ud.logistics:[]
     };
     cacheShippingPublicacaoV47.set(key,{at:Date.now(),data});
     return data;
@@ -5393,51 +5398,91 @@ function contemErroModoEnvioV47(data){
 
 
 /* =========================================================
-   V49 — PRÉ-VALIDAÇÃO REAL DO MERCADO ENVIOS
-   Consulta /shipping_modes antes de validar/publicar e usa
-   somente estratégias que resultem em ME2 para a conta.
+   V50 — MERCADO ENVIOS 2 FIXO + DIMENSÕES AUTOMÁTICAS
+   - nunca remove shipping.mode="me2"
+   - completa atributos SELLER_PACKAGE_* quando a categoria fornece defaults
+   - usa somente tentativas ME2, sem fallback silencioso para ME1
 ========================================================= */
-function aplicarEstrategiaEnvioV49(payload,shippingInfo,strategyName){
+function normalizarAvailableModesV50(data){
+    const modes=data?.channels?.marketplace?.available_modes;
+    return Array.isArray(modes)?modes:[];
+}
+
+function regraEnvioObrigatoriaV50(regra){
+    return String(regra||'').toLowerCase()==='mandatory';
+}
+
+function completarDimensoesPacoteME2V50(payload,shippingPrefs,meta){
+    if(!payload || !meta?.defMap)return [];
+    const dims=shippingPrefs?.category_dimensions||{};
+    const mapa=[
+      ['SELLER_PACKAGE_HEIGHT',dims.height,'cm'],
+      ['SELLER_PACKAGE_LENGTH',dims.length,'cm'],
+      ['SELLER_PACKAGE_WIDTH',dims.width,'cm'],
+      ['SELLER_PACKAGE_WEIGHT',dims.weight,'g']
+    ];
+    const attrs=Array.isArray(payload.attributes)?payload.attributes:[];
+    const ids=new Set(attrs.map(a=>String(a?.id||'')));
+    const adicionados=[];
+    for(const [id,raw,unit] of mapa){
+        if(ids.has(id))continue;
+        const def=meta.defMap.get(id);
+        const num=Number(raw||0);
+        if(!def || !Number.isFinite(num) || num<=0)continue;
+        // A documentação principal do ML aceita value_name com cm/g nesses atributos.
+        const value_name=`${Math.round(num)} ${unit}`;
+        attrs.push({id,value_name});
+        ids.add(id); adicionados.push({id,value_name});
+    }
+    payload.attributes=attrs;
+    return adicionados;
+}
+
+function aplicarEstrategiaEnvioV50(payload,shippingInfo,strategyName='me2_full'){
     const base={...payload};
     const free=Boolean(shippingInfo?.free_shipping);
     const local=Boolean(shippingInfo?.local_pick_up);
-    if(strategyName==='auto_me2'){
-        // No modelo atual de User Products o Mercado Livre pode herdar o ME2 da conta.
-        // O preflight /shipping_modes já confirmou ME2 antes de chegarmos aqui.
-        delete base.shipping;
-        return base;
+    if(strategyName==='me2_mode_only'){
+        base.shipping={mode:'me2'};
+    }else if(strategyName==='me2_minimal'){
+        base.shipping={mode:'me2',free_shipping:free};
+    }else{
+        base.shipping={mode:'me2',local_pick_up:local,free_shipping:free,free_methods:[]};
     }
-    if(strategyName==='auto_me2_free'){
-        base.shipping={free_shipping:free};
-        return base;
-    }
-    base.shipping={
-        mode:'me2',
-        local_pick_up:local,
-        free_shipping:free,
-        free_methods:[]
-    };
     return base;
 }
 
-function ehErroEspecificoEnvioV49(data){
+function ehErroEspecificoEnvioV50(data){
     const causas=Array.isArray(data?.cause)?data.cause:[];
     const codes=causas.map(c=>String(c?.code||'').toLowerCase());
     const txt=JSON.stringify(data||{}).toLowerCase();
     return codes.some(c=>c.startsWith('shipping.')) || /shipping|\bme1\b|\bme2\b|mercado envios/.test(txt);
 }
 
-function normalizarAvailableModesV49(data){
-    const modes=data?.channels?.marketplace?.available_modes;
-    return Array.isArray(modes)?modes:[];
+function somenteErroLostMe1V50(data){
+    const causas=Array.isArray(data?.cause)?data.cause:[];
+    const codes=causas.map(c=>String(c?.code||'').toLowerCase()).filter(Boolean);
+    const txt=JSON.stringify(data||{}).toLowerCase();
+    if(codes.length)return codes.every(c=>c==='shipping.lost_me1_by_user');
+    return txt.includes('shipping.lost_me1_by_user') || (txt.includes('lost_me1_by_user') && !txt.includes('me2_not'));
 }
 
-async function consultarShippingModesV49(token,sellerId,payload,meta){
-    const attrs=(Array.isArray(payload?.attributes)?payload.attributes:[]).map(a=>({
-        id:String(a.id||''),
-        ...(a.value_id?{value_id:String(a.value_id)}:{}),
-        ...(a.value_name?{value_name:String(a.value_name)}:{})
-    })).filter(a=>a.id);
+function podeIgnorarLostMe1NoValidadorV50(validacao,shippingInfo){
+    const modo=String(validacao?.payload?.shipping?.mode||'').toLowerCase();
+    const disponiveis=(shippingInfo?.available_modes||[]).map(x=>String(x).toLowerCase());
+    return modo==='me2' && disponiveis.includes('me2') && somenteErroLostMe1V50(validacao?.data);
+}
+
+async function consultarShippingModesV50(token,sellerId,payload,meta){
+    const attrs=(Array.isArray(payload?.attributes)?payload.attributes:[]).map(a=>{
+        const def=meta?.defMap?.get?.(String(a.id||''));
+        return {
+          id:String(a.id||''),
+          ...(def?.name?{name:String(def.name)}:{}),
+          ...(a.value_id?{value_id:String(a.value_id)}:{}),
+          ...(a.value_name?{value_name:String(a.value_name)}:{})
+        };
+    }).filter(a=>a.id);
     const body={
         site_id:'MLB',
         seller_id:Number(sellerId),
@@ -5455,7 +5500,7 @@ async function consultarShippingModesV49(token,sellerId,payload,meta){
         condition:String(payload?.condition||'new'),
         channels:[{id:'marketplace'}],
         new_format:true,
-        verbose:true
+        verbose:false
     };
     if(!body.catalog.domain_id)delete body.catalog.domain_id;
     const r=await mlFetch(`${ML_API}/users/${encodeURIComponent(sellerId)}/shipping_modes`,token,{
@@ -5467,40 +5512,31 @@ async function consultarShippingModesV49(token,sellerId,payload,meta){
     return {ok:r.ok,status:r.status,data:d,body};
 }
 
-async function resolverEnvioMercadoV49(token,sellerId,categoryId,payload,meta,{userProductSeller=false}={}){
-    const base=await obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{force:false});
-    let shippingModes=null;
-    try{
-        shippingModes=await consultarShippingModesV49(token,sellerId,payload,meta);
-    }catch(e){
-        shippingModes={ok:false,status:500,data:{message:e.message}};
-    }
+async function resolverEnvioMercadoV50(token,sellerId,categoryId,payload,meta){
+    // Força leitura fresca para não reutilizar configuração antiga de ME1/ME2.
+    const base=await obterPreferenciasEnvioPublicacaoV47(token,sellerId,categoryId,{force:true});
+    const dimensoes_auto=completarDimensoesPacoteME2V50(payload,base,meta);
 
-    let me2Mode=null;
-    if(shippingModes?.ok){
-        me2Mode=normalizarAvailableModesV49(shippingModes.data)
-          .find(m=>String(m?.mode||'').toLowerCase()==='me2')||null;
-        if(!me2Mode){
-            const e=new Error('O Mercado Livre não retornou Mercado Envios 2 como modalidade disponível para este produto/categoria.');
-            e.code='shipping.me2_not_available_for_item';
-            e.shipping_modes=shippingModes.data;
-            throw e;
-        }
+    const shippingModes=await consultarShippingModesV50(token,sellerId,payload,meta);
+    if(!shippingModes.ok){
+        const e=new Error('Não foi possível consultar os modos de Mercado Envios para esta publicação: '+formatarErroMercadoLivre(shippingModes.data));
+        e.code='shipping.preflight_failed'; e.shipping_modes=shippingModes.data; throw e;
+    }
+    const me2Mode=normalizarAvailableModesV50(shippingModes.data)
+      .find(m=>String(m?.mode||'').toLowerCase()==='me2')||null;
+    if(!me2Mode){
+        const e=new Error('O Mercado Livre não liberou Mercado Envios 2 para este produto com os dados atuais. Verifique dimensões da embalagem e atributos obrigatórios da categoria.');
+        e.code='shipping.me2_not_available_for_item'; e.shipping_modes=shippingModes.data; throw e;
     }
 
     const logistics=Array.isArray(me2Mode?.logistic_types)?me2Mode.logistic_types:[];
     const def=logistics.find(x=>x?.default===true)||logistics[0]||null;
-    const freeRule=String(def?.attributes?.free_shipping||'').toLowerCase();
-    const localRule=String(def?.attributes?.local_pick_up||'').toLowerCase();
-    const freeShipping=freeRule==='mandatory';
-    const localPickUp=localRule==='mandatory' ? true : false;
-
-    // Em contas User Products, a documentação atual mostra POST /items sem shipping;
-    // o Mercado Livre herda a logística da conta. Como o preflight confirmou ME2,
-    // tentamos esse formato primeiro. Em legado, começamos pelo ME2 explícito.
-    const strategies=userProductSeller
-      ? ['auto_me2','me2_explicit','auto_me2_free']
-      : ['me2_explicit','auto_me2','auto_me2_free'];
+    const modeAttrs=me2Mode?.shipping_attributes||{};
+    const typeAttrs=def?.attributes||{};
+    const freeRule=modeAttrs.free_shipping ?? typeAttrs.free_shipping;
+    const localRule=modeAttrs.local_pick_up ?? typeAttrs.local_pick_up;
+    const freeShipping=regraEnvioObrigatoriaV50(freeRule);
+    const localPickUp=regraEnvioObrigatoriaV50(localRule);
 
     return {
         ...base,
@@ -5508,47 +5544,51 @@ async function resolverEnvioMercadoV49(token,sellerId,categoryId,payload,meta,{u
         free_shipping:freeShipping,
         local_pick_up:localPickUp,
         logistic_type:String(def?.type||''),
-        shipping_modes_checked:Boolean(shippingModes?.ok),
-        shipping_modes_status:shippingModes?.status||null,
-        available_modes:shippingModes?.ok?normalizarAvailableModesV49(shippingModes.data).map(m=>String(m?.mode||'')):base.candidates,
-        strategies,
+        shipping_modes_checked:true,
+        shipping_modes_status:shippingModes.status,
+        available_modes:normalizarAvailableModesV50(shippingModes.data).map(m=>String(m?.mode||'')),
+        // Todas as estratégias preservam explicitamente mode=me2.
+        strategies:['me2_full','me2_minimal','me2_mode_only'],
+        dimensoes_auto,
         shipping:{mode:'me2',local_pick_up:localPickUp,free_shipping:freeShipping,free_methods:[]}
     };
 }
 
-async function validarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
+async function validarPayloadMercadoComFallbackEnvioV50(token,payload,shippingInfo){
     const strategies=Array.isArray(shippingInfo?.strategies)&&shippingInfo.strategies.length
-      ? shippingInfo.strategies : ['me2_explicit','auto_me2','auto_me2_free'];
-    const tentativas=[];
-    let ultimo=null;
+      ? shippingInfo.strategies : ['me2_full','me2_minimal','me2_mode_only'];
+    const tentativas=[]; let ultimo=null;
     for(const strategy of strategies){
-        const tentativa=aplicarEstrategiaEnvioV49(payload,shippingInfo,strategy);
+        const tentativa=aplicarEstrategiaEnvioV50(payload,shippingInfo,strategy);
+        if(String(tentativa?.shipping?.mode||'').toLowerCase()!=='me2'){
+            throw new Error('Proteção interna: a publicação tentou sair sem Mercado Envios 2.');
+        }
         const r=await mlFetch(`${ML_API}/items/validate`,token,{
             method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tentativa)
         });
         const d=await jsonSeguro(r);
-        tentativas.push({strategy,status:r.status,ok:r.ok,erro:r.ok?null:formatarErroMercadoLivre(d)});
+        tentativas.push({strategy,status:r.status,ok:r.ok,shipping:tentativa.shipping,erro:r.ok?null:formatarErroMercadoLivre(d),raw:d});
         ultimo={response:r,data:d,payload:tentativa,mode:'me2',strategy,tentativas};
         if(r.ok)return ultimo;
-        // Só troca a estratégia quando a recusa é de envio. Outros erros de conteúdo
-        // devem ser apresentados ao vendedor exatamente como vieram do Mercado Livre.
-        if(!ehErroEspecificoEnvioV49(d))return ultimo;
+        if(!ehErroEspecificoEnvioV50(d))return ultimo;
     }
     return ultimo;
 }
 
-async function publicarPayloadMercadoComFallbackEnvioV47(token,payload,shippingInfo){
+async function publicarPayloadMercadoComFallbackEnvioV50(token,payload,shippingInfo){
     const strategies=Array.isArray(shippingInfo?.strategies)&&shippingInfo.strategies.length
-      ? shippingInfo.strategies : ['me2_explicit','auto_me2','auto_me2_free'];
-    const tentativas=[];
-    let ultimo=null;
+      ? shippingInfo.strategies : ['me2_full','me2_minimal','me2_mode_only'];
+    const tentativas=[]; let ultimo=null;
     for(const strategy of strategies){
-        const tentativa=aplicarEstrategiaEnvioV49(payload,shippingInfo,strategy);
+        const tentativa=aplicarEstrategiaEnvioV50(payload,shippingInfo,strategy);
+        if(String(tentativa?.shipping?.mode||'').toLowerCase()!=='me2'){
+            throw new Error('Proteção interna: a publicação tentou sair sem Mercado Envios 2.');
+        }
         const pr=await mlPostComRetryV36(`${ML_API}/items`,token,tentativa,4);
-        tentativas.push({strategy,status:pr?.status||null,ok:Boolean(pr?.ok),erro:pr?.ok?null:formatarErroMercadoLivre(pr?.data)});
+        tentativas.push({strategy,status:pr?.status||null,ok:Boolean(pr?.ok),shipping:tentativa.shipping,erro:pr?.ok?null:formatarErroMercadoLivre(pr?.data),raw:pr?.data});
         ultimo={...pr,payload:tentativa,mode:'me2',strategy,tentativas};
         if(pr?.ok)return ultimo;
-        if(!ehErroEspecificoEnvioV49(pr?.data))return ultimo;
+        if(!ehErroEspecificoEnvioV50(pr?.data))return ultimo;
     }
     return ultimo;
 }
@@ -5669,7 +5709,7 @@ async function processarCriacaoMassaV37(job){
             continue;
         }
 
-        const pr=await publicarPayloadMercadoComFallbackEnvioV47(token,payload,prepared.shippingInfo);
+        const pr=await publicarPayloadMercadoComFallbackEnvioV50(token,payload,prepared.shippingInfo);
         if(pr?.ok && pr?.data?.id){
             let warning='';
             const item=pr.data;
@@ -6965,17 +7005,16 @@ function mapAtributoDefV46(a={}){
 
 function selecionarAtributosPrincipaisSecundariosV48(defs=[],outputMeta=[]){
     const defMap=new Map((defs||[]).map(a=>[String(a.id),a]));
-    // Não exibimos identificadores, embalagem, catálogo e campos operacionais/técnicos.
-    // A tela deve imitar a ficha que o comprador realmente vê: principais + secundárias.
-    const internos=/^(GTIN|GTIN14|EAN|UPC|ISBN|MPN|SELLER_SKU|SELLER_PACKAGE_|PACKAGE_|CATALOG_|EMPTY_GTIN_REASON|EMPTY_GTIN_REASON_CODE|INTERNAL_|EXTERNAL_|IS_SUITABLE_FOR_BABIES)$/i;
+    // Exibe somente o que realmente aparece na ficha técnica do comprador.
+    // Campos logísticos, identificadores, catálogo, embalagem e operação ficam ocultos.
+    const internos=/^(GTIN|GTIN14|EAN|UPC|ISBN|MPN|SELLER_SKU|SELLER_PACKAGE_|PACKAGE_|CATALOG_|EMPTY_GTIN_REASON|EMPTY_GTIN_REASON_CODE|INTERNAL_|EXTERNAL_)|(_ID$)/i;
     const candidatos=(outputMeta||[]).map(meta=>{
         const d=defMap.get(String(meta.id))||null;
         if(!d)return null;
         const label=normalizarTextoBuscaV46(meta.group_label||d.attribute_group_name||'');
-        const required=Boolean(d.required);
-        const grupoPrincipal=/caracteristicas do produto|caracteristicas gerais|principal|gerais/.test(label);
-        const principal=required || grupoPrincipal || Number(meta.group_relevance??999)<=1 || Number(meta.attribute_relevance??999)<=1;
-        return {...d,...meta,required,display_level:principal?'principal':'secundaria',visible_to_buyer:true};
+        const grupoPrincipal=/caracteristicas do produto|caracteristicas gerais|principais|principal|gerais/.test(label);
+        const principal=grupoPrincipal || Number(meta.group_relevance??999)<=1 || Number(meta.attribute_relevance??999)<=1;
+        return {...d,...meta,display_level:principal?'principal':'secundaria',visible_to_buyer:true};
     }).filter(Boolean)
       .filter(a=>!a.read_only&&!a.hidden&&!internos.test(String(a.id||'')))
       .sort((a,b)=>{
@@ -6986,35 +7025,25 @@ function selecionarAtributosPrincipaisSecundariosV48(defs=[],outputMeta=[]){
           return Number(a.output_order??9999)-Number(b.output_order??9999);
       });
 
-    const principais=[];const secundarias=[];const seen=new Set();
-    const add=(dest,a)=>{const id=String(a?.id||'');if(!id||seen.has(id))return;seen.add(id);dest.push(a)};
+    const principais=[]; const secundarias=[]; const seen=new Set();
+    const add=(dest,a)=>{const id=String(a?.id||''); if(!id||seen.has(id))return; seen.add(id); dest.push(a)};
 
-    // Primeiro: características principais realmente presentes no technical_specs/output.
+    // Limite visual deliberado: o painel não deve virar a ficha técnica completa interna.
     for(const a of candidatos){
-        if(a.display_level==='principal')add(principais,a);
-    }
-
-    // Mantém todos os principais obrigatórios visíveis e limita os opcionais para não poluir a tela.
-    const obrigatoriosVisiveis=principais.filter(a=>a.required);
-    const principaisOpcionais=principais.filter(a=>!a.required).slice(0,6);
-    seen.clear();
-    const principaisFinais=[];
-    for(const a of [...obrigatoriosVisiveis,...principaisOpcionais])add(principaisFinais,a);
-
-    // Secundárias: somente as mais relevantes do output do Mercado Livre.
-    for(const a of candidatos){
-        if(seen.has(String(a.id||'')))continue;
-        if(a.display_level==='principal')continue;
-        const relA=Number(a.attribute_relevance??999);
-        const relG=Number(a.group_relevance??999);
-        // Não inclui atributos de cauda longa apenas para completar quantidade.
-        if(relA<=4 || relG<=4){
-            add(secundarias,{...a,display_level:'secundaria'});
-            if(secundarias.length>=6)break;
+        if(a.display_level==='principal'){
+            add(principais,a);
+            if(principais.length>=7)break;
         }
     }
-
-    return [...principaisFinais,...secundarias];
+    for(const a of candidatos){
+        if(seen.has(String(a.id||'')) || a.display_level==='principal')continue;
+        const relA=Number(a.attribute_relevance??999), relG=Number(a.group_relevance??999);
+        if(relA<=4 || relG<=4){
+            add(secundarias,{...a,display_level:'secundaria'});
+            if(secundarias.length>=7)break;
+        }
+    }
+    return [...principais,...secundarias];
 }
 async function obterCategoriaV46(token,categoryId,{force=false}={}){
     const id=String(categoryId||'').trim();
@@ -7135,7 +7164,7 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
                 free_shipping:Boolean(category.shipping_free_shipping),
                 local_pick_up:Boolean(category.shipping_local_pick_up),
                 logistic_type:String(category.shipping_logistic_type||''),
-                strategies:[String(category.shipping_strategy)],
+                strategies:[['me2_full','me2_minimal','me2_mode_only'].includes(String(category.shipping_strategy))?String(category.shipping_strategy):'me2_full'],
                 shipping:{
                     mode:'me2',
                     local_pick_up:Boolean(category.shipping_local_pick_up),
@@ -7144,9 +7173,9 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
                 }
             };
         }else{
-            shippingInfo=await resolverEnvioMercadoV49(token,sellerId,category.category_id,payload,meta,{userProductSeller:Boolean(opts?.userProductSeller)});
+            shippingInfo=await resolverEnvioMercadoV50(token,sellerId,category.category_id,payload,meta);
         }
-        payload=aplicarEstrategiaEnvioV49(payload,shippingInfo,shippingInfo.strategies?.[0]||'me2_explicit');
+        payload=aplicarEstrategiaEnvioV50(payload,shippingInfo,shippingInfo.strategies?.[0]||'me2_full');
     }
 
     const maxPics=Number(meta.max_pictures_per_item||0);
@@ -7944,11 +7973,11 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
     }
 });
 
-app.get('/api/v49/build',(req,res)=>{
-    res.json({sucesso:true,version:'V49',publication:'mercado-envios-preflight',shipping:'ME2',attributes:'buyer-visible-only'});
+app.get('/api/v50/build',(req,res)=>{
+    res.json({sucesso:true,version:'V50',publication:'mercado-envios-me2-fixed',shipping:'ME2-explicito',attributes:'principais-secundarias',package_dimensions:'auto-category-defaults'});
 });
 
-app.post('/api/v49/criar/validar',async(req,res)=>{
+app.post('/api/v50/criar/validar',async(req,res)=>{
     const token=obterToken(req);
     if(!token)return respostaErro(res,401,'Token não fornecido.');
 
@@ -7980,19 +8009,24 @@ app.post('/api/v49/criar/validar',async(req,res)=>{
                     continue;
                 }
 
-                const validacao=await validarPayloadMercadoComFallbackEnvioV47(token,sample,prepared.shippingInfo);
+                const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
                 const vr=validacao.response;
                 const vd=validacao.data;
+                const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
                 resultados.push({
                     category_id:category.category_id,
                     category_name:category.category_name,
-                    sucesso:vr.ok,
+                    sucesso:vr.ok||overrideLostMe1,
                     validacao:vd,
-                    erro:vr.ok?null:formatarErroMercadoLivre(vd),
-                    detalhes:vr.ok?[]:detalhesValidacaoV46(vd),
+                    aviso:overrideLostMe1?'O pré-validador retornou uma regra antiga de ME1, mas a conta, a categoria, o preflight e o payload estão confirmados em ME2. A publicação real será tentada em ME2.':null,
+                    erro:(vr.ok||overrideLostMe1)?null:formatarErroMercadoLivre(vd),
+                    detalhes:(vr.ok||overrideLostMe1)?[]:detalhesValidacaoV46(vd),
                     shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
                     shipping_strategy:validacao.strategy||null,
                     shipping_logistic_type:prepared.shippingInfo?.logistic_type||null,
+                    shipping_payload:validacao.payload?.shipping||null,
+                    shipping_tentativas:validacao.tentativas||[],
+                    dimensoes_pacote_auto:prepared.shippingInfo?.dimensoes_auto||[],
                     fotos_enviadas:validacao.payload?.pictures?.length||sample.pictures?.length||0,
                     limite_fotos:prepared.maxPics
                 });
@@ -8013,7 +8047,7 @@ app.post('/api/v49/criar/validar',async(req,res)=>{
     }
 });
 
-app.post('/api/v49/criar/publicar',async(req,res)=>{
+app.post('/api/v50/criar/publicar',async(req,res)=>{
     const token=obterToken(req);
     if(!token)return respostaErro(res,401,'Token não fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
@@ -8057,16 +8091,19 @@ app.post('/api/v49/criar/publicar',async(req,res)=>{
             }
             const sample=prepared.payload;
             if(up&&varCfg.enabled)delete sample.variations;
-            const validacao=await validarPayloadMercadoComFallbackEnvioV47(token,sample,prepared.shippingInfo);
+            const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
             const vr=validacao.response;
             const vd=validacao.data;
-            if(!vr.ok){
+            const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
+            if(!vr.ok&&!overrideLostMe1){
                 errosValidacao.push(`${category.category_name}: ${formatarErroMercadoLivre(vd)}`);
                 continue;
             }
-            // Salva o modo que efetivamente passou na validação para o worker usar a mesma configuração.
+            // Se apenas o validador legado reclamar de ME1, mas todo o preflight confirmou ME2,
+            // não bloqueamos a fila: o POST /items real será a fonte final de verdade.
+            // Salva o modo ME2 para o worker usar a mesma configuração.
             category.shipping_mode='me2';
-            category.shipping_strategy=validacao.strategy||'auto_me2';
+            category.shipping_strategy=validacao.strategy||'me2_full';
             category.shipping_free_shipping=Boolean(prepared.shippingInfo?.free_shipping);
             category.shipping_local_pick_up=Boolean(prepared.shippingInfo?.local_pick_up);
             category.shipping_logistic_type=String(prepared.shippingInfo?.logistic_type||'');
