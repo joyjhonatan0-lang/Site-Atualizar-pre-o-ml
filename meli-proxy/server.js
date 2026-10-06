@@ -5771,11 +5771,11 @@ function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProd
       : pictureIds.map(id=>({id}));
 
     let attributes=(Array.isArray(category?.attributes)?category.attributes:[])
-      .filter(a=>a?.id && (a?.value_id || a?.value_name))
+      .filter(a=>a?.id && (a?.value_id || a?.value_name || a?.value_name===null))
       .map(a=>({
           id:String(a.id),
           ...(a.value_id?{value_id:String(a.value_id)}:{}),
-          ...(a.value_name?{value_name:String(a.value_name)}:{})
+          ...(String(a.value_id||'')==='-1'?{value_name:null}:(a.value_name?{value_name:String(a.value_name)}:{}))
       }));
 
     const varCfg=cfg.variations||{};
@@ -7169,21 +7169,51 @@ function mapAtributoDefV46(a={}){
     };
 }
 
-function selecionarAtributosPrincipaisSecundariosV48(defs=[],outputMeta=[]){
+function extrairDefsTechnicalSpecsV52(payload){
+    const out=[]; const seen=new Set();
+    const walk=node=>{
+        if(!node)return;
+        if(Array.isArray(node)){node.forEach(walk);return;}
+        if(typeof node!=='object')return;
+        if(Array.isArray(node.attributes)){
+            for(const a of node.attributes){
+                const id=String(a?.id||'').trim();
+                if(!id||seen.has(id))continue;
+                seen.add(id);
+                const tags=Array.isArray(a?.tags)
+                  ? Object.fromEntries(a.tags.map(t=>[String(t),true]))
+                  : (a?.tags&&typeof a.tags==='object'?a.tags:{});
+                out.push(mapAtributoDefV46({...a,tags}));
+            }
+        }
+        if(Array.isArray(node.groups))node.groups.forEach(walk);
+        if(Array.isArray(node.components))node.components.forEach(walk);
+        if(Array.isArray(node.content))node.content.forEach(walk);
+    };
+    walk(payload);
+    return out;
+}
+
+function selecionarAtributosPrincipaisSecundariosV52(defs=[],fichaMeta=[]){
     const defMap=new Map((defs||[]).map(a=>[String(a.id),a]));
-    // Exibe somente o que realmente aparece na ficha técnica do comprador.
-    // Campos logísticos, identificadores, catálogo, embalagem e operação ficam ocultos.
+    // V52: usa a estrutura da ficha técnica editável do Mercado Livre e mantém
+    // somente características principais/secundárias. Campos logísticos,
+    // identificadores, catálogo, embalagem e operação continuam ocultos.
     const internos=/^(GTIN|GTIN14|EAN|UPC|ISBN|MPN|SELLER_SKU|SELLER_PACKAGE_|PACKAGE_|CATALOG_|EMPTY_GTIN_REASON|EMPTY_GTIN_REASON_CODE|INTERNAL_|EXTERNAL_)|(_ID$)/i;
-    const candidatos=(outputMeta||[]).map(meta=>{
+    const candidatos=(fichaMeta||[]).map(meta=>{
         const d=defMap.get(String(meta.id))||null;
         if(!d)return null;
         const label=normalizarTextoBuscaV46(meta.group_label||d.attribute_group_name||'');
-        const grupoPrincipal=/caracteristicas do produto|caracteristicas gerais|principais|principal|gerais/.test(label);
-        const principal=grupoPrincipal || Number(meta.group_relevance??999)<=1 || Number(meta.attribute_relevance??999)<=1;
+        const groupId=String(meta.group_id||d.attribute_group_id||'').toUpperCase();
+        // A classificação agora respeita o grupo da ficha. O grupo MAIN/
+        // "Características principais" fica como principal; todo outro grupo
+        // visível e editável da ficha entra como característica secundária.
+        const principal=groupId==='MAIN' || /caracteristicas?\s+principa/.test(label) || /atributos?\s+principa/.test(label);
         return {...d,...meta,display_level:principal?'principal':'secundaria',visible_to_buyer:true};
     }).filter(Boolean)
       .filter(a=>!a.read_only&&!a.hidden&&!internos.test(String(a.id||'')))
       .sort((a,b)=>{
+          if(a.display_level!==b.display_level)return a.display_level==='principal'?-1:1;
           const ga=Number(a.group_relevance??999),gb=Number(b.group_relevance??999);
           if(ga!==gb)return ga-gb;
           const aa=Number(a.attribute_relevance??999),ab=Number(b.attribute_relevance??999);
@@ -7193,21 +7223,9 @@ function selecionarAtributosPrincipaisSecundariosV48(defs=[],outputMeta=[]){
 
     const principais=[]; const secundarias=[]; const seen=new Set();
     const add=(dest,a)=>{const id=String(a?.id||''); if(!id||seen.has(id))return; seen.add(id); dest.push(a)};
-
-    // Limite visual deliberado: o painel não deve virar a ficha técnica completa interna.
     for(const a of candidatos){
-        if(a.display_level==='principal'){
-            add(principais,a);
-            if(principais.length>=7)break;
-        }
-    }
-    for(const a of candidatos){
-        if(seen.has(String(a.id||'')) || a.display_level==='principal')continue;
-        const relA=Number(a.attribute_relevance??999), relG=Number(a.group_relevance??999);
-        if(relA<=4 || relG<=4){
-            add(secundarias,{...a,display_level:'secundaria'});
-            if(secundarias.length>=7)break;
-        }
+        if(a.display_level==='principal')add(principais,a);
+        else add(secundarias,{...a,display_level:'secundaria'});
     }
     return [...principais,...secundarias];
 }
@@ -7220,6 +7238,7 @@ async function obterCategoriaV46(token,categoryId,{force=false}={}){
     const urls=[
         `${ML_API}/categories/${encodeURIComponent(id)}`,
         `${ML_API}/categories/${encodeURIComponent(id)}/attributes`,
+        `${ML_API}/categories/${encodeURIComponent(id)}/technical_specs/input`,
         `${ML_API}/categories/${encodeURIComponent(id)}/technical_specs/output`,
         `${ML_API}/categories/${encodeURIComponent(id)}/sale_terms`
     ];
@@ -7230,27 +7249,54 @@ async function obterCategoriaV46(token,categoryId,{force=false}={}){
     if(!rr[1].ok)throw new Error(formatarErroMercadoLivre(rr[1].data)||`Atributos da categoria ${id} indisponíveis.`);
 
     const categoria=rr[0].data||{};
-    const defs=(Array.isArray(rr[1].data)?rr[1].data:[]).map(mapAtributoDefV46);
+    const defsBase=(Array.isArray(rr[1].data)?rr[1].data:[]).map(mapAtributoDefV46);
+    const defsInput=rr[2].ok?extrairDefsTechnicalSpecsV52(rr[2].data):[];
+    const defsMap=new Map(defsBase.map(a=>[String(a.id),a]));
+    for(const a of defsInput){
+        const id=String(a?.id||''); if(!id)continue;
+        const atual=defsMap.get(id);
+        if(!atual){defsMap.set(id,a);continue;}
+        defsMap.set(id,{
+            ...a,...atual,
+            values:(Array.isArray(atual.values)&&atual.values.length)?atual.values:a.values,
+            value_type:atual.value_type||a.value_type,
+            value_max_length:atual.value_max_length||a.value_max_length,
+            required:Boolean(atual.required||a.required),
+            hidden:Boolean(atual.hidden||a.hidden),
+            read_only:Boolean(atual.read_only||a.read_only)
+        });
+    }
+    const defs=[...defsMap.values()];
     const defMap=new Map(defs.map(a=>[a.id,a]));
-    const outputMeta=rr[2].ok?extrairAtributosOutputV46(rr[2].data):[];
-    const metaMap=new Map(outputMeta.map(x=>[x.id,x]));
-    const saleTerms=rr[3]?.ok && Array.isArray(rr[3]?.data) ? rr[3].data : [];
+    const inputMeta=rr[2].ok?extrairAtributosOutputV46(rr[2].data):[];
+    const outputMeta=rr[3].ok?extrairAtributosOutputV46(rr[3].data):[];
+    const saleTerms=rr[4]?.ok && Array.isArray(rr[4]?.data) ? rr[4].data : [];
+
+    // A ficha INPUT representa os campos que o vendedor realmente pode preencher.
+    // Se estiver indisponível, usamos o OUTPUT; por fim, caímos no /attributes.
+    const metaCombinada=[];
+    const seenMeta=new Set();
+    for(const m of [...inputMeta,...outputMeta]){
+        const key=String(m?.id||'');
+        if(!key||seenMeta.has(key))continue;
+        seenMeta.add(key); metaCombinada.push(m);
+    }
 
     let visiveis=[];
-    if(outputMeta.length){
-        visiveis=selecionarAtributosPrincipaisSecundariosV48(defs,outputMeta);
+    if(metaCombinada.length){
+        visiveis=selecionarAtributosPrincipaisSecundariosV52(defs,metaCombinada);
     }else{
         const fallbackMeta=defs
           .filter(a=>!a.read_only&&!a.hidden)
           .map((a,i)=>({
               id:a.id,
               group_id:String(a.attribute_group_id||''),
-              group_label:a.attribute_group_name||'Características',
+              group_label:a.attribute_group_name||'Características secundárias',
               group_relevance:a.required?1:2,
               attribute_relevance:a.required?1:2,
               output_order:i
           }));
-        visiveis=selecionarAtributosPrincipaisSecundariosV48(defs,fallbackMeta);
+        visiveis=selecionarAtributosPrincipaisSecundariosV52(defs,fallbackMeta);
     }
 
     // Caso um atributo seja obrigatório para publicar mas não apareça no output,
@@ -7277,6 +7323,13 @@ function sanitizarValorAtributoV46(attr,def){
     let valueId=attr.value_id!=null?String(attr.value_id).trim():'';
     let valueName=attr.value_name!=null?String(attr.value_name).trim():'';
     const valores=Array.isArray(def.values)?def.values:[];
+
+    // Mercado Livre: N/A é enviado com value_id = -1 e value_name = null.
+    // Atributos obrigatórios não podem ser marcados como N/A.
+    if(valueId==='-1'){
+        if(def.required)return null;
+        return {id,value_id:'-1',value_name:null};
+    }
 
     if(valores.length){
         let match=null;
@@ -7503,8 +7556,8 @@ app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
             max_pictures_per_item:meta.max_pictures_per_item,
             listing_allowed:meta.listing_allowed,
             variacoes:meta.visiveis.filter(a=>a.allow_variations||a.child_pk),
-            fonte:'technical_specs/output-principais-secundarias',
-            criterio:'Somente características principais e secundárias realmente exibidas ao comprador; campos técnicos e identificadores internos ficam ocultos.'
+            fonte:'technical_specs/input+output-principais-secundarias',
+            criterio:'Características principais e secundárias editáveis da ficha do Mercado Livre; campos técnicos e identificadores internos ficam ocultos.'
         });
     }catch(e){
         respostaErro(res,500,'Erro ao consultar as características exibidas ao comprador: '+e.message);
