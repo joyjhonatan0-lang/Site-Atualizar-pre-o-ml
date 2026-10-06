@@ -5996,11 +5996,22 @@ async function resolverGuiaAutomaticoV55(token,payload,cfg,opts={}){
 
     const manual=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
     if(manual){
+        const todasLinhasManuais=rowsCfg.length>0 && rowsCfg.every(r=>String(r?.size_grid_row_id||'').trim());
         try{
             const chart=await obterChartV55(token,manual);
             const hits=tamanhos.filter(t=>acharRowChartV55(chart,t)).length;
-            if(hits===tamanhos.length)return {gridId:String(chart?.id||manual),chart,source:'manual-compatible'};
-        }catch{}
+            // V56: quando o usuário informou o guia, ele tem prioridade.
+            // Se todas as linhas também foram informadas manualmente, não exigimos
+            // correspondência automática por tamanho: os IDs manuais serão enviados.
+            if(todasLinhasManuais || hits>0){
+                return {gridId:String(chart?.id||manual),chart,hits,source:todasLinhasManuais?'manual-direct':'manual-compatible'};
+            }
+            return {gridId:String(chart?.id||manual),chart,hits,source:'manual-guide'};
+        }catch(e){
+            // Ainda permite publicação com guia + linhas manuais completas.
+            if(todasLinhasManuais)return {gridId:manual,chart:null,hits:0,source:'manual-direct-no-chart'};
+            throw e;
+        }
     }
 
     const title=String(cfg?.titles?.[Number(opts.familyIndex||0)]||cfg?.product_name||'').trim();
@@ -6035,21 +6046,39 @@ async function aplicarGuiaTamanhoV55(token,payload,cfg,opts={}){
     if(!varCfg?.enabled)return payload;
     const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
     const temTamanho=rowsCfg.some(r=>Boolean(tamanhoDaLinhaV55(r)));
-    if(!temTamanho)return payload;
+    const manualGrid=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
+    const temLinhaManual=rowsCfg.some(r=>Boolean(String(r?.size_grid_row_id||'').trim()));
+    if(!temTamanho&&!manualGrid&&!temLinhaManual)return payload;
 
     const resolvido=await resolverGuiaAutomaticoV55(token,payload,cfg,opts);
     if(!resolvido){
-        // Só força guia quando o domínio/categoria realmente devolve um guia compatível.
-        // A validação do ML continuará sendo a autoridade final para categorias que não exigem grade.
-        return payload;
+        // Se a categoria exigir guia, a validação do Mercado Livre informará isso.
+        // Quando houver ID manual, porém, nunca descartamos o que o usuário preencheu.
+        if(!manualGrid)return payload;
     }
-    const gridId=String(resolvido.gridId);
-    const chart=resolvido.chart;
-    const pushUnique=(arr,obj)=>{const id=String(obj?.id||'');const i=arr.findIndex(x=>String(x?.id||'')===id);if(i>=0)arr[i]=obj;else arr.push(obj);};
+
+    const gridId=String(resolvido?.gridId||manualGrid||'').trim();
+    if(!gridId)return payload;
+    const chart=resolvido?.chart||null;
+    const pushUnique=(arr,obj)=>{
+        const id=String(obj?.id||'');
+        const i=arr.findIndex(x=>String(x?.id||'')===id);
+        if(i>=0)arr[i]=obj; else arr.push(obj);
+    };
     payload.attributes=Array.isArray(payload.attributes)?payload.attributes:[];
     pushUnique(payload.attributes,{id:'SIZE_GRID_ID',value_name:gridId});
 
+    const normalizarLinhaManual=(raw)=>{
+        const v=String(raw||'').trim();
+        if(!v)return '';
+        if(v.includes(':'))return v;
+        // Aceita somente o número da linha e converte para o formato oficial GUIA:LINHA.
+        return `${gridId}:${v}`;
+    };
     const resolver=(row)=>{
+        const manual=normalizarLinhaManual(row?.size_grid_row_id);
+        if(manual)return manual;
+        if(!chart)return '';
         const tamanho=tamanhoDaLinhaV55(row,chart);
         if(!tamanho)return '';
         const achou=acharRowChartV55(chart,tamanho);
@@ -6060,7 +6089,7 @@ async function aplicarGuiaTamanhoV55(token,payload,cfg,opts={}){
         const row=rowsCfg[Number(opts.variationIndex||0)]||rowsCfg[0];
         const rowId=resolver(row);
         if(!rowId){
-            const e=new Error(`O Mercado Livre encontrou automaticamente o guia ${gridId}, mas não existe uma linha compatível com o tamanho "${tamanhoDaLinhaV55(row,chart)}". Confira apenas o tamanho informado na variação.`);
+            const e=new Error(`Guia de tamanho ${gridId}: falta o ID da linha desta variação. Preencha SIZE_GRID_ROW_ID (ex.: ${gridId}:1) ou use um tamanho que exista nesse guia.`);
             e.code='missing_size_grid_row'; throw e;
         }
         pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
@@ -6068,7 +6097,10 @@ async function aplicarGuiaTamanhoV55(token,payload,cfg,opts={}){
         payload.variations=payload.variations.map((v,i)=>{
             const row=rowsCfg[i]||rowsCfg[0];
             const rowId=resolver(row);
-            if(!rowId){const e=new Error(`Não existe linha do guia ${gridId} para o tamanho "${tamanhoDaLinhaV55(row,chart)}".`);e.code='missing_size_grid_row';throw e;}
+            if(!rowId){
+                const e=new Error(`Guia de tamanho ${gridId}: variação ${i+1} está sem ID da linha. Preencha SIZE_GRID_ROW_ID (ex.: ${gridId}:${i+1}) ou confirme o tamanho dessa variação.`);
+                e.code='missing_size_grid_row'; throw e;
+            }
             const attrs=Array.isArray(v.attributes)?v.attributes:[];
             pushUnique(attrs,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
             return {...v,attributes:attrs};
