@@ -11302,7 +11302,7 @@ function renderCategoriasSelecionadasV37(){
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
-            <div class="text-[10px] text-emerald-400 mt-2">Exibindo apenas as características principais e secundárias que aparecem para o comprador (${attrs.length}). Campos técnicos internos ficam ocultos.</div>
+            <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.</div>
             ${grupos.map(g=>`<div class="mt-5">
                 <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -11310,18 +11310,21 @@ function renderCategoriasSelecionadasV37(){
                     const current=c.values?.[a.id]||{};
                     const labelClass=a.required?'text-yellow-400':'text-slate-400';
                     const badge=a.required?' · obrigatório':'';
+                    const isAlfanumerico=String(a.id||'').toUpperCase()==='ALPHANUMERIC_MODEL';
+                    const isNA=String(current.value_id||'')==='-1';
+                    const naHtml=isAlfanumerico && !a.required ? `<label class="mt-2 flex items-center gap-2 text-[10px] text-slate-300 cursor-pointer"><input type="checkbox" ${isNA?'checked':''} onchange="setCategoriaNaoAplicaV52('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.checked)" class="w-4 h-4 accent-yellow-400"> Não se aplica</label>` : '';
                     if(Array.isArray(a.values)&&a.values.length){
                         return `<div>
                             <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
-                            <select onchange="setCategoriaValorV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white">
+                            <select ${isNA?'disabled':''} onchange="setCategoriaValorV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white disabled:opacity-50">
                                 <option value="">Selecione...</option>
                                 ${a.values.slice(0,150).map(v=>`<option value="${textoEscapeV37(v.id||'')}" data-name="${textoEscapeV37(v.name||'')}" ${String(current.value_id||'')===String(v.id||'') || (!current.value_id&&String(current.value_name||'').toLowerCase()===String(v.name||'').toLowerCase()) ? 'selected':''}>${textoEscapeV37(v.name||v.id)}</option>`).join('')}
-                            </select>
+                            </select>${naHtml}
                         </div>`;
                     }
                     return `<div>
                         <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
-                        <input value="${textoEscapeV37(current.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor">
+                        <input ${isNA?'disabled':''} value="${textoEscapeV37(isNA?'':(current.value_name||''))}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white disabled:opacity-50" placeholder="${isNA?'Não se aplica':'Valor'}">${naHtml}
                     </div>`;
                 }).join('')}
                 </div>
@@ -11340,6 +11343,15 @@ function setCategoriaValorV37(categoryId,attrId,select){
 function setCategoriaTextoV37(categoryId,attrId,value){
     const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
     cat.values[attrId]={value_name:String(value||'').trim()};
+    atualizarAtributosVariacaoV37();
+    renderPlanilhaPreviewV37();
+}
+
+function setCategoriaNaoAplicaV52(categoryId,attrId,checked){
+    const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
+    if(checked)cat.values[attrId]={value_id:'-1',value_name:null};
+    else cat.values[attrId]={value_name:''};
+    renderCategoriasSelecionadasV37();
     atualizarAtributosVariacaoV37();
     renderPlanilhaPreviewV37();
 }
@@ -11845,7 +11857,12 @@ function gerarUrlsFotosV37(){
 }
 
 function coletarAttributesCategoriaV37(cat){
-    return Object.entries(cat.values||{}).map(([id,v])=>({id,...(v.value_id?{value_id:v.value_id}:{}),...(v.value_name?{value_name:v.value_name}: {})})).filter(x=>x.id && (x.value_id||x.value_name));
+    return Object.entries(cat.values||{}).map(([id,v])=>{
+        const valueId=v?.value_id!=null?String(v.value_id):'';
+        if(valueId==='-1')return {id,value_id:'-1',value_name:null};
+        const valueName=v?.value_name!=null?String(v.value_name).trim():'';
+        return {id,...(valueId?{value_id:valueId}:{}),...(valueName?{value_name:valueName}:{})};
+    }).filter(x=>x.id && (x.value_id||x.value_name||x.value_name===null));
 }
 
 
