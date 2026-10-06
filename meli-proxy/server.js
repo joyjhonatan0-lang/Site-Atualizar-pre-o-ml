@@ -5758,165 +5758,202 @@ async function publicarPayloadMercadoComFallbackEnvioV50(token,payload,shippingI
     return ultimo;
 }
 
-function normalizarLinhasVariacoesV53(cfg={}){
-    const varCfg=cfg?.variations||{};
-    if(!varCfg.enabled)return [];
-
-    const count=Math.min(30,Math.max(1,Number(varCfg.count||1)));
-    const attributeIds=Array.isArray(varCfg.attribute_ids)
-      ? [...new Set(varCfg.attribute_ids.map(x=>String(x||'').trim()).filter(Boolean))]
-      : (varCfg.attribute_id?[String(varCfg.attribute_id)]:[]);
-
-    let rows=[];
-    if(Array.isArray(varCfg.rows)&&varCfg.rows.length){
-        rows=varCfg.rows.slice(0,count).map((row,i)=>{
-            const attrs=Array.isArray(row?.attributes)?row.attributes:[];
-            const cleanAttrs=[];
-            const seen=new Set();
-            for(const a of attrs){
-                const id=String(a?.id||'').trim();
-                if(!id||seen.has(id))continue;
-                const valueId=a?.value_id!=null?String(a.value_id).trim():'';
-                const valueName=a?.value_name!=null?String(a.value_name).trim():'';
-                if(!valueId&&!valueName)continue;
-                cleanAttrs.push({
-                    id,
-                    ...(valueId?{value_id:valueId}:{}),
-                    ...(valueName?{value_name:valueName}:{})
-                });
-                seen.add(id);
-            }
-            return {
-                index:i,
-                sku_suffix:String(row?.sku_suffix||String(i+1).padStart(2,'0')).trim().slice(0,40),
-                price:Number(row?.price)>0?Number(row.price):null,
-                stock:(row?.stock!==null&&row?.stock!==undefined&&String(row.stock)!=='')
-                  ? Math.max(0,Math.floor(Number(row.stock)||0))
-                  : null,
-                attributes:cleanAttrs
-            };
-        });
-    }else{
-        // Compatibilidade com a configuração antiga de apenas 1 atributo.
-        const values=Array.isArray(varCfg.values)?varCfg.values.map(x=>String(x||'').trim()).filter(Boolean):[];
-        const attrId=String(varCfg.attribute_id||attributeIds[0]||'').trim();
-        rows=values.slice(0,count).map((value,i)=>({
-            index:i,
-            sku_suffix:String(i+1).padStart(2,'0'),
-            price:null,
-            stock:null,
-            attributes:attrId?[{id:attrId,value_name:value}]:[]
+function normalizarLinhasVariacaoV53(varCfg={}){
+    const enabled=Boolean(varCfg?.enabled);
+    if(!enabled)return [];
+    const rows=Array.isArray(varCfg?.rows)?varCfg.rows:[];
+    if(rows.length){
+        return rows.slice(0,100).map((r,i)=>({
+            index:i+1,
+            stock:r?.stock==null||r?.stock===''?null:Math.max(0,Number(r.stock||0)),
+            sku_suffix:String(r?.sku_suffix||'').trim(),
+            size_grid_row_id:String(r?.size_grid_row_id||'').trim(),
+            attributes:(Array.isArray(r?.attributes)?r.attributes:[]).map(a=>({
+                id:String(a?.id||'').trim(),
+                ...(a?.value_id!=null&&String(a.value_id).trim()?{value_id:String(a.value_id).trim()}:{}),
+                ...(a?.value_name!=null&&String(a.value_name).trim()?{value_name:String(a.value_name).trim()}:{}),
+            })).filter(a=>a.id&&(a.value_id||a.value_name))
         }));
     }
-
-    return rows;
+    // Compatibilidade com o formato anterior: 1 atributo + lista de valores.
+    const attrId=String(varCfg?.attribute_id||'').trim();
+    const values=Array.isArray(varCfg?.values)?varCfg.values.map(v=>String(v||'').trim()).filter(Boolean):[];
+    const count=Math.min(100,Math.max(1,Number(varCfg?.count||values.length||1)));
+    return values.slice(0,count).map((value,i)=>({index:i+1,stock:null,sku_suffix:'',size_grid_row_id:'',attributes:attrId?[{id:attrId,value_name:value}]:[]}));
 }
 
-function descricaoVariacaoV53(row={}){
-    return (Array.isArray(row.attributes)?row.attributes:[])
-      .map(a=>`${a.id}: ${a.value_name||a.value_id||''}`)
-      .filter(Boolean)
-      .join(' · ');
+function quantidadeVariacoesV53(cfg={},userProductSeller=false){
+    if(!cfg?.variations?.enabled)return 1;
+    if(!userProductSeller)return 1;
+    const rows=normalizarLinhasVariacaoV53(cfg.variations);
+    return Math.max(1,rows.length);
 }
 
-function validarConfigVariacoesV53(cfg={}){
+function assinaturaVariacaoV53(row={},defs=[]){
+    const ids=new Set((defs||[]).map(d=>String(d.id)));
+    return JSON.stringify((row.attributes||[])
+      .filter(a=>ids.has(String(a.id)))
+      .map(a=>[String(a.id),String(a.value_id||a.value_name||'').trim().toLowerCase()])
+      .filter(x=>x[1])
+      .sort((a,b)=>a[0].localeCompare(b[0])));
+}
+
+function validarLinhasVariacaoV53(varCfg={},meta){
+    if(!varCfg?.enabled)return [];
+    const rows=normalizarLinhasVariacaoV53(varCfg);
+    if(!rows.length)return ['Ative as variações e preencha pelo menos uma linha de variação.'];
+    const defs=[...(meta?.defMap?.values?.()||[])].filter(d=>!d.read_only&&(d.child_pk||d.allow_variations||d.variation_attribute));
+    const combinacoes=defs.filter(d=>d.child_pk||d.allow_variations);
+    if(!combinacoes.length)return ['A categoria selecionada não retornou atributos permitidos para variação.'];
+    const obrigatorios=combinacoes.filter(d=>d.child_pk||d.required);
+    const assinaturas=new Set();
+    const erros=[];
+    rows.forEach((row,i)=>{
+        const validos=[]; const porId=new Map();
+        for(const a of (row.attributes||[])){
+            const def=meta?.defMap?.get?.(String(a.id));
+            const clean=sanitizarValorAtributoV46(a,def);
+            if(clean){validos.push(clean);porId.set(String(clean.id),clean);}
+        }
+        const faltantes=obrigatorios.filter(d=>!porId.has(String(d.id)));
+        if(faltantes.length)erros.push(`Variação ${i+1}: faltam ${faltantes.map(d=>d.name||d.id).join(', ')}.`);
+        if(!combinacoes.some(d=>porId.has(String(d.id))))erros.push(`Variação ${i+1}: informe pelo menos um atributo que diferencie a variação.`);
+        const sig=assinaturaVariacaoV53({attributes:validos},combinacoes);
+        if(sig==='[]')return;
+        if(assinaturas.has(sig))erros.push(`Variação ${i+1}: a combinação de atributos está repetida.`);
+        assinaturas.add(sig);
+    });
+    return erros;
+}
+
+
+function normalizarTextoGuiaV54(v){
+    return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function tamanhoDaLinhaV54(row={},chart=null){
+    const idsPreferidos=[
+        String(chart?.main_attribute_id||''),
+        'SIZE','MANUFACTURER_SIZE','BR_SIZE','AR_SIZE','US_SIZE','UK_SIZE','EU_SIZE'
+    ].filter(Boolean);
+    for(const id of idsPreferidos){
+        const a=(row.attributes||[]).find(x=>String(x?.id||'')===id);
+        if(a && String(a.value_name||a.value_id||'').trim())return String(a.value_name||a.value_id).trim();
+    }
+    const a=(row.attributes||[]).find(x=>/SIZE|TAMANHO/i.test(String(x?.id||'')));
+    return a?String(a.value_name||a.value_id||'').trim():'';
+}
+function extrairRowsChartV54(chart){
+    if(Array.isArray(chart?.rows))return chart.rows;
+    if(Array.isArray(chart?.data?.rows))return chart.data.rows;
+    return [];
+}
+function valorPrincipalRowChartV54(chart,row){
+    const main=String(chart?.main_attribute_id||'').trim();
+    const attrs=Array.isArray(row?.attributes)?row.attributes:[];
+    let a=main?attrs.find(x=>String(x?.id||'')===main):null;
+    if(!a)a=attrs.find(x=>/SIZE|TAMANHO/i.test(String(x?.id||'')))||attrs[0];
+    const vals=Array.isArray(a?.values)?a.values:[];
+    return String(vals[0]?.name||vals[0]?.id||a?.value_name||a?.value_id||'').trim();
+}
+async function obterChartV54(token,chartId){
+    const id=String(chartId||'').trim();
+    if(!id)return null;
+    const r=await mlFetch(`${ML_API}/catalog/charts/${encodeURIComponent(id)}`,token);
+    const d=await jsonSeguro(r);
+    if(!r.ok){
+        const e=new Error(`Não foi possível consultar o guia de tamanho ${id}: ${formatarErroMercadoLivre(d)}`);
+        e.code='invalid_size_grid';
+        throw e;
+    }
+    return d;
+}
+async function aplicarGuiaTamanhoV54(token,payload,cfg,opts={}){
     const varCfg=cfg?.variations||{};
-    if(!varCfg.enabled)return {ok:true,rows:[],attribute_ids:[]};
+    const gridId=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
+    if(!gridId)return payload;
 
-    const rows=normalizarLinhasVariacoesV53(cfg);
-    const count=Math.min(30,Math.max(1,Number(varCfg.count||1)));
-    const attributeIds=Array.isArray(varCfg.attribute_ids)
-      ? [...new Set(varCfg.attribute_ids.map(x=>String(x||'').trim()).filter(Boolean))]
-      : (varCfg.attribute_id?[String(varCfg.attribute_id)]:[]);
+    const chart=await obterChartV54(token,gridId);
+    const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
+    const rowAtual=rowsCfg[Number(opts.variationIndex||0)]||rowsCfg[0]||null;
+    const rowsChart=extrairRowsChartV54(chart);
 
-    if(!attributeIds.length){
-        return {ok:false,rows,attribute_ids:attributeIds,erro:'Escolha pelo menos um atributo que diferencie as variações, como tamanho ou cor.'};
-    }
-    if(rows.length!==count){
-        return {ok:false,rows,attribute_ids:attributeIds,erro:`Foram configuradas ${rows.length} variação(ões), mas a quantidade informada é ${count}. Preencha todas as variações.`};
-    }
+    const resolverRowId=(row)=>{
+        const manual=String(row?.size_grid_row_id||'').trim();
+        if(manual)return manual;
+        const tamanho=tamanhoDaLinhaV54(row,chart);
+        if(!tamanho)return '';
+        const alvo=normalizarTextoGuiaV54(tamanho);
+        const achou=rowsChart.find(cr=>normalizarTextoGuiaV54(valorPrincipalRowChartV54(chart,cr))===alvo);
+        return String(achou?.id||achou?.row_id||'').trim();
+    };
 
-    const fingerprints=new Set();
-    for(let i=0;i<rows.length;i++){
-        const row=rows[i];
-        const map=new Map((row.attributes||[]).map(a=>[String(a.id),a]));
-        const faltando=attributeIds.filter(id=>{
-            const a=map.get(id);
-            return !a || (!String(a.value_id||'').trim()&&!String(a.value_name||'').trim());
+    const pushUnique=(arr,obj)=>{
+        const id=String(obj?.id||'');
+        const idx=arr.findIndex(x=>String(x?.id||'')===id);
+        if(idx>=0)arr[idx]=obj; else arr.push(obj);
+    };
+
+    payload.attributes=Array.isArray(payload.attributes)?payload.attributes:[];
+    pushUnique(payload.attributes,{id:'SIZE_GRID_ID',value_name:gridId});
+
+    if(opts.userProductSeller && varCfg.enabled){
+        const rowId=resolverRowId(rowAtual);
+        const tamanho=tamanhoDaLinhaV54(rowAtual,chart);
+        if(!rowId){
+            const e=new Error(`Guia de tamanho ${gridId}: não encontrei a linha correspondente${tamanho?` ao tamanho "${tamanho}"`:''}. Informe o SIZE_GRID_ROW_ID manualmente na variação.`);
+            e.code='missing_size_grid_row';
+            throw e;
+        }
+        pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
+    }else if(varCfg.enabled && Array.isArray(payload.variations)){
+        payload.variations=payload.variations.map((v,i)=>{
+            const cfgRow=rowsCfg[i]||null;
+            const rowId=resolverRowId(cfgRow);
+            const tamanho=tamanhoDaLinhaV54(cfgRow,chart);
+            if(!rowId){
+                const e=new Error(`Guia de tamanho ${gridId}: não encontrei a linha da variação ${i+1}${tamanho?` para o tamanho "${tamanho}"`:''}. Informe o SIZE_GRID_ROW_ID manualmente.`);
+                e.code='missing_size_grid_row';
+                throw e;
+            }
+            const attrs=Array.isArray(v.attributes)?v.attributes:[];
+            pushUnique(attrs,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
+            return {...v,attributes:attrs};
         });
-        if(faltando.length){
-            return {ok:false,rows,attribute_ids:attributeIds,erro:`Variação ${i+1}: preencha ${faltando.join(', ')}.`};
-        }
-        const fp=attributeIds.slice().sort().map(id=>{
-            const a=map.get(id)||{};
-            return `${id}=${String(a.value_id||a.value_name||'').trim().toLowerCase()}`;
-        }).join('|');
-        if(fingerprints.has(fp)){
-            return {ok:false,rows,attribute_ids:attributeIds,erro:`A variação ${i+1} repete exatamente a mesma combinação de outra variação. Cada combinação de tamanho/cor/outros atributos precisa ser única.`};
-        }
-        fingerprints.add(fp);
+    }else{
+        // Sem variações: aceita row manual no primeiro registro quando informado.
+        const rowId=resolverRowId(rowAtual);
+        if(rowId)pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
     }
-    return {ok:true,rows,attribute_ids:attributeIds};
-}
-
-function skuVariacaoV53(prefix,familyIndex,variationIndex,row={}){
-    const base=String(prefix||'').trim();
-    if(!base)return '';
-    const fam=String(Number(familyIndex||0)+1).padStart(5,'0');
-    const suf=String(row?.sku_suffix||Number(variationIndex||0)+1)
-      .trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,40) || String(Number(variationIndex||0)+1).padStart(2,'0');
-    return `${base}-${fam}-${suf}`;
+    return payload;
 }
 
 function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProductSeller=false,category}){
     const title=limitarTituloV36(cfg.titles?.[familyIndex]||cfg.family_name||cfg.product_name||'',60);
-    const basePrice=Number(cfg.price||0);
-    const baseStock=Math.max(1,Number(cfg.stock||1));
+    const price=Number(cfg.price||0);
+    const stock=Math.max(1,Number(cfg.stock||1));
     const pictureIds=(Array.isArray(cfg.picture_ids)?cfg.picture_ids:[]).map(String).filter(Boolean);
     const manualPictureSources=normalizarUrlsManuaisV47(cfg.picture_sources_manual||cfg.manual_picture_urls||[]);
-    const pictures=manualPictureSources.length
-      ? manualPictureSources.map(source=>({source}))
-      : pictureIds.map(id=>({id}));
+    const pictures=manualPictureSources.length?manualPictureSources.map(source=>({source})):pictureIds.map(id=>({id}));
 
     let attributes=(Array.isArray(category?.attributes)?category.attributes:[])
       .filter(a=>a?.id && (a?.value_id || a?.value_name || a?.value_name===null))
-      .map(a=>({
-          id:String(a.id),
-          ...(a.value_id?{value_id:String(a.value_id)}:{}),
-          ...(String(a.value_id||'')==='-1'?{value_name:null}:(a.value_name?{value_name:String(a.value_name)}:{}))
-      }));
+      .map(a=>({id:String(a.id),...(a.value_id?{value_id:String(a.value_id)}:{}),...(String(a.value_id||'')==='-1'?{value_name:null}:(a.value_name?{value_name:String(a.value_name)}:{}))}));
 
     const varCfg=cfg.variations||{};
-    const variationRows=normalizarLinhasVariacoesV53(cfg);
-    const variationAttributeIds=new Set(
-        (Array.isArray(varCfg.attribute_ids)?varCfg.attribute_ids:[varCfg.attribute_id])
-          .map(x=>String(x||'').trim()).filter(Boolean)
-    );
-    const row=variationRows[variationIndex]||null;
+    const varRows=normalizarLinhasVariacaoV53(varCfg);
+    const idsVariacao=new Set(varRows.flatMap(r=>(r.attributes||[]).map(a=>String(a.id))));
+    if(varCfg.enabled&&idsVariacao.size)attributes=attributes.filter(a=>!idsVariacao.has(String(a.id)));
 
-    let price=row?.price!=null?Number(row.price):basePrice;
-    let stock=row?.stock!=null?Math.max(0,Number(row.stock)||0):baseStock;
-
-    if(varCfg.enabled && variationRows.length){
-        // Atributos que variam não podem ficar simultaneamente no nível comum
-        // e no nível da variação. Cada row substitui esses valores.
-        attributes=attributes.filter(a=>!variationAttributeIds.has(String(a.id)));
-        if(row){
-            for(const a of (row.attributes||[])){
-                attributes.push({
-                    id:String(a.id),
-                    ...(a.value_id?{value_id:String(a.value_id)}:{}),
-                    ...(a.value_name?{value_name:String(a.value_name)}:{})
-                });
-            }
-        }
+    const rowSelecionada=varRows[variationIndex]||varRows[0]||null;
+    if(userProductSeller&&varCfg.enabled&&rowSelecionada){
+        for(const a of (rowSelecionada.attributes||[]))attributes.push({...a,id:String(a.id)});
     }
 
     const base={
         category_id:String(category?.category_id||cfg.category_id||''),
         price,
         currency_id:'BRL',
-        available_quantity:stock,
+        available_quantity:userProductSeller&&rowSelecionada?.stock!=null?Math.max(1,Number(rowSelecionada.stock||1)):stock,
         buying_mode:'buy_it_now',
         channels:['marketplace'],
         listing_type_id:String(cfg.listing_type_id||'gold_special'),
@@ -5927,37 +5964,29 @@ function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProd
     };
 
     const skuPrefix=String(cfg.sku_prefix||'').trim();
+    const catKey=String(category?.category_id||'').replace(/[^a-zA-Z0-9]/g,'').slice(-6);
+    const familySku=skuPrefix?`${skuPrefix}-${catKey}-${String(familyIndex+1).padStart(5,'0')}`:'';
 
     if(userProductSeller){
-        // No novo modelo, todos os itens das variações de um mesmo título usam
-        // exatamente o mesmo family_name. Os CHILD_PK/custom variam por item.
         base.family_name=title;
-        const sku=varCfg.enabled
-          ? skuVariacaoV53(skuPrefix,familyIndex,variationIndex,row||{})
-          : (skuPrefix?`${skuPrefix}-${String(familyIndex+1).padStart(5,'0')}`:'');
-        if(sku)base.seller_custom_field=sku;
+        if(familySku){
+            const suffix=String(rowSelecionada?.sku_suffix||'').trim();
+            const skuVariacao=suffix?`${familySku}-${suffix}`:`${familySku}-${String(variationIndex+1).padStart(2,'0')}`;
+            // Fluxo atual do Mercado Livre: SKU deve ser enviado como atributo SELLER_SKU.
+            base.attributes=base.attributes.filter(a=>String(a.id)!=='SELLER_SKU');
+            base.attributes.push({id:'SELLER_SKU',value_name:skuVariacao});
+        }
     }else{
         base.title=title;
-        if(skuPrefix && !varCfg.enabled){
-            const catKey=String(category?.category_id||'').replace(/[^a-zA-Z0-9]/g,'').slice(-6);
-            base.seller_custom_field=`${skuPrefix}-${catKey}-${String(familyIndex+1).padStart(5,'0')}`;
-        }
-
-        if(varCfg.enabled && variationRows.length){
-            // Modelo legado: um anúncio contém todas as variações no array variations.
-            // Cada linha pode ter vários attribute_combinations, além de preço/estoque/SKU próprios.
-            base.available_quantity=variationRows.reduce((s,r)=>s+(r.stock!=null?Math.max(0,Number(r.stock)||0):baseStock),0);
-            base.attributes=attributes.filter(a=>!variationAttributeIds.has(String(a.id)));
-            base.variations=variationRows.map((vr,i)=>({
-                attribute_combinations:(vr.attributes||[]).map(a=>({
-                    id:String(a.id),
-                    ...(a.value_id?{value_id:String(a.value_id)}:{}),
-                    ...(a.value_name?{value_name:String(a.value_name)}:{})
-                })),
-                price:vr.price!=null?Number(vr.price):basePrice,
-                available_quantity:vr.stock!=null?Math.max(0,Number(vr.stock)||0):baseStock,
+        if(familySku)base.seller_custom_field=familySku;
+        if(varCfg.enabled&&varRows.length){
+            base.available_quantity=varRows.reduce((sum,r)=>sum+Math.max(1,Number(r.stock==null?stock:r.stock||1)),0);
+            base.variations=varRows.map((row,i)=>({
+                attribute_combinations:(row.attributes||[]).map(a=>({id:String(a.id),...(a.value_id?{value_id:String(a.value_id)}:{}),...(a.value_name?{value_name:String(a.value_name)}:{})})),
+                price,
+                available_quantity:Math.max(1,Number(row.stock==null?stock:row.stock||1)),
                 ...(pictureIds.length?{picture_ids:pictureIds}:{}),
-                ...(skuPrefix?{seller_custom_field:skuVariacaoV53(skuPrefix,familyIndex,i,vr)}:{})
+                ...(familySku?{seller_custom_field:`${familySku}-${String(row.sku_suffix||'').trim()||String(i+1).padStart(2,'0')}`}:{})
             }));
         }
     }
@@ -5978,11 +6007,8 @@ async function processarCriacaoMassaV37(job){
 
     const userProductSeller=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
     const families=Math.max(1,Number(cfg.quantity||cfg.titles?.length||1));
-    const variacoesValidadasV53=validarConfigVariacoesV53(cfg);
-    if(cfg?.variations?.enabled && !variacoesValidadasV53.ok)throw new Error(variacoesValidadasV53.erro);
-    const varCount=(cfg?.variations?.enabled && userProductSeller)
-      ? Math.max(1,variacoesValidadasV53.rows.length)
-      : 1;
+    const varRows=normalizarLinhasVariacaoV53(cfg?.variations||{});
+    const varCount=quantidadeVariacoesV53(cfg,userProductSeller);
     const perCategory=families*varCount;
     const total=categories.length*perCategory;
 
@@ -6001,10 +6027,7 @@ async function processarCriacaoMassaV37(job){
         const category=categories[categoryIndex];
         const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex,variationIndex,userProductSeller,category,sellerId:job.seller_id});
         const payload=prepared.payload;
-        const titleBase=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
-        const variationRow=variacoesValidadasV53.rows[variationIndex]||null;
-        const variationDesc=(cfg?.variations?.enabled&&variationRow)?descricaoVariacaoV53(variationRow):'';
-        const titleRequested=variationDesc?`${titleBase} · V${variationIndex+1}: ${variationDesc}`:titleBase;
+        const titleRequested=String(cfg.titles?.[familyIndex]||cfg.product_name||'');
 
         if(prepared.faltantes.length){
             const msg=`Faltam características obrigatórias: ${prepared.faltantes.map(x=>x.name).join(', ')}`;
@@ -7292,6 +7315,7 @@ function extrairAtributosOutputV46(payload){
 }
 
 function mapAtributoDefV46(a={}){
+    const hierarchy=String(a?.hierarchy||'').toUpperCase();
     return {
         id:String(a.id||''),
         name:String(a.name||a.id||''),
@@ -7302,11 +7326,11 @@ function mapAtributoDefV46(a={}){
         conditional_required:Boolean(a?.tags?.conditional_required),
         allow_variations:Boolean(a?.tags?.allow_variations),
         variation_attribute:Boolean(a?.tags?.variation_attribute),
-        child_pk:Boolean(a?.tags?.child_pk),
-        parent_pk:Boolean(a?.tags?.parent_pk),
+        child_pk:Boolean(a?.tags?.child_pk||hierarchy==='CHILD_PK'),
+        parent_pk:Boolean(a?.tags?.parent_pk||hierarchy==='PARENT_PK'),
         read_only:Boolean(a?.tags?.read_only),
         hidden:Boolean(a?.tags?.hidden||a?.tags?.vip_hidden),
-        hierarchy:String(a?.hierarchy||''),
+        hierarchy,
         attribute_group_id:String(a?.attribute_group_id||''),
         attribute_group_name:String(a?.attribute_group_name||'')
     };
@@ -7501,6 +7525,12 @@ function sanitizarValorAtributoV46(attr,def){
 async function prepararPayloadPublicacaoV46(token,cfg,opts){
     const category=opts.category||{};
     const meta=await obterCategoriaV46(token,category.category_id);
+    const errosVariacaoV53=validarLinhasVariacaoV53(cfg?.variations||{},meta);
+    if(errosVariacaoV53.length){
+        const e=new Error(errosVariacaoV53.join(' '));
+        e.code='invalid_variations';
+        throw e;
+    }
     if(!meta.listing_allowed){
         const e=new Error(`A categoria ${category.category_name||category.category_id} não permite novas publicações.`);
         e.code='category_listing_not_allowed';throw e;
@@ -7519,6 +7549,7 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
 
     aplicarCodigoUniversalV51(payload,cfg,meta);
     ajustarSaleTermsCategoriaV51(payload,cfg,meta);
+    await aplicarGuiaTamanhoV54(token,payload,cfg,{...opts,userProductSeller:Boolean(opts?.userProductSeller)});
 
     // Resolve automaticamente o envio permitido pela conta + categoria.
     // Evita deixar o Mercado Livre assumir ME1 quando a conta não possui mais esse modo.
@@ -7556,8 +7587,9 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
     }
 
     const enviados=new Set(payload.attributes.map(a=>a.id));
+    const enviadosVariacoes=new Set((Array.isArray(payload.variations)?payload.variations:[]).flatMap(v=>(v.attribute_combinations||[]).map(a=>String(a.id))));
     const faltantes=meta.required
-      .filter(d=>!enviados.has(d.id))
+      .filter(d=>!enviados.has(d.id)&&!enviadosVariacoes.has(String(d.id)))
       .filter(d=>!['ITEM_CONDITION'].includes(d.id))
       .map(d=>({id:d.id,name:d.name}));
 
@@ -7698,7 +7730,8 @@ app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
             obrigatorios_publicacao:meta.required.map(a=>({id:a.id,name:a.name,required:true})),
             max_pictures_per_item:meta.max_pictures_per_item,
             listing_allowed:meta.listing_allowed,
-            variacoes:meta.visiveis.filter(a=>a.allow_variations||a.child_pk),
+            variacoes:meta.defs.filter(a=>!a.read_only&&!a.hidden&&(a.allow_variations||a.child_pk||(a.variation_attribute&&a.required))),
+            atributos_variacao:meta.defs.filter(a=>!a.read_only&&!a.hidden&&(a.allow_variations||a.child_pk||(a.variation_attribute&&a.required))),
             fonte:'technical_specs/input+output-principais-secundarias',
             criterio:'Características principais e secundárias editáveis da ficha do Mercado Livre; campos técnicos e identificadores internos ficam ocultos.'
         });
@@ -8348,7 +8381,7 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
 });
 
 app.get('/api/v51/build',(req,res)=>{
-    res.json({sucesso:true,version:'V51',publication:'mercado-envios-me2-commercial-fields-warnings-aware',shipping:'ME2-explicito',attributes:'principais-secundarias',package_dimensions:'auto-category-defaults'});
+    res.json({sucesso:true,version:'V54',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-auto',package_dimensions:'auto-category-defaults'});
 });
 
 app.post('/api/v51/criar/validar',async(req,res)=>{
@@ -8362,88 +8395,56 @@ app.post('/api/v51/criar/validar',async(req,res)=>{
         const categories=normalizarCategoriasConfigV37(cfg);
         if(!categories.length)return respostaErro(res,400,'Escolha pelo menos uma categoria.');
 
-        const variacoes=validarConfigVariacoesV53(cfg);
-        if(cfg?.variations?.enabled && !variacoes.ok){
-            return respostaErro(res,400,variacoes.erro);
-        }
-
         const resultados=[];
-        const indices=(up&&cfg?.variations?.enabled&&variacoes.rows.length)
-          ? variacoes.rows.map((_,i)=>i)
-          : [0];
-
         for(const category of categories){
-            for(const variationIndex of indices){
-                try{
-                    const prepared=await prepararPayloadPublicacaoV46(token,cfg,{
-                        familyIndex:0,
-                        variationIndex,
-                        userProductSeller:up,
-                        category,
-                        sellerId:me.id
-                    });
-                    const sample=prepared.payload;
-                    if(up && cfg?.variations?.enabled) delete sample.variations;
+            try{
+                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
+                const sample=prepared.payload;
+                if(up && cfg?.variations?.enabled) delete sample.variations;
 
-                    const variationRow=variacoes.rows[variationIndex]||null;
-                    const variationLabel=variationRow?descricaoVariacaoV53(variationRow):'';
-
-                    if(prepared.faltantes.length){
-                        resultados.push({
-                            category_id:category.category_id,
-                            category_name:category.category_name,
-                            variation_index:variationIndex,
-                            variation_label:variationLabel,
-                            sucesso:false,
-                            erro:`Faltam características obrigatórias para publicar${variationLabel?` na variação ${variationIndex+1}`:''}: ${prepared.faltantes.map(x=>x.name).join(', ')}.`,
-                            detalhes:prepared.faltantes.map(x=>`Preencha ${x.name} (${x.id}).`),
-                            campos_faltando:prepared.faltantes,
-                            fotos_enviadas:sample.pictures?.length||0,
-                            limite_fotos:prepared.maxPics
-                        });
-                        continue;
-                    }
-
-                    const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
-                    const vr=validacao.response;
-                    const vd=validacao.data;
-                    const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
-                    const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
-                    const liberado=vr.ok||warningsOnly||overrideLostMe1;
+                if(prepared.faltantes.length){
                     resultados.push({
                         category_id:category.category_id,
                         category_name:category.category_name,
-                        variation_index:variationIndex,
-                        variation_label:variationLabel,
-                        sucesso:liberado,
-                        validacao:vd,
-                        aviso:warningsOnly
-                          ? 'O Mercado Livre retornou apenas avisos não bloqueantes. Eles serão aplicados/normalizados automaticamente na publicação.'
-                          : (overrideLostMe1?'O pré-validador retornou uma regra antiga de ME1, mas o payload está confirmado em ME2. A publicação real será tentada em ME2.':null),
-                        erro:liberado?null:formatarErroMercadoLivre(vd),
-                        detalhes:liberado?[]:detalhesValidacaoV46(vd),
-                        shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
-                        shipping_strategy:validacao.strategy||null,
-                        shipping_logistic_type:prepared.shippingInfo?.logistic_type||null,
-                        shipping_free_shipping:Boolean(validacao.payload?.shipping?.free_shipping),
-                        shipping_free_shipping_required:Boolean(prepared.shippingInfo?.free_shipping_required),
-                        shipping_payload:validacao.payload?.shipping||null,
-                        shipping_tentativas:validacao.tentativas||[],
-                        dimensoes_pacote_auto:prepared.shippingInfo?.dimensoes_auto||[],
-                        fotos_enviadas:validacao.payload?.pictures?.length||sample.pictures?.length||0,
+                        sucesso:false,
+                        erro:`Faltam características obrigatórias para publicar: ${prepared.faltantes.map(x=>x.name).join(', ')}.`,
+                        detalhes:prepared.faltantes.map(x=>`Preencha ${x.name} (${x.id}).`),
+                        campos_faltando:prepared.faltantes,
+                        fotos_enviadas:sample.pictures?.length||0,
                         limite_fotos:prepared.maxPics
                     });
-                }catch(e){
-                    resultados.push({
-                        category_id:category.category_id,
-                        category_name:category.category_name,
-                        variation_index:variationIndex,
-                        variation_label:variacoes.rows[variationIndex]?descricaoVariacaoV53(variacoes.rows[variationIndex]):'',
-                        sucesso:false,
-                        erro:e.message,
-                        detalhes:[e.message]
-                    });
+                    continue;
                 }
+
+                const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
+                const vr=validacao.response;
+                const vd=validacao.data;
+                const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
+                const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
+                const liberado=vr.ok||warningsOnly||overrideLostMe1;
+                resultados.push({
+                    category_id:category.category_id,
+                    category_name:category.category_name,
+                    sucesso:liberado,
+                    validacao:vd,
+                    aviso:warningsOnly
+                      ? 'O Mercado Livre retornou apenas avisos não bloqueantes. Eles serão aplicados/normalizados automaticamente na publicação.'
+                      : (overrideLostMe1?'O pré-validador retornou uma regra antiga de ME1, mas o payload está confirmado em ME2. A publicação real será tentada em ME2.':null),
+                    erro:liberado?null:formatarErroMercadoLivre(vd),
+                    detalhes:liberado?[]:detalhesValidacaoV46(vd),
+                    shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
+                    shipping_strategy:validacao.strategy||null,
+                    shipping_logistic_type:prepared.shippingInfo?.logistic_type||null,
+                    shipping_free_shipping:Boolean(validacao.payload?.shipping?.free_shipping),
+                    shipping_free_shipping_required:Boolean(prepared.shippingInfo?.free_shipping_required),
+                    shipping_payload:validacao.payload?.shipping||null,
+                    shipping_tentativas:validacao.tentativas||[],
+                    dimensoes_pacote_auto:prepared.shippingInfo?.dimensoes_auto||[],
+                    fotos_enviadas:validacao.payload?.pictures?.length||sample.pictures?.length||0,
+                    limite_fotos:prepared.maxPics
+                });
+            }catch(e){
+                resultados.push({category_id:category.category_id,category_name:category.category_name,sucesso:false,erro:e.message,detalhes:[e.message]});
             }
         }
 
@@ -8451,9 +8452,8 @@ app.post('/api/v51/criar/validar',async(req,res)=>{
         res.status(ok?200:400).json({
             sucesso:ok,
             modo:up?'user_products':'legacy',
-            variacoes_por_familia:cfg?.variations?.enabled?Math.max(1,variacoes.rows.length):1,
             resultados,
-            erro:ok?null:resultados.filter(x=>!x.sucesso).map(x=>`${x.category_name}${x.variation_label?` · ${x.variation_label}`:''}: ${x.erro}`).join(' | ')
+            erro:ok?null:resultados.filter(x=>!x.sucesso).map(x=>`${x.category_name}: ${x.erro}`).join(' | ')
         });
     }catch(e){
         respostaErro(res,500,'Erro ao validar publicação: '+e.message);
@@ -8483,9 +8483,9 @@ app.post('/api/v51/criar/publicar',async(req,res)=>{
 
         const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
         const varCfg=cfg.variations||{};
-        const variacoesV53=validarConfigVariacoesV53(cfg);
-        if(varCfg.enabled && !variacoesV53.ok){
-            return respostaErro(res,400,variacoesV53.erro);
+        const varRows=normalizarLinhasVariacaoV53(varCfg);
+        if(varCfg.enabled&&!varRows.length){
+            return respostaErro(res,400,'Preencha as linhas das variações antes de publicar.');
         }
 
         // Pré-valida uma amostra em TODAS as categorias antes de abrir o job.
@@ -8493,90 +8493,37 @@ app.post('/api/v51/criar/publicar',async(req,res)=>{
         const errosValidacao=[];
         const categoriasLimpas=[];
         let maxPicsGlobal=manualPictureSources.length||pictureIds.length;
-        const variationIndices=(up&&varCfg.enabled&&variacoesV53.rows.length)
-          ? variacoesV53.rows.map((_,i)=>i)
-          : [0];
-        const variationIdsSet=new Set(variacoesV53.attribute_ids||[]);
-
-        for(const categoryOrig of categories){
-            const category={...categoryOrig};
-            let firstPrepared=null;
-            let firstValidacao=null;
-            let categoriaOk=true;
-            const shippingSignatures=new Set();
-
-            for(const variationIndex of variationIndices){
-                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{
-                    familyIndex:0,
-                    variationIndex,
-                    userProductSeller:up,
-                    category,
-                    sellerId:me.id
-                });
-                if(!firstPrepared)firstPrepared=prepared;
-                if(prepared.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,prepared.maxPics);
-
-                const variationLabel=variacoesV53.rows[variationIndex]
-                  ? descricaoVariacaoV53(variacoesV53.rows[variationIndex])
-                  : '';
-
-                if(prepared.faltantes.length){
-                    errosValidacao.push(`${category.category_name}${variationLabel?` · ${variationLabel}`:''}: faltam ${prepared.faltantes.map(x=>x.name).join(', ')}`);
-                    categoriaOk=false;
-                    continue;
-                }
-
-                const sample=prepared.payload;
-                if(up&&varCfg.enabled)delete sample.variations;
-
-                const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
-                if(!firstValidacao)firstValidacao=validacao;
-                const vr=validacao.response;
-                const vd=validacao.data;
-                const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
-                const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
-                if(!vr.ok&&!overrideLostMe1&&!warningsOnly){
-                    errosValidacao.push(`${category.category_name}${variationLabel?` · ${variationLabel}`:''}: ${formatarErroMercadoLivre(vd)}`);
-                    categoriaOk=false;
-                    continue;
-                }
-
-                shippingSignatures.add([
-                    validacao.mode||prepared.shippingInfo?.mode||'',
-                    Boolean(validacao.payload?.shipping?.free_shipping),
-                    Boolean(validacao.payload?.shipping?.local_pick_up),
-                    String(prepared.shippingInfo?.logistic_type||'')
-                ].join('|'));
+        for(const category of categories){
+            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
+            if(prepared.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,prepared.maxPics);
+            if(prepared.faltantes.length){
+                errosValidacao.push(`${category.category_name}: faltam ${prepared.faltantes.map(x=>x.name).join(', ')}`);
+                continue;
             }
-
-            if(!categoriaOk||!firstPrepared||!firstValidacao)continue;
-
-            const categoriaLimpa={
+            const sample=prepared.payload;
+            if(up&&varCfg.enabled)delete sample.variations;
+            const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
+            const vr=validacao.response;
+            const vd=validacao.data;
+            const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
+            const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
+            if(!vr.ok&&!overrideLostMe1&&!warningsOnly){
+                errosValidacao.push(`${category.category_name}: ${formatarErroMercadoLivre(vd)}`);
+                continue;
+            }
+            // Se apenas o validador legado reclamar de ME1, mas todo o preflight confirmou ME2,
+            // não bloqueamos a fila: o POST /items real será a fonte final de verdade.
+            // Salva o modo ME2 para o worker usar a mesma configuração.
+            category.shipping_mode='me2';
+            category.shipping_strategy=validacao.strategy||'me2_full';
+            category.shipping_free_shipping=Boolean(validacao.payload?.shipping?.free_shipping ?? prepared.shippingInfo?.free_shipping);
+            category.shipping_local_pick_up=Boolean(validacao.payload?.shipping?.local_pick_up ?? prepared.shippingInfo?.local_pick_up);
+            category.shipping_logistic_type=String(prepared.shippingInfo?.logistic_type||'');
+            categoriasLimpas.push({
                 ...category,
-                // Valores que mudam entre as variações não são persistidos como
-                // atributos comuns da família; o worker aplica a linha correta.
-                attributes:(firstPrepared.payload.attributes||[]).filter(a=>!variationIdsSet.has(String(a.id)))
-            };
-
-            // Reutiliza o preflight de envio quando todas as variações resolveram
-            // para a mesma configuração. Se houver diferenças de preço/logística,
-            // o worker recalcula o ME2 individualmente.
-            if(shippingSignatures.size===1){
-                categoriaLimpa.shipping_mode='me2';
-                categoriaLimpa.shipping_strategy=firstValidacao.strategy||'me2_full';
-                categoriaLimpa.shipping_free_shipping=Boolean(firstValidacao.payload?.shipping?.free_shipping ?? firstPrepared.shippingInfo?.free_shipping);
-                categoriaLimpa.shipping_local_pick_up=Boolean(firstValidacao.payload?.shipping?.local_pick_up ?? firstPrepared.shippingInfo?.local_pick_up);
-                categoriaLimpa.shipping_logistic_type=String(firstPrepared.shippingInfo?.logistic_type||'');
-            }else{
-                delete categoriaLimpa.shipping_mode;
-                delete categoriaLimpa.shipping_strategy;
-                delete categoriaLimpa.shipping_free_shipping;
-                delete categoriaLimpa.shipping_local_pick_up;
-                delete categoriaLimpa.shipping_logistic_type;
-            }
-            categoriasLimpas.push(categoriaLimpa);
+                attributes:prepared.payload.attributes
+            });
         }
-
         if(errosValidacao.length){
             return res.status(400).json({
                 sucesso:false,
@@ -8602,9 +8549,7 @@ app.post('/api/v51/criar/publicar',async(req,res)=>{
         cfg.picture_ids=pictureIds.slice(0,Math.max(1,maxPicsGlobal));
         cfg.categories=categoriasLimpas;
 
-        const varCount=(cfg?.variations?.enabled && up)
-          ? Math.max(1,variacoesV53.rows.length)
-          : 1;
+        const varCount=quantidadeVariacoesV53(cfg,up);
         const total=quantity*categoriasLimpas.length*varCount;
 
         const job=await criarJob(me.id,'mass_create_v37',{version:'v53',config:cfg});
