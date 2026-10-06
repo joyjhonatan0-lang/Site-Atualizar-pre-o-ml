@@ -5463,22 +5463,23 @@ function aplicarCodigoUniversalV51(payload,cfg={},meta){
         if(codigo && defMap?.has?.('GTIN'))attrs.push({id:'GTIN',value_name:codigo});
     }else{
         const def=defMap?.get?.('EMPTY_GTIN_REASON');
-        if(def){
-            const vals=Array.isArray(def.values)?def.values:[];
+        const gtinDef=defMap?.get?.('GTIN');
+        // V54: quando o usuário marcou “produto sem código”, envia o motivo
+        // sempre que a categoria possui GTIN/EMPTY_GTIN_REASON. Isso evita
+        // item.attribute.missing_conditional_required nas categorias em que
+        // o GTIN é condicional.
+        if(def || gtinDef){
+            const vals=Array.isArray(def?.values)?def.values:[];
             const norm=s=>normalizarTextoBuscaV46(s);
             const alvo=vals.find(v=>{
                 const n=norm(v?.name||'');
                 return n.includes('nao registrado') || n.includes('no registrado') || n.includes('sem codigo') || n.includes('nao cadastrado');
             }) || vals.find(v=>String(v?.id||'')==='17055160');
-            if(alvo){
-                attrs.push({
-                    id:'EMPTY_GTIN_REASON',
-                    value_id:String(alvo.id||''),
-                    value_name:String(alvo.name||'Não registrado')
-                });
-            }else{
-                attrs.push({id:'EMPTY_GTIN_REASON',value_id:'17055160',value_name:'Não registrado'});
-            }
+            attrs.push({
+                id:'EMPTY_GTIN_REASON',
+                value_id:String(alvo?.id||'17055160'),
+                value_name:String(alvo?.name||'Não registrado')
+            });
         }
     }
     payload.attributes=attrs;
@@ -5553,9 +5554,10 @@ function completarDimensoesPacoteME2V50(payload,shippingPrefs,meta){
         const def=meta.defMap.get(id);
         const num=Number(raw||0);
         if(!def || !Number.isFinite(num) || num<=0)continue;
-        // Para SELLER_PACKAGE_* o Mercado Livre espera valor numérico puro;
-        // as unidades são definidas pelo próprio atributo da categoria.
-        const value_name=String(Math.round(num));
+        // V54: a API de publicação exige unidade explícita nesses atributos
+        // (cm para altura/comprimento/largura e g para peso).
+        const inteiro=Math.max(1,Math.round(num));
+        const value_name=`${inteiro} ${unit}`;
         attrs.push({id,value_name});
         ids.add(id); adicionados.push({id,value_name});
     }
@@ -5847,13 +5849,22 @@ function montarPayloadPublicacaoV37(cfg,{familyIndex=0,variationIndex=0,userProd
         }
         if(varCfg.enabled && varRows.length){
             base.available_quantity=varRows.reduce((s,r)=>s+Math.max(1,Number(r.stock||stock)),0);
-            base.variations=varRows.map((row,i)=>({
-                attribute_combinations:(row.attributes||[]).map(a=>({id:String(a.id),...(a.value_id?{value_id:String(a.value_id)}:{}),...(a.value_name?{value_name:String(a.value_name)}:{})})),
-                price,
-                available_quantity:Math.max(1,Number(row.stock||stock)),
-                ...(pictureIds.length?{picture_ids:pictureIds}:{}),
-                ...(skuPrefix?{seller_custom_field:skuVariacaoV53(cfg,familyIndex,row,i)}:{})
-            }));
+            base.variations=varRows.map((row,i)=>{
+                const rowAttrs=(row.attributes||[]);
+                const combos=rowAttrs.filter(a=>{
+                    const d=category?.atributos_defs?.[String(a.id)]||null;
+                    return d?.allow_variations!==false;
+                });
+                const extras=rowAttrs.filter(a=>['GTIN','SIZE_GRID_ROW_ID'].includes(String(a.id)));
+                return {
+                    attribute_combinations:combos.map(a=>({id:String(a.id),...(a.value_id?{value_id:String(a.value_id)}:{}),...(a.value_name?{value_name:String(a.value_name)}:{})})),
+                    ...(extras.length?{attributes:extras.map(a=>({id:String(a.id),...(a.value_id?{value_id:String(a.value_id)}:{}),...(a.value_name?{value_name:String(a.value_name)}:{})}))}:{}),
+                    price,
+                    available_quantity:Math.max(1,Number(row.stock||stock)),
+                    ...(pictureIds.length?{picture_ids:pictureIds}:{}),
+                    ...(skuPrefix?{seller_custom_field:skuVariacaoV53(cfg,familyIndex,row,i)}:{})
+                };
+            });
         }
     }
     return base;
@@ -7398,6 +7409,31 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
     }
     let payload=montarPayloadPublicacaoV37(cfg,opts);
     const defMap=meta.defMap;
+
+    // V54: guia de tamanhos. Em moda/calçados o Mercado Livre pode exigir
+    // SIZE_GRID_ID no nível do item e SIZE_GRID_ROW_ID na variação.
+    const catValues=category?.values||{};
+    const sizeGrid=catValues.SIZE_GRID_ID||catValues.size_grid_id||null;
+    if(sizeGrid && defMap.has('SIZE_GRID_ID')){
+        payload.attributes=Array.isArray(payload.attributes)?payload.attributes:[];
+        payload.attributes=payload.attributes.filter(a=>String(a?.id||'')!=='SIZE_GRID_ID');
+        payload.attributes.push({
+            id:'SIZE_GRID_ID',
+            ...(sizeGrid.value_id?{value_id:String(sizeGrid.value_id)}:{}),
+            ...(sizeGrid.value_name?{value_name:String(sizeGrid.value_name)}:{})
+        });
+    }
+    if(Array.isArray(payload.variations) && defMap.has('SIZE_GRID_ROW_ID')){
+        const rows=normalizarLinhasVariacaoV53(cfg);
+        payload.variations=payload.variations.map((v,i)=>{
+            const src=rows[i]?.attributes?.find?.(a=>String(a?.id||'')==='SIZE_GRID_ROW_ID');
+            if(!src)return v;
+            const attrs=Array.isArray(v.attributes)?v.attributes.filter(a=>String(a?.id||'')!=='SIZE_GRID_ROW_ID'):[];
+            attrs.push({id:'SIZE_GRID_ROW_ID',...(src.value_id?{value_id:String(src.value_id)}:{}),...(src.value_name?{value_name:String(src.value_name)}:{})});
+            return {...v,attributes:attrs};
+        });
+    }
+
     const attrs=[];
     const seen=new Set();
     for(const a of (Array.isArray(payload.attributes)?payload.attributes:[])){
@@ -7590,6 +7626,10 @@ app.get('/api/v36/criar/categorias/:id/atributos',async(req,res)=>{
             max_pictures_per_item:meta.max_pictures_per_item,
             listing_allowed:meta.listing_allowed,
             variacoes:meta.visiveis.filter(a=>a.allow_variations||a.child_pk),
+            guia_tamanhos:{
+                size_grid_id:meta.defMap.get('SIZE_GRID_ID')||null,
+                size_grid_row_id:meta.defMap.get('SIZE_GRID_ROW_ID')||null
+            },
             fonte:'technical_specs/input+output-principais-secundarias',
             criterio:'Características principais e secundárias editáveis da ficha do Mercado Livre; campos técnicos e identificadores internos ficam ocultos.'
         });
