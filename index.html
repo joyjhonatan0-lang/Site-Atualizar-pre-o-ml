@@ -2663,8 +2663,21 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </select>
                 <div>
                     <label class="text-[9px] uppercase font-black text-slate-500">Quantidade de variações por título/família</label>
-                    <input id="criar-variacao-qtd-v37" type="number" min="1" max="30" value="2" oninput="ajustarQuantidadeVariacoesV53()" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
-                    <div class="text-[9px] text-slate-600 mt-1">O Mercado Livre permite até 30 condições/itens por User Product.</div>
+                    <input id="criar-variacao-qtd-v37" type="number" min="1" max="100" value="2" oninput="ajustarQuantidadeVariacoesV53()" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                    <div class="text-[9px] text-slate-600 mt-1">Cada título receberá todas as variações configuradas. O limite final também depende da categoria do Mercado Livre.</div>
+                </div>
+            </div>
+
+            <div class="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                    <div>
+                        <label class="text-[9px] uppercase font-black text-sky-400">Código do guia de tamanho — SIZE_GRID_ID</label>
+                        <input id="criar-size-grid-id-v54" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 210058">
+                        <div class="text-[9px] text-slate-500 mt-1">Use em tênis, calçados, roupas e outras categorias que exigem guia de tamanho. O painel tenta localizar automaticamente a linha correta do guia pelo tamanho de cada variação.</div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 leading-relaxed">
+                        Se o Mercado Livre exigir tabela de medidas, o anúncio envia <b class="text-white">SIZE_GRID_ID</b> e cada variação recebe o <b class="text-white">SIZE_GRID_ROW_ID</b>. Você também pode informar a linha manualmente em cada variação.
+                    </div>
                 </div>
             </div>
 
@@ -11407,7 +11420,7 @@ function defAtributoVariacaoV53(id){
 }
 
 function garantirLinhasVariacaoV53(){
-    const count=Math.min(30,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const count=Math.min(100,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
     const rows=Array.isArray(criarEstadoV37.variationRows)?criarEstadoV37.variationRows:[];
     while(rows.length<count){
         const n=rows.length+1;
@@ -11416,6 +11429,7 @@ function garantirLinhasVariacaoV53(){
             sku_suffix:String(n).padStart(2,'0'),
             price:'',
             stock:'',
+            size_grid_row_id:'',
             attributes:{}
         });
     }
@@ -11423,6 +11437,7 @@ function garantirLinhasVariacaoV53(){
     rows.forEach((r,i)=>{
         r.index=i;
         if(!r.attributes||typeof r.attributes!=='object')r.attributes={};
+        if(r.size_grid_row_id==null)r.size_grid_row_id='';
         if(r.sku_suffix==null||r.sku_suffix==='')r.sku_suffix=String(i+1).padStart(2,'0');
     });
     criarEstadoV37.variationRows=rows;
@@ -11553,6 +11568,11 @@ function renderEditorVariacoesV53(){
                     <input type="number" step="1" min="0" value="${textoEscapeV37(row.stock||'')}" oninput="setVariacaoCampoV53(${i},'stock',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Usar estoque geral">
                 </div>
             </div>
+            ${String(document.getElementById('criar-size-grid-id-v54')?.value||'').trim()?`
+            <div class="mt-3">
+                <label class="text-[9px] uppercase font-black text-sky-400">Linha do guia desta variação — SIZE_GRID_ROW_ID (opcional)</label>
+                <input value="${textoEscapeV37(row.size_grid_row_id||'')}" oninput="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white" placeholder="Pode deixar vazio: o servidor tenta localizar pelo tamanho">
+            </div>`:''}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 ${camposAttrs || '<div class="text-[10px] text-slate-500 md:col-span-2">Marque pelo menos um atributo de variação acima.</div>'}
             </div>
@@ -11574,7 +11594,7 @@ function ajustarQuantidadeVariacoesV53(){
     if(el){
         let n=Math.round(Number(el.value||1));
         if(!Number.isFinite(n))n=1;
-        n=Math.min(30,Math.max(1,n));
+        n=Math.min(100,Math.max(1,n));
         el.value=String(n);
     }
     garantirLinhasVariacaoV53();
@@ -12104,12 +12124,13 @@ function urlsManuaisFotosV47(){
 function configCriacaoV37(){
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
     const varEnabled=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-    const varCount=Math.min(30,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const varCount=Math.min(100,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
     const rows=garantirLinhasVariacaoV53().slice(0,varCount).map((r,i)=>({
         index:i,
         sku_suffix:String(r.sku_suffix||String(i+1).padStart(2,'0')).trim(),
         price:Number(r.price)>0?Number(r.price):null,
         stock:String(r.stock??'').trim()!==''?Math.max(0,Number(r.stock)||0):null,
+        size_grid_row_id:String(r.size_grid_row_id||'').trim(),
         attributes:(criarEstadoV37.variationAttributeIds||[]).map(id=>{
             const v=r.attributes?.[id]||{};
             const out={id:String(id)};
@@ -12142,6 +12163,7 @@ function configCriacaoV37(){
         variations:{
             enabled:varEnabled,
             count:varCount,
+            size_grid_id:String(document.getElementById('criar-size-grid-id-v54')?.value||'').trim(),
             attribute_ids:[...(criarEstadoV37.variationAttributeIds||[])],
             rows,
             // Compatibilidade com versões anteriores do server. O V53 usa rows.
