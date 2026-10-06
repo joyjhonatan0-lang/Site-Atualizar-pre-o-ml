@@ -11891,7 +11891,7 @@ async function validarCriacaoV37(){
     if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um título.';out.className='text-[11px] text-red-400 mt-1';return false;}
     try{
         out.textContent='Validando os campos no Mercado Livre...'; out.className='text-[11px] text-yellow-400 mt-1';
-        const r=await fetch(`${RENDER_URL}/api/v49/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const r=await fetch(`${RENDER_URL}/api/v50/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
         if(!r.ok || !d.sucesso){
             const falhas=(d.resultados||[]).filter(x=>!x.sucesso);
@@ -11899,7 +11899,7 @@ async function validarCriacaoV37(){
                 const lista=Array.isArray(x.detalhes)&&x.detalhes.length?x.detalhes.join(' / '):(x.erro||'Erro de validação');
                 return `${x.category_name||x.category_id}: ${lista}`;
             }).join(' | ');
-            const backendMsg=r.status===404 ? 'O SERVER V49 ainda não está ativo no Render. Publique o server V49 e tente novamente.' : (detalhes||d.erro||`HTTP ${r.status}`);
+            const backendMsg=r.status===404 ? 'O SERVER V50 ainda não está ativo no Render. Publique o server V50 e tente novamente.' : (detalhes||d.erro||`HTTP ${r.status}`);
             out.textContent='Validação recusada: '+backendMsg;
             out.className='text-[11px] text-red-400 mt-1';
             return false;
@@ -11907,6 +11907,8 @@ async function validarCriacaoV37(){
         const fotos=(d.resultados||[]).map(x=>x.limite_fotos?`${x.category_name}: ${x.fotos_enviadas}/${x.limite_fotos} fotos`:'').filter(Boolean).join(' · ');
         const envios=[...new Set((d.resultados||[]).map(x=>x.shipping_mode).filter(Boolean))].join(', ').toUpperCase();
         const estrategias=[...new Set((d.resultados||[]).map(x=>x.shipping_strategy).filter(Boolean))].join(', ');
+        const logisticas=[...new Set((d.resultados||[]).map(x=>x.shipping_logistic_type).filter(Boolean))].join(', ');
+        const dims=(d.resultados||[]).flatMap(x=>Array.isArray(x.dimensoes_pacote_auto)?x.dimensoes_pacote_auto:[]);
         out.textContent=`✓ Pronto para publicar no Mercado Livre${envios?' · Mercado Envios: '+envios:''}${estrategias?' · estratégia validada: '+estrategias:''}${fotos?' · '+fotos:''}.`;
         out.className='text-[11px] text-emerald-400 mt-1';
         return true;
@@ -11922,11 +11924,11 @@ async function publicarCriacaoV37(){
     const ok=await validarCriacaoV37(); if(!ok)return;
     if(!confirm(`Confirma a criação em massa em ${cfg.categories.length} categoria(s)?`))return;
     try{
-        const r=await fetch(`${RENDER_URL}/api/v49/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const r=await fetch(`${RENDER_URL}/api/v50/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
         if(!r.ok){
             const detalhe=Array.isArray(d.detalhes)&&d.detalhes.length?` ${d.detalhes.join(' | ')}`:'';
-            if(r.status===404)throw new Error('O SERVER V49 ainda não está ativo no Render. Publique o server V49 antes do index.');
+            if(r.status===404)throw new Error('O SERVER V50 ainda não está ativo no Render. Publique o server V50 antes do index.');
             throw new Error((d.mensagem_pt||d.erro||`HTTP ${r.status}`)+detalhe);
         }
         const jobId=d.job?.id; if(!jobId)throw new Error('O servidor não retornou o ID da criação.');
