@@ -2669,16 +2669,15 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             </div>
 
             <div class="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
                     <div>
                         <label class="text-[9px] uppercase font-black text-sky-400">Código do guia de tamanho — SIZE_GRID_ID</label>
-                        <input id="criar-size-grid-id-v56" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 210058">
-                        <div class="text-[9px] text-slate-500 mt-1">Informe o ID do guia usado no Mercado Livre. Se deixar vazio, o servidor ainda tenta localizar automaticamente um guia compatível.</div>
+                        <input id="criar-size-grid-id-v56" onchange="carregarGuiaTamanhoV57(true)" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 8988234">
+                        <div class="text-[9px] text-slate-500 mt-1">Cole somente o código do guia. O painel busca as linhas do guia e associa automaticamente cada tamanho ao SIZE_GRID_ROW_ID correto.</div>
                     </div>
-                    <div class="text-[10px] text-slate-400 leading-relaxed">
-                        Para categorias de moda/calçados, o Mercado Livre exige <b class="text-white">SIZE_GRID_ID</b> no anúncio e <b class="text-white">SIZE_GRID_ROW_ID</b> em cada variação. Você pode preencher o ID da linha manualmente em cada variação; se deixar a linha vazia, o servidor tenta encontrá-la pelo tamanho informado.
-                    </div>
+                    <button type="button" onclick="carregarGuiaTamanhoV57(false)" class="bg-sky-500 hover:bg-sky-400 text-slate-950 px-4 py-2.5 rounded-lg text-xs font-black">↻ Carregar tamanhos do guia</button>
                 </div>
+                <div id="criar-size-grid-status-v57" class="text-[10px] text-slate-500 mt-3">Informe o código do guia. Depois, os IDs das linhas serão preenchidos automaticamente pelas numerações das variações.</div>
             </div>
 
             <div id="criar-variacao-editor-v53" class="hidden mt-5 space-y-4">
@@ -11509,6 +11508,84 @@ function toggleAtributoVariacaoV53(attrId,checked){
     renderPlanilhaPreviewV37();
 }
 
+function normalizarTamanhoGuiaV57(valor){
+    const raw=String(valor??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const limpo=raw.replace(/\b(brasil|br|bra|tamanho|tam\.?|numero|num\.?|nº|no\.?|size)\b/g,' ')
+      .replace(/[^a-z0-9.,/+\-]+/g,' ').replace(/\s+/g,' ').trim();
+    const nums=(limpo.match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>String(Number(x.replace(',','.'))));
+    return {texto:limpo,numeros:nums};
+}
+function tamanhoLinhaVariacaoV57(row){
+    const attrs=row?.attributes||{};
+    const pref=['SIZE','BR_SIZE','M_BR_SIZE','F_BR_SIZE','KIDS_BR_SIZE','MANUFACTURER_SIZE','FILTRABLE_SIZE'];
+    for(const id of pref){
+        const v=attrs[id];
+        const txt=String(v?.value_name??v?.value_id??'').trim();
+        if(txt)return txt;
+    }
+    for(const [id,v] of Object.entries(attrs)){
+        if(!/SIZE|TAMANHO/i.test(id))continue;
+        const txt=String(v?.value_name??v?.value_id??'').trim();
+        if(txt)return txt;
+    }
+    return '';
+}
+function acharLinhaGuiaV57(row){
+    const alvo=normalizarTamanhoGuiaV57(tamanhoLinhaVariacaoV57(row));
+    if(!alvo.texto && !alvo.numeros.length)return null;
+    const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
+    let exato=linhas.find(l=>{
+        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
+        return cands.some(c=>c.texto===alvo.texto && c.texto);
+    });
+    if(exato)return exato;
+    exato=linhas.find(l=>{
+        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
+        return alvo.numeros.length && cands.some(c=>c.numeros.some(n=>alvo.numeros.includes(n)));
+    });
+    return exato||null;
+}
+function aplicarLinhasGuiaAutomaticamenteV57(){
+    const rows=garantirLinhasVariacaoV53();
+    let encontrados=0;
+    rows.forEach(row=>{
+        if(String(row.size_grid_row_id||'').trim())return;
+        const l=acharLinhaGuiaV57(row);
+        if(l?.row_id){row.size_grid_row_id=String(l.row_id);encontrados++;}
+    });
+    return encontrados;
+}
+async function carregarGuiaTamanhoV57(silencioso=false){
+    const gridId=String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim();
+    const status=document.getElementById('criar-size-grid-status-v57');
+    if(!gridId){
+        criarEstadoV37.sizeGuideRowsV57=[];
+        if(status)status.textContent='Informe o código do guia para carregar os tamanhos.';
+        return;
+    }
+    const token=obterToken();
+    if(!token){if(!silencioso)solicitarToken();return;}
+    if(status){status.textContent='Consultando o guia de tamanhos no Mercado Livre...';status.className='text-[10px] text-sky-400 mt-3';}
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v57/criar/guia-tamanho/${encodeURIComponent(gridId)}`,{headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        criarEstadoV37.sizeGuideRowsV57=Array.isArray(d.rows)?d.rows:[];
+        const achados=aplicarLinhasGuiaAutomaticamenteV57();
+        renderEditorVariacoesV53();
+        renderPlanilhaPreviewV37();
+        const total=criarEstadoV37.sizeGuideRowsV57.length;
+        if(status){
+            status.textContent=`Guia ${gridId} carregado: ${total} linha(s). ${achados} variação(ões) associada(s) automaticamente pelo tamanho.`;
+            status.className='text-[10px] text-emerald-400 mt-3';
+        }
+    }catch(e){
+        criarEstadoV37.sizeGuideRowsV57=[];
+        if(status){status.textContent='Não foi possível carregar o guia: '+e.message;status.className='text-[10px] text-red-400 mt-3';}
+        if(!silencioso)alert('Erro ao carregar guia de tamanhos: '+e.message);
+    }
+}
+
 function renderEditorVariacoesV53(){
     const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
     const editor=document.getElementById('criar-variacao-editor-v53');
@@ -11570,9 +11647,14 @@ function renderEditorVariacoesV53(){
             </div>
 
             <div class="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
-                <label class="text-[9px] uppercase font-black text-sky-400">ID da linha do guia — SIZE_GRID_ROW_ID</label>
-                <input value="${textoEscapeV37(row.size_grid_row_id||'')}" oninput="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white" placeholder="Ex.: 210058:4 (deixe vazio para localizar pelo tamanho)">
-                <div class="text-[9px] text-slate-500 mt-1">Se preencher, este valor será usado exatamente nesta variação. O formato recomendado pelo Mercado Livre é GUIA:LINHA, por exemplo 210058:4.</div>
+                <label class="text-[9px] uppercase font-black text-sky-400">Linha do guia de tamanho — SIZE_GRID_ROW_ID</label>
+                ${Array.isArray(criarEstadoV37.sizeGuideRowsV57)&&criarEstadoV37.sizeGuideRowsV57.length?`
+                <select onchange="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white">
+                    <option value="">Selecionar automaticamente pelo tamanho</option>
+                    ${criarEstadoV37.sizeGuideRowsV57.map(l=>`<option value="${textoEscapeV37(l.row_id||'')}" ${String(row.size_grid_row_id||'')===String(l.row_id||'')?'selected':''}>${textoEscapeV37(l.label||l.row_id||'')}</option>`).join('')}
+                </select>`:`
+                <input value="${textoEscapeV37(row.size_grid_row_id||'')}" oninput="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white" placeholder="Será preenchido automaticamente ao carregar o guia">`}
+                <div class="text-[9px] text-slate-500 mt-1">Normalmente você não precisa digitar este ID. Informe o tamanho da variação e clique em “Carregar tamanhos do guia”.</div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 ${camposAttrs || '<div class="text-[10px] text-slate-500 md:col-span-2">Marque pelo menos um atributo de variação acima.</div>'}
