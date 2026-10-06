@@ -2567,6 +2567,57 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                     <label class="text-[9px] font-bold uppercase text-slate-500">SKU / Prefixo</label>
                     <input id="criar-sku-v37" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white" placeholder="Ex.: APARADOR ou TENISBRANCO">
                 </div>
+
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Código universal</label>
+                    <select id="criar-gtin-modo-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="no_code">O produto não tem código cadastrado</option>
+                        <option value="gtin">Informar GTIN / EAN / UPC</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">GTIN / EAN / UPC</label>
+                    <input id="criar-gtin-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white" placeholder="Digite somente se o produto possuir código">
+                </div>
+
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Forma de envio</label>
+                    <select id="criar-shipping-mode-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="me2">Mercado Envios</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Custo do envio</label>
+                    <select id="criar-shipping-cost-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="buyer">Frete pago pelo comprador</option>
+                        <option value="free">Oferecer frete grátis</option>
+                    </select>
+                    <div class="text-[9px] text-slate-600 mt-1">Se o Mercado Livre exigir frete grátis para esse preço/categoria, o servidor ajusta automaticamente.</div>
+                </div>
+
+                <div>
+                    <label class="text-[9px] font-bold uppercase text-slate-500">Tipo de garantia</label>
+                    <select id="criar-garantia-tipo-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                        <option value="none">Sem garantia</option>
+                        <option value="seller">Garantia do vendedor</option>
+                        <option value="factory">Garantia de fábrica</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[9px] font-bold uppercase text-slate-500">Tempo de garantia</label>
+                        <input id="criar-garantia-tempo-v51" type="number" min="0" value="90" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold uppercase text-slate-500">Unidade</label>
+                        <select id="criar-garantia-unidade-v51" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white">
+                            <option value="dias">Dias</option>
+                            <option value="meses">Meses</option>
+                            <option value="anos">Anos</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="col-span-2">
                     <label class="text-[9px] font-bold uppercase text-slate-500">Palavras-chave</label>
                     <textarea id="criar-keywords-v37" rows="4" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="Clique no botão abaixo para a IA pesquisar e sugerir as palavras-chave."></textarea>
@@ -11833,6 +11884,13 @@ function configCriacaoV37(){
         listing_type_id:String(document.getElementById('criar-listing-v37')?.value||'gold_special'),
         condition:String(document.getElementById('criar-condicao-v37')?.value||'new'),
         sku_prefix:String(document.getElementById('criar-sku-v37')?.value||'').trim(),
+        universal_code_mode:String(document.getElementById('criar-gtin-modo-v51')?.value||'no_code'),
+        universal_code:String(document.getElementById('criar-gtin-v51')?.value||'').trim(),
+        shipping_mode:String(document.getElementById('criar-shipping-mode-v51')?.value||'me2'),
+        shipping_cost_mode:String(document.getElementById('criar-shipping-cost-v51')?.value||'buyer'),
+        warranty_type:String(document.getElementById('criar-garantia-tipo-v51')?.value||'none'),
+        warranty_time:Math.max(0,Number(document.getElementById('criar-garantia-tempo-v51')?.value||0)),
+        warranty_unit:String(document.getElementById('criar-garantia-unidade-v51')?.value||'dias'),
         description:String(document.getElementById('criar-descricao-v37')?.value||'').trim(),
         picture_ids:(criarEstadoV37.pictures||[]).map(p=>p.id).filter(Boolean),
         picture_sources_manual:urlsManuaisFotosV47(),
@@ -11891,7 +11949,7 @@ async function validarCriacaoV37(){
     if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um título.';out.className='text-[11px] text-red-400 mt-1';return false;}
     try{
         out.textContent='Validando os campos no Mercado Livre...'; out.className='text-[11px] text-yellow-400 mt-1';
-        const r=await fetch(`${RENDER_URL}/api/v50/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const r=await fetch(`${RENDER_URL}/api/v51/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
         if(!r.ok || !d.sucesso){
             const falhas=(d.resultados||[]).filter(x=>!x.sucesso);
@@ -11899,7 +11957,7 @@ async function validarCriacaoV37(){
                 const lista=Array.isArray(x.detalhes)&&x.detalhes.length?x.detalhes.join(' / '):(x.erro||'Erro de validação');
                 return `${x.category_name||x.category_id}: ${lista}`;
             }).join(' | ');
-            const backendMsg=r.status===404 ? 'O SERVER V50 ainda não está ativo no Render. Publique o server V50 e tente novamente.' : (detalhes||d.erro||`HTTP ${r.status}`);
+            const backendMsg=r.status===404 ? 'O SERVER V51 ainda não está ativo no Render. Publique o server V51 e tente novamente.' : (detalhes||d.erro||`HTTP ${r.status}`);
             out.textContent='Validação recusada: '+backendMsg;
             out.className='text-[11px] text-red-400 mt-1';
             return false;
@@ -11909,7 +11967,9 @@ async function validarCriacaoV37(){
         const estrategias=[...new Set((d.resultados||[]).map(x=>x.shipping_strategy).filter(Boolean))].join(', ');
         const logisticas=[...new Set((d.resultados||[]).map(x=>x.shipping_logistic_type).filter(Boolean))].join(', ');
         const dims=(d.resultados||[]).flatMap(x=>Array.isArray(x.dimensoes_pacote_auto)?x.dimensoes_pacote_auto:[]);
-        out.textContent=`✓ Pronto para publicar no Mercado Livre${envios?' · Mercado Envios: '+envios:''}${estrategias?' · estratégia validada: '+estrategias:''}${fotos?' · '+fotos:''}.`;
+        const freteGratis=(d.resultados||[]).some(x=>x.shipping_free_shipping===true);
+        const freteObrigatorio=(d.resultados||[]).some(x=>x.shipping_free_shipping_required===true);
+        out.textContent=`✓ Pronto para publicar no Mercado Livre${envios?' · Mercado Envios: '+envios:''}${logisticas?' · logística: '+logisticas:''}${freteGratis?' · frete grátis'+(freteObrigatorio?' obrigatório pelo Mercado Livre':''):''}${fotos?' · '+fotos:''}.`;
         out.className='text-[11px] text-emerald-400 mt-1';
         return true;
     }catch(e){
@@ -11924,11 +11984,11 @@ async function publicarCriacaoV37(){
     const ok=await validarCriacaoV37(); if(!ok)return;
     if(!confirm(`Confirma a criação em massa em ${cfg.categories.length} categoria(s)?`))return;
     try{
-        const r=await fetch(`${RENDER_URL}/api/v50/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
+        const r=await fetch(`${RENDER_URL}/api/v51/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
         if(!r.ok){
             const detalhe=Array.isArray(d.detalhes)&&d.detalhes.length?` ${d.detalhes.join(' | ')}`:'';
-            if(r.status===404)throw new Error('O SERVER V50 ainda não está ativo no Render. Publique o server V50 antes do index.');
+            if(r.status===404)throw new Error('O SERVER V51 ainda não está ativo no Render. Publique o server V51 antes do index.');
             throw new Error((d.mensagem_pt||d.erro||`HTTP ${r.status}`)+detalhe);
         }
         const jobId=d.job?.id; if(!jobId)throw new Error('O servidor não retornou o ID da criação.');
