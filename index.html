@@ -2668,13 +2668,15 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </div>
             </div>
 
-            <div class="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <div class="flex items-start gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">✓</div>
+            <div class="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                     <div>
-                        <div class="text-[10px] uppercase tracking-wider font-black text-emerald-400">Guia de tamanho automático</div>
-                        <div class="text-[10px] text-slate-400 leading-relaxed mt-1">Você não precisa mais informar <b class="text-white">SIZE_GRID_ID</b> nem <b class="text-white">SIZE_GRID_ROW_ID</b>. Quando a categoria exigir tabela de medidas, o servidor identifica automaticamente um guia compatível da sua conta/Mercado Livre e associa a linha correta pelo tamanho de cada variação.</div>
-                        <div class="text-[9px] text-slate-500 mt-2">Preencha apenas os tamanhos das variações (ex.: 34, 35, 36, 37...). O restante é resolvido automaticamente no validar/publicar.</div>
+                        <label class="text-[9px] uppercase font-black text-sky-400">Código do guia de tamanho — SIZE_GRID_ID</label>
+                        <input id="criar-size-grid-id-v56" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 210058">
+                        <div class="text-[9px] text-slate-500 mt-1">Informe o ID do guia usado no Mercado Livre. Se deixar vazio, o servidor ainda tenta localizar automaticamente um guia compatível.</div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 leading-relaxed">
+                        Para categorias de moda/calçados, o Mercado Livre exige <b class="text-white">SIZE_GRID_ID</b> no anúncio e <b class="text-white">SIZE_GRID_ROW_ID</b> em cada variação. Você pode preencher o ID da linha manualmente em cada variação; se deixar a linha vazia, o servidor tenta encontrá-la pelo tamanho informado.
                     </div>
                 </div>
             </div>
@@ -11567,6 +11569,11 @@ function renderEditorVariacoesV53(){
                 </div>
             </div>
 
+            <div class="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+                <label class="text-[9px] uppercase font-black text-sky-400">ID da linha do guia — SIZE_GRID_ROW_ID</label>
+                <input value="${textoEscapeV37(row.size_grid_row_id||'')}" oninput="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white" placeholder="Ex.: 210058:4 (deixe vazio para localizar pelo tamanho)">
+                <div class="text-[9px] text-slate-500 mt-1">Se preencher, este valor será usado exatamente nesta variação. O formato recomendado pelo Mercado Livre é GUIA:LINHA, por exemplo 210058:4.</div>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 ${camposAttrs || '<div class="text-[10px] text-slate-500 md:col-span-2">Marque pelo menos um atributo de variação acima.</div>'}
             </div>
@@ -12157,7 +12164,7 @@ function configCriacaoV37(){
         variations:{
             enabled:varEnabled,
             count:varCount,
-            size_grid_id:'', // V55: guia resolvido automaticamente pelo servidor
+            size_grid_id:String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim(), // V56: manual quando informado; automático como fallback
             attribute_ids:[...(criarEstadoV37.variationAttributeIds||[])],
             rows,
             // Compatibilidade com versões anteriores do server. O V53 usa rows.
