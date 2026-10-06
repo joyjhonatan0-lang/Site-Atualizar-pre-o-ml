@@ -2654,17 +2654,36 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">3. Variações</div>
-            <div class="text-[11px] text-slate-500 mt-1">Configure se o anúncio terá variações e quantas variações deseja por anúncio/família.</div>
+            <div class="text-[11px] text-slate-500 mt-1">Cada título/família receberá todas as variações configuradas abaixo. No modelo User Products, cada variação vira um item da mesma família, com tamanho, cor e demais atributos próprios.</div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
                 <select id="criar-variacao-enabled-v37" onchange="alternarVariacoesV37()" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
                     <option value="0">Sem variações</option>
                     <option value="1">Com variações</option>
                 </select>
-                <input id="criar-variacao-qtd-v37" type="number" min="1" max="50" value="2" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
-                <select id="criar-variacao-atributo-v37" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" disabled>
-                    <option value="">Escolha o atributo da variação</option>
-                </select>
-                <textarea id="criar-variacao-valores-v37" rows="5" class="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white md:col-span-2" placeholder="Um valor por linha, ex.:&#10;Branco&#10;Preto&#10;Azul" disabled></textarea>
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Quantidade de variações por título/família</label>
+                    <input id="criar-variacao-qtd-v37" type="number" min="1" max="30" value="2" oninput="ajustarQuantidadeVariacoesV53()" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                    <div class="text-[9px] text-slate-600 mt-1">O Mercado Livre permite até 30 condições/itens por User Product.</div>
+                </div>
+            </div>
+
+            <div id="criar-variacao-editor-v53" class="hidden mt-5 space-y-4">
+                <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                    <div class="text-[10px] uppercase tracking-wider font-black text-white">Atributos que diferenciam as variações</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Os atributos permitidos pela categoria são carregados automaticamente. Marque, por exemplo, Tamanho, Cor, Desenho do tecido ou outro campo que realmente muda entre as variações.</div>
+                    <div id="criar-variacao-atributos-v53" class="flex flex-wrap gap-2 mt-3"></div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-wider font-black text-white">Preenchimento individual</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Cada variação tem campos próprios. Os mesmos 7 valores, por exemplo, serão repetidos em cada título/família que você gerar.</div>
+                    </div>
+                    <span id="criar-variacao-resumo-v53" class="text-[10px] font-black text-yellow-400"></span>
+                </div>
+
+                <div id="criar-variacao-linhas-v53" class="space-y-3"></div>
             </div>
         </div>
 
@@ -2716,7 +2735,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <thead class="bg-slate-900 text-slate-300 uppercase tracking-[.08em]">
                     <tr>
                         <th class="px-3 py-3 text-left">Categoria</th>
-                        <th class="px-3 py-3 text-left">Título</th>
+                        <th class="px-3 py-3 text-left">Título / família</th>
+                        <th class="px-3 py-3 text-left">Variação</th>
                         <th class="px-3 py-3 text-left">Condição</th>
                         <th class="px-3 py-3 text-left">Preço</th>
                         <th class="px-3 py-3 text-left">Estoque</th>
@@ -11104,7 +11124,9 @@ window.criarEstadoV37={
     pictures:[],
     jobId:null,
     jobTimer:null,
-    sugestões:[]
+    sugestões:[],
+    variationAttributeIds:[],
+    variationRows:[]
 };
 
 function lerArquivoDataUrlV37(file){
@@ -11179,6 +11201,7 @@ async function carregarCriacaoMassaV37(){
     if(jobId)acompanharCriacaoV37(jobId);
     renderFotosReferenciaV37();
     renderCategoriasSelecionadasV37();
+    atualizarAtributosVariacaoV37();
     renderPlanilhaPreviewV37();
 }
 window.carregarCriacaoMassaV36=carregarCriacaoMassaV37;
@@ -11290,7 +11313,9 @@ function renderCategoriasSelecionadasV37(){
     }).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
 
     forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
-        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]);
+        const variacoesAtivas=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+        const idsVariacao=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]).filter(a=>!(variacoesAtivas&&idsVariacao.has(String(a.id))));
         const path=String(c.category_path||c.category_name||c.category_id||'');
         const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
         const grupos=[
@@ -11302,7 +11327,7 @@ function renderCategoriasSelecionadasV37(){
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
-            <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.</div>
+            <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.${variacoesAtivas&&idsVariacao.size?' Os atributos escolhidos para variar são preenchidos exclusivamente na seção 3, uma vez por variação.':''}</div>
             ${grupos.map(g=>`<div class="mt-5">
                 <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -11356,30 +11381,216 @@ function setCategoriaNaoAplicaV52(categoryId,attrId,checked){
     renderPlanilhaPreviewV37();
 }
 
-function atualizarAtributosVariacaoV37(){
-    const select=document.getElementById('criar-variacao-atributo-v37');
-    if(!select)return;
+function atributosVariacaoDisponiveisV53(){
     const map=new Map();
-    criarEstadoV37.selectedCategories.forEach(c=>{
+    (criarEstadoV37.selectedCategories||[]).forEach(c=>{
         (c.atributos||[]).forEach(a=>{
+            if(a?.read_only)return;
             if(a.allow_variations || a.variation_attribute || a.child_pk){
-                if(!map.has(a.id))map.set(a.id,a);
+                const id=String(a.id||'').trim();
+                if(!id)return;
+                if(!map.has(id))map.set(id,{...a,categories:1});
+                else map.get(id).categories=(map.get(id).categories||1)+1;
             }
         });
     });
-    const current=select.value;
-    select.innerHTML='<option value="">Escolha o atributo da variação</option>'+[...map.values()].map(a=>`<option value="${textoEscapeV37(a.id)}">${textoEscapeV37(a.name||a.id)} · ${textoEscapeV37(a.id)}</option>`).join('');
-    if([...map.keys()].includes(current))select.value=current;
+    return [...map.values()];
+}
+
+function defAtributoVariacaoV53(id){
+    const key=String(id||'');
+    for(const c of (criarEstadoV37.selectedCategories||[])){
+        const achou=(c.atributos||[]).find(a=>String(a?.id||'')===key);
+        if(achou)return achou;
+    }
+    return null;
+}
+
+function garantirLinhasVariacaoV53(){
+    const count=Math.min(30,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const rows=Array.isArray(criarEstadoV37.variationRows)?criarEstadoV37.variationRows:[];
+    while(rows.length<count){
+        const n=rows.length+1;
+        rows.push({
+            index:n-1,
+            sku_suffix:String(n).padStart(2,'0'),
+            price:'',
+            stock:'',
+            attributes:{}
+        });
+    }
+    if(rows.length>count)rows.length=count;
+    rows.forEach((r,i)=>{
+        r.index=i;
+        if(!r.attributes||typeof r.attributes!=='object')r.attributes={};
+        if(r.sku_suffix==null||r.sku_suffix==='')r.sku_suffix=String(i+1).padStart(2,'0');
+    });
+    criarEstadoV37.variationRows=rows;
+    return rows;
+}
+
+function sincronizarAtributosVariacaoV53(){
+    const defs=atributosVariacaoDisponiveisV53();
+    const valid=new Set(defs.map(a=>String(a.id)));
+    let selected=(criarEstadoV37.variationAttributeIds||[]).map(String).filter(id=>valid.has(id));
+
+    if(!selected.length && defs.length){
+        const child=defs.filter(a=>a.child_pk).map(a=>String(a.id));
+        if(child.length){
+            selected=[...new Set(child)];
+        }else{
+            const comuns=defs.filter(a=>/(^|_)(SIZE|COLOR|MAIN_COLOR|FABRIC_DESIGN|DESIGN|PATTERN|VOLTAGE|TAMANHO|COR)(_|$)/i.test(String(a.id||'')) || /(tamanho|cor|desenho|estampa|textura|voltagem)/i.test(String(a.name||''))).slice(0,3).map(a=>String(a.id));
+            selected=comuns.length?[...new Set(comuns)]:[String(defs[0].id)];
+        }
+    }
+    criarEstadoV37.variationAttributeIds=selected;
+    garantirLinhasVariacaoV53();
+}
+
+function valorAtualVariacaoV53(row,attrId){
+    const v=row?.attributes?.[attrId]||{};
+    return String(v.value_name??v.value_id??'');
+}
+
+function normalizarValorVariacaoV53(attrId,valor){
+    const def=defAtributoVariacaoV53(attrId);
+    const txt=String(valor||'').trim();
+    if(!txt)return {value_id:'',value_name:''};
+    const vals=Array.isArray(def?.values)?def.values:[];
+    const alvo=txt.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const match=vals.find(v=>{
+        const nome=String(v?.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        return nome===alvo || String(v?.id||'')===txt;
+    });
+    if(match)return {value_id:String(match.id||''),value_name:String(match.name||txt)};
+    return {value_id:'',value_name:txt};
+}
+
+function setVariacaoAtributoV53(index,attrId,value){
+    garantirLinhasVariacaoV53();
+    const row=criarEstadoV37.variationRows[Number(index)];
+    if(!row)return;
+    row.attributes[String(attrId)]=normalizarValorVariacaoV53(attrId,value);
+    renderPlanilhaPreviewV37();
+}
+
+function setVariacaoCampoV53(index,campo,value){
+    garantirLinhasVariacaoV53();
+    const row=criarEstadoV37.variationRows[Number(index)];
+    if(!row)return;
+    if(campo==='price'||campo==='stock')row[campo]=String(value||'').replace(',','.');
+    else row[campo]=String(value||'').trim();
+    renderPlanilhaPreviewV37();
+}
+
+function toggleAtributoVariacaoV53(attrId,checked){
+    const id=String(attrId||'');
+    const set=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+    if(checked)set.add(id); else set.delete(id);
+    criarEstadoV37.variationAttributeIds=[...set];
+    garantirLinhasVariacaoV53();
+    renderCategoriasSelecionadasV37();
+    renderEditorVariacoesV53();
+    renderPlanilhaPreviewV37();
+}
+
+function renderEditorVariacoesV53(){
+    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    const editor=document.getElementById('criar-variacao-editor-v53');
+    const attrBox=document.getElementById('criar-variacao-atributos-v53');
+    const rowsBox=document.getElementById('criar-variacao-linhas-v53');
+    const resumo=document.getElementById('criar-variacao-resumo-v53');
+    if(!editor||!attrBox||!rowsBox)return;
+
+    editor.classList.toggle('hidden',!ativo);
+    if(!ativo)return;
+
+    sincronizarAtributosVariacaoV53();
+    const defs=atributosVariacaoDisponiveisV53();
+    const selected=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+    const rows=garantirLinhasVariacaoV53();
+
+    attrBox.innerHTML=defs.length?defs.map(a=>{
+        const id=String(a.id||'');
+        const marcado=selected.has(id);
+        const destaque=a.child_pk?'border-emerald-500/40 bg-emerald-500/5':'border-slate-700 bg-slate-900';
+        return `<label class="inline-flex items-center gap-2 rounded-xl border ${destaque} px-3 py-2 text-[10px] text-slate-200 cursor-pointer">
+            <input type="checkbox" class="w-4 h-4 accent-yellow-400" ${marcado?'checked':''} onchange="toggleAtributoVariacaoV53('${textoEscapeV37(id)}',this.checked)">
+            <span><b>${textoEscapeV37(a.name||id)}</b>${a.child_pk?'<span class="text-emerald-400"> · variação principal</span>':''}</span>
+        </label>`;
+    }).join(''):'<div class="text-[10px] text-amber-400">A categoria escolhida não informou atributos próprios de variação. Se isso estiver incorreto, escolha a categoria final exata do produto.</div>';
+
+    const attrDefs=[...selected].map(id=>defAtributoVariacaoV53(id)).filter(Boolean);
+    rowsBox.innerHTML=rows.map((row,i)=>{
+        const camposAttrs=attrDefs.map(a=>{
+            const id=String(a.id||'');
+            const current=valorAtualVariacaoV53(row,id);
+            const listId=`var-v53-${i}-${id.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+            const opts=(Array.isArray(a.values)?a.values:[]).slice(0,200);
+            return `<div>
+                <label class="text-[9px] uppercase font-black ${a.child_pk?'text-emerald-400':'text-sky-400'}">${textoEscapeV37(a.name||id)}</label>
+                <input list="${listId}" value="${textoEscapeV37(current)}" oninput="setVariacaoAtributoV53(${i},'${textoEscapeV37(id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Preencha ${textoEscapeV37(a.name||id)}">
+                ${opts.length?`<datalist id="${listId}">${opts.map(v=>`<option value="${textoEscapeV37(v.name||v.id||'')}"></option>`).join('')}</datalist>`:''}
+            </div>`;
+        }).join('');
+
+        return `<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="text-[11px] font-black text-white">Variação ${i+1}</div>
+                <div class="text-[9px] text-slate-500">Será aplicada a todos os títulos/famílias</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">SKU / sufixo</label>
+                    <input value="${textoEscapeV37(row.sku_suffix||'')}" oninput="setVariacaoCampoV53(${i},'sku_suffix',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="${String(i+1).padStart(2,'0')}">
+                </div>
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Preço desta variação — opcional</label>
+                    <input type="number" step="0.01" min="0" value="${textoEscapeV37(row.price||'')}" oninput="setVariacaoCampoV53(${i},'price',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Usar preço geral">
+                </div>
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Estoque desta variação — opcional</label>
+                    <input type="number" step="1" min="0" value="${textoEscapeV37(row.stock||'')}" oninput="setVariacaoCampoV53(${i},'stock',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Usar estoque geral">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                ${camposAttrs || '<div class="text-[10px] text-slate-500 md:col-span-2">Marque pelo menos um atributo de variação acima.</div>'}
+            </div>
+        </div>`;
+    }).join('');
+
+    if(resumo){
+        resumo.textContent=`${rows.length} variação(ões) × cada título/família · ${selected.size} atributo(s) variável(is)`;
+    }
+}
+
+function atualizarAtributosVariacaoV37(){
+    sincronizarAtributosVariacaoV53();
+    renderEditorVariacoesV53();
+}
+
+function ajustarQuantidadeVariacoesV53(){
+    const el=document.getElementById('criar-variacao-qtd-v37');
+    if(el){
+        let n=Math.round(Number(el.value||1));
+        if(!Number.isFinite(n))n=1;
+        n=Math.min(30,Math.max(1,n));
+        el.value=String(n);
+    }
+    garantirLinhasVariacaoV53();
+    renderEditorVariacoesV53();
+    renderPlanilhaPreviewV37();
 }
 
 function alternarVariacoesV37(){
     const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-    ['criar-variacao-qtd-v37','criar-variacao-atributo-v37','criar-variacao-valores-v37'].forEach(id=>{
-        const el=document.getElementById(id); if(el)el.disabled=!ativo;
-    });
+    const qtd=document.getElementById('criar-variacao-qtd-v37');
+    if(qtd)qtd.disabled=!ativo;
+    sincronizarAtributosVariacaoV53();
+    renderCategoriasSelecionadasV37();
+    renderEditorVariacoesV53();
     renderPlanilhaPreviewV37();
 }
-
 
 function chaveCacheConteudoV45(){
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
@@ -11892,6 +12103,22 @@ function urlsManuaisFotosV47(){
 
 function configCriacaoV37(){
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
+    const varEnabled=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    const varCount=Math.min(30,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const rows=garantirLinhasVariacaoV53().slice(0,varCount).map((r,i)=>({
+        index:i,
+        sku_suffix:String(r.sku_suffix||String(i+1).padStart(2,'0')).trim(),
+        price:Number(r.price)>0?Number(r.price):null,
+        stock:String(r.stock??'').trim()!==''?Math.max(0,Number(r.stock)||0):null,
+        attributes:(criarEstadoV37.variationAttributeIds||[]).map(id=>{
+            const v=r.attributes?.[id]||{};
+            const out={id:String(id)};
+            if(v.value_id)out.value_id=String(v.value_id);
+            if(v.value_name)out.value_name=String(v.value_name);
+            return out;
+        }).filter(a=>a.value_id||a.value_name)
+    }));
+    const primeiroAttr=String((criarEstadoV37.variationAttributeIds||[])[0]||'');
     return {
         product_name:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
         quantity:Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||titles.length||1)),
@@ -11913,12 +12140,33 @@ function configCriacaoV37(){
         picture_sources_manual:urlsManuaisFotosV47(),
         categories:criarEstadoV37.selectedCategories.map(c=>({category_id:c.category_id,category_name:c.category_name,attributes:coletarAttributesCategoriaV37(c)})),
         variations:{
-            enabled:String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1',
-            count:Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)),
-            attribute_id:String(document.getElementById('criar-variacao-atributo-v37')?.value||''),
-            values:String(document.getElementById('criar-variacao-valores-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean)
+            enabled:varEnabled,
+            count:varCount,
+            attribute_ids:[...(criarEstadoV37.variationAttributeIds||[])],
+            rows,
+            // Compatibilidade com versões anteriores do server. O V53 usa rows.
+            attribute_id:primeiroAttr,
+            values:rows.map(r=>{
+                const a=(r.attributes||[]).find(x=>String(x.id)===primeiroAttr);
+                return a?.value_name||a?.value_id||'';
+            }).filter(Boolean)
         }
     };
+}
+
+function descricaoVariacaoPreviewV53(row){
+    return (row?.attributes||[]).map(a=>{
+        const def=defAtributoVariacaoV53(a.id);
+        return `${def?.name||a.id}: ${a.value_name||a.value_id||''}`;
+    }).filter(Boolean).join(' · ');
+}
+
+function skuVariacaoPreviewV53(prefix,familyIndex,variationIndex,row){
+    const base=String(prefix||'').trim();
+    if(!base)return '';
+    const fam=String(familyIndex+1).padStart(3,'0');
+    const suf=String(row?.sku_suffix||variationIndex+1).replace(/\s+/g,'-').slice(0,30);
+    return `${base}-${fam}-${suf}`;
 }
 
 function renderPlanilhaPreviewV37(){
@@ -11929,24 +12177,40 @@ function renderPlanilhaPreviewV37(){
     const urls=urlsManuais.length?urlsManuais:(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
     const cats=cfg.categories.length?cfg.categories:[{category_id:'',category_name:'Sem categoria',attributes:[]}];
     const rows=[];
+    const variationRows=cfg.variations.enabled && cfg.variations.rows.length
+      ? cfg.variations.rows
+      : [{index:0,sku_suffix:'',price:null,stock:null,attributes:[]}];
+
     cats.forEach(cat=>{
-        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,idx)=>{
-            rows.push({
-                category:cat.category_name || cat.category_id || 'Sem categoria',
-                title,
-                condition:cfg.condition,
-                price:cfg.price,
-                stock:cfg.stock,
-                sku:cfg.sku_prefix?`${cfg.sku_prefix}-${String(idx+1).padStart(3,'0')}`:'',
-                attrs:(cat.attributes||[]).map(a=>`${a.id}: ${a.value_name||a.value_id||''}`).join(' | '),
-                urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
+        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,familyIndex)=>{
+            variationRows.forEach((vr,variationIndex)=>{
+                const variationIds=new Set((vr.attributes||[]).map(a=>String(a.id)));
+                const attrsBase=(cat.attributes||[]).filter(a=>!variationIds.has(String(a.id)));
+                const attrs=[...attrsBase,...(vr.attributes||[])];
+                rows.push({
+                    category:cat.category_name || cat.category_id || 'Sem categoria',
+                    title,
+                    variation:cfg.variations.enabled?`V${variationIndex+1} · ${descricaoVariacaoPreviewV53(vr)||'preencher variação'}`:'Sem variação',
+                    condition:cfg.condition,
+                    price:Number(vr.price)>0?Number(vr.price):cfg.price,
+                    stock:vr.stock!=null?Number(vr.stock):cfg.stock,
+                    sku:cfg.variations.enabled
+                      ? skuVariacaoPreviewV53(cfg.sku_prefix,familyIndex,variationIndex,vr)
+                      : (cfg.sku_prefix?`${cfg.sku_prefix}-${String(familyIndex+1).padStart(3,'0')}`:''),
+                    attrs:attrs.map(a=>`${a.id}: ${a.value_name??a.value_id??''}`).join(' | '),
+                    urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
+                });
             });
         });
     });
-    tbody.innerHTML=rows.map(r=>`
+
+    const LIMITE_PREVIEW=600;
+    const visiveis=rows.slice(0,LIMITE_PREVIEW);
+    tbody.innerHTML=visiveis.map(r=>`
         <tr class="align-top">
             <td class="px-3 py-3 text-slate-200">${textoEscapeV37(r.category)}</td>
             <td class="px-3 py-3 text-white font-medium">${textoEscapeV37(r.title)}</td>
+            <td class="px-3 py-3 text-yellow-300">${textoEscapeV37(r.variation)}</td>
             <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.condition)}</td>
             <td class="px-3 py-3 text-emerald-400">${textoEscapeV37(moeda(Number(r.price||0)))}</td>
             <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.stock)}</td>
@@ -11954,7 +12218,11 @@ function renderPlanilhaPreviewV37(){
             <td class="px-3 py-3 text-slate-400">${textoEscapeV37(r.attrs || '-')}</td>
             <td class="px-3 py-3 text-sky-400 break-all">${textoEscapeV37(r.urls || '-')}</td>
         </tr>
-    `).join('') || '<tr><td colspan="8" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
+    `).join('') || '<tr><td colspan="9" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
+
+    if(rows.length>LIMITE_PREVIEW){
+        tbody.innerHTML+=`<tr><td colspan="9" class="px-3 py-4 text-center text-amber-400 font-bold">Prévia limitada às primeiras ${LIMITE_PREVIEW.toLocaleString('pt-BR')} linhas para manter o painel rápido. A publicação continuará usando todas as ${rows.length.toLocaleString('pt-BR')} combinações.</td></tr>`;
+    }
 }
 
 async function validarCriacaoV37(){
