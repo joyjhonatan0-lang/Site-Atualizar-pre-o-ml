@@ -5862,9 +5862,36 @@ function tamanhoDaLinhaV55(row={},chart=null){
     return String(a.value_name||a.value_id||vals[0]?.name||vals[0]?.id||'').trim();
 }
 function extrairRowsChartV55(chart){
-    if(Array.isArray(chart?.rows))return chart.rows;
-    if(Array.isArray(chart?.data?.rows))return chart.data.rows;
-    return [];
+    // Algumas respostas do Mercado Livre trazem rows direto no chart e outras
+    // podem encapsular a estrutura. Fazemos uma busca recursiva segura para
+    // localizar qualquer coleção real de linhas da tabela de medidas.
+    const encontrados=[];
+    const vistos=new Set();
+    const walk=(node,depth=0)=>{
+        if(node==null||depth>8)return;
+        if(Array.isArray(node)){
+            for(const item of node)walk(item,depth+1);
+            return;
+        }
+        if(typeof node!=='object')return;
+        if(vistos.has(node))return; vistos.add(node);
+        if(Array.isArray(node.rows)){
+            for(const r of node.rows){
+                if(r&&typeof r==='object'&&(r.id!=null||r.row_id!=null||Array.isArray(r.attributes)))encontrados.push(r);
+            }
+        }
+        for(const [k,v] of Object.entries(node)){
+            if(k==='rows')continue;
+            if(v&&typeof v==='object')walk(v,depth+1);
+        }
+    };
+    walk(chart,0);
+    const unicos=[]; const seen=new Set();
+    for(const r of encontrados){
+        const key=String(r?.id??r?.row_id??JSON.stringify(r?.attributes||[]));
+        if(seen.has(key))continue; seen.add(key); unicos.push(r);
+    }
+    return unicos;
 }
 function valoresRowChartV55(chart,row){
     const attrs=Array.isArray(row?.attributes)?row.attributes:[];
@@ -5899,7 +5926,12 @@ function rowCompativelV55(chart,row,tamanho){
     const alvos=candidatosTamanhoV55(tamanho);
     if(!alvos.length)return false;
     const valores=valoresRowChartV55(chart,row).flatMap(candidatosTamanhoV55);
-    return alvos.some(a=>valores.includes(a));
+    if(alvos.some(a=>valores.includes(a)))return true;
+    // Fallback numérico: 35, "35 BR", "BR 35" e equivalentes devem casar.
+    const numsAlvo=new Set(alvos.flatMap(v=>(String(v).match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>String(Number(n.replace(',','.'))))));
+    if(!numsAlvo.size)return false;
+    const numsValores=new Set(valores.flatMap(v=>(String(v).match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>String(Number(n.replace(',','.'))))));
+    return [...numsAlvo].some(n=>numsValores.has(n));
 }
 async function obterChartV55(token,chartId){
     const id=String(chartId||'').trim();
@@ -9269,6 +9301,38 @@ async function iniciarCoreEscala(){
     }catch(e){console.error('[ESCALA INIT]',e)}
 }
 iniciarCoreEscala();
+
+
+// V57 — Consulta simplificada das linhas do guia de tamanho.
+// O frontend usa esta rota para transformar automaticamente Tamanho -> SIZE_GRID_ROW_ID.
+app.get('/api/v57/criar/guia-tamanho/:gridId', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    const gridId=String(req.params.gridId||'').trim();
+    if(!gridId)return respostaErro(res,400,'Informe o código do guia de tamanho.');
+    try{
+        const chart=await obterChartV55(token,gridId);
+        const rows=extrairRowsChartV55(chart);
+        if(!rows.length){
+            return respostaErro(res,422,`O guia ${gridId} foi encontrado, mas a API não retornou as linhas de tamanho. Abra o guia no Mercado Livre e confirme que ele possui numerações cadastradas.`);
+        }
+        const saida=rows.map((row,i)=>{
+            const row_id=formatarGridRowIdV55(gridId,row);
+            const sizes=valoresRowChartV55(chart,row);
+            const label=sizes.join(' · ') || `Linha ${i+1}`;
+            return {
+                row_id,
+                row_number:String(row?.id??row?.row_id??i+1),
+                label,
+                sizes,
+                attributes:Array.isArray(row?.attributes)?row.attributes:[]
+            };
+        }).filter(x=>x.row_id);
+        res.json({sucesso:true,grid_id:String(chart?.id||gridId),main_attribute_id:chart?.main_attribute_id||null,total:saida.length,rows:saida});
+    }catch(e){
+        respostaErro(res,500,'Erro ao consultar o guia de tamanho: '+e.message);
+    }
+});
 
 app.listen(
     PORT,
