@@ -11234,6 +11234,7 @@ async function adicionarCategoriaSelecionadaV37(){
             category_path:path,
             category_leaf_name:leaf,
             atributos:Array.isArray(d.atributos_visiveis)?d.atributos_visiveis:(Array.isArray(d.atributos)?d.atributos:[]),
+            guia_tamanhos:d.guia_tamanhos||{},
             max_pictures_per_item:Number(d.max_pictures_per_item||0)||null,
             listing_allowed:d.listing_allowed!==false,
             values:{}
@@ -11310,6 +11311,7 @@ function renderCategoriasSelecionadasV37(){
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
             <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.</div>
+            ${c.guia_tamanhos?.size_grid_id ? `<div class="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3"><label class="text-[9px] uppercase font-black text-yellow-400">Código da guia de tamanhos · SIZE_GRID_ID</label><input value="${textoEscapeV37(c.values?.SIZE_GRID_ID?.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','SIZE_GRID_ID',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Cole o código da guia de tamanhos do Mercado Livre"><div class="text-[9px] text-slate-500 mt-1">Para tênis/moda, preencha quando a categoria exigir uma guia.</div></div>` : ''}
             ${grupos.map(g=>`<div class="mt-5">
                 <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -11372,6 +11374,10 @@ function atualizarAtributosVariacaoV37(){
                 if(id&&!map.has(id))map.set(id,a);
             }
         });
+        const sgr=c.guia_tamanhos?.size_grid_row_id;
+        if(sgr?.id && !map.has(String(sgr.id))){
+            map.set(String(sgr.id),{...sgr,required:true,allow_variations:false,variation_attribute:true,name:sgr.name||'Linha da guia de tamanhos'});
+        }
     });
     criarEstadoV37.variationAttributes=[...map.values()];
     const legado=document.getElementById('criar-variacao-atributo-v37');
