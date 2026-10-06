@@ -5802,7 +5802,18 @@ function validarLinhasVariacaoV53(varCfg={},meta){
     if(!varCfg?.enabled)return [];
     const rows=normalizarLinhasVariacaoV53(varCfg);
     if(!rows.length)return ['Ative as variações e preencha pelo menos uma linha de variação.'];
-    const defs=[...(meta?.defMap?.values?.()||[])].filter(d=>!d.read_only&&(d.child_pk||d.allow_variations||d.variation_attribute));
+    // V59: SIZE_GRID_ROW_ID e SIZE_GRID_ID são atributos derivados do guia de tamanhos.
+    // Eles NÃO devem bloquear esta validação preliminar das linhas, porque o painel
+    // resolve e injeta o SIZE_GRID_ROW_ID correto depois, em aplicarGuiaTamanhoV55().
+    // Antes disso o usuário já pode ter selecionado visualmente a linha do guia,
+    // mas ela fica em row.size_grid_row_id (fora de row.attributes), o que fazia o
+    // validador acusar falsamente "faltam ID da linha da guia de tamanhos".
+    const atributosGuiaGerados=new Set(['SIZE_GRID_ID','SIZE_GRID_ROW_ID']);
+    const defs=[...(meta?.defMap?.values?.()||[])].filter(d=>
+        !d.read_only &&
+        !atributosGuiaGerados.has(String(d?.id||'')) &&
+        (d.child_pk||d.allow_variations||d.variation_attribute)
+    );
     const combinacoes=defs.filter(d=>d.child_pk||d.allow_variations);
     if(!combinacoes.length)return ['A categoria selecionada não retornou atributos permitidos para variação.'];
     const obrigatorios=combinacoes.filter(d=>d.child_pk||d.required);
@@ -8612,7 +8623,7 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
 });
 
 app.get('/api/v51/build',(req,res)=>{
-    res.json({sucesso:true,version:'V55',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-100%-automatico',package_dimensions:'auto-category-defaults'});
+    res.json({sucesso:true,version:'V59',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-100%-automatico',package_dimensions:'auto-category-defaults'});
 });
 
 app.post('/api/v51/criar/validar',async(req,res)=>{
