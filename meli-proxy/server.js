@@ -5827,35 +5827,81 @@ function validarLinhasVariacaoV53(varCfg={},meta){
 }
 
 
-function normalizarTextoGuiaV54(v){
-    return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+function normalizarTextoGuiaV55(v){
+    return String(v??'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .trim().toLowerCase()
+      .replace(/\b(brasil|br|bra|tamanho|tam\.?|numero|num\.?|nº|no\.?|size)\b/g,' ')
+      .replace(/[^a-z0-9.,/+-]+/g,' ')
+      .replace(/\s+/g,' ').trim();
 }
-function tamanhoDaLinhaV54(row={},chart=null){
+function candidatosTamanhoV55(v){
+    const raw=String(v??'').trim();
+    const norm=normalizarTextoGuiaV55(raw);
+    const out=new Set([norm]);
+    const nums=(norm.match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>x.replace(',','.'));
+    nums.forEach(n=>out.add(String(Number(n))));
+    if(nums.length)out.add(nums.join('x'));
+    return [...out].filter(Boolean);
+}
+function tamanhoDaLinhaV55(row={},chart=null){
     const idsPreferidos=[
-        String(chart?.main_attribute_id||''),
-        'SIZE','MANUFACTURER_SIZE','BR_SIZE','AR_SIZE','US_SIZE','UK_SIZE','EU_SIZE'
+        'SIZE',String(chart?.main_attribute_id||''),'MANUFACTURER_SIZE','BR_SIZE','AR_SIZE','US_SIZE','UK_SIZE','EU_SIZE',
+        'M_BR_SIZE','F_BR_SIZE','KIDS_BR_SIZE','FILTRABLE_SIZE'
     ].filter(Boolean);
     for(const id of idsPreferidos){
         const a=(row.attributes||[]).find(x=>String(x?.id||'')===id);
-        if(a && String(a.value_name||a.value_id||'').trim())return String(a.value_name||a.value_id).trim();
+        if(!a)continue;
+        const vals=Array.isArray(a?.values)?a.values:[];
+        const val=String(a.value_name||a.value_id||vals[0]?.name||vals[0]?.id||'').trim();
+        if(val)return val;
     }
     const a=(row.attributes||[]).find(x=>/SIZE|TAMANHO/i.test(String(x?.id||'')));
-    return a?String(a.value_name||a.value_id||'').trim():'';
+    if(!a)return '';
+    const vals=Array.isArray(a?.values)?a.values:[];
+    return String(a.value_name||a.value_id||vals[0]?.name||vals[0]?.id||'').trim();
 }
-function extrairRowsChartV54(chart){
+function extrairRowsChartV55(chart){
     if(Array.isArray(chart?.rows))return chart.rows;
     if(Array.isArray(chart?.data?.rows))return chart.data.rows;
     return [];
 }
-function valorPrincipalRowChartV54(chart,row){
-    const main=String(chart?.main_attribute_id||'').trim();
+function valoresRowChartV55(chart,row){
     const attrs=Array.isArray(row?.attributes)?row.attributes:[];
-    let a=main?attrs.find(x=>String(x?.id||'')===main):null;
-    if(!a)a=attrs.find(x=>/SIZE|TAMANHO/i.test(String(x?.id||'')))||attrs[0];
-    const vals=Array.isArray(a?.values)?a.values:[];
-    return String(vals[0]?.name||vals[0]?.id||a?.value_name||a?.value_id||'').trim();
+    const preferidos=new Set([
+        'SIZE',String(chart?.main_attribute_id||''),String(chart?.secondary_attribute_id||''),
+        'MANUFACTURER_SIZE','BR_SIZE','AR_SIZE','US_SIZE','UK_SIZE','EU_SIZE','M_BR_SIZE','F_BR_SIZE','KIDS_BR_SIZE','FILTRABLE_SIZE'
+    ].filter(Boolean));
+    const vals=[];
+    for(const a of attrs){
+        if(!preferidos.has(String(a?.id||'')) && !/SIZE|TAMANHO/i.test(String(a?.id||'')))continue;
+        const av=Array.isArray(a?.values)?a.values:[];
+        const v=String(a?.value_name||a?.value_id||av[0]?.name||av[0]?.id||'').trim();
+        if(v)vals.push(v);
+    }
+    if(!vals.length){
+        for(const a of attrs){
+            const av=Array.isArray(a?.values)?a.values:[];
+            const v=String(a?.value_name||a?.value_id||av[0]?.name||av[0]?.id||'').trim();
+            if(v)vals.push(v);
+        }
+    }
+    return [...new Set(vals)];
 }
-async function obterChartV54(token,chartId){
+function formatarGridRowIdV55(gridId,row){
+    const raw=String(row?.id||row?.row_id||'').trim();
+    if(!raw)return '';
+    // O Mercado Livre espera o valor do GRID_ROW no formato CHART_ID:ROW_ID.
+    // Se a API já devolver o valor completo, preservamos.
+    return raw.includes(':')?raw:`${String(gridId)}:${raw}`;
+}
+function rowCompativelV55(chart,row,tamanho){
+    const alvos=candidatosTamanhoV55(tamanho);
+    if(!alvos.length)return false;
+    const valores=valoresRowChartV55(chart,row).flatMap(candidatosTamanhoV55);
+    return alvos.some(a=>valores.includes(a));
+}
+async function obterChartV55(token,chartId){
     const id=String(chartId||'').trim();
     if(!id)return null;
     const r=await mlFetch(`${ML_API}/catalog/charts/${encodeURIComponent(id)}`,token);
@@ -5867,62 +5913,166 @@ async function obterChartV54(token,chartId){
     }
     return d;
 }
-async function aplicarGuiaTamanhoV54(token,payload,cfg,opts={}){
+function acharRowChartV55(chart,tamanho){
+    return extrairRowsChartV55(chart).find(r=>rowCompativelV55(chart,r,tamanho))||null;
+}
+function extrairDomainIdV55(v){
+    const s=String(v||'').trim();
+    return s.replace(/^MLB-/i,'');
+}
+async function descobrirDominioV55(token,categoryId,title=''){
+    const q=String(title||'').trim();
+    if(q){
+        try{
+            const r=await mlFetch(`${ML_API}/sites/MLB/domain_discovery/search?limit=8&q=${encodeURIComponent(q)}`,token);
+            const d=await jsonSeguro(r);
+            if(r.ok&&Array.isArray(d)&&d.length){
+                const exato=d.find(x=>String(x?.category_id||'')===String(categoryId||''));
+                const alvo=exato||d[0];
+                if(alvo?.domain_id)return extrairDomainIdV55(alvo.domain_id);
+            }
+        }catch{}
+    }
+    return '';
+}
+function attrsPayloadParaBuscaGuiaV55(payload={},ids=null){
+    const filtro=ids?new Set(ids.map(String)):null;
+    return (Array.isArray(payload?.attributes)?payload.attributes:[])
+      .filter(a=>a?.id && (!filtro||filtro.has(String(a.id))) && (a.value_name||a.value_id))
+      .map(a=>({id:String(a.id),values:[{...(a.value_id?{id:String(a.value_id)}:{}),name:String(a.value_name||a.value_id||'')}]}));
+}
+function extrairGridTemplateRequiredV55(payload){
+    const ids=[]; const seen=new Set();
+    const walk=node=>{
+        if(!node)return;
+        if(Array.isArray(node)){node.forEach(walk);return;}
+        if(typeof node!=='object')return;
+        if(Array.isArray(node.attributes)){
+            for(const a of node.attributes){
+                const tags=Array.isArray(a?.tags)?a.tags:Object.keys(a?.tags||{}).filter(k=>a.tags[k]);
+                if(tags.map(String).includes('grid_template_required')){
+                    const id=String(a?.id||''); if(id&&!seen.has(id)){seen.add(id);ids.push(id);}
+                }
+            }
+        }
+        if(Array.isArray(node.groups))node.groups.forEach(walk);
+        if(Array.isArray(node.components))node.components.forEach(walk);
+        if(Array.isArray(node.content))node.content.forEach(walk);
+        if(node.input)walk(node.input);
+    };
+    walk(payload); return ids;
+}
+async function buscarChartsAutomaticosV55(token,{domainId,sellerId,payload}){
+    if(!domainId||!sellerId)return [];
+    let required=[];
+    try{
+        const tr=await mlFetch(`${ML_API}/domains/MLB-${encodeURIComponent(domainId)}/technical_specs`,token);
+        const td=await jsonSeguro(tr);
+        if(tr.ok)required=extrairGridTemplateRequiredV55(td);
+    }catch{}
+    const tentativas=[];
+    const attrsReq=attrsPayloadParaBuscaGuiaV55(payload,required);
+    if(attrsReq.length)tentativas.push(attrsReq);
+    const attrsBG=attrsPayloadParaBuscaGuiaV55(payload,['BRAND','GENDER']);
+    if(attrsBG.length)tentativas.push(attrsBG);
+    tentativas.push([]);
+    const seenBody=new Set();
+    for(const attributes of tentativas){
+        const sig=JSON.stringify(attributes); if(seenBody.has(sig))continue; seenBody.add(sig);
+        const body={domain_id:domainId,site_id:'MLB',seller_id:Number(sellerId),attributes};
+        const r=await mlFetch(`${ML_API}/catalog/charts/search?offset=0&limit=100`,token,{method:'POST',headers:{'Content-Type':'application/json','x-caller-id':String(sellerId)},body:JSON.stringify(body)});
+        const d=await jsonSeguro(r);
+        if(r.ok&&Array.isArray(d?.charts)&&d.charts.length)return d.charts;
+        if(Number(r.status)===400 && String(d?.error||'')==='domain_not_active')return [];
+    }
+    return [];
+}
+async function resolverGuiaAutomaticoV55(token,payload,cfg,opts={}){
     const varCfg=cfg?.variations||{};
-    const gridId=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
-    if(!gridId)return payload;
-
-    const chart=await obterChartV54(token,gridId);
+    if(!varCfg?.enabled)return null;
     const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
-    const rowAtual=rowsCfg[Number(opts.variationIndex||0)]||rowsCfg[0]||null;
-    const rowsChart=extrairRowsChartV54(chart);
+    const tamanhos=[...new Set(rowsCfg.map(r=>tamanhoDaLinhaV55(r)).filter(Boolean))];
+    if(!tamanhos.length)return null;
 
-    const resolverRowId=(row)=>{
-        const manual=String(row?.size_grid_row_id||'').trim();
-        if(manual)return manual;
-        const tamanho=tamanhoDaLinhaV54(row,chart);
-        if(!tamanho)return '';
-        const alvo=normalizarTextoGuiaV54(tamanho);
-        const achou=rowsChart.find(cr=>normalizarTextoGuiaV54(valorPrincipalRowChartV54(chart,cr))===alvo);
-        return String(achou?.id||achou?.row_id||'').trim();
-    };
+    const manual=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
+    if(manual){
+        try{
+            const chart=await obterChartV55(token,manual);
+            const hits=tamanhos.filter(t=>acharRowChartV55(chart,t)).length;
+            if(hits===tamanhos.length)return {gridId:String(chart?.id||manual),chart,source:'manual-compatible'};
+        }catch{}
+    }
 
-    const pushUnique=(arr,obj)=>{
-        const id=String(obj?.id||'');
-        const idx=arr.findIndex(x=>String(x?.id||'')===id);
-        if(idx>=0)arr[idx]=obj; else arr.push(obj);
-    };
+    const title=String(cfg?.titles?.[Number(opts.familyIndex||0)]||cfg?.product_name||'').trim();
+    const domainId=await descobrirDominioV55(token,opts?.category?.category_id||payload?.category_id,title);
+    if(!domainId)return null;
+    const charts=await buscarChartsAutomaticosV55(token,{domainId,sellerId:opts?.sellerId,payload});
+    if(!charts.length)return null;
 
+    const generica=normalizarTextoGuiaV55((payload.attributes||[]).find(a=>String(a.id)==='BRAND')?.value_name||'').includes('generica');
+    const ordenados=[...charts].sort((a,b)=>{
+        const rank=c=>{
+            const type=String(c?.type||'').toUpperCase();
+            if(generica)return type==='STANDARD'?30:type==='SPECIFIC'?20:type==='BRAND'?10:0;
+            return type==='BRAND'?30:type==='SPECIFIC'?25:type==='STANDARD'?20:0;
+        };
+        return rank(b)-rank(a);
+    });
+
+    let melhor=null;
+    for(const c of ordenados.slice(0,20)){
+        try{
+            const chart=await obterChartV55(token,c.id);
+            const hits=tamanhos.filter(t=>acharRowChartV55(chart,t)).length;
+            if(!melhor||hits>melhor.hits)melhor={gridId:String(chart?.id||c.id),chart,hits,source:'automatic-search'};
+            if(hits===tamanhos.length)return melhor;
+        }catch{}
+    }
+    return melhor?.hits?melhor:null;
+}
+async function aplicarGuiaTamanhoV55(token,payload,cfg,opts={}){
+    const varCfg=cfg?.variations||{};
+    if(!varCfg?.enabled)return payload;
+    const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
+    const temTamanho=rowsCfg.some(r=>Boolean(tamanhoDaLinhaV55(r)));
+    if(!temTamanho)return payload;
+
+    const resolvido=await resolverGuiaAutomaticoV55(token,payload,cfg,opts);
+    if(!resolvido){
+        // Só força guia quando o domínio/categoria realmente devolve um guia compatível.
+        // A validação do ML continuará sendo a autoridade final para categorias que não exigem grade.
+        return payload;
+    }
+    const gridId=String(resolvido.gridId);
+    const chart=resolvido.chart;
+    const pushUnique=(arr,obj)=>{const id=String(obj?.id||'');const i=arr.findIndex(x=>String(x?.id||'')===id);if(i>=0)arr[i]=obj;else arr.push(obj);};
     payload.attributes=Array.isArray(payload.attributes)?payload.attributes:[];
     pushUnique(payload.attributes,{id:'SIZE_GRID_ID',value_name:gridId});
 
-    if(opts.userProductSeller && varCfg.enabled){
-        const rowId=resolverRowId(rowAtual);
-        const tamanho=tamanhoDaLinhaV54(rowAtual,chart);
+    const resolver=(row)=>{
+        const tamanho=tamanhoDaLinhaV55(row,chart);
+        if(!tamanho)return '';
+        const achou=acharRowChartV55(chart,tamanho);
+        return formatarGridRowIdV55(gridId,achou);
+    };
+
+    if(opts.userProductSeller){
+        const row=rowsCfg[Number(opts.variationIndex||0)]||rowsCfg[0];
+        const rowId=resolver(row);
         if(!rowId){
-            const e=new Error(`Guia de tamanho ${gridId}: não encontrei a linha correspondente${tamanho?` ao tamanho "${tamanho}"`:''}. Informe o SIZE_GRID_ROW_ID manualmente na variação.`);
-            e.code='missing_size_grid_row';
-            throw e;
+            const e=new Error(`O Mercado Livre encontrou automaticamente o guia ${gridId}, mas não existe uma linha compatível com o tamanho "${tamanhoDaLinhaV55(row,chart)}". Confira apenas o tamanho informado na variação.`);
+            e.code='missing_size_grid_row'; throw e;
         }
         pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
-    }else if(varCfg.enabled && Array.isArray(payload.variations)){
+    }else if(Array.isArray(payload.variations)){
         payload.variations=payload.variations.map((v,i)=>{
-            const cfgRow=rowsCfg[i]||null;
-            const rowId=resolverRowId(cfgRow);
-            const tamanho=tamanhoDaLinhaV54(cfgRow,chart);
-            if(!rowId){
-                const e=new Error(`Guia de tamanho ${gridId}: não encontrei a linha da variação ${i+1}${tamanho?` para o tamanho "${tamanho}"`:''}. Informe o SIZE_GRID_ROW_ID manualmente.`);
-                e.code='missing_size_grid_row';
-                throw e;
-            }
+            const row=rowsCfg[i]||rowsCfg[0];
+            const rowId=resolver(row);
+            if(!rowId){const e=new Error(`Não existe linha do guia ${gridId} para o tamanho "${tamanhoDaLinhaV55(row,chart)}".`);e.code='missing_size_grid_row';throw e;}
             const attrs=Array.isArray(v.attributes)?v.attributes:[];
             pushUnique(attrs,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
             return {...v,attributes:attrs};
         });
-    }else{
-        // Sem variações: aceita row manual no primeiro registro quando informado.
-        const rowId=resolverRowId(rowAtual);
-        if(rowId)pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
     }
     return payload;
 }
@@ -7549,7 +7699,7 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
 
     aplicarCodigoUniversalV51(payload,cfg,meta);
     ajustarSaleTermsCategoriaV51(payload,cfg,meta);
-    await aplicarGuiaTamanhoV54(token,payload,cfg,{...opts,userProductSeller:Boolean(opts?.userProductSeller)});
+    await aplicarGuiaTamanhoV55(token,payload,cfg,{...opts,userProductSeller:Boolean(opts?.userProductSeller)});
 
     // Resolve automaticamente o envio permitido pela conta + categoria.
     // Evita deixar o Mercado Livre assumir ME1 quando a conta não possui mais esse modo.
@@ -8381,7 +8531,7 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
 });
 
 app.get('/api/v51/build',(req,res)=>{
-    res.json({sucesso:true,version:'V54',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-auto',package_dimensions:'auto-category-defaults'});
+    res.json({sucesso:true,version:'V55',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-100%-automatico',package_dimensions:'auto-category-defaults'});
 });
 
 app.post('/api/v51/criar/validar',async(req,res)=>{
