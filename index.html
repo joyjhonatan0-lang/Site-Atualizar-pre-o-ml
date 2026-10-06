@@ -2654,22 +2654,48 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">3. Variações</div>
-            <div class="text-[11px] text-slate-500 mt-1">Cada título/família será publicado com todas as variações configuradas abaixo. Preencha tamanho, cor, textura e demais campos permitidos pela categoria, uma variação por vez.</div>
+            <div class="text-[11px] text-slate-500 mt-1">Cada título/família receberá todas as variações configuradas abaixo. No modelo User Products, cada variação vira um item da mesma família, com tamanho, cor e demais atributos próprios.</div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
                 <select id="criar-variacao-enabled-v37" onchange="alternarVariacoesV37()" class="campo-preview-v37 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white">
                     <option value="0">Sem variações</option>
                     <option value="1">Com variações</option>
                 </select>
                 <div>
-                    <label class="text-[9px] uppercase font-black text-slate-500">Quantidade de variações por título</label>
-                    <input id="criar-variacao-qtd-v37" type="number" min="1" max="50" value="2" oninput="sincronizarQuantidadeVariacoesV53()" class="campo-preview-v37 w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Quantidade de variações por título/família</label>
+                    <input id="criar-variacao-qtd-v37" type="number" min="1" max="100" value="2" oninput="ajustarQuantidadeVariacoesV53()" class="campo-preview-v37 w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white" disabled>
+                    <div class="text-[9px] text-slate-600 mt-1">Cada título receberá todas as variações configuradas. O limite final também depende da categoria do Mercado Livre.</div>
                 </div>
             </div>
-            <div id="criar-variacoes-ajuda-v53" class="mt-4 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-[10px] text-slate-400">Escolha uma categoria primeiro. O painel carregará automaticamente todos os campos que podem variar nessa categoria.</div>
-            <div id="criar-variacoes-linhas-v53" class="mt-4 space-y-4"></div>
-            <div class="hidden">
-                <select id="criar-variacao-atributo-v37"><option value="">Compatibilidade</option></select>
-                <textarea id="criar-variacao-valores-v37"></textarea>
+
+            <div class="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+                    <div>
+                        <label class="text-[9px] uppercase font-black text-sky-400">Código do guia de tamanho — SIZE_GRID_ID</label>
+                        <input id="criar-size-grid-id-v56" onchange="carregarGuiaTamanhoV57(true)" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 8988234">
+                        <div class="text-[9px] text-slate-500 mt-1">Cole somente o código do guia. O painel busca as linhas do guia e associa automaticamente cada tamanho ao SIZE_GRID_ROW_ID correto.</div>
+                    </div>
+                    <button type="button" onclick="carregarGuiaTamanhoV57(false)" class="bg-sky-500 hover:bg-sky-400 text-slate-950 px-4 py-2.5 rounded-lg text-xs font-black">↻ Carregar tamanhos do guia</button>
+                </div>
+                <div id="criar-size-grid-status-v57" class="text-[10px] text-slate-500 mt-3">Informe o código do guia. Depois, os IDs das linhas serão preenchidos automaticamente pelas numerações das variações.</div>
+            </div>
+
+            <div id="criar-variacao-editor-v53" class="hidden mt-5 space-y-4">
+                <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                    <div class="text-[10px] uppercase tracking-wider font-black text-white">Atributos que diferenciam as variações</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Os atributos permitidos pela categoria são carregados automaticamente. Marque, por exemplo, Tamanho, Cor, Desenho do tecido ou outro campo que realmente muda entre as variações.</div>
+                    <div id="criar-variacao-atributos-v53" class="flex flex-wrap gap-2 mt-3"></div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-wider font-black text-white">Preenchimento individual</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Cada variação tem campos próprios. Os mesmos 7 valores, por exemplo, serão repetidos em cada título/família que você gerar.</div>
+                    </div>
+                    <span id="criar-variacao-resumo-v53" class="text-[10px] font-black text-yellow-400"></span>
+                </div>
+
+                <div id="criar-variacao-linhas-v53" class="space-y-3"></div>
             </div>
         </div>
 
@@ -2721,7 +2747,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <thead class="bg-slate-900 text-slate-300 uppercase tracking-[.08em]">
                     <tr>
                         <th class="px-3 py-3 text-left">Categoria</th>
-                        <th class="px-3 py-3 text-left">Título</th>
+                        <th class="px-3 py-3 text-left">Título / família</th>
+                        <th class="px-3 py-3 text-left">Variação</th>
                         <th class="px-3 py-3 text-left">Condição</th>
                         <th class="px-3 py-3 text-left">Preço</th>
                         <th class="px-3 py-3 text-left">Estoque</th>
@@ -11110,8 +11137,8 @@ window.criarEstadoV37={
     jobId:null,
     jobTimer:null,
     sugestões:[],
-    variationRows:[],
-    variationAttributes:[]
+    variationAttributeIds:[],
+    variationRows:[]
 };
 
 function lerArquivoDataUrlV37(file){
@@ -11186,6 +11213,7 @@ async function carregarCriacaoMassaV37(){
     if(jobId)acompanharCriacaoV37(jobId);
     renderFotosReferenciaV37();
     renderCategoriasSelecionadasV37();
+    atualizarAtributosVariacaoV37();
     renderPlanilhaPreviewV37();
 }
 window.carregarCriacaoMassaV36=carregarCriacaoMassaV37;
@@ -11234,7 +11262,6 @@ async function adicionarCategoriaSelecionadaV37(){
             category_path:path,
             category_leaf_name:leaf,
             atributos:Array.isArray(d.atributos_visiveis)?d.atributos_visiveis:(Array.isArray(d.atributos)?d.atributos:[]),
-            guia_tamanhos:d.guia_tamanhos||{},
             max_pictures_per_item:Number(d.max_pictures_per_item||0)||null,
             listing_allowed:d.listing_allowed!==false,
             values:{}
@@ -11298,7 +11325,9 @@ function renderCategoriasSelecionadasV37(){
     }).join('') || '<div class="text-[11px] text-slate-500">Nenhuma categoria selecionada.</div>';
 
     forms.innerHTML=criarEstadoV37.selectedCategories.map(c=>{
-        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]);
+        const variacoesAtivas=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+        const idsVariacao=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+        const attrs=ordenarAtributosCategoriaV37(c.atributos||[]).filter(a=>!(variacoesAtivas&&idsVariacao.has(String(a.id))));
         const path=String(c.category_path||c.category_name||c.category_id||'');
         const leaf=String(c.category_leaf_name||path.split(' > ').pop()||c.category_name||'');
         const grupos=[
@@ -11310,8 +11339,7 @@ function renderCategoriasSelecionadasV37(){
             <div class="text-sm font-black text-white">${textoEscapeV37(c.category_name)}</div>
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
-            <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.</div>
-            ${c.guia_tamanhos?.size_grid_id ? `<div class="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3"><label class="text-[9px] uppercase font-black text-yellow-400">Código da guia de tamanhos · SIZE_GRID_ID</label><input value="${textoEscapeV37(c.values?.SIZE_GRID_ID?.value_name||'')}" oninput="setCategoriaTextoV37('${textoEscapeV37(c.category_id)}','SIZE_GRID_ID',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Cole o código da guia de tamanhos do Mercado Livre"><div class="text-[9px] text-slate-500 mt-1">Para tênis/moda, preencha quando a categoria exigir uma guia.</div></div>` : ''}
+            <div class="text-[10px] text-emerald-400 mt-2">Exibindo características principais e secundárias editáveis da ficha do Mercado Livre (${attrs.length}). Campos técnicos internos ficam ocultos.${variacoesAtivas&&idsVariacao.size?' Os atributos escolhidos para variar são preenchidos exclusivamente na seção 3, uma vez por variação.':''}</div>
             ${grupos.map(g=>`<div class="mt-5">
                 <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -11365,99 +11393,322 @@ function setCategoriaNaoAplicaV52(categoryId,attrId,checked){
     renderPlanilhaPreviewV37();
 }
 
-function atualizarAtributosVariacaoV37(){
+function atributosVariacaoDisponiveisV53(){
     const map=new Map();
-    criarEstadoV37.selectedCategories.forEach(c=>{
+    (criarEstadoV37.selectedCategories||[]).forEach(c=>{
         (c.atributos||[]).forEach(a=>{
+            if(a?.read_only)return;
             if(a.allow_variations || a.variation_attribute || a.child_pk){
                 const id=String(a.id||'').trim();
-                if(id&&!map.has(id))map.set(id,a);
+                if(!id)return;
+                if(!map.has(id))map.set(id,{...a,categories:1});
+                else map.get(id).categories=(map.get(id).categories||1)+1;
             }
         });
-        const sgr=c.guia_tamanhos?.size_grid_row_id;
-        if(sgr?.id && !map.has(String(sgr.id))){
-            map.set(String(sgr.id),{...sgr,required:true,allow_variations:false,variation_attribute:true,name:sgr.name||'Linha da guia de tamanhos'});
-        }
     });
-    criarEstadoV37.variationAttributes=[...map.values()];
-    const legado=document.getElementById('criar-variacao-atributo-v37');
-    if(legado){
-        legado.innerHTML='<option value="">Compatibilidade</option>'+criarEstadoV37.variationAttributes.map(a=>`<option value="${textoEscapeV37(a.id)}">${textoEscapeV37(a.name||a.id)}</option>`).join('');
-        if(criarEstadoV37.variationAttributes[0])legado.value=criarEstadoV37.variationAttributes[0].id;
-    }
-    garantirLinhasVariacaoV53();
-    renderVariacoesV53();
+    return [...map.values()];
 }
 
-function snapshotVariacoesV53(){
-    document.querySelectorAll('[data-v53-row]').forEach(rowEl=>{
-        const i=Number(rowEl.dataset.v53Row);
-        const row=criarEstadoV37.variationRows[i];
-        if(!row)return;
-        row.sku_suffix=String(rowEl.querySelector('[data-v53-sku]')?.value||'').trim();
-        row.stock=Math.max(1,Number(rowEl.querySelector('[data-v53-stock]')?.value||1));
-        row.attributes=row.attributes||{};
-        rowEl.querySelectorAll('[data-v53-attr]').forEach(el=>{
-            const id=String(el.dataset.v53Attr||''); if(!id)return;
-            if(el.tagName==='SELECT'){
-                const opt=el.options[el.selectedIndex];
-                row.attributes[id]={value_id:String(el.value||''),value_name:String(opt?.dataset?.name||opt?.textContent||'').trim()};
-            }else{
-                row.attributes[id]={value_name:String(el.value||'').trim()};
-            }
-        });
-    });
+function defAtributoVariacaoV53(id){
+    const key=String(id||'');
+    for(const c of (criarEstadoV37.selectedCategories||[])){
+        const achou=(c.atributos||[]).find(a=>String(a?.id||'')===key);
+        if(achou)return achou;
+    }
+    return null;
 }
 
 function garantirLinhasVariacaoV53(){
-    snapshotVariacoesV53();
-    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-    const qtd=ativo?Math.min(50,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1))):0;
-    const atual=Array.isArray(criarEstadoV37.variationRows)?criarEstadoV37.variationRows:[];
-    while(atual.length<qtd){
-        atual.push({sku_suffix:`V${String(atual.length+1).padStart(2,'0')}`,stock:Math.max(1,Number(document.getElementById('criar-estoque-v37')?.value||1)),attributes:{}});
+    const count=Math.min(100,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const rows=Array.isArray(criarEstadoV37.variationRows)?criarEstadoV37.variationRows:[];
+    while(rows.length<count){
+        const n=rows.length+1;
+        rows.push({
+            index:n-1,
+            sku_suffix:String(n).padStart(2,'0'),
+            price:'',
+            stock:'',
+            size_grid_row_id:'',
+            attributes:{}
+        });
     }
-    if(atual.length>qtd)atual.splice(qtd);
-    criarEstadoV37.variationRows=atual;
+    if(rows.length>count)rows.length=count;
+    rows.forEach((r,i)=>{
+        r.index=i;
+        if(!r.attributes||typeof r.attributes!=='object')r.attributes={};
+        if(r.size_grid_row_id==null)r.size_grid_row_id='';
+        if(r.sku_suffix==null||r.sku_suffix==='')r.sku_suffix=String(i+1).padStart(2,'0');
+    });
+    criarEstadoV37.variationRows=rows;
+    return rows;
 }
 
-function sincronizarQuantidadeVariacoesV53(){
+function sincronizarAtributosVariacaoV53(){
+    const defs=atributosVariacaoDisponiveisV53();
+    const valid=new Set(defs.map(a=>String(a.id)));
+    let selected=(criarEstadoV37.variationAttributeIds||[]).map(String).filter(id=>valid.has(id));
+
+    if(!selected.length && defs.length){
+        const child=defs.filter(a=>a.child_pk).map(a=>String(a.id));
+        if(child.length){
+            selected=[...new Set(child)];
+        }else{
+            const comuns=defs.filter(a=>/(^|_)(SIZE|COLOR|MAIN_COLOR|FABRIC_DESIGN|DESIGN|PATTERN|VOLTAGE|TAMANHO|COR)(_|$)/i.test(String(a.id||'')) || /(tamanho|cor|desenho|estampa|textura|voltagem)/i.test(String(a.name||''))).slice(0,3).map(a=>String(a.id));
+            selected=comuns.length?[...new Set(comuns)]:[String(defs[0].id)];
+        }
+    }
+    criarEstadoV37.variationAttributeIds=selected;
     garantirLinhasVariacaoV53();
-    renderVariacoesV53();
+}
+
+function valorAtualVariacaoV53(row,attrId){
+    const v=row?.attributes?.[attrId]||{};
+    return String(v.value_name??v.value_id??'');
+}
+
+function normalizarValorVariacaoV53(attrId,valor){
+    const def=defAtributoVariacaoV53(attrId);
+    const txt=String(valor||'').trim();
+    if(!txt)return {value_id:'',value_name:''};
+    const vals=Array.isArray(def?.values)?def.values:[];
+    const alvo=txt.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const match=vals.find(v=>{
+        const nome=String(v?.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        return nome===alvo || String(v?.id||'')===txt;
+    });
+    if(match)return {value_id:String(match.id||''),value_name:String(match.name||txt)};
+    return {value_id:'',value_name:txt};
+}
+
+function setVariacaoAtributoV53(index,attrId,value){
+    garantirLinhasVariacaoV53();
+    const row=criarEstadoV37.variationRows[Number(index)];
+    if(!row)return;
+    row.attributes[String(attrId)]=normalizarValorVariacaoV53(attrId,value);
+    // V58: ao alterar Tamanho, refaz automaticamente a associação com a linha
+    // real do guia carregado. Nunca reaproveita um SIZE_GRID_ROW_ID incompatível.
+    if(/SIZE|TAMANHO/i.test(String(attrId||'')) && Array.isArray(criarEstadoV37.sizeGuideRowsV57) && criarEstadoV37.sizeGuideRowsV57.length){
+        const linha=acharLinhaGuiaV57(row);
+        row.size_grid_row_id=linha?.row_id?String(linha.row_id):'';
+    }
+    renderEditorVariacoesV53();
     renderPlanilhaPreviewV37();
 }
 
-function renderCampoVariacaoV53(a,row,i){
-    const cur=row.attributes?.[a.id]||{};
-    const label=`${a.name||a.id}${a.required?' · obrigatório':''}`;
-    if(Array.isArray(a.values)&&a.values.length){
-        return `<div><label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-400'}">${textoEscapeV37(label)}</label><select data-v53-attr="${textoEscapeV37(a.id)}" onchange="snapshotVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"><option value="">Selecione...</option>${a.values.slice(0,150).map(v=>`<option value="${textoEscapeV37(v.id||'')}" data-name="${textoEscapeV37(v.name||'')}" ${String(cur.value_id||'')===String(v.id||'')||(!cur.value_id&&String(cur.value_name||'').toLowerCase()===String(v.name||'').toLowerCase())?'selected':''}>${textoEscapeV37(v.name||v.id)}</option>`).join('')}</select></div>`;
-    }
-    return `<div><label class="text-[9px] uppercase font-black ${a.required?'text-yellow-400':'text-slate-400'}">${textoEscapeV37(label)}</label><input data-v53-attr="${textoEscapeV37(a.id)}" value="${textoEscapeV37(cur.value_name||'')}" oninput="snapshotVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Valor da variação"></div>`;
+function setVariacaoCampoV53(index,campo,value){
+    garantirLinhasVariacaoV53();
+    const row=criarEstadoV37.variationRows[Number(index)];
+    if(!row)return;
+    if(campo==='price'||campo==='stock')row[campo]=String(value||'').replace(',','.');
+    else row[campo]=String(value||'').trim();
+    renderPlanilhaPreviewV37();
 }
 
-function renderVariacoesV53(){
-    const box=document.getElementById('criar-variacoes-linhas-v53');
-    const ajuda=document.getElementById('criar-variacoes-ajuda-v53');
-    if(!box)return;
-    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-    if(!ativo){box.innerHTML=''; if(ajuda)ajuda.textContent='Ative “Com variações” para configurar cada variação individualmente.';return;}
+function toggleAtributoVariacaoV53(attrId,checked){
+    const id=String(attrId||'');
+    const set=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+    if(checked)set.add(id); else set.delete(id);
+    criarEstadoV37.variationAttributeIds=[...set];
     garantirLinhasVariacaoV53();
-    const attrs=criarEstadoV37.variationAttributes||[];
-    if(ajuda)ajuda.innerHTML=attrs.length
-      ? `Campos de variação detectados na categoria: <b class="text-white">${attrs.map(a=>textoEscapeV37(a.name||a.id)).join(', ')}</b>. Cada título gerado receberá todas as ${criarEstadoV37.variationRows.length} variações abaixo.`
-      : 'Esta categoria não retornou atributos próprios de variação. Escolha outra categoria ou confirme se ela permite variações no Mercado Livre.';
-    box.innerHTML=criarEstadoV37.variationRows.map((row,i)=>`<div data-v53-row="${i}" class="rounded-2xl border border-slate-700 bg-slate-950/60 p-4"><div class="flex items-center justify-between gap-3"><div class="font-black text-white text-xs">Variação ${i+1}</div><div class="text-[10px] text-emerald-400">Será repetida em cada título/família</div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="text-[9px] uppercase font-black text-slate-400">SKU / sufixo exclusivo</label><input data-v53-sku value="${textoEscapeV37(row.sku_suffix||'')}" oninput="snapshotVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Ex.: 34-BRANCO"></div><div><label class="text-[9px] uppercase font-black text-slate-400">Estoque desta variação</label><input data-v53-stock type="number" min="1" value="${textoEscapeV37(row.stock||1)}" oninput="snapshotVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"></div>${attrs.map(a=>renderCampoVariacaoV53(a,row,i)).join('')}</div></div>`).join('');
+    renderCategoriasSelecionadasV37();
+    renderEditorVariacoesV53();
+    renderPlanilhaPreviewV37();
+}
+
+function normalizarTamanhoGuiaV57(valor){
+    const raw=String(valor??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const limpo=raw.replace(/\b(brasil|br|bra|tamanho|tam\.?|numero|num\.?|nº|no\.?|size)\b/g,' ')
+      .replace(/[^a-z0-9.,/+\-]+/g,' ').replace(/\s+/g,' ').trim();
+    const nums=(limpo.match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>String(Number(x.replace(',','.'))));
+    return {texto:limpo,numeros:nums};
+}
+function tamanhoLinhaVariacaoV57(row){
+    const attrs=row?.attributes||{};
+    const pref=['SIZE','BR_SIZE','M_BR_SIZE','F_BR_SIZE','KIDS_BR_SIZE','MANUFACTURER_SIZE','FILTRABLE_SIZE'];
+    for(const id of pref){
+        const v=attrs[id];
+        const txt=String(v?.value_name??v?.value_id??'').trim();
+        if(txt)return txt;
+    }
+    for(const [id,v] of Object.entries(attrs)){
+        if(!/SIZE|TAMANHO/i.test(id))continue;
+        const txt=String(v?.value_name??v?.value_id??'').trim();
+        if(txt)return txt;
+    }
+    return '';
+}
+function acharLinhaGuiaV57(row){
+    const alvo=normalizarTamanhoGuiaV57(tamanhoLinhaVariacaoV57(row));
+    if(!alvo.texto && !alvo.numeros.length)return null;
+    const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
+    let exato=linhas.find(l=>{
+        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
+        return cands.some(c=>c.texto===alvo.texto && c.texto);
+    });
+    if(exato)return exato;
+    exato=linhas.find(l=>{
+        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
+        return alvo.numeros.length && cands.some(c=>c.numeros.some(n=>alvo.numeros.includes(n)));
+    });
+    return exato||null;
+}
+function aplicarLinhasGuiaAutomaticamenteV57(){
+    const rows=garantirLinhasVariacaoV53();
+    const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
+    const validos=new Set(linhas.map(l=>String(l?.row_id||'').trim()).filter(Boolean));
+    let encontrados=0;
+    rows.forEach(row=>{
+        const l=acharLinhaGuiaV57(row);
+        if(l?.row_id){
+            row.size_grid_row_id=String(l.row_id);
+            encontrados++;
+            return;
+        }
+        // Se um ID técnico antigo/manual não pertence ao guia atual, limpa.
+        const atual=String(row.size_grid_row_id||'').trim();
+        if(atual && !validos.has(atual))row.size_grid_row_id='';
+    });
+    return encontrados;
+}
+async function carregarGuiaTamanhoV57(silencioso=false){
+    const gridId=String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim();
+    const status=document.getElementById('criar-size-grid-status-v57');
+    if(!gridId){
+        criarEstadoV37.sizeGuideRowsV57=[];
+        if(status)status.textContent='Informe o código do guia para carregar os tamanhos.';
+        return;
+    }
+    const token=obterToken();
+    if(!token){if(!silencioso)solicitarToken();return;}
+    if(status){status.textContent='Consultando o guia de tamanhos no Mercado Livre...';status.className='text-[10px] text-sky-400 mt-3';}
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v57/criar/guia-tamanho/${encodeURIComponent(gridId)}`,{headers:{Authorization:token}});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+        criarEstadoV37.sizeGuideRowsV57=Array.isArray(d.rows)?d.rows:[];
+        const achados=aplicarLinhasGuiaAutomaticamenteV57();
+        renderEditorVariacoesV53();
+        renderPlanilhaPreviewV37();
+        const total=criarEstadoV37.sizeGuideRowsV57.length;
+        if(status){
+            status.textContent=`Guia ${gridId} carregado: ${total} linha(s). ${achados} variação(ões) associada(s) automaticamente pelo tamanho.`;
+            status.className='text-[10px] text-emerald-400 mt-3';
+        }
+    }catch(e){
+        criarEstadoV37.sizeGuideRowsV57=[];
+        if(status){status.textContent='Não foi possível carregar o guia: '+e.message;status.className='text-[10px] text-red-400 mt-3';}
+        if(!silencioso)alert('Erro ao carregar guia de tamanhos: '+e.message);
+    }
+}
+
+function renderEditorVariacoesV53(){
+    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    const editor=document.getElementById('criar-variacao-editor-v53');
+    const attrBox=document.getElementById('criar-variacao-atributos-v53');
+    const rowsBox=document.getElementById('criar-variacao-linhas-v53');
+    const resumo=document.getElementById('criar-variacao-resumo-v53');
+    if(!editor||!attrBox||!rowsBox)return;
+
+    editor.classList.toggle('hidden',!ativo);
+    if(!ativo)return;
+
+    sincronizarAtributosVariacaoV53();
+    const defs=atributosVariacaoDisponiveisV53();
+    const selected=new Set((criarEstadoV37.variationAttributeIds||[]).map(String));
+    const rows=garantirLinhasVariacaoV53();
+
+    attrBox.innerHTML=defs.length?defs.map(a=>{
+        const id=String(a.id||'');
+        const marcado=selected.has(id);
+        const destaque=a.child_pk?'border-emerald-500/40 bg-emerald-500/5':'border-slate-700 bg-slate-900';
+        return `<label class="inline-flex items-center gap-2 rounded-xl border ${destaque} px-3 py-2 text-[10px] text-slate-200 cursor-pointer">
+            <input type="checkbox" class="w-4 h-4 accent-yellow-400" ${marcado?'checked':''} onchange="toggleAtributoVariacaoV53('${textoEscapeV37(id)}',this.checked)">
+            <span><b>${textoEscapeV37(a.name||id)}</b>${a.child_pk?'<span class="text-emerald-400"> · variação principal</span>':''}</span>
+        </label>`;
+    }).join(''):'<div class="text-[10px] text-amber-400">A categoria escolhida não informou atributos próprios de variação. Se isso estiver incorreto, escolha a categoria final exata do produto.</div>';
+
+    const attrDefs=[...selected].map(id=>defAtributoVariacaoV53(id)).filter(Boolean);
+    rowsBox.innerHTML=rows.map((row,i)=>{
+        const camposAttrs=attrDefs.map(a=>{
+            const id=String(a.id||'');
+            const current=valorAtualVariacaoV53(row,id);
+            const listId=`var-v53-${i}-${id.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+            const opts=(Array.isArray(a.values)?a.values:[]).slice(0,200);
+            return `<div>
+                <label class="text-[9px] uppercase font-black ${a.child_pk?'text-emerald-400':'text-sky-400'}">${textoEscapeV37(a.name||id)}</label>
+                <input list="${listId}" value="${textoEscapeV37(current)}" oninput="setVariacaoAtributoV53(${i},'${textoEscapeV37(id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Preencha ${textoEscapeV37(a.name||id)}">
+                ${opts.length?`<datalist id="${listId}">${opts.map(v=>`<option value="${textoEscapeV37(v.name||v.id||'')}"></option>`).join('')}</datalist>`:''}
+            </div>`;
+        }).join('');
+
+        return `<div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="text-[11px] font-black text-white">Variação ${i+1}</div>
+                <div class="text-[9px] text-slate-500">Será aplicada a todos os títulos/famílias</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">SKU / sufixo</label>
+                    <input value="${textoEscapeV37(row.sku_suffix||'')}" oninput="setVariacaoCampoV53(${i},'sku_suffix',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="${String(i+1).padStart(2,'0')}">
+                </div>
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Preço desta variação — opcional</label>
+                    <input type="number" step="0.01" min="0" value="${textoEscapeV37(row.price||'')}" oninput="setVariacaoCampoV53(${i},'price',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Usar preço geral">
+                </div>
+                <div>
+                    <label class="text-[9px] uppercase font-black text-slate-500">Estoque desta variação — opcional</label>
+                    <input type="number" step="1" min="0" value="${textoEscapeV37(row.stock||'')}" oninput="setVariacaoCampoV53(${i},'stock',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Usar estoque geral">
+                </div>
+            </div>
+
+            <div class="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+                <label class="text-[9px] uppercase font-black text-sky-400">Linha do guia de tamanho — SIZE_GRID_ROW_ID</label>
+                ${Array.isArray(criarEstadoV37.sizeGuideRowsV57)&&criarEstadoV37.sizeGuideRowsV57.length?`
+                <select onchange="setVariacaoCampoV53(${i},'size_grid_row_id',this.value)" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2 text-xs text-white">
+                    <option value="">Selecionar automaticamente pelo tamanho</option>
+                    ${criarEstadoV37.sizeGuideRowsV57.map(l=>`<option value="${textoEscapeV37(l.row_id||'')}" ${String(row.size_grid_row_id||'')===String(l.row_id||'')?'selected':''}>${textoEscapeV37(l.label||l.row_id||'')}</option>`).join('')}
+                </select>`:`
+                <input value="${textoEscapeV37(row.size_grid_row_id||'')}" readonly class="w-full mt-2 bg-slate-950/60 border border-sky-500/20 rounded-lg px-3 py-2 text-xs text-slate-400" placeholder="Automático: carregue o guia e informe o tamanho">`}
+                <div class="text-[9px] text-slate-500 mt-1">V58: este ID é técnico e agora é validado pelo próprio guia do Mercado Livre. Informe o tamanho; o painel escolhe a linha correta automaticamente.</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                ${camposAttrs || '<div class="text-[10px] text-slate-500 md:col-span-2">Marque pelo menos um atributo de variação acima.</div>'}
+            </div>
+        </div>`;
+    }).join('');
+
+    if(resumo){
+        resumo.textContent=`${rows.length} variação(ões) × cada título/família · ${selected.size} atributo(s) variável(is)`;
+    }
+}
+
+function atualizarAtributosVariacaoV37(){
+    sincronizarAtributosVariacaoV53();
+    renderEditorVariacoesV53();
+}
+
+function ajustarQuantidadeVariacoesV53(){
+    const el=document.getElementById('criar-variacao-qtd-v37');
+    if(el){
+        let n=Math.round(Number(el.value||1));
+        if(!Number.isFinite(n))n=1;
+        n=Math.min(100,Math.max(1,n));
+        el.value=String(n);
+    }
+    garantirLinhasVariacaoV53();
+    renderEditorVariacoesV53();
+    renderPlanilhaPreviewV37();
 }
 
 function alternarVariacoesV37(){
     const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-    const qtd=document.getElementById('criar-variacao-qtd-v37'); if(qtd)qtd.disabled=!ativo;
-    garantirLinhasVariacaoV53();
-    renderVariacoesV53();
+    const qtd=document.getElementById('criar-variacao-qtd-v37');
+    if(qtd)qtd.disabled=!ativo;
+    sincronizarAtributosVariacaoV53();
+    renderCategoriasSelecionadasV37();
+    renderEditorVariacoesV53();
     renderPlanilhaPreviewV37();
 }
-
 
 function chaveCacheConteudoV45(){
     const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
@@ -11970,6 +12221,23 @@ function urlsManuaisFotosV47(){
 
 function configCriacaoV37(){
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
+    const varEnabled=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    const varCount=Math.min(100,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
+    const rows=garantirLinhasVariacaoV53().slice(0,varCount).map((r,i)=>({
+        index:i,
+        sku_suffix:String(r.sku_suffix||String(i+1).padStart(2,'0')).trim(),
+        price:Number(r.price)>0?Number(r.price):null,
+        stock:String(r.stock??'').trim()!==''?Math.max(0,Number(r.stock)||0):null,
+        size_grid_row_id:String(r.size_grid_row_id||'').trim(),
+        attributes:(criarEstadoV37.variationAttributeIds||[]).map(id=>{
+            const v=r.attributes?.[id]||{};
+            const out={id:String(id)};
+            if(v.value_id)out.value_id=String(v.value_id);
+            if(v.value_name)out.value_name=String(v.value_name);
+            return out;
+        }).filter(a=>a.value_id||a.value_name)
+    }));
+    const primeiroAttr=String((criarEstadoV37.variationAttributeIds||[])[0]||'');
     return {
         product_name:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
         quantity:Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||titles.length||1)),
@@ -11990,24 +12258,35 @@ function configCriacaoV37(){
         picture_ids:(criarEstadoV37.pictures||[]).map(p=>p.id).filter(Boolean),
         picture_sources_manual:urlsManuaisFotosV47(),
         categories:criarEstadoV37.selectedCategories.map(c=>({category_id:c.category_id,category_name:c.category_name,attributes:coletarAttributesCategoriaV37(c)})),
-        variations:(()=>{
-            snapshotVariacoesV53();
-            const enabled=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
-            const rows=(criarEstadoV37.variationRows||[]).map((r,i)=>({
-                sku_suffix:String(r.sku_suffix||`V${String(i+1).padStart(2,'0')}`).trim(),
-                stock:Math.max(1,Number(r.stock||1)),
-                attributes:Object.entries(r.attributes||{}).map(([id,v])=>({id,...(v?.value_id?{value_id:String(v.value_id)}:{}),...(v?.value_name?{value_name:String(v.value_name)}:{})})).filter(a=>a.id&&(a.value_id||a.value_name))
-            }));
-            return {
-                enabled,
-                count:enabled?rows.length:1,
-                rows,
-                attribute_ids:(criarEstadoV37.variationAttributes||[]).map(a=>String(a.id||'')).filter(Boolean),
-                attribute_id:String((criarEstadoV37.variationAttributes||[])[0]?.id||''),
-                values:rows.map(r=>r.attributes?.[0]?.value_name||r.attributes?.[0]?.value_id||'').filter(Boolean)
-            };
-        })()
+        variations:{
+            enabled:varEnabled,
+            count:varCount,
+            size_grid_id:String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim(), // V56: manual quando informado; automático como fallback
+            attribute_ids:[...(criarEstadoV37.variationAttributeIds||[])],
+            rows,
+            // Compatibilidade com versões anteriores do server. O V53 usa rows.
+            attribute_id:primeiroAttr,
+            values:rows.map(r=>{
+                const a=(r.attributes||[]).find(x=>String(x.id)===primeiroAttr);
+                return a?.value_name||a?.value_id||'';
+            }).filter(Boolean)
+        }
     };
+}
+
+function descricaoVariacaoPreviewV53(row){
+    return (row?.attributes||[]).map(a=>{
+        const def=defAtributoVariacaoV53(a.id);
+        return `${def?.name||a.id}: ${a.value_name||a.value_id||''}`;
+    }).filter(Boolean).join(' · ');
+}
+
+function skuVariacaoPreviewV53(prefix,familyIndex,variationIndex,row){
+    const base=String(prefix||'').trim();
+    if(!base)return '';
+    const fam=String(familyIndex+1).padStart(3,'0');
+    const suf=String(row?.sku_suffix||variationIndex+1).replace(/\s+/g,'-').slice(0,30);
+    return `${base}-${fam}-${suf}`;
 }
 
 function renderPlanilhaPreviewV37(){
@@ -12018,24 +12297,40 @@ function renderPlanilhaPreviewV37(){
     const urls=urlsManuais.length?urlsManuais:(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
     const cats=cfg.categories.length?cfg.categories:[{category_id:'',category_name:'Sem categoria',attributes:[]}];
     const rows=[];
+    const variationRows=cfg.variations.enabled && cfg.variations.rows.length
+      ? cfg.variations.rows
+      : [{index:0,sku_suffix:'',price:null,stock:null,attributes:[]}];
+
     cats.forEach(cat=>{
-        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,idx)=>{
-            rows.push({
-                category:cat.category_name || cat.category_id || 'Sem categoria',
-                title,
-                condition:cfg.condition,
-                price:cfg.price,
-                stock:cfg.stock,
-                sku:cfg.sku_prefix?`${cfg.sku_prefix}-${String(idx+1).padStart(3,'0')}`:'',
-                attrs:(cat.attributes||[]).map(a=>`${a.id}: ${a.value_name||a.value_id||''}`).join(' | ')+(cfg.variations.enabled?` | VARIAÇÕES: ${cfg.variations.rows.map((v,vi)=>`#${vi+1} ${v.attributes.map(a=>`${a.id}=${a.value_name||a.value_id||''}`).join(', ')} SKU=${v.sku_suffix}`).join(' ; ')}`:''),
-                urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
+        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,familyIndex)=>{
+            variationRows.forEach((vr,variationIndex)=>{
+                const variationIds=new Set((vr.attributes||[]).map(a=>String(a.id)));
+                const attrsBase=(cat.attributes||[]).filter(a=>!variationIds.has(String(a.id)));
+                const attrs=[...attrsBase,...(vr.attributes||[])];
+                rows.push({
+                    category:cat.category_name || cat.category_id || 'Sem categoria',
+                    title,
+                    variation:cfg.variations.enabled?`V${variationIndex+1} · ${descricaoVariacaoPreviewV53(vr)||'preencher variação'}`:'Sem variação',
+                    condition:cfg.condition,
+                    price:Number(vr.price)>0?Number(vr.price):cfg.price,
+                    stock:vr.stock!=null?Number(vr.stock):cfg.stock,
+                    sku:cfg.variations.enabled
+                      ? skuVariacaoPreviewV53(cfg.sku_prefix,familyIndex,variationIndex,vr)
+                      : (cfg.sku_prefix?`${cfg.sku_prefix}-${String(familyIndex+1).padStart(3,'0')}`:''),
+                    attrs:attrs.map(a=>`${a.id}: ${a.value_name??a.value_id??''}`).join(' | '),
+                    urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
+                });
             });
         });
     });
-    tbody.innerHTML=rows.map(r=>`
+
+    const LIMITE_PREVIEW=600;
+    const visiveis=rows.slice(0,LIMITE_PREVIEW);
+    tbody.innerHTML=visiveis.map(r=>`
         <tr class="align-top">
             <td class="px-3 py-3 text-slate-200">${textoEscapeV37(r.category)}</td>
             <td class="px-3 py-3 text-white font-medium">${textoEscapeV37(r.title)}</td>
+            <td class="px-3 py-3 text-yellow-300">${textoEscapeV37(r.variation)}</td>
             <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.condition)}</td>
             <td class="px-3 py-3 text-emerald-400">${textoEscapeV37(moeda(Number(r.price||0)))}</td>
             <td class="px-3 py-3 text-slate-300">${textoEscapeV37(r.stock)}</td>
@@ -12043,14 +12338,58 @@ function renderPlanilhaPreviewV37(){
             <td class="px-3 py-3 text-slate-400">${textoEscapeV37(r.attrs || '-')}</td>
             <td class="px-3 py-3 text-sky-400 break-all">${textoEscapeV37(r.urls || '-')}</td>
         </tr>
-    `).join('') || '<tr><td colspan="8" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
+    `).join('') || '<tr><td colspan="9" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
+
+    if(rows.length>LIMITE_PREVIEW){
+        tbody.innerHTML+=`<tr><td colspan="9" class="px-3 py-4 text-center text-amber-400 font-bold">Prévia limitada às primeiras ${LIMITE_PREVIEW.toLocaleString('pt-BR')} linhas para manter o painel rápido. A publicação continuará usando todas as ${rows.length.toLocaleString('pt-BR')} combinações.</td></tr>`;
+    }
+}
+
+async function prepararGuiaTamanhoAntesValidarV58(){
+    const ativo=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
+    if(!ativo)return true;
+    const gridId=String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim();
+    if(!gridId)return true;
+
+    // Sempre consulta/valida o guia antes de validar/publicar. Assim um ID de linha
+    // antigo ou digitado incorretamente nunca é enviado ao Mercado Livre.
+    if(!Array.isArray(criarEstadoV37.sizeGuideRowsV57) || !criarEstadoV37.sizeGuideRowsV57.length){
+        await carregarGuiaTamanhoV57(true);
+    }else{
+        aplicarLinhasGuiaAutomaticamenteV57();
+    }
+
+    const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
+    if(!linhas.length)throw new Error(`Não foi possível carregar as linhas do guia ${gridId}. Confira o código do guia de tamanhos.`);
+
+    const rows=garantirLinhasVariacaoV53();
+    const faltando=[];
+    rows.forEach((row,i)=>{
+        const tamanho=tamanhoLinhaVariacaoV57(row);
+        const linha=acharLinhaGuiaV57(row);
+        if(linha?.row_id)row.size_grid_row_id=String(linha.row_id);
+        else faltando.push(`Variação ${i+1}${tamanho?` (tamanho ${tamanho})`:''}`);
+    });
+    renderEditorVariacoesV53();
+    renderPlanilhaPreviewV37();
+    if(faltando.length){
+        throw new Error(`O guia ${gridId} não possui uma linha compatível para: ${faltando.join(', ')}. Escolha tamanhos existentes nesse guia ou use o guia correto.`);
+    }
+    return true;
 }
 
 async function validarCriacaoV37(){
     const token=obterToken();
     if(!token){solicitarToken();return false}
-    const cfg=configCriacaoV37();
     const out=document.getElementById('criar-validacao-v37');
+    try{
+        await prepararGuiaTamanhoAntesValidarV58();
+    }catch(e){
+        out.textContent='Validação recusada: '+e.message;
+        out.className='text-[11px] text-red-400 mt-1';
+        return false;
+    }
+    const cfg=configCriacaoV37();
     if(!cfg.categories.length){out.textContent='Adicione pelo menos uma categoria.';out.className='text-[11px] text-red-400 mt-1';return false;}
     if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um título.';out.className='text-[11px] text-red-400 mt-1';return false;}
     try{
@@ -12086,8 +12425,10 @@ async function validarCriacaoV37(){
 async function publicarCriacaoV37(){
     const token=obterToken();
     if(!token){solicitarToken();return}
-    const cfg=configCriacaoV37();
     const ok=await validarCriacaoV37(); if(!ok)return;
+    // V58: recria a configuração depois da validação porque o guia pode ter
+    // preenchido/ajustado automaticamente os SIZE_GRID_ROW_ID das variações.
+    const cfg=configCriacaoV37();
     if(!confirm(`Confirma a criação em massa em ${cfg.categories.length} categoria(s)?`))return;
     try{
         const r=await fetch(`${RENDER_URL}/api/v51/criar/publicar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
