@@ -11166,6 +11166,7 @@ function bindPreviewListenersV37(){
 }
 
 async function carregarFotosReferenciaV37(ev){
+    cancelarConteudoV61();
     try{
         const files=[...(ev?.target?.files||[])].slice(0,8);
         criarEstadoV37.referenceImages=[];
@@ -11754,23 +11755,142 @@ function alternarVariacoesV37(){
     renderPlanilhaPreviewV37();
 }
 
-function chaveCacheConteudoV45(){
-    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
-    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    const categoryIds=(criarEstadoV37.selectedCategories||[]).map(c=>c.category_id).sort();
-    const refs=(criarEstadoV37.referenceImages||[]).slice(0,1).map(x=>`${String(x||'').length}:${String(x||'').slice(0,60)}`);
-    return 'mlhubpro_v46_conteudo_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,categoryIds,refs})))).slice(0,400);
+function textoConteudoV61(valor){
+    return String(valor??'').replace(/\s+/g,' ').trim();
 }
-function salvarCacheConteudoV45(payload){
-    try{localStorage.setItem(chaveCacheConteudoV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
+function quantidadeConteudoV61(valor){
+    const n=Number(valor);return Number.isFinite(n)?Math.min(1000,Math.max(1,Math.floor(n))):1;
 }
-function lerCacheConteudoV45(){
+function expandirTitulosConfirmadosV61(payload,quantidade){
+    const total=quantidadeConteudoV61(quantidade),out=[],seen=new Set();
+    const add=valor=>{
+        let t=textoConteudoV61(valor);
+        if(t.length>60){const curto=t.slice(0,60);t=curto.includes(' ')?curto.slice(0,curto.lastIndexOf(' ')):curto;}
+        t=t.trim();if(t&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t);}
+    };
+    (payload.titulos_semente||payload.titulos||[]).slice(0,30).forEach(add);
+    const produto=textoConteudoV61(payload.produto_detectado||payload.produto||'');
+    add(produto);
+    // Varia somente a ordem dos termos fornecidos. Não acrescenta propriedades
+    // como "recarregável", "alta precisão" ou "premium" a produtos desconhecidos.
+    const kws=(payload.keywords||[]).map(textoConteudoV61).filter(Boolean).slice(0,30);
+    for(const kw of kws){
+        if(out.length>=total)break;
+        if(produto&&!produto.toLowerCase().includes(kw.toLowerCase())){add(`${produto} ${kw}`);add(`${kw} ${produto}`);}
+    }
+    const palavras=produto.split(' ').filter(Boolean);
+    for(let i=1;i<Math.min(palavras.length,12)&&out.length<total;i++)add([...palavras.slice(i),...palavras.slice(0,i)].join(' '));
+    if(!out.length)return [];
+    const unicos=[...out];
+    while(out.length<total)out.push(unicos[out.length%unicos.length]);
+    return out.slice(0,total);
+}
+function rascunhoConteudoV61(entrada){
+    const produto=textoConteudoV61(entrada.produto);
+    const detalhes=String(entrada.detalhes||'').trim();
+    const categorias=Array.isArray(entrada.categorias)?entrada.categorias:[];
+    const linhas=[],seen=new Set();
+    for(const cat of categorias){
+        const defs=new Map((cat.atributos||[]).map(a=>[String(a.id),a]));
+        for(const [id,v] of Object.entries(cat.values||{})){
+            if(String(v?.value_id||'')==='-1')continue;
+            const valor=textoConteudoV61(v?.value_name||'');
+            if(!valor||/^(SIZE_GRID_|SELLER_|GTIN|EAN|UPC)/.test(id))continue;
+            const linha=`${defs.get(id)?.name||id}: ${valor}`;
+            if(!seen.has(linha)){seen.add(linha);linhas.push(linha);}
+        }
+    }
+    const palavras=produto.split(' ').filter(p=>p.length>2);
+    const keywords=[...new Set([produto,...palavras,...palavras.slice(0,-1).map((p,i)=>`${p} ${palavras[i+1]}`)].filter(Boolean))].slice(0,30);
+    const partes=produto?[produto]:[];
+    if(detalhes)partes.push('Detalhes do produto\n'+detalhes);
+    if(linhas.length)partes.push('Características informadas\n'+linhas.join('\n'));
+    if(produto)partes.push('Confira as características e as opções selecionadas antes de concluir a compra.');
+    const payload={sucesso:true,produto_detectado:produto,resumo:'',keywords,descricao:partes.join('\n\n'),
+        image_prompt:'',categorias:[],origem:'rascunho_local',rascunho:true,modo_rapido:true};
+    payload.titulos=expandirTitulosConfirmadosV61(payload,entrada.quantidade);
+    payload.titulos_semente=[...new Set(payload.titulos)].slice(0,30);
+    return payload;
+}
+
+function hashConteudoV61(valor){
+    const s=String(valor||'');let a=2166136261,b=2246822507;
+    for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);a=Math.imul(a^c,16777619);b=Math.imul(b^c,3266489909);}
+    return (a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');
+}
+function entradaConteudoV61(){
+    const categorias=(criarEstadoV37.selectedCategories||[]).map(c=>({category_id:String(c.category_id),category_name:String(c.category_name||''),
+        category_path:String(c.category_path||''),category_leaf_name:String(c.category_leaf_name||''),
+        atributos:(c.atributos||[]).filter(a=>!a.read_only).map(a=>({id:String(a.id),name:String(a.name||a.id),value_type:a.value_type||'string',required:Boolean(a.required),value_max_length:a.value_max_length,
+            values:(a.values||[]).slice(0,8).map(v=>({id:v.id,name:v.name}))})),
+        values:Object.fromEntries(Object.entries(c.values||{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,{value_id:v.value_id||'',value_name:v.value_name??''}]))})).sort((a,b)=>a.category_id.localeCompare(b.category_id));
+    const entrada={produto:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
+        detalhes:String(document.getElementById('criar-detalhes-v37')?.value||'').trim(),
+        quantidade:quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value),categorias,
+        category_ids:categorias.map(c=>c.category_id),reference_images:[...(criarEstadoV37.referenceImages||[])].slice(0,1)};
+    const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
+        foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken())};
+    entrada.identity=hashConteudoV61(JSON.stringify(identidade));
+    entrada.cacheKey='mlhubpro_v61_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    return entrada;
+}
+function camposConteudoV61(){
+    return Object.fromEntries(['criar-titulos-v37','criar-descricao-v37','criar-keywords-v37'].map(id=>[id,String(document.getElementById(id)?.value||'')]));
+}
+function aplicarConteudoRapidoV61(d,antes=null){
+    if(d.produto_detectado&&!String(document.getElementById('criar-produto-v37')?.value||'').trim())document.getElementById('criar-produto-v37').value=d.produto_detectado;
+    const campos={'criar-titulos-v37':(d.titulos||[]).join('\n'),'criar-descricao-v37':d.descricao||'','criar-keywords-v37':(d.keywords||[]).join(', ')};
+    for(const [id,value] of Object.entries(campos)){const el=document.getElementById(id);if(el&&(!antes||String(el.value)===antes[id]))el.value=value;}
+    for(const c of d.categorias||[]){
+        const cat=criarEstadoV37.selectedCategories.find(x=>String(x.category_id)===String(c.category_id));if(!cat)continue;
+        for(const a of c.suggested_attributes||[]){
+            const id=String(a?.id||'');if(!id||cat.values?.[id]?.value_name||cat.values?.[id]?.value_id)continue;
+            cat.values=cat.values||{};cat.values[id]={value_id:a.value_id||'',value_name:a.value_name||''};
+        }
+    }
+    const urls=document.getElementById('criar-imagens-urls-v37');
+    if(urls&&!urls.dataset.prompt&&d.image_prompt)urls.dataset.prompt=d.image_prompt;
+    renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();
+}
+function statusConteudoV61(texto,tipo='ok'){
+    const st=document.getElementById('criar-validacao-v37');if(!st)return;
+    st.textContent=texto;st.className=`text-[11px] ${tipo==='ok'?'text-emerald-400':tipo==='erro'?'text-red-400':'text-yellow-400'} mt-1`;
+}
+function restaurarBotaoConteudoV61(run){
+    if(run?.button){run.button.disabled=false;run.button.innerHTML=run.buttonHTML;}
+}
+function cancelarConteudoV61(){
+    const run=criarEstadoV37.conteudoRunV61;if(!run)return;
+    run.cancelled=true;run.controller.abort();clearTimeout(run.timer);restaurarBotaoConteudoV61(run);
+    criarEstadoV37.conteudoRunV61=null;
+}
+function comSinalConteudoV61(promise,signal){
+    return new Promise((resolve,reject)=>{
+        const abort=()=>{const e=new Error('Prazo rápido encerrado.');e.name='AbortError';reject(e);};
+        if(signal.aborted){abort();return;}
+        signal.addEventListener('abort',abort,{once:true});
+        promise.then(value=>{signal.removeEventListener('abort',abort);resolve(value);},e=>{signal.removeEventListener('abort',abort);reject(e);});
+    });
+}
+
+function chaveCacheConteudoV45(){return entradaConteudoV61().cacheKey;}
+function salvarCacheConteudoV45(payload,key=chaveCacheConteudoV45()){
+    if(payload?.rascunho)return;
     try{
-        const raw=localStorage.getItem(chaveCacheConteudoV45());
-        if(!raw)return null;
-        const obj=JSON.parse(raw);
-        if(Date.now()-Number(obj?.created_at||0)>1000*60*60*12)return null;
-        return obj?.data||null;
+        localStorage.setItem(key,JSON.stringify({created_at:Date.now(),data:payload}));
+        const keys=[];
+        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v61_conteudo_'))keys.push(k);}
+        if(keys.length>20){
+            keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).created_at-JSON.parse(localStorage.getItem(b)).created_at;}catch{return 0;}});
+            keys.slice(0,keys.length-20).forEach(k=>localStorage.removeItem(k));
+        }
+    }catch(e){}
+}
+function lerCacheConteudoV45(key=chaveCacheConteudoV45()){
+    try{
+        const obj=JSON.parse(localStorage.getItem(key)||'null');
+        if(!obj||obj.data?.rascunho||Date.now()-Number(obj.created_at||0)>12*60*60*1000)return null;
+        return obj.data||null;
     }catch(e){return null;}
 }
 function chaveCacheKeywordsV45(){
@@ -11833,26 +11953,7 @@ function limparImagensGeradasV45(){
 
 
 function expandirTitulosLocalV46(payload,quantidade){
-    const limite=60;
-    const clean=x=>String(x||'').replace(/\s+/g,' ').trim();
-    const out=[];const seen=new Set();
-    const add=t=>{t=clean(t).slice(0,limite).trim();if(t.length>=8&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t)}};
-    (payload.titulos||payload.titulos_semente||[]).forEach(add);
-    const produto=clean(payload.produto_detectado||document.getElementById('criar-produto-v37')?.value||'Produto');
-    const kws=(payload.keywords||[]).map(clean).filter(Boolean);
-    const sufixos=['Profissional','Premium','Completo','Prático','Uso Diário','Alta Precisão','Recarregável','Compacto'];
-    for(let i=0;out.length<quantidade&&i<5000;i++){
-        const k1=kws[i%Math.max(1,kws.length)]||'';
-        const k2=kws[(i+5)%Math.max(1,kws.length)]||'';
-        add(`${produto} ${k1} ${i%3===0?k2:sufixos[i%sufixos.length]}`);
-        add(`${k1} ${produto} ${sufixos[(i+3)%sufixos.length]}`);
-    }
-    const baseRepeticao=[...out];
-    if(baseRepeticao.length){
-        let i=0;
-        while(out.length<quantidade){out.push(baseRepeticao[i%baseRepeticao.length]);i++;}
-    }
-    return out.slice(0,quantidade);
+    return expandirTitulosConfirmadosV61({...payload,produto_detectado:payload.produto_detectado||document.getElementById('criar-produto-v37')?.value||''},quantidade);
 }
 async function referenciaRapidaConteudoV46(){
     const src=(criarEstadoV37.referenceImages||[])[0];
@@ -11861,42 +11962,57 @@ async function referenciaRapidaConteudoV46(){
 }
 
 async function gerarConteudoCriacaoV37(){
-    const token=obterToken();
-    if(!token){solicitarToken();return}
-    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
-    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    const quantidade=Math.min(1000,Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||1)));
-    if(!produto && !criarEstadoV37.referenceImages.length)return alert('Informe o produto ou envie uma foto.');
-
-    const cached=lerCacheConteudoV45();
+    const token=obterToken();if(!token){solicitarToken();return;}
+    const entrada=entradaConteudoV61();
+    if(!entrada.produto&&!entrada.reference_images.length)return alert('Informe o produto ou envie uma foto.');
+    const atual=criarEstadoV37.conteudoRunV61;
+    if(atual&&!atual.cancelled&&atual.identity===entrada.identity)return atual.promise;
+    cancelarConteudoV61();
+    const cached=lerCacheConteudoV45(entrada.cacheKey);
     if(cached){
-        const d={...cached,titulos:expandirTitulosLocalV46(cached,quantidade)};
-        aplicarConteudoGeradoV45(d);
-        const st=document.getElementById('criar-validacao-v37');
-        if(st){st.textContent='✓ Conteúdo carregado instantaneamente do cache. Só será gerado novamente se produto, detalhes, foto ou categoria mudarem.';st.className='text-[11px] text-emerald-400 mt-1';}
-        return;
+        aplicarConteudoRapidoV61({...cached,titulos:expandirTitulosConfirmadosV61(cached,entrada.quantidade)});
+        statusConteudoV61('✓ Conteúdo pronto carregado imediatamente. Revise e valide antes de publicar.');return;
     }
-
-    mostrarLoading('Gerando conteúdo rápido: títulos SEO, descrição e ficha técnica...');
-    try{
-        const refs=await referenciaRapidaConteudoV46();
-        const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
-            method:'POST',
-            headers:{Authorization:token,'Content-Type':'application/json'},
-            body:JSON.stringify({
-                produto,detalhes,quantidade,
-                reference_images:refs,
-                category_ids:criarEstadoV37.selectedCategories.map(c=>c.category_id)
-            })
-        });
-        const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-        d.titulos=expandirTitulosLocalV46(d,quantidade);
-        aplicarConteudoGeradoV45(d);
-        salvarCacheConteudoV45(d);
-    }catch(e){
-        alert('Erro ao gerar conteúdo com IA: '+e.message);
-    }finally{esconderLoading();}
+    // Aparece antes de qualquer rede/IA, sem bloquear a tela com o loading.
+    const draft=rascunhoConteudoV61(entrada);
+    aplicarConteudoRapidoV61(draft);
+    statusConteudoV61(entrada.produto?'Rascunho imediato pronto com os dados informados. A IA está completando o conteúdo em segundo plano.':'Analisando a foto com IA. Informe o nome do produto para ter um rascunho imediato.','aviso');
+    const run={identity:entrada.identity,controller:new AbortController(),cancelled:false,campos:camposConteudoV61(),
+        button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
+    if(run.button){run.buttonHTML=run.button.innerHTML;run.button.disabled=true;run.button.textContent='✦ IA em segundo plano...';}
+    criarEstadoV37.conteudoRunV61=run;
+    run.timer=setTimeout(()=>run.controller.abort(),8000);
+    run.promise=(async()=>{
+        try{
+            // Cede um frame para exibir o rascunho antes de preparar a imagem.
+            await comSinalConteudoV61(new Promise(resolve=>setTimeout(resolve,0)),run.controller.signal);
+            const refs=await comSinalConteudoV61(referenciaRapidaConteudoV46(),run.controller.signal);
+            if(entradaConteudoV61().identity!==run.identity){statusConteudoV61('Os dados do produto mudaram. Clique em gerar para atualizar o conteúdo.','aviso');return;}
+            const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
+                method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
+                body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,
+                    reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,modo_rapido:true})
+            });
+            const d=await r.json().catch(()=>({}));
+            if(run.cancelled||criarEstadoV37.conteudoRunV61!==run)return;
+            if(entradaConteudoV61().identity!==run.identity){statusConteudoV61('Os dados do produto mudaram. Clique em gerar para atualizar o conteúdo.','aviso');return;}
+            if(!r.ok||!d.sucesso)throw new Error(d.erro||`HTTP ${r.status}`);
+            if(d.rascunho){
+                statusConteudoV61(entrada.produto?'Rascunho imediato disponível para revisão. A IA não concluiu no prazo rápido. Clique novamente para tentar completar.':'A IA não concluiu a análise da foto. Informe o nome do produto e clique novamente.','aviso');return;
+            }
+            d.titulos=expandirTitulosConfirmadosV61(d,quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value));
+            aplicarConteudoRapidoV61(d,run.campos);
+            salvarCacheConteudoV45(d,entrada.cacheKey);salvarCacheConteudoV45(d,chaveCacheConteudoV45());
+            statusConteudoV61('✓ Conteúdo da IA pronto. Suas edições foram preservadas; revise e valide antes de publicar.');
+        }catch(e){
+            if(run.cancelled||criarEstadoV37.conteudoRunV61!==run||entradaConteudoV61().identity!==run.identity)return;
+            statusConteudoV61(entrada.produto?'Rascunho imediato disponível para revisão. A IA não concluiu agora; clique novamente para tentar completar.':'Não foi possível analisar a foto agora. Informe o nome do produto para gerar o rascunho imediato.','aviso');
+        }finally{
+            clearTimeout(run.timer);
+            if(criarEstadoV37.conteudoRunV61===run){restaurarBotaoConteudoV61(run);criarEstadoV37.conteudoRunV61=null;}
+        }
+    })();
+    return run.promise;
 }
 
 async function gerarKeywordsV38(){
@@ -12341,13 +12457,19 @@ function renderPlanilhaPreviewV37(){
     const urls=urlsManuais.length?urlsManuais:(criarEstadoV37.pictures||[]).map(p=>p.url).filter(Boolean);
     const cats=cfg.categories.length?cfg.categories:[{category_id:'',category_name:'Sem categoria',attributes:[]}];
     const rows=[];
+    const LIMITE_PREVIEW=600;
+    const shownTitles=titles.slice(0,Math.max(1,cfg.quantity));
     const variationRows=cfg.variations.enabled && cfg.variations.rows.length
       ? cfg.variations.rows
       : [{index:0,sku_suffix:'',price:null,stock:null,attributes:[]}];
 
-    cats.forEach(cat=>{
-        titles.slice(0,Math.max(1,cfg.quantity)).forEach((title,familyIndex)=>{
-            variationRows.forEach((vr,variationIndex)=>{
+    const totalRows=cats.length*shownTitles.length*variationRows.length;
+    previewRowsV61: for(const cat of cats){
+        for(let familyIndex=0;familyIndex<shownTitles.length;familyIndex++){
+            const title=shownTitles[familyIndex];
+            for(let variationIndex=0;variationIndex<variationRows.length;variationIndex++){
+                if(rows.length>=LIMITE_PREVIEW)break previewRowsV61;
+                const vr=variationRows[variationIndex];
                 const variationIds=new Set((vr.attributes||[]).map(a=>String(a.id)));
                 const attrsBase=(cat.attributes||[]).filter(a=>!variationIds.has(String(a.id)));
                 const attrs=[...attrsBase,...(vr.attributes||[])];
@@ -12364,11 +12486,9 @@ function renderPlanilhaPreviewV37(){
                     attrs:attrs.map(a=>`${a.id}: ${a.value_name??a.value_id??''}`).join(' | '),
                     urls:urls.slice(0,3).join(' | ')+(urls.length>3?` +${urls.length-3}`:'')
                 });
-            });
-        });
-    });
-
-    const LIMITE_PREVIEW=600;
+            }
+        }
+    }
     const visiveis=rows.slice(0,LIMITE_PREVIEW);
     tbody.innerHTML=visiveis.map(r=>`
         <tr class="align-top">
@@ -12384,8 +12504,8 @@ function renderPlanilhaPreviewV37(){
         </tr>
     `).join('') || '<tr><td colspan="9" class="px-3 py-6 text-center text-slate-500">Preencha as informações do anúncio para visualizar a prévia.</td></tr>';
 
-    if(rows.length>LIMITE_PREVIEW){
-        tbody.innerHTML+=`<tr><td colspan="9" class="px-3 py-4 text-center text-amber-400 font-bold">Prévia limitada às primeiras ${LIMITE_PREVIEW.toLocaleString('pt-BR')} linhas para manter o painel rápido. A publicação continuará usando todas as ${rows.length.toLocaleString('pt-BR')} combinações.</td></tr>`;
+    if(totalRows>LIMITE_PREVIEW){
+        tbody.innerHTML+=`<tr><td colspan="9" class="px-3 py-4 text-center text-amber-400 font-bold">Prévia limitada às primeiras ${LIMITE_PREVIEW.toLocaleString('pt-BR')} linhas para manter o painel rápido. A publicação continuará usando todas as ${totalRows.toLocaleString('pt-BR')} combinações.</td></tr>`;
     }
 }
 
@@ -12422,6 +12542,7 @@ async function prepararGuiaTamanhoAntesValidarV58(){
 }
 
 async function validarCriacaoV37(){
+    cancelarConteudoV61();
     const token=obterToken();
     if(!token){solicitarToken();return false}
     const out=document.getElementById('criar-validacao-v37');
