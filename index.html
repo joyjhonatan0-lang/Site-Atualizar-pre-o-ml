@@ -13313,41 +13313,64 @@ async function pesquisarTermosTitulosV69(entrada,run,ativo){
     finally{clearTimeout(timer);run.controllersV68.delete(controller);}
 }
 
-/* Tr\u00eas chamadas no m\u00e1ximo; compara\u00e7\u00e3o compartilhada entre todas as respostas. */
-async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso,iniciais=[]}){
-    let etapa=0,reservados=0,vazias=0,paralelo=3,falhas=0,tamanhoLote=80,recuperacoes=0;
-    const titles=[],seen=new Set(),erros=[];
+/* V70: micro-lotes contínuos. Um timeout não encerra a geração inteira. */
+function esperarTitulosV70(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso,iniciais=[],bloqueados=[]}){
+    let etapa=0,reservados=0,vaziasConsecutivas=0,falhasConsecutivas=0;
+    const paralelo=2,tamanhoLote=24,titles=[],seen=new Set(),erros=[];
+    const bloqueadosLimpos=[];
+    for(const t of bloqueados){const key=assinaturaTituloV66(t);if(key&&!seen.has(key)){seen.add(key);bloqueadosLimpos.push(t);}}
     for(const t of iniciais){const key=assinaturaTituloV66(t);if(key&&!seen.has(key)&&titles.length<total){seen.add(key);titles.push(t);}}
-    const maxEtapas=Math.ceil(total/20)+12;
+    const maxEtapas=Math.max(120,Math.ceil(total/8)*10);
     async function worker(){
-        while(ativo()&&titles.length<total&&etapa<maxEtapas&&vazias<5&&!falhas){
-            const restante=total-titles.length-reservados;
-            if(restante<=0)return;
-            const index=etapa++,quantidade=Math.min(index===0?20:tamanhoLote,restante);
-            reservados+=quantidade;
+        while(ativo()&&titles.length<total&&etapa<maxEtapas&&vaziasConsecutivas<40&&falhasConsecutivas<18){
+            const restante=total-titles.length-reservados;if(restante<=0){await esperarTitulosV70(40);continue;}
+            const index=etapa++,quantidade=Math.min(tamanhoLote,restante);reservados+=quantidade;
             try{
-                const d=await request({quantidade,etapa:index,existentes:titles.slice()});
+                const existentes=[...bloqueadosLimpos,...titles].slice(-15000);
+                const d=await request({quantidade,etapa:index,existentes});
                 if(!ativo())return;
-                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V69.');
-                const antes=titles.length,limite=Math.min(60,Number(d.limite)||60);
+                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V70.');
+                const antes=titles.length,limite=Math.min(60,Number(d.limite)||60),minimo=Math.min(42,limite);
                 for(const raw of Array.isArray(d.titulos)?d.titulos:[]){
                     if(typeof raw!=='string')continue;
                     const t=textoConteudoV61(raw),key=assinaturaTituloV66(t);
-                    if(!key||t.length<Math.min(50,limite)||t.length>limite||seen.has(key))continue;
+                    if(!key||t.length<minimo||t.length>limite||seen.has(key))continue;
                     seen.add(key);titles.push(t);if(titles.length>=total)break;
                 }
-                vazias=titles.length===antes?vazias+1:0;
+                if(titles.length===antes){vaziasConsecutivas++;await esperarTitulosV70(Math.min(1400,150+vaziasConsecutivas*60));}
+                else{vaziasConsecutivas=0;falhasConsecutivas=0;}
                 aceitar(titles.slice());progresso(titles.length,total);
-            }catch(e){if(ativo()){
-                const temporario=e.name==='AbortError'||e.status===504||e.status===502;
-                if(temporario&&recuperacoes<3){recuperacoes++;tamanhoLote=20;progresso(titles.length,total);}
-                else{erros.push(e);falhas++;}
-            }}finally{reservados-=quantidade;}
+            }catch(e){
+                if(ativo()){
+                    erros.push(e);falhasConsecutivas++;progresso(titles.length,total);
+                    const temporario=e.name==='AbortError'||[408,429,500,502,503,504].includes(Number(e.status));
+                    if(!temporario)throw e;
+                    await esperarTitulosV70(Math.min(5000,500*falhasConsecutivas));
+                }
+            }finally{reservados-=quantidade;}
         }
     }
-    // Todos compartilham os t\u00edtulos aceitos; nunca contam duplicatas entre lotes.
-    await Promise.all(Array.from({length:paralelo},()=>worker()));
-    return {titulos:titles,erro:erros[0]||null};
+    try{await Promise.all(Array.from({length:paralelo},()=>worker()));}
+    catch(e){return {titulos:titles,erro:e};}
+    const esgotou=titles.length<total&&(falhasConsecutivas>=18||vaziasConsecutivas>=40||etapa>=maxEtapas);
+    return {titulos:titles,erro:esgotou?(erros.at(-1)||new Error(`A IA parou após ${titles.length} títulos únicos. Clique em Gerar novamente para continuar sem perder os já criados.`)):null};
+}
+
+function chaveHistoricoTitulosV70(entrada,tituloBase){
+    const bruto=JSON.stringify({produto:String(entrada?.produto||'').toLowerCase().trim(),titulo_base:String(tituloBase||'').toLowerCase().trim(),categorias:(entrada?.category_ids||[]).slice().sort()});
+    let hash=2166136261;for(let i=0;i<bruto.length;i++){hash^=bruto.charCodeAt(i);hash=Math.imul(hash,16777619);}
+    return 'mlhub_titulos_v70_'+(hash>>>0).toString(36);
+}
+function lerHistoricoTitulosV70(entrada,tituloBase){
+    try{const d=JSON.parse(localStorage.getItem(chaveHistoricoTitulosV70(entrada,tituloBase))||'[]');return Array.isArray(d)?d.filter(x=>typeof x==='string').slice(-15000):[];}catch(e){return [];}
+}
+function salvarHistoricoTitulosV70(entrada,tituloBase,lista){
+    try{
+        const base=lerHistoricoTitulosV70(entrada,tituloBase),out=[],seen=new Set();
+        for(const t of [...base,...lista]){const txt=textoConteudoV61(t),key=assinaturaTituloV66(txt);if(key&&!seen.has(key)){seen.add(key);out.push(txt);}}
+        localStorage.setItem(chaveHistoricoTitulosV70(entrada,tituloBase),JSON.stringify(out.slice(-15000)));
+    }catch(e){}
 }
 
 async function gerarFluxoTitulosV67(somenteTitulos=false){
@@ -13360,6 +13383,7 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
     const field=document.getElementById('criar-titulos-v37');
     const baseDigitada=document.getElementById('titulo-base-ia-v67')?.value||'';
     const tituloBase=baseDigitada.trim()||entrada.produto;
+    const historicoV70=lerHistoricoTitulosV70(entrada,tituloBase);
     const contextoInicial=contextoTitulosV69(entrada),sessao=criarEstadoV37.titulosSessaoV69;
     const continuar=sessao?.contexto===contextoInicial&&sessao.titulos.length<entrada.quantidade;
     const conhecidos=new Set((sessao?.titulos||[]).map(assinaturaTituloV66));
@@ -13404,10 +13428,10 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
             const valido=()=>atual()&&normalizarListaTitulosV69(field.value)===normalizarListaTitulosV69(esperado);
             run.keywordsV69=termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],300);
             if(document.getElementById('titulos-pesquisar-v69')?.checked)run.pesquisaPromiseV69=pesquisarTermosTitulosV69(entrada,run,valido);
-            const result=await executarLotesTitulosV68({total:entrada.quantidade,ativo:valido,iniciais,
+            const result=await executarLotesTitulosV68({total:entrada.quantidade,ativo:valido,iniciais,bloqueados:continuar?[]:historicoV70,
                 request:async lote=>{
                     const controller=new AbortController();run.controllersV68.add(controller);
-                    const timer=setTimeout(()=>controller.abort(),55000);
+                    const timer=setTimeout(()=>controller.abort(),120000);
                     try{
                         const r=await fetch(`${RENDER_URL}/api/v69/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
                             body:JSON.stringify({produto:entrada.produto,titulo_base:tituloBase||entrada.produto,detalhes:entrada.detalhes,...lote,
@@ -13423,8 +13447,9 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
             if(!valido()){if(!run.cancelled)statusConteudoV61('Um campo de entrada foi alterado durante a gera\u00e7\u00e3o. Os t\u00edtulos prontos foram preservados. Clique novamente para continuar com os dados atuais.','aviso');return;}
             const titles=result.titulos;
             if(result.erro){renderPlanilhaPreviewV37();throw result.erro;}
+            if(titles.length===entrada.quantidade)salvarHistoricoTitulosV70(entrada,tituloBase,titles);
             preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();
-            statusConteudoV61(titles.length===entrada.quantidade?`${titles.length} t\u00edtulos \u00fanicos criados pela IA. Revise antes de publicar.`:`A IA criou ${titles.length} de ${entrada.quantidade} t\u00edtulos \u00fanicos. Acrescente informa\u00e7\u00f5es ou ajuste a quantidade; nenhum repetido foi inclu\u00eddo.`,titles.length===entrada.quantidade?'ok':'aviso');
+            statusConteudoV61(titles.length===entrada.quantidade?`${titles.length} títulos únicos criados pela IA. O histórico deste produto foi salvo para os próximos lotes não repetirem estes títulos.`:`A IA criou ${titles.length} de ${entrada.quantidade} títulos únicos. Os prontos foram preservados; clique em Gerar novamente para continuar.`,titles.length===entrada.quantidade?'ok':'aviso');
             if(run.contentPromiseV68){
                 const d=await run.contentPromiseV68;
                 if(d&&atual()){
