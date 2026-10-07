@@ -2642,7 +2642,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </div>
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Quantidade de an&#250;ncios / fam&#237;lias</label>
-                    <input id="criar-qtd-v37" type="number" min="1" max="1000" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
+                    <input id="criar-qtd-v37" type="number" min="1" max="5000" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
                 </div>
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Limite do t&#237;tulo</label>
@@ -2859,7 +2859,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="text-sm font-black text-white">5. T&#237;tulos / nomes de fam&#237;lia</div>
             <div class="text-[11px] text-slate-500 mt-1">Um por linha, sempre limitado a 60 caracteres e com foco em SEO e convers&#227;o.</div>
             <label class="block text-xs text-slate-300 mb-2">T&#237;tulo base (opcional)</label><input id="titulo-base-ia-v67" class="w-full mb-3 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm" placeholder="Ex.: Maquininha de cortar cabelo T9 dourada">
-<textarea oninput="atualizarInformacaoTitulosV65()" id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+<textarea oninput="atualizarInformacaoTitulosV65()" id="criar-titulos-v37" style="color:#f8fafc;-webkit-text-fill-color:#f8fafc;opacity:1" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+<label class="flex items-center gap-2 mt-3 text-xs text-slate-300"><input id="titulos-pesquisar-v69" type="checkbox" checked>Ampliar palavras-chave com pesquisa na internet</label><div id="titulos-pesquisa-status-v69" class="mt-1 text-xs text-slate-400">Os termos pesquisados entram nos pr&#243;ximos lotes. As fontes aparecem junto &#224;s palavras-chave.</div><p class="mt-2 text-xs text-slate-400">At&#233; 5.000 por lote. Se interromper, clique em Gerar para continuar os t&#237;tulos desta sess&#227;o.</p>
 <div id="criar-titulos-info-v65" class="text-[11px] text-slate-400 mt-2"></div>
 <button onclick="gerarTitulosKeywordsV65()" class="mt-2 border border-yellow-500 text-yellow-300 rounded-lg px-3 py-2 text-xs font-bold">Gerar t&#237;tulos &#250;nicos por IA</button><button onclick="pararTitulosIAV67()" class="ml-2 mt-2 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-xs">Parar gera&#231;&#227;o</button>
         </div>
@@ -11516,6 +11517,7 @@ function renderCategoriasSelecionadasV37(){
 }
 
 function setCategoriaValorV37(categoryId,attrId,select){
+    criarEstadoV37.titulosSessaoV69=null;if(criarEstadoV37.conteudoRunV61)criarEstadoV37.conteudoRunV61.edicaoAtributoV69=true;
     const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
     const opt=select.options[select.selectedIndex];
     cat.values[attrId]={value_id:String(select.value||''),value_name:String(opt?.dataset?.name||opt?.textContent||'').trim()};
@@ -11523,6 +11525,7 @@ function setCategoriaValorV37(categoryId,attrId,select){
     renderPlanilhaPreviewV37();
 }
 function setCategoriaTextoV37(categoryId,attrId,value){
+    criarEstadoV37.titulosSessaoV69=null;if(criarEstadoV37.conteudoRunV61)criarEstadoV37.conteudoRunV61.edicaoAtributoV69=true;
     const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
     cat.values[attrId]={value_name:String(value||'').trim()};
     atualizarAtributosVariacaoV37();
@@ -11530,6 +11533,7 @@ function setCategoriaTextoV37(categoryId,attrId,value){
 }
 
 function setCategoriaNaoAplicaV52(categoryId,attrId,checked){
+    criarEstadoV37.titulosSessaoV69=null;if(criarEstadoV37.conteudoRunV61)criarEstadoV37.conteudoRunV61.edicaoAtributoV69=true;
     const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId); if(!cat)return;
     if(checked)cat.values[attrId]={value_id:'-1',value_name:null};
     else cat.values[attrId]={value_name:''};
@@ -11988,7 +11992,7 @@ function textoConteudoV61(valor){
     return String(valor??'').replace(/\s+/g,' ').trim();
 }
 function quantidadeConteudoV61(valor){
-    const n=Number(valor);return Number.isFinite(n)?Math.min(1000,Math.max(1,Math.floor(n))):1;
+    const n=Number(valor);return Number.isFinite(n)?Math.min(5000,Math.max(1,Math.floor(n))):1;
 }
 // V65: gera\u00e7\u00e3o exclusiva nas fun\u00e7\u00f5es compartilhadas abaixo.
 function termosUnicosV62(lista,limite=80){
@@ -12106,7 +12110,7 @@ function entradaConteudoV61(){
     const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
         keywords:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
     entrada.identity=hashConteudoV61(JSON.stringify(identidade));
-    entrada.cacheKey='mlhubpro_v68_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    entrada.cacheKey='mlhubpro_v69_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
     return entrada;
 }
 function camposConteudoV61(){
@@ -12154,7 +12158,7 @@ function salvarCacheConteudoV45(payload,key=chaveCacheConteudoV45()){
     try{
         localStorage.setItem(key,JSON.stringify({created_at:Date.now(),data:payload}));
         const keys=[];
-        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v68_conteudo_'))keys.push(k);}
+        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v69_conteudo_'))keys.push(k);}
         if(keys.length>20){
             keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).created_at-JSON.parse(localStorage.getItem(b)).created_at;}catch{return 0;}});
             keys.slice(0,keys.length-20).forEach(k=>localStorage.removeItem(k));
@@ -13222,7 +13226,7 @@ function atualizarInformacaoTitulosV65(){
     const el=document.getElementById('criar-titulos-info-v65');if(!el)return;
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(textoConteudoV61).filter(Boolean);
     const unicos=new Set(titles.map(assinaturaTituloV66)).size,q=quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value);
-    el.textContent=`V68 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
+    el.textContent=`V69 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
     el.className='text-[11px] mt-2 '+(unicos>=q&&unicos===titles.length?'text-emerald-400':'text-yellow-400');
 }
 function preencherCaracteristicasV65(silencioso=false){
@@ -13280,10 +13284,40 @@ async function consultarAcervoAgenteV65(pagina=1){
     }catch(e){if(agentesEstadoV62.agente?.id===a.id)out.innerHTML=`<p class="text-xs text-red-300">${textoEscapeV37(e.message)}</p>`;}
 }
 
+function contextoTitulosV69(entrada){
+    // O agente pode atualizar vers\u00e3o, fichas e metadados em segundo plano.
+    // Apenas os campos de entrada desta gera\u00e7\u00e3o identificam a lista ativa.
+    return JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,conta:obterToken(),
+        categorias:entrada.category_ids,agente:entrada.agente_id,keywords:entrada.keywords_titulos,
+        base:document.getElementById('titulo-base-ia-v67')?.value||''});
+}
+function normalizarListaTitulosV69(texto){return String(texto||'').replace(/\r\n?/g,'\n').trim();}
+async function lerRespostaTitulosV69(r){
+    const text=await r.text();let d;try{d=JSON.parse(text);}catch(e){
+        const err=new Error(`O servidor respondeu HTTP ${r.status} fora do formato esperado. Confira o deploy do server V69 no Render.`);err.status=r.status||502;throw err;
+    }
+    if(!r.ok||!d.sucesso){const err=new Error(d.erro||d.error||d.message||`Falha HTTP ${r.status} ao gerar t\u00edtulos.`);err.status=r.status;throw err;}return d;
+}
+async function pesquisarTermosTitulosV69(entrada,run,ativo){
+    const controller=new AbortController();run.controllersV68.add(controller);const timer=setTimeout(()=>controller.abort(),85000);
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/keywords`,{method:'POST',headers:{Authorization:obterToken(),'Content-Type':'application/json'},signal:controller.signal,
+            body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null})});
+        const d=await lerRespostaTitulosV69(r);
+        if(ativo()){
+            run.keywordsV69=termosUnicosV62([...(run.keywordsV69||[]),...(d.keywords||[])],300);
+            renderFontesKeywordsV62(d);
+            const el=document.getElementById('titulos-pesquisa-status-v69');if(el)el.textContent=d.parcial?(d.observacao||'Pesquisa parcial; os termos dispon\u00edveis foram aproveitados.'):`${run.keywordsV69.length} termos dispon\u00edveis para os pr\u00f3ximos lotes.`;
+        }
+    }catch(e){if(ativo()){const el=document.getElementById('titulos-pesquisa-status-v69');if(el)el.textContent='Pesquisa n\u00e3o conclu\u00edda: '+(e.name==='AbortError'?'prazo excedido.':e.message)+' A gera\u00e7\u00e3o usa a base e as palavras-chave dispon\u00edveis.';}}
+    finally{clearTimeout(timer);run.controllersV68.delete(controller);}
+}
+
 /* Tr\u00eas chamadas no m\u00e1ximo; compara\u00e7\u00e3o compartilhada entre todas as respostas. */
-async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso}){
+async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso,iniciais=[]}){
     let etapa=0,reservados=0,vazias=0,paralelo=3,falhas=0,tamanhoLote=80,recuperacoes=0;
     const titles=[],seen=new Set(),erros=[];
+    for(const t of iniciais){const key=assinaturaTituloV66(t);if(key&&!seen.has(key)&&titles.length<total){seen.add(key);titles.push(t);}}
     const maxEtapas=Math.ceil(total/20)+12;
     async function worker(){
         while(ativo()&&titles.length<total&&etapa<maxEtapas&&vazias<5&&!falhas){
@@ -13294,7 +13328,7 @@ async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso}){
             try{
                 const d=await request({quantidade,etapa:index,existentes:titles.slice()});
                 if(!ativo())return;
-                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V68.');
+                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V69.');
                 const antes=titles.length,limite=Math.min(60,Number(d.limite)||60);
                 for(const raw of Array.isArray(d.titulos)?d.titulos:[]){
                     if(typeof raw!=='string')continue;
@@ -13321,17 +13355,23 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
     if(criarEstadoV37.conteudoRunV61&&!criarEstadoV37.conteudoRunV61.cancelled)return criarEstadoV37.conteudoRunV61.promise;
     if(document.getElementById('criar-agente-v62')?.value&&!contextoAgenteCriacaoV62()){await selecionarAgenteCriacaoV62();if(!contextoAgenteCriacaoV62())return;}
     let entrada=entradaConteudoV61();if(!entrada.produto&&!entrada.reference_images.length)return alert('Informe o produto ou envie uma foto.');
+    const pedido=Number(document.getElementById('criar-qtd-v37')?.value||entrada.quantidade);
+    if(!Number.isInteger(pedido)||pedido<1||pedido>5000)return alert('Informe de 1 a 5.000 t\u00edtulos por lote. Use novos lotes para volumes maiores.');
     const field=document.getElementById('criar-titulos-v37');
     const baseDigitada=document.getElementById('titulo-base-ia-v67')?.value||'';
-    const tituloBase=baseDigitada.trim()||String(field.value||'').split(/\r?\n/).find(t=>t.trim())||entrada.produto;
+    const tituloBase=baseDigitada.trim()||entrada.produto;
+    const contextoInicial=contextoTitulosV69(entrada),sessao=criarEstadoV37.titulosSessaoV69;
+    const continuar=sessao?.contexto===contextoInicial&&sessao.titulos.length<entrada.quantidade;
+    const conhecidos=new Set((sessao?.titulos||[]).map(assinaturaTituloV66));
+    const iniciais=continuar?String(field.value||'').split(/\r?\n/).map(textoConteudoV61).filter(t=>conhecidos.has(assinaturaTituloV66(t))):[];
     const cached=lerCacheConteudoV45(entrada.cacheKey);
     let conteudo=somenteTitulos?{keywords:entrada.keywords_titulos,produto_detectado:entrada.produto}:cached||rascunhoConteudoV61(entrada);
-    if(!somenteTitulos)aplicarConteudoRapidoV61({...conteudo,titulos:[]});else field.value='';
+    if(!somenteTitulos)aplicarConteudoRapidoV61({...conteudo,titulos:iniciais});else field.value=iniciais.join('\n');
     entrada=entradaConteudoV61();
-    const run={identity:entrada.identity,quantidade:entrada.quantidade,controller:new AbortController(),cancelled:false,controllersV68:new Set(),campos:camposConteudoV61(),button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
+    const run={identity:contextoTitulosV69(entrada),quantidade:entrada.quantidade,controller:new AbortController(),cancelled:false,controllersV68:new Set(),campos:camposConteudoV61(),button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
     if(run.button){run.buttonHTML=run.button.innerHTML;run.button.disabled=true;run.button.textContent='Gerando t\u00edtulos por IA...';}
     criarEstadoV37.conteudoRunV61=run;
-    const atual=()=>!run.cancelled&&criarEstadoV37.conteudoRunV61===run&&entradaConteudoV61().identity===run.identity&&entradaConteudoV61().quantidade===run.quantidade&&(document.getElementById('titulo-base-ia-v67')?.value||'')===baseDigitada;
+    const atual=()=>!run.cancelled&&criarEstadoV37.conteudoRunV61===run&&contextoTitulosV69(entradaConteudoV61())===run.identity&&!run.edicaoAtributoV69&&entradaConteudoV61().quantidade===run.quantidade&&(document.getElementById('titulo-base-ia-v67')?.value||'')===baseDigitada;
     statusConteudoV61('Preparando os dados do produto para a IA...','aviso');
     run.promise=(async()=>{
         try{
@@ -13358,26 +13398,29 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
                     salvarCacheConteudoV45({...conteudo,titulos:[],titulos_semente:[]},entrada.cacheKey);
                 }
             }
-            entrada=entradaConteudoV61();run.identity=entrada.identity;
+            entrada=entradaConteudoV61();run.identity=contextoTitulosV69(entrada);
             if(!entrada.produto)throw new Error('Informe o nome do produto para a IA criar os t\u00edtulos.');
             let esperado=field.value;
-            const valido=()=>atual()&&field.value===esperado;
-            const result=await executarLotesTitulosV68({total:entrada.quantidade,ativo:valido,
+            const valido=()=>atual()&&normalizarListaTitulosV69(field.value)===normalizarListaTitulosV69(esperado);
+            run.keywordsV69=termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],300);
+            if(document.getElementById('titulos-pesquisar-v69')?.checked)run.pesquisaPromiseV69=pesquisarTermosTitulosV69(entrada,run,valido);
+            const result=await executarLotesTitulosV68({total:entrada.quantidade,ativo:valido,iniciais,
                 request:async lote=>{
                     const controller=new AbortController();run.controllersV68.add(controller);
                     const timer=setTimeout(()=>controller.abort(),55000);
                     try{
-                        const r=await fetch(`${RENDER_URL}/api/v68/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
+                        const r=await fetch(`${RENDER_URL}/api/v69/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
                             body:JSON.stringify({produto:entrada.produto,titulo_base:tituloBase||entrada.produto,detalhes:entrada.detalhes,...lote,
                                 category_ids:entrada.category_ids,agente_id:entrada.agente_id||null,agente_version:entrada.agente_contexto?.version||0,
-                                keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],180)})});
-                        const d=await r.json().catch(()=>({}));if(!r.ok||!d.sucesso){const e=new Error(d.erro||'A IA n\u00e3o conseguiu concluir esta etapa.');e.status=r.status;throw e;}return d;
+                                keywords:run.keywordsV69,atributos_confirmados:entrada.categorias.map(c=>({category_id:c.category_id,values:c.values}))})});
+                        return await lerRespostaTitulosV69(r);
                     }finally{clearTimeout(timer);run.controllersV68.delete(controller);}
                 },
-                aceitar:titles=>{esperado=titles.join('\n');field.value=esperado;atualizarInformacaoTitulosV65();
+                aceitar:titles=>{field.value=titles.join('\n');esperado=field.value;
+                    criarEstadoV37.titulosSessaoV69={contexto:run.identity,titulos:titles.slice()};atualizarInformacaoTitulosV65();
                     if(!run.previewTimerV68)run.previewTimerV68=setTimeout(()=>{run.previewTimerV68=null;if(atual())renderPlanilhaPreviewV37();},120);},
                 progresso:(n,q)=>statusConteudoV61(`IA criando t\u00edtulos em paralelo: ${n} de ${q} prontos...`,'aviso')});
-            if(!valido()){if(!run.cancelled)statusConteudoV61('Os dados ou os t\u00edtulos foram editados. A gera\u00e7\u00e3o foi interrompida e sua edi\u00e7\u00e3o foi preservada.','aviso');return;}
+            if(!valido()){if(!run.cancelled)statusConteudoV61('Um campo de entrada foi alterado durante a gera\u00e7\u00e3o. Os t\u00edtulos prontos foram preservados. Clique novamente para continuar com os dados atuais.','aviso');return;}
             const titles=result.titulos;
             if(result.erro){renderPlanilhaPreviewV37();throw result.erro;}
             preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();
@@ -13387,10 +13430,11 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
                 if(d&&atual()){
                     aplicarConteudoRapidoV61({...d,titulos:field.value.split(/\r?\n/).filter(Boolean)},run.campos);
                     salvarCacheConteudoV45({...d,titulos:[],titulos_semente:[]},entrada.cacheKey);
+                    if(criarEstadoV37.titulosSessaoV69)criarEstadoV37.titulosSessaoV69.contexto=contextoTitulosV69(entradaConteudoV61());
                 }
             }
         }catch(e){
-            if(!run.cancelled&&criarEstadoV37.conteudoRunV61===run)statusConteudoV61(e.name==='AbortError'?'A IA n\u00e3o concluiu esta etapa no prazo. Os t\u00edtulos j\u00e1 gerados foram mantidos.':e.message,'erro');
+            if(!run.cancelled&&criarEstadoV37.conteudoRunV61===run)statusConteudoV61(e.name==='AbortError'?'A IA n\u00e3o concluiu esta etapa no prazo. Os t\u00edtulos prontos foram mantidos; clique em Gerar para continuar.':e.message,'erro');
         }finally{clearTimeout(run.timer);clearTimeout(run.previewTimerV68);for(const c of run.controllersV68)c.abort();if(criarEstadoV37.conteudoRunV61===run){restaurarBotaoConteudoV61(run);criarEstadoV37.conteudoRunV61=null;}}
     })();return run.promise;
 }
