@@ -2858,11 +2858,10 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">5. T&#237;tulos / nomes de fam&#237;lia</div>
             <div class="text-[11px] text-slate-500 mt-1">Um por linha, sempre limitado a 60 caracteres e com foco em SEO e convers&#227;o.</div>
-            <textarea oninput="atualizarInformacaoTitulosV65()" id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
-<label class="flex items-center gap-2 text-xs text-slate-300 mt-3"><input id="titulos-pesquisar-v66" type="checkbox" checked>Pesquisar palavras relacionadas na internet (usa a cota configurada)</label>
-<details class="mt-3 border border-slate-700 rounded-lg p-3"><summary class="cursor-pointer text-sm font-bold">Hist&#243;rico de t&#237;tulos gerados &#183; V66</summary><p class="text-xs text-slate-400 mt-2">Os t&#237;tulos s&#227;o comparados com o hist&#243;rico de toda esta conta. As mesmas palavras em outra ordem tamb&#233;m s&#227;o descartadas. A lista atual ser&#225; inclu&#237;da no hist&#243;rico na pr&#243;xima gera&#231;&#227;o.</p><div class="flex gap-2 mt-2"><input id="titulos-historico-busca-v66" placeholder="Buscar por t&#237;tulo ou produto" class="bg-slate-900 border border-slate-600 rounded p-2 flex-1"><button onclick="consultarHistoricoTitulosV66(1)" class="bg-blue-600 rounded px-3 text-sm">Consultar</button></div><div id="titulos-historico-resultados-v66" class="text-xs mt-3"></div></details>
+            <label class="block text-xs text-slate-300 mb-2">T&#237;tulo base (opcional)</label><input id="titulo-base-ia-v67" class="w-full mb-3 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm" placeholder="Ex.: Maquininha de cortar cabelo T9 dourada">
+<textarea oninput="atualizarInformacaoTitulosV65()" id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
 <div id="criar-titulos-info-v65" class="text-[11px] text-slate-400 mt-2"></div>
-<button onclick="gerarTitulosKeywordsV65()" class="mt-2 border border-yellow-500 text-yellow-300 rounded-lg px-3 py-2 text-xs font-bold">Gerar t&#237;tulos &#250;nicos com as palavras-chave atuais</button>
+<button onclick="gerarTitulosKeywordsV65()" class="mt-2 border border-yellow-500 text-yellow-300 rounded-lg px-3 py-2 text-xs font-bold">Gerar t&#237;tulos &#250;nicos por IA</button><button onclick="pararTitulosIAV67()" class="ml-2 mt-2 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-xs">Parar gera&#231;&#227;o</button>
         </div>
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">6. Descri&#231;&#227;o</div>
@@ -11905,35 +11904,6 @@ function alternarVariacoesV37(){
 function assinaturaTituloV66(valor){
     return [...new Set(chaveTextoV65(valor).split(' ').filter(p=>p&&!/^(de|do|da|dos|das|e|com|para|sem|em|a|o|as|os)$/.test(p)))].sort().join(' ');
 }
-function* candidatosTitulosV66(payload){
-    const max=Math.min(60,Math.max(1,Number(payload.limite)||60)),min=Math.min(50,max);
-    const nome=tituloLimpoV65(payload.produto_detectado||payload.produto||'');
-    if(!nome)return;
-    const seen=new Set(),stop=/^(de|do|da|dos|das|e|com|para|sem|em|a|o|as|os)$/i;
-    const limpar=v=>tituloLimpoV65(v).replace(/^(de|do|da|dos|das|e|com|para|sem|em)\s+/i,'').replace(/\s+(de|do|da|dos|das|e|com|para|sem|em)$/i,'').trim();
-    const kws=termosUnicosV62(payload.keywords||[],180).map(limpar).filter(k=>k&&k.length<=55&&!/https?:|www\.|\b(frete gr[a\u00e1]tis|promo[c\u00e7][a\u00e3]o|estoque|melhor pre[c\u00e7]o)\b/i.test(k));
-    let base='';for(const p of nome.split(' ')){if((base+' '+p).trim().length>36)break;base=(base+' '+p).trim();}base=limpar(base)||nome.split(' ')[0];
-    const bases=termosUnicosV62([...(payload.bases||[]).map(limpar).filter(b=>b.length<=40),base],12);
-    function valido(t){const sig=assinaturaTituloV66(t);if(t.length<min||t.length>max||/\b(modelo|tipo|uso|carga|de|com|para|sem)$/i.test(t)||seen.has(sig))return false;seen.add(sig);return true;}
-    for(const seed of payload.titulos_semente||[]){const t=limpar(seed);if(valido(t))yield t;}
-    if(valido(nome))yield nome;
-    let attempts=0;
-    for(const b of bases){
-        const fixed=new Set(chaveTextoV65(b).split(' '));
-        const partes=termosUnicosV62([nome.slice(base.length).trim(),...kws].map(k=>limpar(k.split(' ').filter(p=>stop.test(p)||!fixed.has(chaveTextoV65(p))).join(' '))).filter(k=>k&&!stop.test(k)),150);
-        for(let i=0;i<partes.length;i++){
-            let t=limpar(b+' '+partes[i]);if(valido(t))yield t;
-            for(let j=i+1;j<partes.length;j++){
-                t=limpar(b+' '+partes[i]+' '+partes[j]);if(valido(t))yield t;
-                if(t.length>max)continue;
-                for(let k=j+1;k<partes.length;k++){
-                    if(++attempts>500000)return;
-                    t=limpar(b+' '+partes[i]+' '+partes[j]+' '+partes[k]);if(valido(t))yield t;
-                }
-            }
-        }
-    }
-}
 
 function chaveTextoV65(valor){
     return textoConteudoV61(valor).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -11961,7 +11931,13 @@ function validarTitulosUnicosV65(config){
     return true;
 }
 function expandirTitulosConfirmadosV61(payload,quantidade){
-    const out=[];for(const title of candidatosTitulosV66(payload)){out.push(title);if(out.length>=quantidadeConteudoV61(quantidade))break;}return out;
+    const seen=new Set(),out=[];
+    for(const raw of payload.titulos||payload.titulos_semente||[]){
+        if(typeof raw!=='string')continue;
+        const t=textoConteudoV61(raw),key=assinaturaTituloV66(t);
+        if(!key||t.length>60||seen.has(key))continue;
+        seen.add(key);out.push(t);if(out.length>=quantidadeConteudoV61(quantidade))break;
+    }return out;
 }
 function fatosPreenchimentoV65(entrada){
     const agente=entrada.agente_contexto||{},out=[];
@@ -12130,7 +12106,7 @@ function entradaConteudoV61(){
     const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
         keywords:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
     entrada.identity=hashConteudoV61(JSON.stringify(identidade));
-    entrada.cacheKey='mlhubpro_v66_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    entrada.cacheKey='mlhubpro_v67_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
     return entrada;
 }
 function camposConteudoV61(){
@@ -12178,7 +12154,7 @@ function salvarCacheConteudoV45(payload,key=chaveCacheConteudoV45()){
     try{
         localStorage.setItem(key,JSON.stringify({created_at:Date.now(),data:payload}));
         const keys=[];
-        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v66_conteudo_'))keys.push(k);}
+        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v67_conteudo_'))keys.push(k);}
         if(keys.length>20){
             keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).created_at-JSON.parse(localStorage.getItem(b)).created_at;}catch{return 0;}});
             keys.slice(0,keys.length-20).forEach(k=>localStorage.removeItem(k));
@@ -12193,7 +12169,7 @@ function lerCacheConteudoV45(key=chaveCacheConteudoV45()){
     }catch(e){return null;}
 }
 function chaveCacheKeywordsV45(){
-    return 'mlhubpro_v66_keywords_'+entradaConteudoV61().identity;
+    return 'mlhubpro_v67_keywords_'+entradaConteudoV61().identity;
 }
 function salvarCacheKeywordsV45(payload){
     try{localStorage.setItem(chaveCacheKeywordsV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
@@ -12258,7 +12234,7 @@ async function referenciaRapidaConteudoV46(){
 }
 
 async function gerarConteudoCriacaoV37(){
-    return gerarFluxoTitulosV66(false);
+    return gerarFluxoTitulosV67(false);
 }
 
 function cancelarKeywordsV62(){
@@ -12657,7 +12633,7 @@ function configCriacaoV37(){
     return {
         product_name:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
         quantity:Math.max(1,Number(document.getElementById('criar-qtd-v37')?.value||titles.length||1)),
-        titles,title_batch_id:criarEstadoV37.titleBatchV66||null,
+        titles,
         price:Number(document.getElementById('criar-preco-v37')?.value||0),
         stock:Math.max(1,Number(document.getElementById('criar-estoque-v37')?.value||1)),
         listing_type_id:String(document.getElementById('criar-listing-v37')?.value||'gold_special'),
@@ -13246,7 +13222,7 @@ function atualizarInformacaoTitulosV65(){
     const el=document.getElementById('criar-titulos-info-v65');if(!el)return;
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(textoConteudoV61).filter(Boolean);
     const unicos=new Set(titles.map(assinaturaTituloV66)).size,q=quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value);
-    el.textContent=`V66 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
+    el.textContent=`V67 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
     el.className='text-[11px] mt-2 '+(unicos>=q&&unicos===titles.length?'text-emerald-400':'text-yellow-400');
 }
 function preencherCaracteristicasV65(silencioso=false){
@@ -13262,7 +13238,7 @@ function preencherCaracteristicasV65(silencioso=false){
     return preenchidos;
 }
 async function gerarTitulosKeywordsV65(){
-    return gerarFluxoTitulosV66(true);
+    return gerarFluxoTitulosV67(true);
 }
 async function organizarFontesSalvasV65(){
     if(agentesEstadoV62.busy||agentesEstadoV62.agente?.refreshing)return;
@@ -13304,28 +13280,23 @@ async function consultarAcervoAgenteV65(pagina=1){
     }catch(e){if(agentesEstadoV62.agente?.id===a.id)out.innerHTML=`<p class="text-xs text-red-300">${textoEscapeV37(e.message)}</p>`;}
 }
 
-/* V66: nenhum lote \u00e9 liberado pelo cache ou por gera\u00e7\u00e3o apenas local. */
-function novoPedidoTitulosV66(){
-    if(globalThis.crypto?.randomUUID)return globalThis.crypto.randomUUID();
-    const bytes=new Uint8Array(16);globalThis.crypto.getRandomValues(bytes);bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
-    const h=[...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
-}
-async function gerarFluxoTitulosV66(somenteTitulos=false){
+async function gerarFluxoTitulosV67(somenteTitulos=false){
     const token=obterToken();if(!token){solicitarToken();return;}
     if(criarEstadoV37.conteudoRunV61&&!criarEstadoV37.conteudoRunV61.cancelled)return criarEstadoV37.conteudoRunV61.promise;
     if(document.getElementById('criar-agente-v62')?.value&&!contextoAgenteCriacaoV62()){await selecionarAgenteCriacaoV62();if(!contextoAgenteCriacaoV62())return;}
     let entrada=entradaConteudoV61();if(!entrada.produto&&!entrada.reference_images.length)return alert('Informe o produto ou envie uma foto.');
-    const field=document.getElementById('criar-titulos-v37'),anteriores=String(field.value||'').split(/\r?\n/).filter(Boolean);
-    criarEstadoV37.titleBatchV66=null;
+    const field=document.getElementById('criar-titulos-v37');
+    const baseDigitada=document.getElementById('titulo-base-ia-v67')?.value||'';
+    const tituloBase=baseDigitada.trim()||String(field.value||'').split(/\r?\n/).find(t=>t.trim())||entrada.produto;
     const cached=lerCacheConteudoV45(entrada.cacheKey);
     let conteudo=somenteTitulos?{keywords:entrada.keywords_titulos,produto_detectado:entrada.produto}:cached||rascunhoConteudoV61(entrada);
     if(!somenteTitulos)aplicarConteudoRapidoV61({...conteudo,titulos:[]});else field.value='';
     entrada=entradaConteudoV61();
     const run={identity:entrada.identity,quantidade:entrada.quantidade,controller:new AbortController(),cancelled:false,campos:camposConteudoV61(),button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
-    if(run.button){run.buttonHTML=run.button.innerHTML;run.button.disabled=true;run.button.textContent='Conferindo t\u00edtulos in\u00e9ditos...';}
+    if(run.button){run.buttonHTML=run.button.innerHTML;run.button.disabled=true;run.button.textContent='Gerando t\u00edtulos por IA...';}
     criarEstadoV37.conteudoRunV61=run;
-    const atual=()=>!run.cancelled&&criarEstadoV37.conteudoRunV61===run&&entradaConteudoV61().identity===run.identity&&entradaConteudoV61().quantidade===run.quantidade;
-    statusConteudoV61('Preparando conte\u00fado e conferindo t\u00edtulos no hist\u00f3rico da conta...','aviso');
+    const atual=()=>!run.cancelled&&criarEstadoV37.conteudoRunV61===run&&entradaConteudoV61().identity===run.identity&&entradaConteudoV61().quantidade===run.quantidade&&(document.getElementById('titulo-base-ia-v67')?.value||'')===baseDigitada;
+    statusConteudoV61('Preparando os dados do produto para a IA...','aviso');
     run.promise=(async()=>{
         try{
             if(!somenteTitulos&&!cached){
@@ -13341,38 +13312,46 @@ async function gerarFluxoTitulosV66(somenteTitulos=false){
                 salvarCacheConteudoV45({...conteudo,titulos:[],titulos_semente:[]},entrada.cacheKey);
             }
             entrada=entradaConteudoV61();run.identity=entrada.identity;
-            if(!entrada.produto)throw new Error('Informe o nome do produto para conferir o hist\u00f3rico.');
-            run.controller=new AbortController();run.timer=setTimeout(()=>run.controller.abort(),90000);
-            const campoAntes=field.value,keywordsAntes=document.getElementById('criar-keywords-v37')?.value||'';
-            statusConteudoV61('Buscando combina\u00e7\u00f5es relacionadas e comparando com todos os t\u00edtulos j\u00e1 salvos...','aviso');
-            const r=await fetch(`${RENDER_URL}/api/v66/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
-                body:JSON.stringify({request_id:novoPedidoTitulosV66(),produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,
-                    category_ids:entrada.category_ids,agente_id:entrada.agente_id||null,keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],180),
-                    pesquisar:document.getElementById('titulos-pesquisar-v66')?.checked!==false,anteriores})});
-            const d=await r.json().catch(()=>({}));
-            if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram. O lote foi preservado no hist\u00f3rico; gere novamente para os dados atuais.','aviso');return;}
-            if(!r.ok||!d.sucesso)throw new Error(d.erro||'N\u00e3o foi poss\u00edvel salvar o hist\u00f3rico.');
-            if(field.value!==campoAntes){statusConteudoV61('Voc\u00ea editou os t\u00edtulos durante a gera\u00e7\u00e3o. O novo lote ficou salvo no hist\u00f3rico.','aviso');return;}
-            const titles=d.titulos||[],sigs=titles.map(assinaturaTituloV66);
-            if(new Set(sigs).size!==titles.length||titles.some(t=>t.length>Math.min(60,d.limite||60)||t.length<Math.min(50,d.limite||60)))throw new Error('O servidor devolveu t\u00edtulos inv\u00e1lidos. Atualize tamb\u00e9m o c\u00f3digo do servidor.');
-            field.value=titles.join('\n');criarEstadoV37.titleBatchV66=d.title_batch_id;
-            const kw=document.getElementById('criar-keywords-v37');if(kw&&kw.value===keywordsAntes&&d.keywords)kw.value=d.keywords.join(', ');
-            if(d.sources)renderFontesKeywordsV62(d);
-            preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();renderPlanilhaPreviewV37();
-            statusConteudoV61(d.aviso||`${titles.length} t\u00edtulos in\u00e9ditos conferidos e salvos no banco.${d.pesquisa_aviso?' '+d.pesquisa_aviso:''}`,d.incompleto||d.pesquisa_aviso?'aviso':'ok');
+            if(!entrada.produto)throw new Error('Informe o nome do produto para a IA criar os t\u00edtulos.');
+            const titles=[],seen=new Set();let esperado=field.value,vazias=0,etapa=0;
+            const maxEtapas=Math.ceil(entrada.quantidade/40)+12;
+            while(titles.length<entrada.quantidade&&etapa<maxEtapas&&vazias<3){
+                if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram. Gere novamente para o produto atual.','aviso');return;}
+                if(field.value!==esperado){statusConteudoV61('Sua edi\u00e7\u00e3o foi preservada. A gera\u00e7\u00e3o foi interrompida.','aviso');return;}
+                run.controller=new AbortController();run.timer=setTimeout(()=>run.controller.abort(),60000);
+                statusConteudoV61(`IA criando t\u00edtulos: ${titles.length} de ${entrada.quantidade} prontos...`,'aviso');
+                const r=await fetch(`${RENDER_URL}/api/v67/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
+                    body:JSON.stringify({produto:entrada.produto,titulo_base:tituloBase||entrada.produto,detalhes:entrada.detalhes,
+                        quantidade:Math.min(40,entrada.quantidade-titles.length),etapa:etapa++,existentes:titles,
+                        category_ids:entrada.category_ids,agente_id:entrada.agente_id||null,
+                        keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],180)})});
+                const d=await r.json().catch(()=>({}));clearTimeout(run.timer);
+                if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram durante a gera\u00e7\u00e3o. Gere novamente.','aviso');return;}
+                if(field.value!==esperado){statusConteudoV61('Sua edi\u00e7\u00e3o foi preservada. A gera\u00e7\u00e3o foi interrompida.','aviso');return;}
+                if(!r.ok||!d.sucesso)throw new Error(d.erro||'A IA n\u00e3o conseguiu criar os t\u00edtulos agora.');
+                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V67 para gerar t\u00edtulos por IA.');
+                const antes=titles.length,limite=Math.min(60,Number(d.limite)||60);
+                for(const raw of d.titulos||[]){
+                    if(typeof raw!=='string')continue;
+                    const title=textoConteudoV61(raw),key=assinaturaTituloV66(title);
+                    if(!key||title.length<Math.min(50,limite)||title.length>limite||seen.has(key))continue;
+                    seen.add(key);titles.push(title);if(titles.length>=entrada.quantidade)break;
+                }
+                vazias=titles.length===antes?vazias+1:0;
+                esperado=titles.join('\n');field.value=esperado;
+                atualizarInformacaoTitulosV65();renderPlanilhaPreviewV37();
+                await new Promise(resolve=>setTimeout(resolve,0));
+            }
+            preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();
+            statusConteudoV61(titles.length===entrada.quantidade?`${titles.length} t\u00edtulos \u00fanicos criados pela IA. Revise antes de publicar.`:`A IA criou ${titles.length} de ${entrada.quantidade} t\u00edtulos \u00fanicos. Acrescente informa\u00e7\u00f5es ou ajuste a quantidade; nenhum repetido foi inclu\u00eddo.`,titles.length===entrada.quantidade?'ok':'aviso');
         }catch(e){
-            if(!run.cancelled&&criarEstadoV37.conteudoRunV61===run)statusConteudoV61(e.name==='AbortError'?'A confer\u00eancia n\u00e3o concluiu no prazo. Consulte o hist\u00f3rico ou tente novamente; nenhum t\u00edtulo sem confer\u00eancia foi liberado.':e.message,'erro');
+            if(!run.cancelled&&criarEstadoV37.conteudoRunV61===run)statusConteudoV61(e.name==='AbortError'?'A IA n\u00e3o concluiu esta etapa no prazo. Os t\u00edtulos j\u00e1 gerados foram mantidos.':e.message,'erro');
         }finally{clearTimeout(run.timer);if(criarEstadoV37.conteudoRunV61===run){restaurarBotaoConteudoV61(run);criarEstadoV37.conteudoRunV61=null;}}
     })();return run.promise;
 }
-async function consultarHistoricoTitulosV66(pagina=1){
-    const el=document.getElementById('titulos-historico-resultados-v66');if(!el)return;
-    const seq=(criarEstadoV37.histSeqV66||0)+1;criarEstadoV37.histSeqV66=seq;el.textContent='Consultando...';
-    try{const q=document.getElementById('titulos-historico-busca-v66')?.value||'';
-        const r=await fetch(`${RENDER_URL}/api/v66/titulos/historico?q=${encodeURIComponent(q)}&pagina=${pagina}`,{headers:{Authorization:obterToken()}});
-        const d=await r.json();if(criarEstadoV37.histSeqV66!==seq)return;if(!r.ok||!d.sucesso)throw new Error(d.erro||'Falha ao consultar.');
-        el.innerHTML=`<p class="mb-2">${Number(d.total)} t\u00edtulos salvos \u00b7 p\u00e1gina ${Number(d.pagina)}</p>`+(d.itens||[]).map(x=>`<div class="border-b border-slate-700 py-2"><b>${textoEscapeV37(x.title)}</b><div class="text-slate-400">${textoEscapeV37(x.product)} \u00b7 ${textoEscapeV37(new Date(x.created_at).toLocaleString('pt-BR'))}</div></div>`).join('')+`<div class="flex gap-3 mt-3"><button ${pagina<=1?'disabled':''} onclick="consultarHistoricoTitulosV66(${pagina-1})">Anterior</button><button ${pagina*40>=d.total?'disabled':''} onclick="consultarHistoricoTitulosV66(${pagina+1})">Pr\u00f3xima</button></div>`;
-    }catch(e){if(criarEstadoV37.histSeqV66===seq)el.textContent=e.message;}
+
+function pararTitulosIAV67(){
+    cancelarConteudoV61();atualizarInformacaoTitulosV65();statusConteudoV61('Gera\u00e7\u00e3o interrompida. Os t\u00edtulos j\u00e1 criados foram mantidos.','aviso');
 }
 
 function camposEditorAgenteV62(){
