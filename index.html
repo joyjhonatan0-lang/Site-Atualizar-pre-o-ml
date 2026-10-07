@@ -2537,6 +2537,8 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <div class="flex flex-wrap gap-2">
                     <button id="agente-salvar-v62" onclick="salvarAgenteProdutoV62()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl">Salvar agente</button>
                     <button id="agente-pesquisar-v62" onclick="pesquisarProdutoAgenteV62()" class="bg-blue-500 hover:bg-blue-400 text-white font-black text-xs px-4 py-2.5 rounded-xl">&#8981; Pesquisar na internet</button>
+                    <button onclick="organizarFontesSalvasV65()" class="border border-blue-600 text-blue-300 font-bold text-xs px-3 py-2 rounded-xl">Organizar fontes salvas</button>
+                    <button onclick="consultarAcervoAgenteV65(1)" class="border border-slate-600 text-slate-200 font-bold text-xs px-3 py-2 rounded-xl">Consultar dados salvos</button>
                     <button onclick="anunciarComAgenteV62()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl">Usar no an&#250;ncio</button>
                     <button id="agente-excluir-v62" onclick="excluirAgenteProdutoV62()" class="border border-rose-800 text-rose-400 text-xs font-bold px-3 py-2.5 rounded-xl">Excluir</button>
                 </div>
@@ -2569,6 +2571,19 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="hub-section-title">Pesquisa, SEO e ficha encontrada</div>
             <div class="hub-section-help">Revise as especifica&#231;&#245;es pesquisadas e marque quais correspondem ao seu produto. Depois, salve o agente.</div>
             <div id="agente-pesquisa-v62" class="mt-4 space-y-4"></div>
+<details id="agente-acervo-v65" class="mt-5 rounded-xl border border-slate-700 p-4">
+ <summary class="cursor-pointer text-sm font-black text-white">Consultar pesquisas e dados salvos</summary>
+ <p class="hub-tip">O acervo acumula fontes, especifica&#231;&#245;es, palavras-chave e ideias deste produto no banco de dados. Registros iguais n&#227;o s&#227;o duplicados. Revise as especifica&#231;&#245;es antes de usar no an&#250;ncio.</p>
+ <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+  <input id="agente-acervo-busca-v65" class="hub-input" placeholder="Buscar palavra-chave, caracter&#237;stica, modelo ou fonte">
+  <select id="agente-acervo-tipo-v65" class="hub-input"><option value="">Todos os dados</option><option value="fact">Especifica&#231;&#245;es e ficha t&#233;cnica</option><option value="keyword">Palavras-chave</option><option value="source">Fontes consultadas</option><option value="summary">Resumos</option><option value="title">T&#237;tulos sugeridos</option><option value="application">Aplica&#231;&#245;es</option></select>
+ </div>
+ <div class="flex flex-wrap items-center gap-3 mt-3"><button onclick="consultarAcervoAgenteV65(1)" class="bg-blue-500 text-white font-black px-4 py-2 rounded-lg text-xs">Consultar dados salvos</button><label class="text-xs text-slate-400"><input id="agente-acervo-todos-v65" type="checkbox"> Incluir produtos anteriores deste agente</label></div>
+ <div id="agente-acervo-resumo-v65" class="text-[11px] text-slate-400 mt-3"></div>
+ <div id="agente-acervo-resultados-v65" class="space-y-3 mt-4 max-h-[650px] overflow-y-auto"></div>
+ <div class="flex items-center justify-between mt-3"><button id="agente-acervo-anterior-v65" onclick="consultarAcervoAgenteV65((agentesEstadoV62.acervoPagina||1)-1)" class="text-xs text-blue-400 disabled:opacity-40">Anterior</button><span id="agente-acervo-pagina-v65" class="text-xs text-slate-500"></span><button id="agente-acervo-proximo-v65" onclick="consultarAcervoAgenteV65((agentesEstadoV62.acervoPagina||1)+1)" class="text-xs text-blue-400 disabled:opacity-40">Pr&#243;xima</button></div>
+</details>
+
         </div>
         <div class="panel rounded-2xl p-5">
             <div class="hub-section-title">Chat para organizar as ideias</div>
@@ -2627,7 +2642,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 </div>
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Quantidade de an&#250;ncios / fam&#237;lias</label>
-                    <input id="criar-qtd-v37" type="number" min="1" max="500" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
+                    <input id="criar-qtd-v37" type="number" min="1" max="1000" value="10" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white">
                 </div>
                 <div>
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Limite do t&#237;tulo</label>
@@ -2843,7 +2858,9 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">5. T&#237;tulos / nomes de fam&#237;lia</div>
             <div class="text-[11px] text-slate-500 mt-1">Um por linha, sempre limitado a 60 caracteres e com foco em SEO e convers&#227;o.</div>
-            <textarea id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+            <textarea oninput="atualizarInformacaoTitulosV65()" id="criar-titulos-v37" rows="12" class="campo-preview-v37 w-full mt-4 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white"></textarea>
+<div id="criar-titulos-info-v65" class="text-[11px] text-slate-400 mt-2"></div>
+<button onclick="gerarTitulosKeywordsV65()" class="mt-2 border border-yellow-500 text-yellow-300 rounded-lg px-3 py-2 text-xs font-bold">Gerar t&#237;tulos &#250;nicos com as palavras-chave atuais</button>
         </div>
         <div class="panel rounded-2xl p-5">
             <div class="text-sm font-black text-white">6. Descri&#231;&#227;o</div>
@@ -11382,6 +11399,7 @@ async function adicionarCategoriaSelecionadaV37(){
             listing_allowed:d.listing_allowed!==false,
             values:{}
         });
+        preencherCaracteristicasV65(true);
         renderCategoriasSelecionadasV37();
         atualizarAtributosVariacaoV37();
         renderPlanilhaPreviewV37();
@@ -11456,6 +11474,7 @@ function renderCategoriasSelecionadasV37(){
             <div class="text-[10px] text-slate-400 mt-1">${textoEscapeV37(path)}</div>
             <div class="text-[10px] text-yellow-400 mt-1">Categoria final: ${textoEscapeV37(leaf)}</div>
             <div class="text-[10px] text-emerald-400 mt-2">Exibindo caracter\u00edsticas principais e secund\u00e1rias edit\u00e1veis da ficha do Mercado Livre (${attrs.length}). Campos t\u00e9cnicos internos ficam ocultos.${variacoesAtivas&&idsVariacao.size?' Os atributos escolhidos para variar s\u00e3o preenchidos exclusivamente na se\u00e7\u00e3o 3, uma vez por varia\u00e7\u00e3o.':''}</div>
+            <button onclick="preencherCaracteristicasV65()" class="mt-3 border border-emerald-600 text-emerald-300 rounded-lg px-3 py-2 text-xs font-bold">Preencher caracter\u00edsticas com os dados do produto</button>
             ${grupos.map(g=>`<div class="mt-5">
                 <div class="text-[11px] uppercase tracking-wider font-black text-white border-b border-slate-800 pb-2">${textoEscapeV37(g.label)}</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -11879,36 +11898,124 @@ function alternarVariacoesV37(){
     renderPlanilhaPreviewV37();
 }
 
+/* V65 \u2014 t\u00edtulos exclusivos e caracter\u00edsticas confirmadas. */
+function chaveTextoV65(valor){
+    return textoConteudoV61(valor).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function tituloLimpoV65(valor){
+    const palavras=textoConteudoV61(valor).replace(/[|/;,]+/g,' ').split(' '),out=[],seen=new Set();
+    const ligacao=/^(de|do|da|dos|das|e|com|para|sem|em|a|o)$/i;
+    for(const palavra of palavras){const key=chaveTextoV65(palavra);if(!key)continue;if(!ligacao.test(palavra)&&seen.has(key))continue;seen.add(key);out.push(palavra);}
+    while(out.length&&ligacao.test(out[out.length-1]))out.pop();
+    return out.join(' ');
+}
+function validarTitulosUnicosV65(config){
+    const titulos=Array.isArray(config.titles)?config.titles:[],seen=new Set();
+    const falhar=mensagem=>{const e=new Error(mensagem);e.status=422;throw e;};
+    const total=Number(config.quantity||titulos.length||1);
+    if(!Number.isInteger(total)||total<1)falhar('Informe uma quantidade inteira de t\u00edtulos.');
+    if(titulos.length<total)falhar(`Foram solicitados ${total} t\u00edtulos, mas existem ${titulos.length} t\u00edtulos \u00fanicos. Acrescente informa\u00e7\u00f5es ou palavras-chave e gere novamente, ou ajuste a quantidade.`);
+    for(let i=0;i<total;i++){
+        const t=textoConteudoV61(titulos[i]),key=chaveTextoV65(t);
+        if(!key)falhar(`O t\u00edtulo ${i+1} est\u00e1 vazio.`);
+        if(t.length>60)falhar(`O t\u00edtulo ${i+1} ultrapassa 60 caracteres.`);
+        if(seen.has(key))falhar(`O t\u00edtulo ${i+1} se repete. Cada t\u00edtulo da lista precisa ser \u00fanico.`);
+        seen.add(key);
+    }
+    return true;
+}
+function expandirTitulosConfirmadosV61(payload,quantidade){
+    const total=quantidadeConteudoV61(quantidade),out=[],seen=new Set();
+    const nome=tituloLimpoV65(payload.produto_detectado||payload.produto||'');
+    const kws=termosUnicosV62(payload.keywords||[],120).map(tituloLimpoV65).filter(Boolean);
+    const add=valor=>{
+        const t=tituloLimpoV65(valor),key=chaveTextoV65(t);
+        if(!t||t.length>60||seen.has(key)||out.length>=total)return;
+        seen.add(key);out.push(t);
+    };
+    if(!nome)return [];
+    const palavras=nome.split(' ');
+    const nucleo=[];
+    for(const p of palavras){if((nucleo.join(' ')+' '+p).trim().length>30)break;nucleo.push(p);}
+    while(nucleo.length>1&&/^(de|do|da|para|com|e)$/i.test(nucleo[nucleo.length-1]))nucleo.pop();
+    const base=nucleo.join(' ')||palavras[0];
+    const bases=termosUnicosV62([base,...kws.filter(k=>k.length<=32&&chaveTextoV65(k).split(' ').includes(chaveTextoV65(palavras[0])))],12);
+    (payload.titulos_semente||payload.titulos||[]).slice(0,40).forEach(add);
+    add(nome);
+    const detalhes=termosUnicosV62([palavras.slice(nucleo.length).join(' '),...kws],100);
+    // Reordena express\u00f5es inteiras; nunca gira fragmentos de frases nem completa
+    // a quantidade voltando ao in\u00edcio da lista.
+    for(const b of bases){for(const k of detalhes){add(b+' '+k);if(out.length>=total)return out;}}
+    let tentativas=0;
+    for(const b of bases){
+        const palavrasBase=new Set(chaveTextoV65(b).split(' '));
+        const partes=termosUnicosV62(detalhes.map(k=>k.split(' ').filter(p=>!palavrasBase.has(chaveTextoV65(p))).join(' ')).map(tituloLimpoV65).filter(k=>k&&k.length<=32),55);
+        for(let i=0;i<partes.length;i++)for(let j=0;j<partes.length;j++){
+            if(i===j)continue;
+            add(b+' '+partes[i]+' '+partes[j]);
+            if(out.length>=total)return out;
+        }
+        for(let i=0;i<partes.length;i++)for(let j=0;j<partes.length;j++)for(let k=0;k<partes.length;k++){
+            if(i===j||i===k||j===k)continue;
+            if(++tentativas>90000)return out;
+            add(b+' '+partes[i]+' '+partes[j]+' '+partes[k]);
+            if(out.length>=total)return out;
+        }
+    }
+    return out;
+}
+function fatosPreenchimentoV65(entrada){
+    const agente=entrada.agente_contexto||{},out=[];
+    if(agente.brand)out.unshift({name:'Marca',value:agente.brand});
+    const textos=[entrada.detalhes,agente.technical_sheet,agente.information,agente.applications,agente.notes].filter(Boolean);
+    for(const texto of textos)for(const linha of String(texto).split(/[\n;]+/)){
+        const m=linha.trim().match(/^([^:]{2,90}):\s*(.{1,500})$/);
+        if(m)out.push({name:m[1].trim(),value:m[2].trim()});
+    }
+    out.push(...(agente.approved_facts||[]));
+    const produto=String(entrada.produto||agente.product||'');
+    const modelo=produto.match(/\b[A-Z]{1,6}[- ]?\d{1,6}[A-Z0-9-]*\b/i);
+    if(modelo&&!out.some(f=>chaveTextoV65(f.name)==='modelo'))out.push({name:'Modelo',value:modelo[0]});
+    const cor=produto.match(/\b(branco|branca|preto|preta|azul|rosa|vermelho|vermelha|verde|dourado|dourada|prateado|prateada|cinza|bege|marrom)\b/i);
+    if(cor&&!out.some(f=>chaveTextoV65(f.name)==='cor'))out.push({name:'Cor',value:cor[0]});
+    return out;
+}
+function atributosAutomaticosV65(entrada){
+    const fatos=fatosPreenchimentoV65(entrada);
+    const aliases={brand:['marca'],model:['modelo'],alphanumeric_model:['modelo alfanumerico'],color:['cor'],voltage:['voltagem','tensao'],
+        power:['potencia'],with_rechargeable_battery:['inclui bateria recarregavel','bateria recarregavel'],
+        is_wireless:['e sem fio','sem fio'],power_type:['tipo de alimentacao','alimentacao'],
+        number_of_combs:['quantidade de pentes'],battery_voltage:['voltagem da bateria','tensao da bateria']};
+    const bool=v=>/^(sim|true|s|yes)$/i.test(v)?'sim':/^(nao|n\u00e3o|false|n|no)$/i.test(v)?'nao':chaveTextoV65(v);
+    return (entrada.categorias||[]).map(c=>{
+        const suggested=[];
+        for(const a of c.atributos||[]){
+            const id=String(a.id||'');if(!id||a.read_only||/^(SELLER_|SIZE_GRID_|GTIN|EAN|UPC)/.test(id))continue;
+            if((entrada.variacao_ids||[]).includes(id))continue;
+            if(c.values?.[id]?.value_name||c.values?.[id]?.value_id)continue;
+            const nomes=new Set([chaveTextoV65(a.name),chaveTextoV65(id),...(aliases[id.toLowerCase()]||[])]);
+            const f=fatos.find(f=>nomes.has(chaveTextoV65(f.name)));if(!f)continue;
+            let valor=textoConteudoV61(f.value),value_id='';
+            const escolhas=Array.isArray(a.values)?a.values:[];
+            if(escolhas.length){
+                let escolha=escolhas.find(v=>bool(v.name)===bool(valor));
+                if(!escolha&&id==='COLOR')escolha=escolhas.find(v=>chaveTextoV65(v.name).replace(/a$/,'o')===chaveTextoV65(valor).replace(/a$/,'o'));
+                if(escolha){valor=String(escolha.name);value_id=String(escolha.id||'');}
+                else if(id!=='BRAND')continue;
+            }
+            if(valor&&valor.length<=Number(a.value_max_length||500))suggested.push({id,value_name:valor,...(value_id?{value_id}:{})});
+        }
+        return {...c,suggested_attributes:suggested};
+    });
+}
+
 function textoConteudoV61(valor){
     return String(valor??'').replace(/\s+/g,' ').trim();
 }
 function quantidadeConteudoV61(valor){
     const n=Number(valor);return Number.isFinite(n)?Math.min(1000,Math.max(1,Math.floor(n))):1;
 }
-function expandirTitulosConfirmadosV61(payload,quantidade){
-    const total=quantidadeConteudoV61(quantidade),out=[],seen=new Set();
-    const add=valor=>{
-        let t=textoConteudoV61(valor);
-        if(t.length>60){const curto=t.slice(0,60);t=curto.includes(' ')?curto.slice(0,curto.lastIndexOf(' ')):curto;}
-        t=t.trim();if(t&&!seen.has(t.toLowerCase())){seen.add(t.toLowerCase());out.push(t);}
-    };
-    (payload.titulos_semente||payload.titulos||[]).slice(0,30).forEach(add);
-    const produto=textoConteudoV61(payload.produto_detectado||payload.produto||'');
-    add(produto);
-    // Varia somente a ordem dos termos fornecidos. N\u00e3o acrescenta propriedades
-    // como "recarreg\u00e1vel", "alta precis\u00e3o" ou "premium" a produtos desconhecidos.
-    const kws=(payload.keywords||[]).map(textoConteudoV61).filter(Boolean).slice(0,30);
-    for(const kw of kws){
-        if(out.length>=total)break;
-        if(produto&&!produto.toLowerCase().includes(kw.toLowerCase())){add(`${produto} ${kw}`);add(`${kw} ${produto}`);}
-    }
-    const palavras=produto.split(' ').filter(Boolean);
-    for(let i=1;i<Math.min(palavras.length,12)&&out.length<total;i++)add([...palavras.slice(i),...palavras.slice(0,i)].join(' '));
-    if(!out.length)return [];
-    const unicos=[...out];
-    while(out.length<total)out.push(unicos[out.length%unicos.length]);
-    return out.slice(0,total);
-}
+// V65: gera\u00e7\u00e3o exclusiva nas fun\u00e7\u00f5es compartilhadas abaixo.
 function termosUnicosV62(lista,limite=80){
     const itens=Array.isArray(lista)?lista:String(lista||'').split(/[,;\n]/);
     const out=[],seen=new Set();
@@ -11977,7 +12084,7 @@ function rascunhoConteudoV61(entrada){
     const detalhes=String(entrada.detalhes||'').trim();
     const agente=entrada.agente_contexto||{};
     const fatos=fatosConteudoV62(entrada);
-    const keywords=keywordsLocaisV62(entrada,fatos);
+    const keywords=termosUnicosV62([...(entrada.keywords_titulos||[]),...keywordsLocaisV62(entrada,fatos)],120);
     const partes=[];
     if(produto){
         partes.push(produto.toUpperCase());
@@ -11996,7 +12103,7 @@ function rascunhoConteudoV61(entrada){
     if(agente.notes)partes.push('INFORMA\u00c7\u00d5ES ADICIONAIS\n'+agente.notes);
     if(produto)partes.push('ORIENTA\u00c7\u00d5ES PARA A COMPRA\nConfira as imagens, as caracter\u00edsticas e a op\u00e7\u00e3o selecionada antes de finalizar o pedido. Quando houver varia\u00e7\u00f5es, escolha o tamanho, a cor ou o modelo correspondente ao produto desejado. Se precisar esclarecer algum detalhe que n\u00e3o esteja na ficha, utilize o campo de perguntas do an\u00fancio.');
     const payload={sucesso:true,produto_detectado:produto,resumo:'',keywords,descricao:partes.join('\n\n'),
-        image_prompt:'',categorias:[],origem:'rascunho_local',rascunho:true,modo_rapido:true};
+        image_prompt:'',categorias:atributosAutomaticosV65(entrada),origem:'rascunho_local',rascunho:true,modo_rapido:true};
     payload.titulos=expandirTitulosConfirmadosV61(payload,entrada.quantidade);
     payload.titulos_semente=[...new Set(payload.titulos)].slice(0,30);
     return payload;
@@ -12011,18 +12118,20 @@ function entradaConteudoV61(){
     const categorias=(criarEstadoV37.selectedCategories||[]).map(c=>({category_id:String(c.category_id),category_name:String(c.category_name||''),
         category_path:String(c.category_path||''),category_leaf_name:String(c.category_leaf_name||''),
         atributos:(c.atributos||[]).filter(a=>!a.read_only).map(a=>({id:String(a.id),name:String(a.name||a.id),value_type:a.value_type||'string',required:Boolean(a.required),value_max_length:a.value_max_length,
-            values:(a.values||[]).slice(0,8).map(v=>({id:v.id,name:v.name}))})),
+            values:(a.values||[]).slice(0,300).map(v=>({id:v.id,name:v.name}))})),
         values:Object.fromEntries(Object.entries(c.values||{}).sort(([a],[b])=>a.localeCompare(b)).map(([id,v])=>[id,{value_id:v.value_id||'',value_name:v.value_name??''}]))})).sort((a,b)=>a.category_id.localeCompare(b.category_id));
     const entrada={produto:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
         detalhes:String(document.getElementById('criar-detalhes-v37')?.value||'').trim(),
         quantidade:quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value),categorias,
         category_ids:categorias.map(c=>c.category_id),reference_images:[...(criarEstadoV37.referenceImages||[])].slice(0,1),
+        keywords_titulos:termosUnicosV62(document.getElementById('criar-keywords-v37')?.value||'',120),
+        variacao_ids:String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1'?[...(criarEstadoV37.variationAttributeIds||[])]:[],
         agente_id:String(document.getElementById('criar-agente-v62')?.value||'').trim(),
         agente_contexto:typeof contextoAgenteCriacaoV62==='function'?contextoAgenteCriacaoV62():null};
     const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
-        foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
+        keywords:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
     entrada.identity=hashConteudoV61(JSON.stringify(identidade));
-    entrada.cacheKey='mlhubpro_v63_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    entrada.cacheKey='mlhubpro_v65_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
     return entrada;
 }
 function camposConteudoV61(){
@@ -12041,7 +12150,7 @@ function aplicarConteudoRapidoV61(d,antes=null){
     }
     const urls=document.getElementById('criar-imagens-urls-v37');
     if(urls&&!urls.dataset.prompt&&d.image_prompt)urls.dataset.prompt=d.image_prompt;
-    renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();
+    renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();atualizarInformacaoTitulosV65();
 }
 function statusConteudoV61(texto,tipo='ok'){
     const st=document.getElementById('criar-validacao-v37');if(!st)return;
@@ -12085,7 +12194,7 @@ function lerCacheConteudoV45(key=chaveCacheConteudoV45()){
     }catch(e){return null;}
 }
 function chaveCacheKeywordsV45(){
-    return 'mlhubpro_v63_keywords_'+entradaConteudoV61().identity;
+    return 'mlhubpro_v65_keywords_'+entradaConteudoV61().identity;
 }
 function salvarCacheKeywordsV45(payload){
     try{localStorage.setItem(chaveCacheKeywordsV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
@@ -12154,7 +12263,7 @@ async function gerarConteudoCriacaoV37(){
     if(document.getElementById('criar-agente-v62')?.value && typeof contextoAgenteCriacaoV62==='function' && !contextoAgenteCriacaoV62()){
         await selecionarAgenteCriacaoV62();if(!contextoAgenteCriacaoV62())return;
     }
-    const entrada=entradaConteudoV61();
+    let entrada=entradaConteudoV61();
     if(!entrada.produto&&!entrada.reference_images.length)return alert('Informe o produto ou envie uma foto.');
     const atual=criarEstadoV37.conteudoRunV61;
     if(atual&&!atual.cancelled&&atual.identity===entrada.identity)return atual.promise;
@@ -12167,6 +12276,7 @@ async function gerarConteudoCriacaoV37(){
     // Aparece antes de qualquer rede/IA, sem bloquear a tela com o loading.
     const draft=rascunhoConteudoV61(entrada);
     aplicarConteudoRapidoV61(draft);
+    entrada=entradaConteudoV61();
     statusConteudoV61(entrada.produto?'Rascunho imediato pronto com os dados informados. A IA est\u00e1 completando o conte\u00fado em segundo plano.':'Analisando a foto com IA. Informe o nome do produto para ter um rascunho imediato.','aviso');
     const run={identity:entrada.identity,controller:new AbortController(),cancelled:false,campos:camposConteudoV61(),
         button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
@@ -12182,7 +12292,7 @@ async function gerarConteudoCriacaoV37(){
             const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
                 method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
                 body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,
-                    reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null,modo_rapido:true})
+                    reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null,keywords_titulos:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,modo_rapido:true})
             });
             const d=await r.json().catch(()=>({}));
             if(run.cancelled||criarEstadoV37.conteudoRunV61!==run)return;
@@ -12581,7 +12691,7 @@ function urlsManuaisFotosV47(){
 }
 
 function configCriacaoV37(){
-    const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(x=>x.slice(0,60));
+    const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
     const varEnabled=String(document.getElementById('criar-variacao-enabled-v37')?.value||'0')==='1';
     const varCount=Math.min(100,Math.max(1,Number(document.getElementById('criar-variacao-qtd-v37')?.value||1)));
     const rows=garantirLinhasVariacaoV53().slice(0,varCount).map((r,i)=>({
@@ -12759,6 +12869,7 @@ async function validarCriacaoV37(){
     if(!cfg.categories.length){out.textContent='Adicione pelo menos uma categoria.';out.className='text-[11px] text-red-400 mt-1';return false;}
     if(!cfg.titles.length){out.textContent='Gere ou informe pelo menos um t\u00edtulo.';out.className='text-[11px] text-red-400 mt-1';return false;}
     try{
+        validarTitulosUnicosV65(cfg);
         out.textContent='Validando os campos no Mercado Livre...'; out.className='text-[11px] text-yellow-400 mt-1';
         const r=await fetch(`${RENDER_URL}/api/v51/criar/validar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});
         const d=await r.json().catch(()=>({}));
@@ -13102,7 +13213,7 @@ function conferirContaAgentesV62(){
 async function apiAgenteV62(caminho,method='GET',body=null){
     const token=obterToken();if(!token)throw new Error('Conecte a conta Mercado Livre para usar os agentes.');
     const conta=conferirContaAgentesV62(),controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),method==='POST'&&caminho.endsWith('/chat')?25000:20000);
+    const timer=setTimeout(()=>controller.abort(),method==='POST'&&caminho.endsWith('/chat')?75000:20000);
     try{
         const r=await fetch(RENDER_URL+'/api/v62/agentes'+caminho,{method,
             headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
@@ -13185,6 +13296,75 @@ async function abrirAgenteProdutoV62(id){
     }catch(e){statusAgenteV62(e.message,'erro');}
 }
 
+/* V65 \u2014 consulta \u00e0s pesquisas acumuladas e gera\u00e7\u00e3o com as palavras-chave atuais. */
+function atualizarInformacaoTitulosV65(){
+    const el=document.getElementById('criar-titulos-info-v65');if(!el)return;
+    const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(textoConteudoV61).filter(Boolean);
+    const unicos=new Set(titles.map(chaveTextoV65)).size,q=quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value);
+    el.textContent=`${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
+    el.className='text-[11px] mt-2 '+(unicos>=q&&unicos===titles.length?'text-emerald-400':'text-yellow-400');
+}
+function preencherCaracteristicasV65(silencioso=false){
+    const entrada=entradaConteudoV61();let preenchidos=0;
+    entrada.categorias=entrada.categorias.map(c=>({...c,atributos:criarEstadoV37.selectedCategories.find(x=>x.category_id===c.category_id)?.atributos||c.atributos}));
+    for(const c of atributosAutomaticosV65(entrada)){
+        const cat=criarEstadoV37.selectedCategories.find(x=>x.category_id===c.category_id);if(!cat)continue;
+        cat.values=cat.values||{};
+        for(const a of c.suggested_attributes||[]){if(cat.values[a.id]?.value_name||cat.values[a.id]?.value_id)continue;cat.values[a.id]={value_name:a.value_name,value_id:a.value_id||''};preenchidos++;}
+    }
+    renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();
+    if(!silencioso)statusConteudoV61(`${preenchidos} caracter\u00edstica(s) preenchida(s) com os dados informados e revisados. Confira os campos antes de publicar.`);
+    return preenchidos;
+}
+function gerarTitulosKeywordsV65(){
+    cancelarConteudoV61();
+    const entrada=entradaConteudoV61();if(!entrada.produto)return alert('Informe o produto e as palavras-chave para gerar t\u00edtulos.');
+    const payload={produto_detectado:entrada.produto,keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...keywordsLocaisV62(entrada)],120),titulos_semente:entrada.agente_contexto?.title_ideas||[]};
+    const titles=expandirTitulosConfirmadosV61(payload,entrada.quantidade);
+    document.getElementById('criar-titulos-v37').value=titles.join('\n');
+    preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();
+    statusConteudoV61(titles.length===entrada.quantidade?`${titles.length} t\u00edtulos diferentes gerados com as palavras-chave atuais.`:`Foram gerados ${titles.length} t\u00edtulos \u00fanicos. Acrescente mais informa\u00e7\u00f5es e termos pertinentes para chegar a ${entrada.quantidade}.`,'aviso');
+}
+async function organizarFontesSalvasV65(){
+    if(agentesEstadoV62.busy||agentesEstadoV62.agente?.refreshing)return;
+    let a=agentesEstadoV62.agente;if(!a)return;
+    if(!a.id||agentesEstadoV62.dirty){a=await salvarAgenteProdutoV62(true);if(!a)return;}
+    agentesEstadoV62.busy=true;atualizarStatusAtualizacaoAgenteV62();
+    try{
+        const d=await apiAgenteV62('/'+a.id+'/organizar','POST',{});
+        agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);
+        statusAgenteV62('Organiza\u00e7\u00e3o por IA iniciada com as fontes salvas. Voc\u00ea pode continuar usando o painel.');
+        agendarPollAgenteV62(a.id,true);
+    }catch(e){statusAgenteV62(e.message,'erro');}
+    finally{agentesEstadoV62.busy=false;atualizarStatusAtualizacaoAgenteV62();}
+}
+async function consultarAcervoAgenteV65(pagina=1){
+    const a=agentesEstadoV62.agente;if(!a?.id){statusAgenteV62('Salve o agente para consultar seu acervo.');return;}
+    const box=elAgenteV62('agente-acervo-v65'),out=elAgenteV62('agente-acervo-resultados-v65');if(!box||!out)return;
+    box.open=true;
+    const request=(agentesEstadoV62.acervoRequest||0)+1;agentesEstadoV62.acervoRequest=request;
+    const params=new URLSearchParams({q:valorAgenteV62('agente-acervo-busca-v65'),tipo:valorAgenteV62('agente-acervo-tipo-v65'),pagina:String(Math.max(1,pagina)),todos:elAgenteV62('agente-acervo-todos-v65')?.checked?'1':'0'});
+    out.innerHTML='<p class="text-xs text-slate-400">Consultando informa\u00e7\u00f5es salvas...</p>';
+    try{
+        const d=await apiAgenteV62('/'+a.id+'/acervo?'+params);
+        if(agentesEstadoV62.agente?.id!==a.id||agentesEstadoV62.acervoRequest!==request)return;
+        agentesEstadoV62.acervoPagina=d.pagina;
+        const labels={fact:'Especifica\u00e7\u00e3o',keyword:'Palavra-chave',source:'Fonte consultada',title:'T\u00edtulo sugerido',summary:'Resumo da pesquisa',application:'Aplica\u00e7\u00e3o'};
+        const fontes=urls=>(urls||[]).map(u=>{const safe=urlFonteAgenteV62(u);return safe?`<a href="${textoEscapeV37(safe)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">Consultar fonte</a>`:'';}).join(' \u00b7 ');
+        const rows=(d.entradas||[]).map(e=>{
+            const p=e.payload||{},texto=e.entry_kind==='fact'?p.name+': '+p.value:e.entry_kind==='source'?[p.title,p.content].filter(Boolean).join('\n'):p.text||'';
+            const date=e.first_seen_at?new Date(e.first_seen_at).toLocaleString('pt-BR'):'';
+            return `<div class="border border-slate-700 rounded-xl p-3"><div class="text-[10px] font-bold text-yellow-400">${labels[e.entry_kind]||'Informa\u00e7\u00e3o'} \u00b7 Salvo em ${textoEscapeV37(date)}</div><div class="text-xs text-slate-200 whitespace-pre-wrap mt-2">${textoEscapeV37(texto)}</div><div class="text-[10px] mt-2">${fontes(p.url?[p.url]:p.sources||[])}</div></div>`;
+        }).join('');
+        const total=Number(d.total||0),pages=Math.max(1,Math.ceil(total/Number(d.por_pagina||40)));
+        elAgenteV62('agente-acervo-resumo-v65').textContent=`${total} registro(s) encontrado(s). `+(d.contagens||[]).map(c=>(labels[c.entry_kind]||c.entry_kind)+': '+Number(c.total)).join(' \u00b7 ');
+        out.innerHTML=rows||'<p class="text-xs text-slate-500">Nenhum registro encontrado. As pr\u00f3ximas pesquisas ser\u00e3o salvas aqui, sem duplica\u00e7\u00e3o.</p>';
+        elAgenteV62('agente-acervo-pagina-v65').textContent=`P\u00e1gina ${d.pagina} de ${pages}`;
+        elAgenteV62('agente-acervo-anterior-v65').disabled=d.pagina<=1;
+        elAgenteV62('agente-acervo-proximo-v65').disabled=d.pagina>=pages;
+    }catch(e){if(agentesEstadoV62.agente?.id===a.id)out.innerHTML=`<p class="text-xs text-red-300">${textoEscapeV37(e.message)}</p>`;}
+}
+
 function camposEditorAgenteV62(){
     return {'agente-nome-v62':'name','agente-produto-v62':'product','agente-marca-v62':'brand','agente-instrucoes-v62':'instructions',
         'agente-informacoes-v62':'information','agente-ficha-v62':'technical_sheet','agente-aplicacoes-v62':'applications',
@@ -13203,6 +13383,7 @@ function renderEditorAgenteV62(){
     elAgenteV62('agentes-editor-v62').classList.remove('hidden');
     elAgenteV62('agente-conhecimento-v62').classList.remove('hidden');
     elAgenteV62('agente-excluir-v62').disabled=!a.id;
+    const acervo=elAgenteV62('agente-acervo-v65');if(acervo){acervo.open=false;elAgenteV62('agente-acervo-resultados-v65').innerHTML='';elAgenteV62('agente-acervo-resumo-v65').textContent='';}
     agentesEstadoV62.dirty=false;agentesEstadoV62.organiza\u00e7\u00e3o=null;
     elAgenteV62('agente-aplicar-organizacao-v62').classList.add('hidden');
     elAgenteV62('agente-chat-mensagem-v62').value='';
@@ -13323,7 +13504,7 @@ async function pollAgenteV62(id){
         if(agentesEstadoV62.agente?.id!==id)return;
         agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);
         atualizarStatusAtualizacaoAgenteV62();renderPesquisaAgenteV62();
-        if(d.agente.refreshing&&++agentesEstadoV62.pollAttempts<40)agendarPollAgenteV62(id);
+        if(d.agente.refreshing&&++agentesEstadoV62.pollAttempts<50)agendarPollAgenteV62(id);
         else if(d.agente.refreshing)statusAgenteV62('A pesquisa continua no servidor. Reabra o agente para consultar o resultado.');
         else statusAgenteV62(d.agente.last_error||d.agente.knowledge?.warning||'Pesquisa conclu\u00edda. Revise as fontes e as especifica\u00e7\u00f5es antes de usar no an\u00fancio.',d.agente.last_error?'erro':'ok');
     }catch(e){statusAgenteV62(e.message,'erro');}
@@ -13423,6 +13604,7 @@ async function usarInformacoesAgenteCriacaoV62(){
         c.values=c.values||{};
         if(a.brand&&!c.values.BRAND?.value_name&&!c.values.BRAND?.value_id&&c.atributos?.some(d=>d.id==='BRAND'))setCategoriaMarcaV62(c.category_id,a.brand);
     }
+    preencherCaracteristicasV65(true);
     renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();
     elAgenteV62('criar-agente-info-v62').textContent='Informa\u00e7\u00f5es do agente aplicadas. Ajuste os detalhes desta vers\u00e3o e clique em gerar o conte\u00fado.';
 }
