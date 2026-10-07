@@ -2672,7 +2672,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
                     <div>
                         <label class="text-[9px] uppercase font-black text-sky-400">Código do guia de tamanho — SIZE_GRID_ID</label>
-                        <input id="criar-size-grid-id-v56" onchange="carregarGuiaTamanhoV57(true)" oninput="renderEditorVariacoesV53();renderPlanilhaPreviewV37()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 8988234">
+                        <input id="criar-size-grid-id-v56" onchange="carregarGuiaTamanhoV57(true)" oninput="atualizarCodigoGuiaV60()" class="w-full mt-2 bg-slate-950 border border-sky-500/30 rounded-lg px-3 py-2.5 text-xs text-white" placeholder="Ex.: 8988234">
                         <div class="text-[9px] text-slate-500 mt-1">Cole somente o código do guia. O painel busca as linhas do guia e associa automaticamente cada tamanho ao SIZE_GRID_ROW_ID correto.</div>
                     </div>
                     <button type="button" onclick="carregarGuiaTamanhoV57(false)" class="bg-sky-500 hover:bg-sky-400 text-slate-950 px-4 py-2.5 rounded-lg text-xs font-black">↻ Carregar tamanhos do guia</button>
@@ -11482,25 +11482,27 @@ function normalizarValorVariacaoV53(attrId,valor){
 
 function setVariacaoAtributoV53(index,attrId,value){
     garantirLinhasVariacaoV53();
-    const row=criarEstadoV37.variationRows[Number(index)];
-    if(!row)return;
+    const row=criarEstadoV37.variationRows[Number(index)];if(!row)return;
     row.attributes[String(attrId)]=normalizarValorVariacaoV53(attrId,value);
-    // V58: ao alterar Tamanho, refaz automaticamente a associação com a linha
-    // real do guia carregado. Nunca reaproveita um SIZE_GRID_ROW_ID incompatível.
-    if(/SIZE|TAMANHO/i.test(String(attrId||'')) && Array.isArray(criarEstadoV37.sizeGuideRowsV57) && criarEstadoV37.sizeGuideRowsV57.length){
+    if(/SIZE|TAMANHO/i.test(String(attrId||''))){
         const linha=acharLinhaGuiaV57(row);
-        row.size_grid_row_id=linha?.row_id?String(linha.row_id):'';
+        if(!aplicarTamanhoCanonicoGuiaV60(row,linha))row.size_grid_row_id='';
     }
-    renderEditorVariacoesV53();
+    // Mantém o foco enquanto o vendedor digita; redesenha ao concluir o campo.
     renderPlanilhaPreviewV37();
 }
 
 function setVariacaoCampoV53(index,campo,value){
     garantirLinhasVariacaoV53();
-    const row=criarEstadoV37.variationRows[Number(index)];
-    if(!row)return;
+    const row=criarEstadoV37.variationRows[Number(index)];if(!row)return;
     if(campo==='price'||campo==='stock')row[campo]=String(value||'').replace(',','.');
     else row[campo]=String(value||'').trim();
+    if(campo==='size_grid_row_id'){
+        const linha=(criarEstadoV37.sizeGuideRowsV57||[]).find(l=>String(l.row_id)===String(value));
+        if(linha)aplicarTamanhoCanonicoGuiaV60(row,linha);
+        else aplicarLinhasGuiaAutomaticamenteV57();
+        renderEditorVariacoesV53();
+    }
     renderPlanilhaPreviewV37();
 }
 
@@ -11537,65 +11539,107 @@ function tamanhoLinhaVariacaoV57(row){
     }
     return '';
 }
+function partesTamanhoGuiaV60(valor,attributeId=''){
+    let texto=String(valor??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
+      .replace(/\b(tamanho|tam\.?|numero|num\.?|size)\b/g,' ').replace(/brasil|\bbra\b/g,'br').replace(/,/g,'.');
+    const sistema=texto.match(/^(br|us|uk|eu|ar|mx|cl|co|pe)(?=\s|\d)|(?:\d|\s)(br|us|uk|eu|ar|mx|cl|co|pe)\s*$/i);
+    const sistemaId=String(attributeId).match(/(?:^|_)(BR|US|UK|EU|AR|MX|CL|CO|PE)_SIZE$/i);
+    const region=String(sistema?.[1]||sistema?.[2]||sistemaId?.[1]||'').toUpperCase();
+    const full=texto.replace(/\s+/g,'').replace(/\d+(?:\.\d+)?/g,n=>String(Number(n)));
+    if(sistema){
+        texto=texto.replace(/^(br|us|uk|eu|ar|mx|cl|co|pe)(?=\s|\d)|(?:br|us|uk|eu|ar|mx|cl|co|pe)\s*$/i,'');
+    }
+    const base=texto.replace(/\s+/g,'').replace(/\d+(?:\.\d+)?/g,n=>String(Number(n)));
+    return {full,base,region};
+}
+
+function pontuarTamanhoGuiaV60(tamanho,valores,mainAttributeId=''){
+    const alvo=partesTamanhoGuiaV60(tamanho);
+    if(!alvo.base)return 0;
+    let melhor=0;
+    for(const v of valores||[]){
+        const id=String(v?.attribute_id||'');
+        const parte=partesTamanhoGuiaV60(v?.value_name,id==='SIZE'?mainAttributeId:id);
+        if(alvo.region && parte.region && alvo.region!==parte.region)continue;
+        const prioridade=id==='SIZE'?15:id===mainAttributeId?10:0;
+        let score=0;
+        if(alvo.full===parte.full)score=100+prioridade;
+        else if(alvo.base===parte.base){
+            if(alvo.region)score=parte.region===alvo.region?90+prioridade:0;
+            else if(parte.region==='BR')score=80+prioridade;
+            else if(id==='SIZE'||id===mainAttributeId)score=70+prioridade;
+            else if(id!=='FILTRABLE_SIZE')score=50+prioridade;
+        }
+        melhor=Math.max(melhor,score);
+    }
+    return melhor;
+}
+
+
 function acharLinhaGuiaV57(row){
-    const alvo=normalizarTamanhoGuiaV57(tamanhoLinhaVariacaoV57(row));
-    if(!alvo.texto && !alvo.numeros.length)return null;
+    const tamanho=tamanhoLinhaVariacaoV57(row);
+    if(!tamanho)return null;
     const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
-    let exato=linhas.find(l=>{
-        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
-        return cands.some(c=>c.texto===alvo.texto && c.texto);
-    });
-    if(exato)return exato;
-    exato=linhas.find(l=>{
-        const cands=[l.label,...(l.sizes||[])].map(normalizarTamanhoGuiaV57);
-        return alvo.numeros.length && cands.some(c=>c.numeros.some(n=>alvo.numeros.includes(n)));
-    });
-    return exato||null;
+    const candidatas=linhas.map(l=>({linha:l,score:pontuarTamanhoGuiaV60(tamanho,l.size_values||[...(l.sizes||[])].map((v,i)=>({attribute_id:i===0?'SIZE':'',value_name:v})),String(l.main_attribute_id||''))}))
+      .filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+    if(!candidatas.length || (candidatas[1]&&candidatas[0].score===candidatas[1].score))return null;
+    return candidatas[0].linha;
+}
+
+function aplicarTamanhoCanonicoGuiaV60(row,linha){
+    if(!row||!linha?.row_id)return false;
+    row.size_grid_row_id=String(linha.row_id);
+    const size=linha.size_attribute;
+    if(size?.value_name){
+        row.attributes=row.attributes||{};
+        row.attributes.SIZE={value_name:String(size.value_name),...(size.value_id?{value_id:String(size.value_id)}:{})};
+    }
+    return true;
+}
+
+function atualizarCodigoGuiaV60(){
+    const gridId=String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim();
+    if(String(criarEstadoV37.sizeGuideIdV60||'')!==gridId){
+        criarEstadoV37.sizeGuideRowsV57=[];
+        criarEstadoV37.sizeGuideIdV60='';
+        (criarEstadoV37.variationRows||[]).forEach(r=>r.size_grid_row_id='');
+        const status=document.getElementById('criar-size-grid-status-v57');
+        if(status){status.textContent=gridId?'Carregue o guia para associar os tamanhos.':'Informe o código do guia para carregar os tamanhos.';status.className='text-[10px] text-slate-500 mt-3';}
+    }
+    renderEditorVariacoesV53();renderPlanilhaPreviewV37();
 }
 function aplicarLinhasGuiaAutomaticamenteV57(){
-    const rows=garantirLinhasVariacaoV53();
-    const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
-    const validos=new Set(linhas.map(l=>String(l?.row_id||'').trim()).filter(Boolean));
     let encontrados=0;
-    rows.forEach(row=>{
-        const l=acharLinhaGuiaV57(row);
-        if(l?.row_id){
-            row.size_grid_row_id=String(l.row_id);
-            encontrados++;
-            return;
-        }
-        // Se um ID técnico antigo/manual não pertence ao guia atual, limpa.
-        const atual=String(row.size_grid_row_id||'').trim();
-        if(atual && !validos.has(atual))row.size_grid_row_id='';
+    garantirLinhasVariacaoV53().forEach(row=>{
+        const linha=acharLinhaGuiaV57(row);
+        if(aplicarTamanhoCanonicoGuiaV60(row,linha))encontrados++;
+        else row.size_grid_row_id='';
     });
     return encontrados;
 }
 async function carregarGuiaTamanhoV57(silencioso=false){
     const gridId=String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim();
     const status=document.getElementById('criar-size-grid-status-v57');
-    if(!gridId){
-        criarEstadoV37.sizeGuideRowsV57=[];
-        if(status)status.textContent='Informe o código do guia para carregar os tamanhos.';
-        return;
-    }
+    const requestId=(criarEstadoV37.sizeGuideRequestV60||0)+1;
+    criarEstadoV37.sizeGuideRequestV60=requestId;
+    criarEstadoV37.sizeGuideRowsV57=[];criarEstadoV37.sizeGuideIdV60='';
+    if(!gridId){if(status)status.textContent='Informe o código do guia para carregar os tamanhos.';return;}
     const token=obterToken();
     if(!token){if(!silencioso)solicitarToken();return;}
     if(status){status.textContent='Consultando o guia de tamanhos no Mercado Livre...';status.className='text-[10px] text-sky-400 mt-3';}
     try{
-        const r=await fetch(`${RENDER_URL}/api/v57/criar/guia-tamanho/${encodeURIComponent(gridId)}`,{headers:{Authorization:token}});
+        const r=await fetch(`${RENDER_URL}/api/v57/criar/guia-tamanho/${encodeURIComponent(gridId)}`,{cache:'no-store',headers:{Authorization:token}});
         const d=await r.json().catch(()=>({}));
+        if(requestId!==criarEstadoV37.sizeGuideRequestV60 || gridId!==String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim())return;
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
         criarEstadoV37.sizeGuideRowsV57=Array.isArray(d.rows)?d.rows:[];
+        criarEstadoV37.sizeGuideIdV60=gridId;
         const achados=aplicarLinhasGuiaAutomaticamenteV57();
-        renderEditorVariacoesV53();
-        renderPlanilhaPreviewV37();
-        const total=criarEstadoV37.sizeGuideRowsV57.length;
-        if(status){
-            status.textContent=`Guia ${gridId} carregado: ${total} linha(s). ${achados} variação(ões) associada(s) automaticamente pelo tamanho.`;
-            status.className='text-[10px] text-emerald-400 mt-3';
-        }
+        renderEditorVariacoesV53();renderPlanilhaPreviewV37();
+        if(status){status.textContent=`Guia ${gridId} carregado: ${criarEstadoV37.sizeGuideRowsV57.length} linha(s). ${achados} variação(ões) associada(s) automaticamente pelo tamanho.`;status.className='text-[10px] text-emerald-400 mt-3';}
     }catch(e){
-        criarEstadoV37.sizeGuideRowsV57=[];
+        if(requestId!==criarEstadoV37.sizeGuideRequestV60)return;
+        criarEstadoV37.sizeGuideRowsV57=[];criarEstadoV37.sizeGuideIdV60='';
         if(status){status.textContent='Não foi possível carregar o guia: '+e.message;status.className='text-[10px] text-red-400 mt-3';}
         if(!silencioso)alert('Erro ao carregar guia de tamanhos: '+e.message);
     }
@@ -11636,7 +11680,7 @@ function renderEditorVariacoesV53(){
             const opts=(Array.isArray(a.values)?a.values:[]).slice(0,200);
             return `<div>
                 <label class="text-[9px] uppercase font-black ${a.child_pk?'text-emerald-400':'text-sky-400'}">${textoEscapeV37(a.name||id)}</label>
-                <input list="${listId}" value="${textoEscapeV37(current)}" oninput="setVariacaoAtributoV53(${i},'${textoEscapeV37(id)}',this.value)" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Preencha ${textoEscapeV37(a.name||id)}">
+                <input list="${listId}" value="${textoEscapeV37(current)}" oninput="setVariacaoAtributoV53(${i},'${textoEscapeV37(id)}',this.value)" onchange="renderEditorVariacoesV53()" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Preencha ${textoEscapeV37(a.name||id)}">
                 ${opts.length?`<datalist id="${listId}">${opts.map(v=>`<option value="${textoEscapeV37(v.name||v.id||'')}"></option>`).join('')}</datalist>`:''}
             </div>`;
         }).join('');
@@ -12353,10 +12397,9 @@ async function prepararGuiaTamanhoAntesValidarV58(){
 
     // Sempre consulta/valida o guia antes de validar/publicar. Assim um ID de linha
     // antigo ou digitado incorretamente nunca é enviado ao Mercado Livre.
-    if(!Array.isArray(criarEstadoV37.sizeGuideRowsV57) || !criarEstadoV37.sizeGuideRowsV57.length){
-        await carregarGuiaTamanhoV57(true);
-    }else{
-        aplicarLinhasGuiaAutomaticamenteV57();
+    await carregarGuiaTamanhoV57(true);
+    if(String(document.getElementById('criar-size-grid-id-v56')?.value||'').trim()!==gridId || criarEstadoV37.sizeGuideIdV60!==gridId){
+        throw new Error('O código do guia mudou durante a consulta. Carregue o guia atual e tente novamente.');
     }
 
     const linhas=Array.isArray(criarEstadoV37.sizeGuideRowsV57)?criarEstadoV37.sizeGuideRowsV57:[];
@@ -12367,7 +12410,7 @@ async function prepararGuiaTamanhoAntesValidarV58(){
     rows.forEach((row,i)=>{
         const tamanho=tamanhoLinhaVariacaoV57(row);
         const linha=acharLinhaGuiaV57(row);
-        if(linha?.row_id)row.size_grid_row_id=String(linha.row_id);
+        if(linha?.row_id)aplicarTamanhoCanonicoGuiaV60(row,linha);
         else faltando.push(`Variação ${i+1}${tamanho?` (tamanho ${tamanho})`:''}`);
     });
     renderEditorVariacoesV53();
@@ -12400,7 +12443,7 @@ async function validarCriacaoV37(){
             const falhas=(d.resultados||[]).filter(x=>!x.sucesso);
             const detalhes=falhas.map(x=>{
                 const lista=Array.isArray(x.detalhes)&&x.detalhes.length?x.detalhes.join(' / '):(x.erro||'Erro de validação');
-                return `${x.category_name||x.category_id}: ${lista}`;
+                return `${x.category_name||x.category_id}${cfg.variations.enabled&&criarEstadoV37.userProductSeller&&x.variation_index!=null?` · variação ${Number(x.variation_index)+1}`:''}: ${lista}`;
             }).join(' | ');
             const backendMsg=r.status===404 ? 'O SERVER V51 ainda não está ativo no Render. Publique o server V51 e tente novamente.' : (detalhes||d.erro||`HTTP ${r.status}`);
             out.textContent='Validação recusada: '+backendMsg;
@@ -12414,7 +12457,7 @@ async function validarCriacaoV37(){
         const dims=(d.resultados||[]).flatMap(x=>Array.isArray(x.dimensoes_pacote_auto)?x.dimensoes_pacote_auto:[]);
         const freteGratis=(d.resultados||[]).some(x=>x.shipping_free_shipping===true);
         const freteObrigatorio=(d.resultados||[]).some(x=>x.shipping_free_shipping_required===true);
-        out.textContent=`✓ Pronto para publicar no Mercado Livre${envios?' · Mercado Envios: '+envios:''}${logisticas?' · logística: '+logisticas:''}${freteGratis?' · frete grátis'+(freteObrigatorio?' obrigatório pelo Mercado Livre':''):''}${fotos?' · '+fotos:''}.`;
+        out.textContent=`✓ Pronto para publicar no Mercado Livre${cfg.variations.enabled?` · ${cfg.variations.rows.length} variação(ões) verificadas`:''}${envios?' · Mercado Envios: '+envios:''}${logisticas?' · logística: '+logisticas:''}${freteGratis?' · frete grátis'+(freteObrigatorio?' obrigatório pelo Mercado Livre':''):''}${fotos?' · '+fotos:''}.`;
         out.className='text-[11px] text-emerald-400 mt-1';
         return true;
     }catch(e){
