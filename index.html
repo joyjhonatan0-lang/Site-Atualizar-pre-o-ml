@@ -12106,7 +12106,7 @@ function entradaConteudoV61(){
     const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
         keywords:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
     entrada.identity=hashConteudoV61(JSON.stringify(identidade));
-    entrada.cacheKey='mlhubpro_v67_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    entrada.cacheKey='mlhubpro_v68_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
     return entrada;
 }
 function camposConteudoV61(){
@@ -12136,7 +12136,7 @@ function restaurarBotaoConteudoV61(run){
 }
 function cancelarConteudoV61(){
     const run=criarEstadoV37.conteudoRunV61;if(!run)return;
-    run.cancelled=true;run.controller.abort();clearTimeout(run.timer);restaurarBotaoConteudoV61(run);
+    run.cancelled=true;clearTimeout(run.previewTimerV68);for(const c of run.controllersV68||[])c.abort();run.controller.abort();clearTimeout(run.timer);restaurarBotaoConteudoV61(run);
     criarEstadoV37.conteudoRunV61=null;
 }
 function comSinalConteudoV61(promise,signal){
@@ -12154,7 +12154,7 @@ function salvarCacheConteudoV45(payload,key=chaveCacheConteudoV45()){
     try{
         localStorage.setItem(key,JSON.stringify({created_at:Date.now(),data:payload}));
         const keys=[];
-        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v67_conteudo_'))keys.push(k);}
+        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v68_conteudo_'))keys.push(k);}
         if(keys.length>20){
             keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).created_at-JSON.parse(localStorage.getItem(b)).created_at;}catch{return 0;}});
             keys.slice(0,keys.length-20).forEach(k=>localStorage.removeItem(k));
@@ -13222,7 +13222,7 @@ function atualizarInformacaoTitulosV65(){
     const el=document.getElementById('criar-titulos-info-v65');if(!el)return;
     const titles=String(document.getElementById('criar-titulos-v37')?.value||'').split(/\r?\n/).map(textoConteudoV61).filter(Boolean);
     const unicos=new Set(titles.map(assinaturaTituloV66)).size,q=quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value);
-    el.textContent=`V67 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
+    el.textContent=`V68 \u00b7 ${unicos} de ${q} t\u00edtulos \u00fanicos${titles.length!==unicos?' \u00b7 H\u00e1 t\u00edtulos repetidos: gere a lista novamente.':unicos<q?' \u00b7 Acrescente detalhes/palavras-chave ou ajuste a quantidade.':' \u00b7 Lista sem repeti\u00e7\u00f5es.'}`;
     el.className='text-[11px] mt-2 '+(unicos>=q&&unicos===titles.length?'text-emerald-400':'text-yellow-400');
 }
 function preencherCaracteristicasV65(silencioso=false){
@@ -13280,6 +13280,42 @@ async function consultarAcervoAgenteV65(pagina=1){
     }catch(e){if(agentesEstadoV62.agente?.id===a.id)out.innerHTML=`<p class="text-xs text-red-300">${textoEscapeV37(e.message)}</p>`;}
 }
 
+/* Tr\u00eas chamadas no m\u00e1ximo; compara\u00e7\u00e3o compartilhada entre todas as respostas. */
+async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso}){
+    let etapa=0,reservados=0,vazias=0,paralelo=3,falhas=0,tamanhoLote=80,recuperacoes=0;
+    const titles=[],seen=new Set(),erros=[];
+    const maxEtapas=Math.ceil(total/20)+12;
+    async function worker(){
+        while(ativo()&&titles.length<total&&etapa<maxEtapas&&vazias<5&&!falhas){
+            const restante=total-titles.length-reservados;
+            if(restante<=0)return;
+            const index=etapa++,quantidade=Math.min(index===0?20:tamanhoLote,restante);
+            reservados+=quantidade;
+            try{
+                const d=await request({quantidade,etapa:index,existentes:titles.slice()});
+                if(!ativo())return;
+                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V68.');
+                const antes=titles.length,limite=Math.min(60,Number(d.limite)||60);
+                for(const raw of Array.isArray(d.titulos)?d.titulos:[]){
+                    if(typeof raw!=='string')continue;
+                    const t=textoConteudoV61(raw),key=assinaturaTituloV66(t);
+                    if(!key||t.length<Math.min(50,limite)||t.length>limite||seen.has(key))continue;
+                    seen.add(key);titles.push(t);if(titles.length>=total)break;
+                }
+                vazias=titles.length===antes?vazias+1:0;
+                aceitar(titles.slice());progresso(titles.length,total);
+            }catch(e){if(ativo()){
+                const temporario=e.name==='AbortError'||e.status===504||e.status===502;
+                if(temporario&&recuperacoes<3){recuperacoes++;tamanhoLote=20;progresso(titles.length,total);}
+                else{erros.push(e);falhas++;}
+            }}finally{reservados-=quantidade;}
+        }
+    }
+    // Todos compartilham os t\u00edtulos aceitos; nunca contam duplicatas entre lotes.
+    await Promise.all(Array.from({length:paralelo},()=>worker()));
+    return {titulos:titles,erro:erros[0]||null};
+}
+
 async function gerarFluxoTitulosV67(somenteTitulos=false){
     const token=obterToken();if(!token){solicitarToken();return;}
     if(criarEstadoV37.conteudoRunV61&&!criarEstadoV37.conteudoRunV61.cancelled)return criarEstadoV37.conteudoRunV61.promise;
@@ -13292,7 +13328,7 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
     let conteudo=somenteTitulos?{keywords:entrada.keywords_titulos,produto_detectado:entrada.produto}:cached||rascunhoConteudoV61(entrada);
     if(!somenteTitulos)aplicarConteudoRapidoV61({...conteudo,titulos:[]});else field.value='';
     entrada=entradaConteudoV61();
-    const run={identity:entrada.identity,quantidade:entrada.quantidade,controller:new AbortController(),cancelled:false,campos:camposConteudoV61(),button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
+    const run={identity:entrada.identity,quantidade:entrada.quantidade,controller:new AbortController(),cancelled:false,controllersV68:new Set(),campos:camposConteudoV61(),button:document.querySelector('button[onclick="gerarConteudoCriacaoV37()"]')};
     if(run.button){run.buttonHTML=run.button.innerHTML;run.button.disabled=true;run.button.textContent='Gerando t\u00edtulos por IA...';}
     criarEstadoV37.conteudoRunV61=run;
     const atual=()=>!run.cancelled&&criarEstadoV37.conteudoRunV61===run&&entradaConteudoV61().identity===run.identity&&entradaConteudoV61().quantidade===run.quantidade&&(document.getElementById('titulo-base-ia-v67')?.value||'')===baseDigitada;
@@ -13300,53 +13336,62 @@ async function gerarFluxoTitulosV67(somenteTitulos=false){
     run.promise=(async()=>{
         try{
             if(!somenteTitulos&&!cached){
-                run.timer=setTimeout(()=>run.controller.abort(),8500);
-                try{
-                    const refs=await comSinalConteudoV61(referenciaRapidaConteudoV46(),run.controller.signal);
-                    const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
-                        body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null,keywords_titulos:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,apenas_conteudo:true,modo_rapido:true})});
-                    const d=await r.json();if(r.ok&&d.sucesso)conteudo=d;
-                }catch(e){if(run.cancelled)return;}finally{clearTimeout(run.timer);}
-                if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram durante a gera\u00e7\u00e3o. Gere novamente.','aviso');return;}
-                aplicarConteudoRapidoV61({...conteudo,titulos:[]},run.campos);
-                salvarCacheConteudoV45({...conteudo,titulos:[],titulos_semente:[]},entrada.cacheKey);
+                const completarConteudo=async()=>{
+                    const controller=new AbortController();run.controllersV68.add(controller);
+                    const timer=setTimeout(()=>controller.abort(),8500);
+                    try{
+                        const refs=await comSinalConteudoV61(referenciaRapidaConteudoV46(),controller.signal);
+                        const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
+                            body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,reference_images:refs,
+                                category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null,
+                                keywords_titulos:entrada.keywords_titulos,variacao_ids:entrada.variacao_ids,apenas_conteudo:true,modo_rapido:true})});
+                        const d=await r.json();return r.ok&&d.sucesso?d:null;
+                    }catch(e){return null;}finally{clearTimeout(timer);run.controllersV68.delete(controller);}
+                };
+                if(entrada.produto){
+                    // O nome j\u00e1 \u00e9 conhecido: descri\u00e7\u00e3o e t\u00edtulos come\u00e7am juntos.
+                    run.contentPromiseV68=completarConteudo();
+                }else{
+                    const d=await completarConteudo();if(d)conteudo=d;
+                    if(!atual())return;
+                    aplicarConteudoRapidoV61({...conteudo,titulos:[]},run.campos);
+                    salvarCacheConteudoV45({...conteudo,titulos:[],titulos_semente:[]},entrada.cacheKey);
+                }
             }
             entrada=entradaConteudoV61();run.identity=entrada.identity;
             if(!entrada.produto)throw new Error('Informe o nome do produto para a IA criar os t\u00edtulos.');
-            const titles=[],seen=new Set();let esperado=field.value,vazias=0,etapa=0;
-            const maxEtapas=Math.ceil(entrada.quantidade/40)+12;
-            while(titles.length<entrada.quantidade&&etapa<maxEtapas&&vazias<3){
-                if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram. Gere novamente para o produto atual.','aviso');return;}
-                if(field.value!==esperado){statusConteudoV61('Sua edi\u00e7\u00e3o foi preservada. A gera\u00e7\u00e3o foi interrompida.','aviso');return;}
-                run.controller=new AbortController();run.timer=setTimeout(()=>run.controller.abort(),60000);
-                statusConteudoV61(`IA criando t\u00edtulos: ${titles.length} de ${entrada.quantidade} prontos...`,'aviso');
-                const r=await fetch(`${RENDER_URL}/api/v67/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
-                    body:JSON.stringify({produto:entrada.produto,titulo_base:tituloBase||entrada.produto,detalhes:entrada.detalhes,
-                        quantidade:Math.min(40,entrada.quantidade-titles.length),etapa:etapa++,existentes:titles,
-                        category_ids:entrada.category_ids,agente_id:entrada.agente_id||null,
-                        keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],180)})});
-                const d=await r.json().catch(()=>({}));clearTimeout(run.timer);
-                if(!atual()){if(!run.cancelled)statusConteudoV61('Os dados mudaram durante a gera\u00e7\u00e3o. Gere novamente.','aviso');return;}
-                if(field.value!==esperado){statusConteudoV61('Sua edi\u00e7\u00e3o foi preservada. A gera\u00e7\u00e3o foi interrompida.','aviso');return;}
-                if(!r.ok||!d.sucesso)throw new Error(d.erro||'A IA n\u00e3o conseguiu criar os t\u00edtulos agora.');
-                if(d.origem!=='ia')throw new Error('Atualize o servidor para a V67 para gerar t\u00edtulos por IA.');
-                const antes=titles.length,limite=Math.min(60,Number(d.limite)||60);
-                for(const raw of d.titulos||[]){
-                    if(typeof raw!=='string')continue;
-                    const title=textoConteudoV61(raw),key=assinaturaTituloV66(title);
-                    if(!key||title.length<Math.min(50,limite)||title.length>limite||seen.has(key))continue;
-                    seen.add(key);titles.push(title);if(titles.length>=entrada.quantidade)break;
-                }
-                vazias=titles.length===antes?vazias+1:0;
-                esperado=titles.join('\n');field.value=esperado;
-                atualizarInformacaoTitulosV65();renderPlanilhaPreviewV37();
-                await new Promise(resolve=>setTimeout(resolve,0));
-            }
+            let esperado=field.value;
+            const valido=()=>atual()&&field.value===esperado;
+            const result=await executarLotesTitulosV68({total:entrada.quantidade,ativo:valido,
+                request:async lote=>{
+                    const controller=new AbortController();run.controllersV68.add(controller);
+                    const timer=setTimeout(()=>controller.abort(),55000);
+                    try{
+                        const r=await fetch(`${RENDER_URL}/api/v68/titulos/gerar`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
+                            body:JSON.stringify({produto:entrada.produto,titulo_base:tituloBase||entrada.produto,detalhes:entrada.detalhes,...lote,
+                                category_ids:entrada.category_ids,agente_id:entrada.agente_id||null,agente_version:entrada.agente_contexto?.version||0,
+                                keywords:termosUnicosV62([...(entrada.keywords_titulos||[]),...(conteudo.keywords||[])],180)})});
+                        const d=await r.json().catch(()=>({}));if(!r.ok||!d.sucesso){const e=new Error(d.erro||'A IA n\u00e3o conseguiu concluir esta etapa.');e.status=r.status;throw e;}return d;
+                    }finally{clearTimeout(timer);run.controllersV68.delete(controller);}
+                },
+                aceitar:titles=>{esperado=titles.join('\n');field.value=esperado;atualizarInformacaoTitulosV65();
+                    if(!run.previewTimerV68)run.previewTimerV68=setTimeout(()=>{run.previewTimerV68=null;if(atual())renderPlanilhaPreviewV37();},120);},
+                progresso:(n,q)=>statusConteudoV61(`IA criando t\u00edtulos em paralelo: ${n} de ${q} prontos...`,'aviso')});
+            if(!valido()){if(!run.cancelled)statusConteudoV61('Os dados ou os t\u00edtulos foram editados. A gera\u00e7\u00e3o foi interrompida e sua edi\u00e7\u00e3o foi preservada.','aviso');return;}
+            const titles=result.titulos;
+            if(result.erro){renderPlanilhaPreviewV37();throw result.erro;}
             preencherCaracteristicasV65(true);atualizarInformacaoTitulosV65();
             statusConteudoV61(titles.length===entrada.quantidade?`${titles.length} t\u00edtulos \u00fanicos criados pela IA. Revise antes de publicar.`:`A IA criou ${titles.length} de ${entrada.quantidade} t\u00edtulos \u00fanicos. Acrescente informa\u00e7\u00f5es ou ajuste a quantidade; nenhum repetido foi inclu\u00eddo.`,titles.length===entrada.quantidade?'ok':'aviso');
+            if(run.contentPromiseV68){
+                const d=await run.contentPromiseV68;
+                if(d&&atual()){
+                    aplicarConteudoRapidoV61({...d,titulos:field.value.split(/\r?\n/).filter(Boolean)},run.campos);
+                    salvarCacheConteudoV45({...d,titulos:[],titulos_semente:[]},entrada.cacheKey);
+                }
+            }
         }catch(e){
             if(!run.cancelled&&criarEstadoV37.conteudoRunV61===run)statusConteudoV61(e.name==='AbortError'?'A IA n\u00e3o concluiu esta etapa no prazo. Os t\u00edtulos j\u00e1 gerados foram mantidos.':e.message,'erro');
-        }finally{clearTimeout(run.timer);if(criarEstadoV37.conteudoRunV61===run){restaurarBotaoConteudoV61(run);criarEstadoV37.conteudoRunV61=null;}}
+        }finally{clearTimeout(run.timer);clearTimeout(run.previewTimerV68);for(const c of run.controllersV68)c.abort();if(criarEstadoV37.conteudoRunV61===run){restaurarBotaoConteudoV61(run);criarEstadoV37.conteudoRunV61=null;}}
     })();return run.promise;
 }
 
