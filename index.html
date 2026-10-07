@@ -819,6 +819,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <span>Criar anúncios em massa</span>
         </button>
 
+        <button class="painel-sidebar-v24-item" data-aba="agentes-produto" onclick="mudarAba('agentes-produto')">
+            <span class="painel-sidebar-v24-icone">✦</span>
+            <span>Agentes de produto</span>
+        </button>
+
         <button class="painel-sidebar-v24-item" data-aba="anuncios-restritos" onclick="mudarAba('anuncios-restritos')">
             <span class="painel-sidebar-v24-icone">◫</span>
             <span>Anúncios inativos / revisão</span>
@@ -2484,6 +2489,80 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 <!-- =====================================================
      V37 — CRIAR ANÚNCIOS EM MASSA COM FOTO / SEO / URLS
 ===================================================== -->
+<section id="secao-agentes-produto" class="hidden space-y-6">
+    <div class="hub-page-head">
+        <div>
+            <div class="hub-eyebrow">Conhecimento, pesquisa e conteúdo</div>
+            <h1 class="hub-title">Agentes de produto</h1>
+            <p class="hub-help">Crie uma base para cada produto. Acrescente informações, organize as ideias no chat e pesquise fontes para melhorar seus anúncios.</p>
+        </div>
+        <button onclick="novoAgenteProdutoV62()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs px-5 py-3 rounded-xl">＋ Novo agente</button>
+    </div>
+    <div id="agentes-status-v62" role="status" aria-live="polite" class="hub-info">Conecte sua conta para carregar os agentes.</div>
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-5">
+        <div class="panel rounded-2xl p-4">
+            <label for="agentes-busca-v62" class="hub-label">Buscar produto ou agente</label>
+            <input id="agentes-busca-v62" class="hub-input" placeholder="Nome, produto ou marca" oninput="renderListaAgentesV62()">
+            <div id="agentes-lista-v62" class="space-y-3 mt-4 max-h-[700px] overflow-y-auto"></div>
+        </div>
+        <div id="agentes-editor-v62" class="panel rounded-2xl p-5 xl:col-span-3 hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="hub-section-title">Base do produto</div>
+                    <div id="agente-salvo-v62" class="hub-section-help">Preencha os dados e salve para começar.</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button id="agente-salvar-v62" onclick="salvarAgenteProdutoV62()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl">Salvar agente</button>
+                    <button id="agente-pesquisar-v62" onclick="pesquisarProdutoAgenteV62()" class="bg-blue-500 hover:bg-blue-400 text-white font-black text-xs px-4 py-2.5 rounded-xl">⌕ Pesquisar na internet</button>
+                    <button onclick="anunciarComAgenteV62()" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl">Usar no anúncio</button>
+                    <button id="agente-excluir-v62" onclick="excluirAgenteProdutoV62()" class="border border-rose-800 text-rose-400 text-xs font-bold px-3 py-2.5 rounded-xl">Excluir</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                <div class="hub-field"><label for="agente-nome-v62">Nome do agente</label><input id="agente-nome-v62" class="hub-input" placeholder="Ex.: Especialista — Tênis Vicus branco"></div>
+                <div class="hub-field"><label for="agente-produto-v62">Produto específico / modelo</label><input id="agente-produto-v62" class="hub-input" placeholder="Tipo, marca, modelo e versão exatos"></div>
+                <div class="hub-field"><label for="agente-marca-v62">Marca (texto livre)</label><input id="agente-marca-v62" class="hub-input" placeholder="Digite a marca real do produto"></div>
+                <div class="hub-field"><label for="agente-instrucoes-v62">O que o agente deve priorizar?</label><textarea id="agente-instrucoes-v62" rows="2" class="hub-input" placeholder="Ex.: uso casual, características confirmadas, títulos claros e SEO"></textarea></div>
+                <div class="hub-field md:col-span-2"><label for="agente-informacoes-v62">Informações do produto</label><textarea id="agente-informacoes-v62" rows="4" class="hub-input" placeholder="Descrição real, público, acabamento e diferenciais que você conhece"></textarea></div>
+                <div class="hub-field"><label for="agente-ficha-v62">Ficha técnica</label><textarea id="agente-ficha-v62" rows="6" class="hub-input" placeholder="Material externo: couro&#10;Cor: branco&#10;Fechamento: cadarço&#10;Inclua somente informações corretas para este produto."></textarea></div>
+                <div class="hub-field"><label for="agente-aplicacoes-v62">Aplicações e formas de uso</label><textarea id="agente-aplicacoes-v62" rows="6" class="hub-input" placeholder="Uso indicado, contextos e compatibilidades confirmadas"></textarea></div>
+                <div class="hub-field md:col-span-2"><label for="agente-notas-v62">Mais informações / ideias livres</label><textarea id="agente-notas-v62" rows="4" class="hub-input" placeholder="Acrescente observações, perguntas e ideias. O chat pode ajudar a organizá-las."></textarea></div>
+                <div class="hub-field md:col-span-2"><label for="agente-keywords-v62">Suas palavras-chave</label><textarea id="agente-keywords-v62" rows="3" class="hub-input" placeholder="Separe por vírgula ou por linha"></textarea><p class="hub-tip">Os termos salvos serão combinados com as sugestões da pesquisa, até 80 palavras-chave relevantes.</p></div>
+                <div class="hub-field md:col-span-2"><label for="agente-links-v62">Sites e links preferidos para pesquisa</label><textarea id="agente-links-v62" rows="3" class="hub-input" placeholder="Um endereço por linha: fabricante, ficha técnica, Mercado Livre, Amazon ou outro site público"></textarea></div>
+            </div>
+            <div class="rounded-2xl border border-slate-700 bg-slate-950 p-4 mt-5">
+                <div class="flex flex-wrap items-center gap-4">
+                    <label class="flex items-center gap-2 text-xs font-bold text-white"><input id="agente-auto-v62" type="checkbox" class="w-4 h-4 accent-yellow-400">Atualizar este agente automaticamente</label>
+                    <label class="text-xs text-slate-400" for="agente-intervalo-v62">Frequência</label>
+                    <select id="agente-intervalo-v62" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"><option value="6">A cada 6 horas</option><option value="12">A cada 12 horas</option><option value="24" selected>Diariamente</option><option value="72">A cada 3 dias</option><option value="168">Semanalmente</option></select>
+                </div>
+                <p class="hub-tip">As atualizações pesquisam novas fontes e termos. A rotina funciona enquanto o servidor estiver ativo e a conta conectada; usa a mesma API de IA configurada no painel.</p>
+                <div id="agente-atualizacao-v62" class="text-[11px] text-slate-400 mt-3"></div>
+            </div>
+        </div>
+    </div>
+    <div id="agente-conhecimento-v62" class="hidden grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div class="panel rounded-2xl p-5">
+            <div class="hub-section-title">Pesquisa, SEO e ficha encontrada</div>
+            <div class="hub-section-help">Revise as especificações pesquisadas e marque quais correspondem ao seu produto. Depois, salve o agente.</div>
+            <div id="agente-pesquisa-v62" class="mt-4 space-y-4"></div>
+        </div>
+        <div class="panel rounded-2xl p-5">
+            <div class="hub-section-title">Chat para organizar as ideias</div>
+            <div class="hub-section-help">Peça para organizar a ficha, acrescentar informações ou sugerir uma abordagem para o anúncio.</div>
+            <div id="agente-chat-historico-v62" class="space-y-3 mt-4 max-h-[560px] overflow-y-auto" aria-live="polite"></div>
+            <label for="agente-chat-mensagem-v62" class="hub-label mt-4">Sua mensagem</label>
+            <textarea id="agente-chat-mensagem-v62" rows="3" class="hub-input" placeholder="Ex.: Organize tudo que preenchi em ficha técnica, aplicações e diferenciais confirmados."></textarea>
+            <div class="flex flex-wrap gap-2 mt-3">
+                <button id="agente-chat-enviar-v62" onclick="enviarChatAgenteV62()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">Enviar ao agente</button>
+                <button onclick="organizarIdeiasAgenteV62()" class="border border-slate-700 text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl">Organizar minhas informações</button>
+                <button id="agente-aplicar-organizacao-v62" onclick="aplicarOrganizacaoAgenteV62()" class="hidden bg-yellow-400 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">Aplicar organização aos campos</button>
+            </div>
+            <p class="hub-tip">A organização aparece primeiro no chat. Use “Aplicar organização” para preencher os campos e salve quando terminar.</p>
+        </div>
+    </div>
+</section>
+
 <section id="secao-criar-massa" class="hidden space-y-6">
 
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
@@ -2505,6 +2584,16 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="text-[11px] text-slate-500 mt-1">A imagem enviada será usada para analisar o produto, sugerir SEO e gerar o pacote com 11 fotos do anúncio.</div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                <div class="md:col-span-2 rounded-xl border border-blue-900 bg-blue-950/20 p-4">
+                    <label for="criar-agente-busca-v62" class="text-[10px] font-black uppercase tracking-[.1em] text-blue-400">Agente / base deste produto (opcional)</label>
+                    <input id="criar-agente-busca-v62" class="hub-input mt-2" placeholder="Digite o produto para encontrar um agente salvo" oninput="renderSelecaoAgenteCriacaoV62()">
+                    <select id="criar-agente-v62" onchange="selecionarAgenteCriacaoV62()" class="hub-input mt-2"><option value="">Gerar com os dados preenchidos abaixo</option></select>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <button onclick="usarInformacoesAgenteCriacaoV62()" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Usar informações do agente</button>
+                        <button onclick="mudarAba('agentes-produto')" class="border border-slate-700 text-slate-300 text-xs font-bold px-3 py-2 rounded-lg">Gerenciar agentes</button>
+                    </div>
+                    <p id="criar-agente-info-v62" class="text-[11px] text-slate-400 mt-3">Escolha um agente para usar a ficha técnica, as informações revisadas e as palavras-chave salvas.</p>
+                </div>
                 <div class="md:col-span-2">
                     <label class="text-[10px] font-black uppercase tracking-[.1em] text-slate-500">Produto base</label>
                     <input id="criar-produto-v37" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white" placeholder="Ex.: Tênis casual branco solado reforçado">
@@ -2620,11 +2709,12 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div class="col-span-2">
                     <label class="text-[9px] font-bold uppercase text-slate-500">Palavras-chave</label>
-                    <textarea id="criar-keywords-v37" rows="4" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="Clique no botão abaixo para a IA pesquisar e sugerir as palavras-chave."></textarea>
+                    <textarea id="criar-keywords-v37" rows="6" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white" placeholder="Clique no botão abaixo para a IA pesquisar e sugerir as palavras-chave."></textarea>
                     <div class="flex flex-wrap items-center gap-2 mt-3">
                         <button onclick="gerarKeywordsV38()" class="bg-sky-600 hover:bg-sky-500 text-white font-black text-[11px] px-4 py-2 rounded-xl">🔎 Buscar palavras-chave com IA</button>
                         <span id="criar-keywords-status-v38" class="text-[10px] text-slate-500">Busca focada em SEO e intenção de compra. Pesquisa Web é opcional no servidor.</span>
                     </div>
+                    <div id="criar-keywords-fontes-v62" class="text-[10px] mt-3"></div>
                 </div>
             </div>
         </div>
@@ -4426,6 +4516,7 @@ function mudarAba(aba) {
         'pedidos',
         'reclamacoes',
         'criar-massa',
+        'agentes-produto',
         'anuncios-restritos',
         'integracoes',
         'oportunidades',
@@ -4492,6 +4583,7 @@ function mudarAba(aba) {
     if (aba === 'central' && typeof carregarCentralPro === 'function') carregarCentralPro();
     if (aba === 'reclamacoes' && typeof carregarReclamacoesPro === 'function') carregarReclamacoesPro();
     if (aba === 'criar-massa' && typeof carregarCriacaoMassaV36 === 'function') carregarCriacaoMassaV36();
+    if ((aba === 'agentes-produto' || aba === 'criar-massa') && typeof carregarAgentesProdutoV62 === 'function') carregarAgentesProdutoV62(aba === 'agentes-produto');
     if (aba === 'integracoes' && typeof carregarIntegracoesPro === 'function') carregarIntegracoesPro();
     if (aba === 'oportunidades' && typeof carregarOportunidades === 'function') carregarOportunidades();
     if (aba === 'operacao' && typeof carregarOperacaoV2 === 'function') carregarOperacaoV2(1);
@@ -10190,7 +10282,7 @@ async function salvarBaseSkuV27(){
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
     const destino=String(aba);
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','anuncios-restritos'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos'];
 
     document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
     document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
@@ -10217,7 +10309,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
     hidratarBaseSkuCacheV42().catch(e=>console.warn('[BASE SKU START V42]',e));
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','anuncios-restritos'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos'];
 
     document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
     document.body.classList.toggle('configuracoes-isolado-v24',abaInicial==='configuracoes');
@@ -11351,6 +11443,15 @@ function renderCategoriasSelecionadasV37(){
                     const isAlfanumerico=String(a.id||'').toUpperCase()==='ALPHANUMERIC_MODEL';
                     const isNA=String(current.value_id||'')==='-1';
                     const naHtml=isAlfanumerico && !a.required ? `<label class="mt-2 flex items-center gap-2 text-[10px] text-slate-300 cursor-pointer"><input type="checkbox" ${isNA?'checked':''} onchange="setCategoriaNaoAplicaV52('${textoEscapeV37(c.category_id)}','${textoEscapeV37(a.id)}',this.checked)" class="w-4 h-4 accent-yellow-400"> Não se aplica</label>` : '';
+                    if(String(a.id).toUpperCase()==='BRAND'){
+                        const listId='marcas-v62-'+String(c.category_id).replace(/[^a-z0-9-]/ig,'');
+                        return `<div>
+                            <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||'Marca')}${badge}</label>
+                            <input value="${textoEscapeV37(current.value_name||'')}" list="${listId}" oninput="setCategoriaMarcaV62('${textoEscapeV37(c.category_id)}',this.value)" maxlength="${Number(a.value_max_length)>0?Number(a.value_max_length):120}" class="w-full mt-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" placeholder="Selecione ou digite a marca real">
+                            <datalist id="${listId}">${(a.values||[]).slice(0,300).map(v=>`<option value="${textoEscapeV37(v.name||'')}"></option>`).join('')}</datalist>
+                            <div class="text-[10px] text-slate-500 mt-1">Você pode escrever uma marca que não aparece nas sugestões.</div>
+                        </div>`;
+                    }
                     if(Array.isArray(a.values)&&a.values.length){
                         return `<div>
                             <label class="text-[9px] uppercase font-black ${labelClass}">${textoEscapeV37(a.name||a.id)}${badge}</label>
@@ -11785,27 +11886,92 @@ function expandirTitulosConfirmadosV61(payload,quantidade){
     while(out.length<total)out.push(unicos[out.length%unicos.length]);
     return out.slice(0,total);
 }
-function rascunhoConteudoV61(entrada){
-    const produto=textoConteudoV61(entrada.produto);
-    const detalhes=String(entrada.detalhes||'').trim();
-    const categorias=Array.isArray(entrada.categorias)?entrada.categorias:[];
-    const linhas=[],seen=new Set();
-    for(const cat of categorias){
-        const defs=new Map((cat.atributos||[]).map(a=>[String(a.id),a]));
-        for(const [id,v] of Object.entries(cat.values||{})){
-            if(String(v?.value_id||'')==='-1')continue;
-            const valor=textoConteudoV61(v?.value_name||'');
-            if(!valor||/^(SIZE_GRID_|SELLER_|GTIN|EAN|UPC)/.test(id))continue;
-            const linha=`${defs.get(id)?.name||id}: ${valor}`;
-            if(!seen.has(linha)){seen.add(linha);linhas.push(linha);}
+function termosUnicosV62(lista,limite=80){
+    const itens=Array.isArray(lista)?lista:String(lista||'').split(/[,;\n]/);
+    const out=[],seen=new Set();
+    for(const item of itens){
+        const termo=textoConteudoV61(item).slice(0,120);
+        const key=termo.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        if(termo.length>1&&!seen.has(key)){seen.add(key);out.push(termo);}
+        if(out.length>=limite)break;
+    }
+    return out;
+}
+
+function fatosConteudoV62(entrada){
+    const out=[],seen=new Set();
+    const add=(nome,valor)=>{
+        nome=textoConteudoV61(nome);valor=textoConteudoV61(valor);
+        if(!valor||valor==='-1'||!nome)return;
+        const key=(nome+':'+valor).toLowerCase();
+        if(!seen.has(key)){seen.add(key);out.push({name:nome,value:valor});}
+    };
+    // Características do anúncio têm precedência sobre a base do agente.
+    for(const c of entrada.categorias||[]){
+        const defs=new Map((c.atributos||[]).map(a=>[String(a.id),a]));
+        for(const [id,v] of Object.entries(c.values||{})){
+            if(String(v?.value_id||'')==='-1'||/^(SIZE_GRID_|SELLER_|GTIN|EAN|UPC)/.test(id))continue;
+            add(defs.get(id)?.name||id,v?.value_name);
         }
     }
-    const palavras=produto.split(' ').filter(p=>p.length>2);
-    const keywords=[...new Set([produto,...palavras,...palavras.slice(0,-1).map((p,i)=>`${p} ${palavras[i+1]}`)].filter(Boolean))].slice(0,30);
-    const partes=produto?[produto]:[];
-    if(detalhes)partes.push('Detalhes do produto\n'+detalhes);
-    if(linhas.length)partes.push('Características informadas\n'+linhas.join('\n'));
-    if(produto)partes.push('Confira as características e as opções selecionadas antes de concluir a compra.');
+    const agente=entrada.agente_contexto||{};
+    if(agente.brand&&!out.some(f=>/^(marca|brand)$/i.test(f.name)))add('Marca',agente.brand);
+    for(const f of agente.approved_facts||[]){
+        if(!out.some(x=>x.name.toLowerCase()===String(f.name||'').toLowerCase()))add(f.name,f.value);
+    }
+    return out.slice(0,80);
+}
+
+function baseConfirmadaAgenteV62(agente){
+    if(!agente)return '';
+    return [agente.brand?'Marca: '+agente.brand:'',agente.information||'',
+        agente.technical_sheet?'Ficha técnica informada:\n'+agente.technical_sheet:'',
+        agente.applications?'Aplicações informadas:\n'+agente.applications:'',
+        agente.notes?'Informações adicionais:\n'+agente.notes:'',
+        (agente.approved_facts||[]).length?'Informações revisadas:\n'+agente.approved_facts.map(f=>f.name+': '+f.value).join('\n'):''].filter(Boolean).join('\n\n');
+}
+
+function keywordsLocaisV62(entrada,fatos=fatosConteudoV62(entrada)){
+    const nome=textoConteudoV61(entrada.produto||entrada.agente_contexto?.product);
+    const palavras=nome.split(' ').filter(p=>p.length>2&&!/^(com|para|por|dos|das|uma|sem)$/i.test(p));
+    const nucleo=palavras[0]||'';
+    const lista=[nome,...(entrada.agente_contexto?.keywords||[]),...palavras];
+    for(let i=0;i<palavras.length;i++){
+        for(let n=2;n<=4&&i+n<=palavras.length;n++)lista.push(palavras.slice(i,i+n).join(' '));
+        if(i>0&&nucleo)lista.push(nucleo+' '+palavras[i]);
+    }
+    for(const f of fatos){
+        if(!nucleo||/^(modelo|model|tamanho|size|largura)/i.test(f.name))continue;
+        lista.push(nucleo+' '+f.value);
+        if(palavras.length>1)lista.push(palavras.slice(0,2).join(' ')+' '+f.value);
+    }
+    // Expressões de busca usam apenas informações confirmadas; não fabricam volumes.
+    return termosUnicosV62(lista,80);
+}
+
+function rascunhoConteudoV61(entrada){
+    const produto=textoConteudoV61(entrada.produto||entrada.agente_contexto?.product);
+    const detalhes=String(entrada.detalhes||'').trim();
+    const agente=entrada.agente_contexto||{};
+    const fatos=fatosConteudoV62(entrada);
+    const keywords=keywordsLocaisV62(entrada,fatos);
+    const partes=[];
+    if(produto){
+        partes.push(produto.toUpperCase());
+        const destaque=fatos.filter(f=>!/^(tamanho|size|modelo|model)$/i.test(f.name)).slice(0,4).map(f=>f.name.toLowerCase()+': '+f.value).join('; ');
+        partes.push('Conheça '+produto+'. '+(destaque?'A versão apresentada reúne as seguintes características: '+destaque+'. ':'')+
+            'A seguir, consulte os detalhes do produto para escolher a opção adequada ao que você procura.');
+    }
+    const informacoes=[...new Set([detalhes,String(agente.information||'').trim()].filter(Boolean))];
+    if(informacoes.length)partes.push('SOBRE O PRODUTO\n'+informacoes.join('\n\n'));
+    const ficha=[agente.technical_sheet||'',...fatos.map(f=>f.name+': '+f.value)].filter(Boolean);
+    if(ficha.length)partes.push('CARACTERÍSTICAS E FICHA TÉCNICA\n'+ficha.join('\n'));
+    if(agente.applications)partes.push('APLICAÇÕES E FORMAS DE USO\n'+agente.applications);
+    else if(/t[eê]nis/i.test(produto)&&/casual/i.test(produto)){
+        partes.push('ESTILO E COMBINAÇÕES\nO estilo casual permite compor o visual com peças do dia a dia. Observe a cor, o modelo e as opções de numeração do anúncio para escolher a combinação que você deseja.');
+    }
+    if(agente.notes)partes.push('INFORMAÇÕES ADICIONAIS\n'+agente.notes);
+    if(produto)partes.push('ORIENTAÇÕES PARA A COMPRA\nConfira as imagens, as características e a opção selecionada antes de finalizar o pedido. Quando houver variações, escolha o tamanho, a cor ou o modelo correspondente ao produto desejado. Se precisar esclarecer algum detalhe que não esteja na ficha, utilize o campo de perguntas do anúncio.');
     const payload={sucesso:true,produto_detectado:produto,resumo:'',keywords,descricao:partes.join('\n\n'),
         image_prompt:'',categorias:[],origem:'rascunho_local',rascunho:true,modo_rapido:true};
     payload.titulos=expandirTitulosConfirmadosV61(payload,entrada.quantidade);
@@ -11827,11 +11993,13 @@ function entradaConteudoV61(){
     const entrada={produto:String(document.getElementById('criar-produto-v37')?.value||'').trim(),
         detalhes:String(document.getElementById('criar-detalhes-v37')?.value||'').trim(),
         quantidade:quantidadeConteudoV61(document.getElementById('criar-qtd-v37')?.value),categorias,
-        category_ids:categorias.map(c=>c.category_id),reference_images:[...(criarEstadoV37.referenceImages||[])].slice(0,1)};
+        category_ids:categorias.map(c=>c.category_id),reference_images:[...(criarEstadoV37.referenceImages||[])].slice(0,1),
+        agente_id:String(document.getElementById('criar-agente-v62')?.value||'').trim(),
+        agente_contexto:typeof contextoAgenteCriacaoV62==='function'?contextoAgenteCriacaoV62():null};
     const identidade={produto:entrada.produto,detalhes:entrada.detalhes,categories:entrada.category_ids,values:categorias.map(c=>[c.category_id,c.values]),
-        foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken())};
+        foto:entrada.reference_images.map(hashConteudoV61),conta:hashConteudoV61(obterToken()),agente:entrada.agente_contexto,agente_id:entrada.agente_id};
     entrada.identity=hashConteudoV61(JSON.stringify(identidade));
-    entrada.cacheKey='mlhubpro_v61_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
+    entrada.cacheKey='mlhubpro_v62_conteudo_'+hashConteudoV61(JSON.stringify({...identidade,values:categorias.map(c=>[c.category_id,c.values])}));
     return entrada;
 }
 function camposConteudoV61(){
@@ -11879,7 +12047,7 @@ function salvarCacheConteudoV45(payload,key=chaveCacheConteudoV45()){
     try{
         localStorage.setItem(key,JSON.stringify({created_at:Date.now(),data:payload}));
         const keys=[];
-        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v61_conteudo_'))keys.push(k);}
+        for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('mlhubpro_v62_conteudo_'))keys.push(k);}
         if(keys.length>20){
             keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).created_at-JSON.parse(localStorage.getItem(b)).created_at;}catch{return 0;}});
             keys.slice(0,keys.length-20).forEach(k=>localStorage.removeItem(k));
@@ -11894,10 +12062,7 @@ function lerCacheConteudoV45(key=chaveCacheConteudoV45()){
     }catch(e){return null;}
 }
 function chaveCacheKeywordsV45(){
-    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
-    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    const categoryIds=(criarEstadoV37.selectedCategories||[]).map(c=>c.category_id).sort();
-    return 'mlhubpro_v45_keywords_'+btoa(unescape(encodeURIComponent(JSON.stringify({produto,detalhes,categoryIds})))).slice(0,300);
+    return 'mlhubpro_v62_keywords_'+entradaConteudoV61().identity;
 }
 function salvarCacheKeywordsV45(payload){
     try{localStorage.setItem(chaveCacheKeywordsV45(),JSON.stringify({created_at:Date.now(),data:payload}));}catch(e){}
@@ -11963,6 +12128,9 @@ async function referenciaRapidaConteudoV46(){
 
 async function gerarConteudoCriacaoV37(){
     const token=obterToken();if(!token){solicitarToken();return;}
+    if(document.getElementById('criar-agente-v62')?.value && typeof contextoAgenteCriacaoV62==='function' && !contextoAgenteCriacaoV62()){
+        await selecionarAgenteCriacaoV62();if(!contextoAgenteCriacaoV62())return;
+    }
     const entrada=entradaConteudoV61();
     if(!entrada.produto&&!entrada.reference_images.length)return alert('Informe o produto ou envie uma foto.');
     const atual=criarEstadoV37.conteudoRunV61;
@@ -11991,7 +12159,7 @@ async function gerarConteudoCriacaoV37(){
             const r=await fetch(`${RENDER_URL}/api/v37/criar/ia/analisar-produto`,{
                 method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
                 body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,quantidade:entrada.quantidade,
-                    reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,modo_rapido:true})
+                    reference_images:refs,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null,modo_rapido:true})
             });
             const d=await r.json().catch(()=>({}));
             if(run.cancelled||criarEstadoV37.conteudoRunV61!==run)return;
@@ -12015,39 +12183,49 @@ async function gerarConteudoCriacaoV37(){
     return run.promise;
 }
 
+function cancelarKeywordsV62(){
+    const run=criarEstadoV37.keywordsRunV62;
+    if(!run)return;
+    run.controller.abort();
+    criarEstadoV37.keywordsRunV62=null;
+}
+
+function renderFontesKeywordsV62(d){
+    const el=document.getElementById('criar-keywords-fontes-v62');if(!el)return;
+    el.innerHTML=(d.sources||[]).map(s=>{const u=urlFonteAgenteV62(s.url);return u?`<a href="${textoEscapeV37(u)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline mr-3">${textoEscapeV37(s.title||'Fonte consultada')}</a>`:'';}).join('');
+    renderSugestoesGoogleV62(el,d.search_suggestions||'');
+}
+
 async function gerarKeywordsV38(){
-    const token=obterToken();
-    if(!token){solicitarToken();return}
-    const produto=String(document.getElementById('criar-produto-v37')?.value||'').trim();
-    const detalhes=String(document.getElementById('criar-detalhes-v37')?.value||'').trim();
-    if(!produto&&!detalhes)return alert('Informe o produto ou os detalhes para pesquisar palavras-chave.');
-    const status=document.getElementById('criar-keywords-status-v38');
+    const token=obterToken();if(!token){solicitarToken();return;}
+    const entrada=entradaConteudoV61();
+    if(!entrada.produto&&!entrada.detalhes)return alert('Informe o produto ou os detalhes para gerar palavras-chave.');
+    const status=document.getElementById('criar-keywords-status-v38'),campo=document.getElementById('criar-keywords-v37');
     const cached=lerCacheKeywordsV45();
-    if(cached){
-        document.getElementById('criar-keywords-v37').value=(cached.keywords||[]).join(', ');
-        if(status){status.textContent='✓ Palavras-chave carregadas do cache local.';status.className='text-[10px] text-emerald-400';}
-        return;
-    }
-    if(status){status.textContent='Pesquisando termos de compra e SEO...';status.className='text-[10px] text-yellow-400';}
-    mostrarLoading('Pesquisando palavras-chave e termos de compra...');
+    if(cached){campo.value=(cached.keywords||[]).join(', ');renderFontesKeywordsV62(cached);if(status)status.textContent=`${cached.keywords?.length||0} palavras-chave carregadas da última geração.`;return;}
+    if(criarEstadoV37.keywordsRunV62?.identity===entrada.identity)return;
+    cancelarKeywordsV62();
+    campo.value=termosUnicosV62([...termosUnicosV62(campo.value),...keywordsLocaisV62(entrada)],80).join(', ');
+    const run={identity:entrada.identity,controller:new AbortController(),antes:campo.value};
+    criarEstadoV37.keywordsRunV62=run;
+    const botao=document.querySelector('button[onclick="gerarKeywordsV38()"]');
+    if(botao)botao.disabled=true;
+    if(status){status.textContent='Termos da base disponíveis. A IA está ampliando as sugestões em segundo plano...';status.className='text-[10px] text-yellow-400';}
+    const timer=setTimeout(()=>run.controller.abort(),55000);
     try{
-        const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/keywords`,{
-            method:'POST',
-            headers:{Authorization:token,'Content-Type':'application/json'},
-            body:JSON.stringify({produto,detalhes,category_ids:criarEstadoV37.selectedCategories.map(c=>c.category_id)})
-        });
+        const r=await fetch(`${RENDER_URL}/api/v38/criar/ia/keywords`,{method:'POST',
+            headers:{Authorization:token,'Content-Type':'application/json'},signal:run.controller.signal,
+            body:JSON.stringify({produto:entrada.produto,detalhes:entrada.detalhes,category_ids:entrada.category_ids,categorias:entrada.categorias,agente_id:entrada.agente_id||null})});
         const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-        document.getElementById('criar-keywords-v37').value=(d.keywords||[]).join(', ');
-        salvarCacheKeywordsV45(d);
-        if(status){
-            status.textContent=d.pesquisa_web?`✓ Palavras-chave pesquisadas na Web com IA (${d.fonte||'Google Search'}).`:`✓ Palavras-chave geradas pela IA.`;
-            status.className='text-[10px] text-emerald-400';
-        }
+        if(criarEstadoV37.keywordsRunV62!==run||entradaConteudoV61().identity!==run.identity)return;
+        if(!r.ok||!d.sucesso)throw new Error(d.erro||'Não foi possível gerar as palavras-chave.');
+        if(campo.value===run.antes)campo.value=termosUnicosV62(d.keywords||[],80).join(', ');
+        salvarCacheKeywordsV45(d);renderFontesKeywordsV62(d);
+        if(status){status.textContent=`${d.keywords?.length||0} palavras-chave ${d.pesquisa_web?'pesquisadas com fontes na internet':'geradas com os dados confirmados'}. Suas edições foram preservadas.`;status.className='text-[10px] text-emerald-400';}
     }catch(e){
-        if(status){status.textContent='Não foi possível buscar as palavras-chave agora.';status.className='text-[10px] text-red-400';}
-        alert('Erro ao buscar palavras-chave: '+e.message);
-    }finally{esconderLoading();}
+        if(criarEstadoV37.keywordsRunV62!==run||entradaConteudoV61().identity!==run.identity)return;
+        if(status){status.textContent='Os termos da base foram mantidos. '+(e.name==='AbortError'?'A pesquisa não concluiu no prazo; tente novamente.':e.message);status.className='text-[10px] text-yellow-400';}
+    }finally{clearTimeout(timer);if(botao)botao.disabled=false;if(criarEstadoV37.keywordsRunV62===run)criarEstadoV37.keywordsRunV62=null;}
 }
 
 async function redimensionarReferenciaCloudflareV44(src,maxDim=480){
@@ -12543,6 +12721,7 @@ async function prepararGuiaTamanhoAntesValidarV58(){
 
 async function validarCriacaoV37(){
     cancelarConteudoV61();
+    if(typeof cancelarKeywordsV62==='function')cancelarKeywordsV62();
     const token=obterToken();
     if(!token){solicitarToken();return false}
     const out=document.getElementById('criar-validacao-v37');
@@ -12871,6 +13050,382 @@ async function excluirSelecionadosRestritosV41(){
 
 document.addEventListener('DOMContentLoaded',()=>{
     setTimeout(()=>{try{bindPreviewListenersV37();renderPlanilhaPreviewV37();}catch(e){}},300);
+});
+/* V62 — editor de agentes e integração com a criação de anúncios. */
+const agentesEstadoV62={conta:'',lista:[],cache:new Map(),agente:null,carregado:false,dirty:false,busy:false,
+    saving:null,pollTimer:null,pollAttempts:0,pollBusy:false,selecao:0,organização:null};
+
+function elAgenteV62(id){return document.getElementById(id);}
+function valorAgenteV62(id){return String(elAgenteV62(id)?.value||'').trim();}
+function statusAgenteV62(texto,tipo='info'){
+    const el=elAgenteV62('agentes-status-v62');
+    if(el){el.textContent=texto;el.className='hub-info '+(tipo==='erro'?'text-rose-400':tipo==='ok'?'text-emerald-400':'text-slate-300');}
+}
+
+function conferirContaAgentesV62(){
+    const conta=hashConteudoV61(obterToken());
+    if(agentesEstadoV62.conta!==conta){
+        clearTimeout(agentesEstadoV62.pollTimer);
+        Object.assign(agentesEstadoV62,{conta,lista:[],cache:new Map(),agente:null,carregado:false,dirty:false,busy:false,saving:null,pollTimer:null,organização:null});
+        agentesEstadoV62.selecao++;
+        criarEstadoV37.agenteV62=null;
+        if(elAgenteV62('criar-agente-v62'))elAgenteV62('criar-agente-v62').value='';
+        elAgenteV62('agentes-editor-v62')?.classList.add('hidden');
+        elAgenteV62('agente-conhecimento-v62')?.classList.add('hidden');
+    }
+    return conta;
+}
+
+async function apiAgenteV62(caminho,method='GET',body=null){
+    const token=obterToken();if(!token)throw new Error('Conecte a conta Mercado Livre para usar os agentes.');
+    const conta=conferirContaAgentesV62(),controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),method==='POST'&&caminho.endsWith('/chat')?25000:20000);
+    try{
+        const r=await fetch(RENDER_URL+'/api/v62/agentes'+caminho,{method,
+            headers:{Authorization:token,'Content-Type':'application/json'},signal:controller.signal,
+            ...(body!==null?{body:JSON.stringify(body)}:{})});
+        const d=await r.json().catch(()=>({}));
+        if(hashConteudoV61(obterToken())!==conta)throw new Error('A conta mudou. Carregue os agentes novamente.');
+        if(!r.ok||!d.sucesso){const e=new Error(d.erro||'Não foi possível acessar os agentes.');e.status=r.status;throw e;}
+        return d;
+    }catch(e){if(e.name==='AbortError')throw new Error('O servidor demorou a responder. Aguarde alguns segundos e tente novamente.');throw e;}
+    finally{clearTimeout(timer);}
+}
+
+function guardarAgenteV62(a){
+    agentesEstadoV62.cache.set(a.id,a);
+    const index=agentesEstadoV62.lista.findIndex(x=>x.id===a.id);
+    if(index<0)agentesEstadoV62.lista.unshift(a);else agentesEstadoV62.lista[index]=a;
+    if(criarEstadoV37.agenteV62?.id===a.id)criarEstadoV37.agenteV62=a;
+    renderListaAgentesV62();renderSelecaoAgenteCriacaoV62();
+}
+
+async function carregarAgentesProdutoV62(forcar=false){
+    conferirContaAgentesV62();
+    if(agentesEstadoV62.carregado&&!forcar){renderListaAgentesV62();renderSelecaoAgenteCriacaoV62();return;}
+    try{
+        statusAgenteV62('Carregando agentes de produto...');
+        const d=await apiAgenteV62('');
+        agentesEstadoV62.lista=d.agentes||[];agentesEstadoV62.carregado=true;
+        renderListaAgentesV62();renderSelecaoAgenteCriacaoV62();
+        statusAgenteV62(agentesEstadoV62.lista.length?`${agentesEstadoV62.lista.length} agente(s) disponível(is). Escolha um produto para editar.`:'Crie seu primeiro agente e salve a base do produto.');
+    }catch(e){
+        statusAgenteV62(e.message,'erro');
+        const hint=elAgenteV62('criar-agente-info-v62');if(hint)hint.textContent=e.message;
+    }
+}
+
+function renderListaAgentesV62(){
+    const el=elAgenteV62('agentes-lista-v62');if(!el)return;
+    const busca=valorAgenteV62('agentes-busca-v62').toLocaleLowerCase('pt-BR');
+    const lista=agentesEstadoV62.lista.filter(a=>[a.name,a.product,a.brand].join(' ').toLocaleLowerCase('pt-BR').includes(busca));
+    el.innerHTML=lista.map(a=>`<button onclick="abrirAgenteProdutoV62('${a.id}')" class="w-full text-left rounded-xl border ${agentesEstadoV62.agente?.id===a.id?'border-yellow-400':'border-slate-700'} bg-slate-950 p-3">
+        <div class="text-xs font-black text-white">${textoEscapeV37(a.name)}</div>
+        <div class="text-[11px] text-slate-400 mt-1">${textoEscapeV37(a.product)}</div>
+        <div class="text-[10px] text-slate-500 mt-2">${a.refreshing?'Pesquisa em andamento':a.refresh_enabled?'Atualização automática ativa':'Atualização manual'}</div></button>`).join('')||'<p class="text-xs text-slate-500">Nenhum agente encontrado. Clique em Novo agente para começar.</p>';
+}
+
+function renderSelecaoAgenteCriacaoV62(){
+    const el=elAgenteV62('criar-agente-v62');if(!el)return;
+    const atual=el.value||criarEstadoV37.agenteV62?.id||'';
+    const busca=valorAgenteV62('criar-agente-busca-v62').toLocaleLowerCase('pt-BR');
+    const lista=agentesEstadoV62.lista.filter(a=>a.id===atual||[a.name,a.product,a.brand].join(' ').toLocaleLowerCase('pt-BR').includes(busca));
+    el.innerHTML='<option value="">Gerar com os dados preenchidos abaixo</option>'+lista.map(a=>`<option value="${a.id}">${textoEscapeV37(a.product+' — '+a.name)}</option>`).join('');
+    el.value=lista.some(a=>a.id===atual)?atual:'';
+}
+
+function podeTrocarAgenteV62(){
+    if(agentesEstadoV62.busy||agentesEstadoV62.saving){statusAgenteV62('Aguarde a operação atual terminar.');return false;}
+    return !agentesEstadoV62.dirty||confirm('Há alterações não salvas neste agente. Deseja continuar sem salvá-las?');
+}
+
+function novoAgenteProdutoV62(){
+    conferirContaAgentesV62();if(!podeTrocarAgenteV62())return;
+    clearTimeout(agentesEstadoV62.pollTimer);
+    agentesEstadoV62.agente={id:'',version:0,name:'',product:'',brand:'',manual:{},knowledge:{},chat:[],urls:[],instructions:'',refresh_enabled:false,interval_hours:24};
+    renderEditorAgenteV62();statusAgenteV62('Preencha o produto específico, a ficha e os detalhes que você conhece.');
+    elAgenteV62('agente-nome-v62')?.focus();
+}
+
+async function abrirAgenteProdutoV62(id){
+    if(!podeTrocarAgenteV62())return;
+    clearTimeout(agentesEstadoV62.pollTimer);
+    const request=++agentesEstadoV62.selecao;
+    try{
+        statusAgenteV62('Abrindo agente...');
+        const d=await apiAgenteV62('/'+encodeURIComponent(id));
+        if(request!==agentesEstadoV62.selecao)return;
+        agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);renderEditorAgenteV62();
+        statusAgenteV62('Agente carregado. Você pode editar a base, pesquisar ou conversar no chat.');
+        if(d.agente.refreshing)agendarPollAgenteV62(id,true);
+    }catch(e){statusAgenteV62(e.message,'erro');}
+}
+
+function camposEditorAgenteV62(){
+    return {'agente-nome-v62':'name','agente-produto-v62':'product','agente-marca-v62':'brand','agente-instrucoes-v62':'instructions',
+        'agente-informacoes-v62':'information','agente-ficha-v62':'technical_sheet','agente-aplicacoes-v62':'applications',
+        'agente-notas-v62':'notes','agente-keywords-v62':'keywords','agente-links-v62':'urls'};
+}
+
+function renderEditorAgenteV62(){
+    const a=agentesEstadoV62.agente;if(!a)return;
+    for(const [id,key] of Object.entries(camposEditorAgenteV62())){
+        const el=elAgenteV62(id);if(!el)continue;
+        const v=['name','product','brand','instructions','urls'].includes(key)?a[key]:a.manual?.[key];
+        el.value=Array.isArray(v)?v.join(key==='keywords'?', ':'\n'):String(v||'');
+    }
+    elAgenteV62('agente-auto-v62').checked=Boolean(a.refresh_enabled);
+    elAgenteV62('agente-intervalo-v62').value=String(a.interval_hours||24);
+    elAgenteV62('agentes-editor-v62').classList.remove('hidden');
+    elAgenteV62('agente-conhecimento-v62').classList.remove('hidden');
+    elAgenteV62('agente-excluir-v62').disabled=!a.id;
+    agentesEstadoV62.dirty=false;agentesEstadoV62.organização=null;
+    elAgenteV62('agente-aplicar-organizacao-v62').classList.add('hidden');
+    elAgenteV62('agente-chat-mensagem-v62').value='';
+    atualizarStatusAtualizacaoAgenteV62();renderPesquisaAgenteV62();renderChatAgenteV62();renderListaAgentesV62();
+}
+
+function marcarEdicaoAgenteV62(){
+    agentesEstadoV62.dirty=true;
+    const el=elAgenteV62('agente-salvo-v62');if(el)el.textContent='Alterações nos campos ainda não foram salvas.';
+}
+
+function atualizarStatusAtualizacaoAgenteV62(){
+    const a=agentesEstadoV62.agente;if(!a)return;
+    const data=v=>v?new Date(v).toLocaleString('pt-BR'):'Ainda não pesquisado';
+    elAgenteV62('agente-salvo-v62').textContent=agentesEstadoV62.dirty?'Alterações nos campos ainda não foram salvas.':a.id?'Base salva. Produto: '+a.product:'Agente novo. Salve para iniciar a pesquisa e o chat.';
+    elAgenteV62('agente-atualizacao-v62').textContent=a.refreshing?'Pesquisando fontes na internet...':
+        'Última pesquisa: '+data(a.last_refreshed_at)+(a.refresh_enabled?' · Próxima: '+data(a.next_refresh_at):' · Atualização automática desativada')+(a.last_error?' · '+a.last_error:'');
+    const botao=elAgenteV62('agente-pesquisar-v62');
+    botao.disabled=a.refreshing||agentesEstadoV62.busy;
+    botao.textContent=a.refreshing?'⌕ Pesquisando...':'⌕ Pesquisar na internet';
+}
+
+function aprovadosCamposAgenteV62(){
+    const a=agentesEstadoV62.agente||{};
+    const todos=[...(a.manual?.approved_facts||[]),...(a.knowledge?.facts||[])];
+    const boxes=[...document.querySelectorAll('#agente-pesquisa-v62 input[data-fato-v62]')];
+    if(!boxes.length)return a.manual?.approved_facts||[];
+    const keys=new Set(boxes.filter(b=>b.checked).map(b=>b.dataset.fatoV62));
+    return todos.filter((f,i)=>keys.has(hashConteudoV61(f.name+'\n'+f.value))&&todos.findIndex(x=>x.name===f.name&&x.value===f.value)===i);
+}
+
+function corpoAgenteV62(){
+    return {name:valorAgenteV62('agente-nome-v62'),product:valorAgenteV62('agente-produto-v62'),brand:valorAgenteV62('agente-marca-v62'),
+        instructions:valorAgenteV62('agente-instrucoes-v62'),urls:valorAgenteV62('agente-links-v62').split('\n'),
+        refresh_enabled:Boolean(elAgenteV62('agente-auto-v62')?.checked),interval_hours:Number(valorAgenteV62('agente-intervalo-v62')||24),
+        version:agentesEstadoV62.agente?.version||0,manual:{information:valorAgenteV62('agente-informacoes-v62'),
+            technical_sheet:valorAgenteV62('agente-ficha-v62'),applications:valorAgenteV62('agente-aplicacoes-v62'),
+            notes:valorAgenteV62('agente-notas-v62'),keywords:termosUnicosV62(valorAgenteV62('agente-keywords-v62'),80),approved_facts:aprovadosCamposAgenteV62()}};
+}
+
+async function salvarAgenteProdutoV62(silencioso=false){
+    if(agentesEstadoV62.saving)return agentesEstadoV62.saving;
+    if(agentesEstadoV62.busy)return null;
+    const a=agentesEstadoV62.agente;if(!a)return null;
+    const body=corpoAgenteV62();
+    if(!body.name||!body.product){statusAgenteV62('Preencha o nome do agente e o produto específico.','erro');return null;}
+    const botao=elAgenteV62('agente-salvar-v62');botao.disabled=true;
+    agentesEstadoV62.saving=(async()=>{
+        try{
+            const d=await apiAgenteV62(a.id?'/'+a.id:'',a.id?'PUT':'POST',body);
+            // Edições realizadas enquanto o salvamento responde continuam nos campos.
+            const atual=corpoAgenteV62();const semVersao=x=>JSON.stringify({...x,version:0});
+            const mudou=semVersao(atual)!==semVersao(body);
+            agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);
+            if(!mudou)renderEditorAgenteV62();else{agentesEstadoV62.dirty=true;atualizarStatusAtualizacaoAgenteV62();}
+            if(!silencioso)statusAgenteV62(mudou?'Agente salvo. Suas novas edições continuam nos campos para um próximo salvamento.':'Agente salvo. Esta base já pode ser usada na criação de anúncios.','ok');
+            return d.agente;
+        }catch(e){statusAgenteV62(e.message,'erro');return null;}
+        finally{botao.disabled=false;agentesEstadoV62.saving=null;}
+    })();
+    return agentesEstadoV62.saving;
+}
+
+function urlFonteAgenteV62(valor){
+    try{const u=new URL(String(valor||''));return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch(e){return '';}
+}
+
+function renderSugestoesGoogleV62(container,html){
+    if(!container||!html)return;
+    const frame=document.createElement('iframe');
+    frame.title='Sugestões da Pesquisa Google';frame.setAttribute('sandbox','allow-popups allow-popups-to-escape-sandbox');
+    frame.referrerPolicy='no-referrer';frame.className='w-full rounded-xl bg-white mt-3';frame.style.height='170px';
+    frame.srcdoc='<base target="_blank">'+html;container.appendChild(frame);
+}
+
+function renderPesquisaAgenteV62(){
+    const el=elAgenteV62('agente-pesquisa-v62');if(!el)return;
+    const a=agentesEstadoV62.agente||{},k=a.knowledge||{};
+    const antes=agentesEstadoV62.dirty?[...document.querySelectorAll('#agente-pesquisa-v62 input[data-fato-v62]')]:[];
+    const marcados=new Set(antes.length?antes.filter(b=>b.checked).map(b=>b.dataset.fatoV62):(a.manual?.approved_facts||[]).map(f=>hashConteudoV61(f.name+'\n'+f.value)));
+    const fatos=[...(a.manual?.approved_facts||[]),...(k.facts||[])].filter((f,i,list)=>list.findIndex(x=>x.name===f.name&&x.value===f.value)===i);
+    const fontes=k.sources||[];
+    const links=urls=>urls.map(url=>{const segura=urlFonteAgenteV62(url);return segura?`<a href="${textoEscapeV37(segura)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">Fonte ${fontes.findIndex(s=>s.url===url)+1||'consultada'}</a>`:'';}).join(' · ');
+    el.innerHTML=(k.summary?`<div class="text-xs leading-6 text-slate-300 whitespace-pre-wrap">${textoEscapeV37(k.summary)}</div>`:'<p class="text-xs text-slate-500">Clique em Pesquisar na internet para reunir informações, palavras-chave e fontes deste produto.</p>')+
+        (fatos.length?`<div><div class="hub-label">Especificações para sua revisão</div>${fatos.map(f=>{
+            const key=hashConteudoV61(f.name+'\n'+f.value);
+            return `<div class="rounded-xl border border-slate-700 p-3 mt-2"><label class="flex gap-2 items-start text-xs text-slate-200"><input type="checkbox" data-fato-v62="${key}" ${marcados.has(key)?'checked':''} onchange="marcarEdicaoAgenteV62()" class="w-4 h-4 mt-0.5 accent-yellow-400"><span><strong>${textoEscapeV37(f.name)}:</strong> ${textoEscapeV37(f.value)}<span class="block text-[10px] text-slate-500 mt-1">Usar esta informação no anúncio após salvar o agente</span></span></label><div class="text-[10px] mt-2">${links(f.sources||[])}</div></div>`;
+        }).join('')}</div>`:'')+
+        (k.applications?`<div><div class="hub-label">Aplicações encontradas — confira o modelo</div><p class="text-xs text-slate-300 whitespace-pre-wrap">${textoEscapeV37(k.applications)}</p></div>`:'')+
+        ((k.keywords||[]).length?`<div><div class="hub-label">${k.keywords.length} palavras-chave sugeridas</div><div class="flex flex-wrap gap-1.5">${k.keywords.map(w=>`<span class="hub-badge">${textoEscapeV37(w)}</span>`).join('')}</div></div>`:'')+
+        ((k.titles||[]).length?`<div><div class="hub-label">Ideias de títulos</div><ol class="list-decimal pl-5 text-xs text-slate-300 space-y-2">${k.titles.map(t=>`<li>${textoEscapeV37(t)}</li>`).join('')}</ol></div>`:'')+
+        ((k.pending||[]).length?`<div class="hub-info"><div class="font-bold text-yellow-400">Informações a confirmar</div><ul class="list-disc pl-4 mt-2">${k.pending.map(p=>`<li>${textoEscapeV37(p)}</li>`).join('')}</ul></div>`:'')+
+        (fontes.length?`<div><div class="hub-label">Fontes da última pesquisa</div><ol class="list-decimal pl-5 space-y-2 text-xs">${fontes.map(s=>{const u=urlFonteAgenteV62(s.url);return u?`<li><a href="${textoEscapeV37(u)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">${textoEscapeV37(s.title||u)}</a></li>`:'';}).join('')}</ol></div>`:'')+
+        ((k.queries||[]).length?`<div class="text-[10px] text-slate-500">Buscas utilizadas: ${textoEscapeV37(k.queries.join(' · '))}</div>`:'');
+    renderSugestoesGoogleV62(el,k.search_suggestions||'');
+}
+
+function renderChatAgenteV62(){
+    const el=elAgenteV62('agente-chat-historico-v62');if(!el)return;
+    const chat=agentesEstadoV62.agente?.chat||[];
+    el.innerHTML=chat.map(m=>`<div class="rounded-xl border ${m.role==='user'?'border-slate-700 bg-slate-950':'border-emerald-900 bg-emerald-950/20'} p-3"><div class="text-[10px] uppercase font-black ${m.role==='user'?'text-slate-500':'text-emerald-400'}">${m.role==='user'?'Você':'Agente'}</div><div class="text-xs leading-6 text-slate-200 whitespace-pre-wrap mt-1">${textoEscapeV37(m.text)}</div></div>`).join('')||'<p class="text-xs text-slate-500">Comece contando o que você sabe sobre o produto ou peça para organizar a base preenchida.</p>';
+    el.scrollTop=el.scrollHeight;
+    const ultima=[...chat].reverse().find(m=>m.role==='assistant'&&m.organization);
+    agentesEstadoV62.organização=ultima?.organization||null;
+    elAgenteV62('agente-aplicar-organizacao-v62').classList.toggle('hidden',!agentesEstadoV62.organização);
+}
+
+function agendarPollAgenteV62(id,reiniciar=false){
+    clearTimeout(agentesEstadoV62.pollTimer);if(reiniciar)agentesEstadoV62.pollAttempts=0;
+    agentesEstadoV62.pollTimer=setTimeout(()=>pollAgenteV62(id),3000);
+}
+
+async function pollAgenteV62(id){
+    if(agentesEstadoV62.agente?.id!==id||agentesEstadoV62.pollBusy)return;
+    agentesEstadoV62.pollBusy=true;
+    try{
+        const d=await apiAgenteV62('/'+id);
+        if(agentesEstadoV62.agente?.id!==id)return;
+        agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);
+        atualizarStatusAtualizacaoAgenteV62();renderPesquisaAgenteV62();
+        if(d.agente.refreshing&&++agentesEstadoV62.pollAttempts<40)agendarPollAgenteV62(id);
+        else if(d.agente.refreshing)statusAgenteV62('A pesquisa continua no servidor. Reabra o agente para consultar o resultado.');
+        else statusAgenteV62(d.agente.last_error||'Pesquisa concluída. Revise as fontes e as especificações antes de usar no anúncio.',d.agente.last_error?'erro':'ok');
+    }catch(e){statusAgenteV62(e.message,'erro');}
+    finally{agentesEstadoV62.pollBusy=false;}
+}
+
+async function pesquisarProdutoAgenteV62(){
+    if(agentesEstadoV62.busy||agentesEstadoV62.agente?.refreshing)return;
+    let a=agentesEstadoV62.agente;if(!a)return;
+    if(!a.id||agentesEstadoV62.dirty){a=await salvarAgenteProdutoV62(true);if(!a)return;}
+    agentesEstadoV62.busy=true;atualizarStatusAtualizacaoAgenteV62();
+    try{
+        const d=await apiAgenteV62('/'+a.id+'/pesquisar','POST',{});
+        agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);
+        statusAgenteV62('Pesquisa iniciada. Você pode continuar usando o painel enquanto o agente reúne as fontes.');
+        agendarPollAgenteV62(a.id,true);
+    }catch(e){statusAgenteV62(e.message,'erro');}
+    finally{agentesEstadoV62.busy=false;atualizarStatusAtualizacaoAgenteV62();}
+}
+
+async function enviarChatAgenteV62(){
+    if(agentesEstadoV62.busy)return;
+    const message=valorAgenteV62('agente-chat-mensagem-v62');if(!message){statusAgenteV62('Escreva a mensagem para o agente.');return;}
+    let a=agentesEstadoV62.agente;if(!a)return;
+    if(!a.id||agentesEstadoV62.dirty){a=await salvarAgenteProdutoV62(true);if(!a)return;}
+    agentesEstadoV62.busy=true;const botao=elAgenteV62('agente-chat-enviar-v62');botao.disabled=true;
+    statusAgenteV62('O agente está organizando sua resposta...');
+    try{
+        const d=await apiAgenteV62('/'+a.id+'/chat','POST',{message});
+        agentesEstadoV62.agente=d.agente;guardarAgenteV62(d.agente);renderChatAgenteV62();
+        if(valorAgenteV62('agente-chat-mensagem-v62')===message)elAgenteV62('agente-chat-mensagem-v62').value='';
+        statusAgenteV62('Resposta salva no histórico. Você pode aplicar a organização aos campos.','ok');
+    }catch(e){statusAgenteV62(e.message,'erro');}
+    finally{agentesEstadoV62.busy=false;botao.disabled=false;atualizarStatusAtualizacaoAgenteV62();}
+}
+
+function organizarIdeiasAgenteV62(){
+    elAgenteV62('agente-chat-mensagem-v62').value='Organize todas as informações que preenchi em informações do produto, ficha técnica, aplicações, observações e palavras-chave. Preserve os fatos e indique os pontos que ainda preciso confirmar.';
+    enviarChatAgenteV62();
+}
+
+function aplicarOrganizacaoAgenteV62(){
+    const o=agentesEstadoV62.organização;if(!o)return;
+    const campos={'agente-informacoes-v62':'information','agente-ficha-v62':'technical_sheet','agente-aplicacoes-v62':'applications','agente-notas-v62':'notes','agente-keywords-v62':'keywords'};
+    for(const [id,key] of Object.entries(campos)){if(o[key]&&(!Array.isArray(o[key])||o[key].length))elAgenteV62(id).value=Array.isArray(o[key])?o[key].join(', '):o[key];}
+    marcarEdicaoAgenteV62();statusAgenteV62('Organização aplicada aos campos. Confira o conteúdo e salve o agente.');
+}
+
+async function excluirAgenteProdutoV62(){
+    const a=agentesEstadoV62.agente;if(!a?.id||agentesEstadoV62.busy||agentesEstadoV62.saving)return;
+    if(!confirm('Excluir o agente “'+a.name+'” e seu histórico de pesquisa/chat?'))return;
+    agentesEstadoV62.busy=true;
+    try{
+        await apiAgenteV62('/'+a.id,'DELETE',{version:a.version});
+        clearTimeout(agentesEstadoV62.pollTimer);agentesEstadoV62.cache.delete(a.id);
+        agentesEstadoV62.lista=agentesEstadoV62.lista.filter(x=>x.id!==a.id);agentesEstadoV62.agente=null;agentesEstadoV62.dirty=false;
+        if(criarEstadoV37.agenteV62?.id===a.id){criarEstadoV37.agenteV62=null;elAgenteV62('criar-agente-v62').value='';cancelarConteudoV61();}
+        elAgenteV62('agentes-editor-v62').classList.add('hidden');elAgenteV62('agente-conhecimento-v62').classList.add('hidden');
+        renderListaAgentesV62();renderSelecaoAgenteCriacaoV62();statusAgenteV62('Agente excluído.','ok');
+    }catch(e){statusAgenteV62(e.message,'erro');}
+    finally{agentesEstadoV62.busy=false;}
+}
+
+function contextoAgenteCriacaoV62(){
+    conferirContaAgentesV62();
+    const a=criarEstadoV37.agenteV62;
+    const id=valorAgenteV62('criar-agente-v62');if(!a||a.id!==id)return null;
+    const m=a.manual||{},k=a.knowledge||{};
+    return {id:a.id,version:a.version,name:a.name,product:a.product,brand:a.brand,information:m.information||'',
+        technical_sheet:m.technical_sheet||'',applications:m.applications||'',notes:m.notes||'',approved_facts:m.approved_facts||[],
+        instructions:a.instructions||'',keywords:termosUnicosV62([...(m.keywords||[]),...(k.keywords||[])],80),title_ideas:k.titles||[]};
+}
+
+async function selecionarAgenteCriacaoV62(){
+    const id=valorAgenteV62('criar-agente-v62'),request=++agentesEstadoV62.selecao;
+    cancelarConteudoV61();criarEstadoV37.agenteV62=null;
+    const info=elAgenteV62('criar-agente-info-v62');
+    if(!id){info.textContent='A geração usará o produto, os detalhes e as características preenchidas no anúncio.';return;}
+    info.textContent='Carregando a base deste agente...';
+    try{
+        const d=await apiAgenteV62('/'+id);
+        if(request!==agentesEstadoV62.selecao||valorAgenteV62('criar-agente-v62')!==id)return;
+        criarEstadoV37.agenteV62=d.agente;guardarAgenteV62(d.agente);
+        if(!valorAgenteV62('criar-produto-v37'))elAgenteV62('criar-produto-v37').value=d.agente.product;
+        info.textContent='Base selecionada: '+d.agente.product+'. A geração usará a ficha e as informações revisadas deste agente. Use o botão abaixo para preencher também os campos.';
+    }catch(e){info.textContent=e.message;}
+}
+
+async function usarInformacoesAgenteCriacaoV62(){
+    if(!criarEstadoV37.agenteV62)await selecionarAgenteCriacaoV62();
+    const a=contextoAgenteCriacaoV62();if(!a)return;
+    cancelarConteudoV61();elAgenteV62('criar-produto-v37').value=a.product;
+    const dados=baseConfirmadaAgenteV62(a),atual=valorAgenteV62('criar-detalhes-v37');
+    if(dados&&!atual.includes(dados))elAgenteV62('criar-detalhes-v37').value=[atual,dados].filter(Boolean).join('\n\n');
+    elAgenteV62('criar-keywords-v37').value=termosUnicosV62([...termosUnicosV62(valorAgenteV62('criar-keywords-v37')),...a.keywords],80).join(', ');
+    for(const c of criarEstadoV37.selectedCategories||[]){
+        c.values=c.values||{};
+        if(a.brand&&!c.values.BRAND?.value_name&&!c.values.BRAND?.value_id&&c.atributos?.some(d=>d.id==='BRAND'))setCategoriaMarcaV62(c.category_id,a.brand);
+    }
+    renderCategoriasSelecionadasV37();renderPlanilhaPreviewV37();
+    elAgenteV62('criar-agente-info-v62').textContent='Informações do agente aplicadas. Ajuste os detalhes desta versão e clique em gerar o conteúdo.';
+}
+
+async function anunciarComAgenteV62(){
+    let a=agentesEstadoV62.agente;if(!a)return;
+    if(!a.id||agentesEstadoV62.dirty){a=await salvarAgenteProdutoV62(true);if(!a)return;}
+    guardarAgenteV62(a);mudarAba('criar-massa');
+    elAgenteV62('criar-agente-busca-v62').value='';renderSelecaoAgenteCriacaoV62();
+    elAgenteV62('criar-agente-v62').value=a.id;criarEstadoV37.agenteV62=a;
+    await usarInformacoesAgenteCriacaoV62();
+}
+
+function setCategoriaMarcaV62(categoryId,value){
+    const cat=criarEstadoV37.selectedCategories.find(c=>c.category_id===categoryId);if(!cat)return;
+    const nome=String(value||'').trim(),def=cat.atributos?.find(a=>String(a.id)==='BRAND');
+    const normal=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const match=(def?.values||[]).find(v=>normal(v.name)===normal(nome));
+    cat.values=cat.values||{};
+    cat.values.BRAND=match?{value_id:String(match.id||''),value_name:String(match.name||nome)}:{value_name:nome};
+    renderPlanilhaPreviewV37();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+    for(const id of [...Object.keys(camposEditorAgenteV62()),'agente-auto-v62','agente-intervalo-v62']){
+        const el=elAgenteV62(id);if(el)el.addEventListener(el.tagName==='SELECT'||el.type==='checkbox'?'change':'input',marcarEdicaoAgenteV62);
+    }
 });
 </script>
 
