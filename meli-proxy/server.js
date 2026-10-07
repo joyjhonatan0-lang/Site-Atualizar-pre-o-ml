@@ -5546,21 +5546,55 @@ function completarDimensoesPacoteME2V50(payload,shippingPrefs,meta){
       ['SELLER_PACKAGE_WEIGHT',dims.weight,'g']
     ];
     const attrs=Array.isArray(payload.attributes)?payload.attributes:[];
-    const ids=new Set(attrs.map(a=>String(a?.id||'')));
     const adicionados=[];
     for(const [id,raw,unit] of mapa){
-        if(ids.has(id))continue;
         const def=meta.defMap.get(id);
-        const num=Number(raw||0);
-        if(!def || !Number.isFinite(num) || num<=0)continue;
-        // Para SELLER_PACKAGE_* o Mercado Livre espera valor numérico puro;
-        // as unidades são definidas pelo próprio atributo da categoria.
-        const value_name=String(Math.round(num));
-        attrs.push({id,value_name});
-        ids.add(id); adicionados.push({id,value_name});
+        if(!def || def.read_only)continue;
+        const existente=attrs.find(a=>String(a?.id||'')===id);
+        if(existente){
+            const clean=normalizarMedidaAtributoV60(existente,def);
+            if(clean)Object.assign(existente,clean);
+            continue;
+        }
+        // As dimensões retornadas nas preferências são cm; o peso é em g.
+        // O POST /items exige a unidade no value_name, inclusive nos defaults.
+        const clean=normalizarMedidaAtributoV60({id,value_name:String(raw??'')},def,unit);
+        if(!clean)continue;
+        attrs.push(clean); adicionados.push({...clean});
     }
     payload.attributes=attrs;
     return adicionados;
+}
+
+function normalizarMedidaAtributoV60(attr,def,unidadePreferida=''){
+    const id=String(attr?.id||'');
+    const pacote=/^SELLER_PACKAGE_(HEIGHT|LENGTH|WIDTH|WEIGHT)$/.test(id);
+    const struct=attr?.value_struct;
+    const raw=String(attr?.value_name??(struct?.number!=null?`${struct.number} ${struct.unit||''}`:'')).trim();
+    const match=raw.replace(',','.').match(/^([+]?(?:\d+(?:\.\d+)?|\.\d+))\s*([^\d]*)$/);
+    if(!match)return null;
+    let numero=Number(match[1]);
+    if(!Number.isFinite(numero) || (pacote && numero<=0))return null;
+    let unit=String(match[2]||struct?.unit||'').trim();
+    if(pacote){
+        const peso=id==='SELLER_PACKAGE_WEIGHT';
+        const destino=peso?'g':'cm';
+        unit=unit.toLowerCase()||destino;
+        const fatores=peso?{g:1,kg:1000,mg:0.001}:{cm:1,mm:0.1,m:100,in:2.54,pulgadas:2.54,ft:30.48};
+        if(fatores[unit]==null)return null;
+        // A API aceita apenas inteiros em cm/g. Arredonda para cima para não
+        // declarar uma embalagem menor ou mais leve que a medida informada.
+        numero=Math.ceil(Number((numero*fatores[unit]).toFixed(8)));
+        unit=destino;
+    }else{
+        const units=Array.isArray(def?.allowed_units)?def.allowed_units:[];
+        unit=unit||unidadePreferida||String(def?.default_unit||'');
+        if(!unit)return null;
+        const permitido=units.find(u=>String(u.id).toLowerCase()===unit.toLowerCase() || String(u.name).toLowerCase()===unit.toLowerCase());
+        if(units.length&&!permitido)return null;
+        if(permitido)unit=String(permitido.id);
+    }
+    return {id,value_name:`${numero} ${unit}`};
 }
 
 function aplicarEstrategiaEnvioV50(payload,shippingInfo,strategyName='me2_full'){
@@ -5904,27 +5938,74 @@ function extrairRowsChartV55(chart){
     }
     return unicos;
 }
-function valoresRowChartV55(chart,row){
+function valoresTamanhoGuiaV60(chart,row){
     const attrs=Array.isArray(row?.attributes)?row.attributes:[];
-    const preferidos=new Set([
-        'SIZE',String(chart?.main_attribute_id||''),String(chart?.secondary_attribute_id||''),
-        'MANUFACTURER_SIZE','BR_SIZE','AR_SIZE','US_SIZE','UK_SIZE','EU_SIZE','M_BR_SIZE','F_BR_SIZE','KIDS_BR_SIZE','FILTRABLE_SIZE'
-    ].filter(Boolean));
-    const vals=[];
+    const principais=new Set(['SIZE',String(chart?.main_attribute_id||''),String(chart?.secondary_attribute_id||'')].filter(Boolean));
+    const out=[];
     for(const a of attrs){
-        if(!preferidos.has(String(a?.id||'')) && !/SIZE|TAMANHO/i.test(String(a?.id||'')))continue;
-        const av=Array.isArray(a?.values)?a.values:[];
-        const v=String(a?.value_name||a?.value_id||av[0]?.name||av[0]?.id||'').trim();
-        if(v)vals.push(v);
-    }
-    if(!vals.length){
-        for(const a of attrs){
-            const av=Array.isArray(a?.values)?a.values:[];
-            const v=String(a?.value_name||a?.value_id||av[0]?.name||av[0]?.id||'').trim();
-            if(v)vals.push(v);
+        const id=String(a?.id||'');
+        if(!principais.has(id) && !/(?:^|_)SIZE$|TAMANHO/i.test(id))continue;
+        if(['SIZE_GRID_ID','SIZE_GRID_ROW_ID'].includes(id))continue;
+        const values=Array.isArray(a.values)&&a.values.length?a.values:[{id:a.value_id,name:a.value_name,struct:a.value_struct}];
+        for(const v of values){
+            const name=String(v?.name??(v?.struct?.number!=null?`${v.struct.number} ${v.struct.unit||''}`:'')).trim();
+            if(!name)continue;
+            out.push({attribute_id:id,value_name:name,...(v?.id!=null&&String(v.id).trim()?{value_id:String(v.id)}:{})});
         }
     }
-    return [...new Set(vals)];
+    return out;
+}
+
+function partesTamanhoGuiaV60(valor,attributeId=''){
+    let texto=String(valor??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
+      .replace(/\b(tamanho|tam\.?|numero|num\.?|size)\b/g,' ').replace(/brasil|\bbra\b/g,'br').replace(/,/g,'.');
+    const sistema=texto.match(/^(br|us|uk|eu|ar|mx|cl|co|pe)(?=\s|\d)|(?:\d|\s)(br|us|uk|eu|ar|mx|cl|co|pe)\s*$/i);
+    const sistemaId=String(attributeId).match(/(?:^|_)(BR|US|UK|EU|AR|MX|CL|CO|PE)_SIZE$/i);
+    const region=String(sistema?.[1]||sistema?.[2]||sistemaId?.[1]||'').toUpperCase();
+    const full=texto.replace(/\s+/g,'').replace(/\d+(?:\.\d+)?/g,n=>String(Number(n)));
+    if(sistema){
+        texto=texto.replace(/^(br|us|uk|eu|ar|mx|cl|co|pe)(?=\s|\d)|(?:br|us|uk|eu|ar|mx|cl|co|pe)\s*$/i,'');
+    }
+    const base=texto.replace(/\s+/g,'').replace(/\d+(?:\.\d+)?/g,n=>String(Number(n)));
+    return {full,base,region};
+}
+
+function pontuarTamanhoGuiaV60(tamanho,valores,mainAttributeId=''){
+    const alvo=partesTamanhoGuiaV60(tamanho);
+    if(!alvo.base)return 0;
+    let melhor=0;
+    for(const v of valores||[]){
+        const id=String(v?.attribute_id||'');
+        const parte=partesTamanhoGuiaV60(v?.value_name,id==='SIZE'?mainAttributeId:id);
+        if(alvo.region && parte.region && alvo.region!==parte.region)continue;
+        const prioridade=id==='SIZE'?15:id===mainAttributeId?10:0;
+        let score=0;
+        if(alvo.full===parte.full)score=100+prioridade;
+        else if(alvo.base===parte.base){
+            if(alvo.region)score=parte.region===alvo.region?90+prioridade:0;
+            else if(parte.region==='BR')score=80+prioridade;
+            else if(id==='SIZE'||id===mainAttributeId)score=70+prioridade;
+            else if(id!=='FILTRABLE_SIZE')score=50+prioridade;
+        }
+        melhor=Math.max(melhor,score);
+    }
+    return melhor;
+}
+
+function atributoSizeDaLinhaGuiaV60(chart,row){
+    const valores=valoresTamanhoGuiaV60(chart,row);
+    const principal=valores.find(v=>v.attribute_id==='SIZE')
+      || valores.find(v=>v.attribute_id===String(chart?.main_attribute_id||''))
+      || valores.find(v=>/(?:^|_)BR_SIZE$/.test(v.attribute_id))
+      || valores.find(v=>v.attribute_id!=='FILTRABLE_SIZE');
+    if(!principal)return null;
+    // IDs de BR_SIZE/US_SIZE não são IDs de SIZE. Copia o ID somente quando
+    // veio do próprio atributo SIZE da linha consultada.
+    return {id:'SIZE',value_name:principal.value_name,...(principal.attribute_id==='SIZE'&&principal.value_id?{value_id:principal.value_id}:{})};
+}
+
+function valoresRowChartV55(chart,row){
+    return [...new Set(valoresTamanhoGuiaV60(chart,row).map(v=>v.value_name))];
 }
 function formatarGridRowIdV55(gridId,row){
     const raw=String(row?.id||row?.row_id||'').trim();
@@ -5951,15 +6032,7 @@ function linhasValidasGuiaV58(chart,gridId){
     return map;
 }
 function rowCompativelV55(chart,row,tamanho){
-    const alvos=candidatosTamanhoV55(tamanho);
-    if(!alvos.length)return false;
-    const valores=valoresRowChartV55(chart,row).flatMap(candidatosTamanhoV55);
-    if(alvos.some(a=>valores.includes(a)))return true;
-    // Fallback numérico: 35, "35 BR", "BR 35" e equivalentes devem casar.
-    const numsAlvo=new Set(alvos.flatMap(v=>(String(v).match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>String(Number(n.replace(',','.'))))));
-    if(!numsAlvo.size)return false;
-    const numsValores=new Set(valores.flatMap(v=>(String(v).match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>String(Number(n.replace(',','.'))))));
-    return [...numsAlvo].some(n=>numsValores.has(n));
+    return pontuarTamanhoGuiaV60(tamanho,valoresTamanhoGuiaV60(chart,row),String(chart?.main_attribute_id||''))>0;
 }
 async function obterChartV55(token,chartId){
     const id=String(chartId||'').trim();
@@ -5974,7 +6047,10 @@ async function obterChartV55(token,chartId){
     return d;
 }
 function acharRowChartV55(chart,tamanho){
-    return extrairRowsChartV55(chart).find(r=>rowCompativelV55(chart,r,tamanho))||null;
+    const candidatas=extrairRowsChartV55(chart).map(row=>({row,score:pontuarTamanhoGuiaV60(tamanho,valoresTamanhoGuiaV60(chart,row),String(chart?.main_attribute_id||''))}))
+      .filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+    if(!candidatas.length || (candidatas[1]&&candidatas[0].score===candidatas[1].score))return null;
+    return candidatas[0].row;
 }
 function extrairDomainIdV55(v){
     const s=String(v||'').trim();
@@ -6052,14 +6128,14 @@ async function resolverGuiaAutomaticoV55(token,payload,cfg,opts={}){
     if(!varCfg?.enabled)return null;
     const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
     const tamanhos=[...new Set(rowsCfg.map(r=>tamanhoDaLinhaV55(r)).filter(Boolean))];
-    if(!tamanhos.length)return null;
-
     const manual=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
+    if(!tamanhos.length&&!manual)return null;
     if(manual){
         // V58: o código do guia informado continua tendo prioridade, porém as linhas
         // NUNCA são aceitas cegamente. Consultamos o chart real para garantir que
         // SIZE_GRID_ROW_ID pertença ao SIZE_GRID_ID e ao tamanho escolhido.
-        const chart=await obterChartV55(token,manual);
+        let chart=opts.sizeGuideCacheV60?.get(manual);
+        if(!chart){chart=await obterChartV55(token,manual);opts.sizeGuideCacheV60?.set(manual,chart);}
         const hits=tamanhos.filter(t=>acharRowChartV55(chart,t)).length;
         return {gridId:String(chart?.id||manual),chart,hits,source:hits?'manual-compatible':'manual-guide'};
     }
@@ -6095,66 +6171,54 @@ async function aplicarGuiaTamanhoV55(token,payload,cfg,opts={}){
     const varCfg=cfg?.variations||{};
     if(!varCfg?.enabled)return payload;
     const rowsCfg=normalizarLinhasVariacaoV53(varCfg);
-    const temTamanho=rowsCfg.some(r=>Boolean(tamanhoDaLinhaV55(r)));
     const manualGrid=String(varCfg?.size_grid_id||cfg?.size_grid_id||'').trim();
-    const temLinhaManual=rowsCfg.some(r=>Boolean(String(r?.size_grid_row_id||'').trim()));
-    if(!temTamanho&&!manualGrid&&!temLinhaManual)return payload;
-
+    if(!rowsCfg.some(r=>tamanhoDaLinhaV55(r)||r.size_grid_row_id)&&!manualGrid)return payload;
     const resolvido=await resolverGuiaAutomaticoV55(token,payload,cfg,opts);
-    if(!resolvido){
-        // Se a categoria exigir guia, a validação do Mercado Livre informará isso.
-        // Quando houver ID manual, porém, nunca descartamos o que o usuário preencheu.
-        if(!manualGrid)return payload;
-    }
-
-    const gridId=String(resolvido?.gridId||manualGrid||'').trim();
-    if(!gridId)return payload;
-    const chart=resolvido?.chart||null;
+    if(!resolvido)return payload;
+    const gridId=String(resolvido.gridId||manualGrid);
+    const chart=resolvido.chart;
+    const linhasValidas=linhasValidasGuiaV58(chart,gridId);
     const pushUnique=(arr,obj)=>{
-        const id=String(obj?.id||'');
-        const i=arr.findIndex(x=>String(x?.id||'')===id);
-        if(i>=0)arr[i]=obj; else arr.push(obj);
+        const i=arr.findIndex(x=>String(x?.id||'')===String(obj.id));
+        if(i>=0)arr[i]=obj;else arr.push(obj);
     };
+    // Resolve TODAS as linhas, mesmo quando a conta publica um item por variação.
+    const resolvidas=rowsCfg.map((row,i)=>{
+        const tamanho=tamanhoDaLinhaV55(row,chart);
+        const raw=String(row.size_grid_row_id||'');
+        let linha=linhasValidas.get(normalizarGridRowIdV58(gridId,raw))||linhasValidas.get(raw);
+        if(linha&&tamanho&&!rowCompativelV55(chart,linha,tamanho))linha=null;
+        if(!linha&&tamanho)linha=acharRowChartV55(chart,tamanho);
+        const rowId=linha?formatarGridRowIdV55(gridId,linha):'';
+        const size=linha?atributoSizeDaLinhaGuiaV60(chart,linha):null;
+        if(!rowId||!size){
+            const e=new Error(`Guia ${gridId}: a variação ${i+1} (tamanho ${tamanho||'não informado'}) não corresponde a uma linha única e válida. Escolha uma numeração existente nesse guia.`);
+            e.code='missing_size_grid_row';throw e;
+        }
+        const attributes=(row.attributes||[]).filter(a=>!['SIZE','SIZE_GRID_ID','SIZE_GRID_ROW_ID'].includes(String(a.id)));
+        attributes.push(size);
+        return {...row,size_grid_row_id:rowId,attributes,size};
+    });
+    // Usa os valores canônicos também na validação de campos obrigatórios e
+    // duplicidade, evitando rejeitar "34" quando a ficha exige "34 BR".
+    opts.variationsConfigV60={...varCfg,rows:resolvidas};
     payload.attributes=Array.isArray(payload.attributes)?payload.attributes:[];
     pushUnique(payload.attributes,{id:'SIZE_GRID_ID',value_name:gridId});
-
-    const linhasValidas=chart?linhasValidasGuiaV58(chart,gridId):new Map();
-    const resolver=(row)=>{
-        if(!chart)return '';
-        const manualRaw=String(row?.size_grid_row_id||'').trim();
-        if(manualRaw){
-            const manual=normalizarGridRowIdV58(gridId,manualRaw);
-            const achouManual=linhasValidas.get(manual)||linhasValidas.get(manualRaw);
-            if(achouManual)return formatarGridRowIdV55(gridId,achouManual);
-            // ID manual incompatível: não envia. Tenta recuperar pela numeração.
-        }
-        const tamanho=tamanhoDaLinhaV55(row,chart);
-        if(!tamanho)return '';
-        const achou=acharRowChartV55(chart,tamanho);
-        return formatarGridRowIdV55(gridId,achou);
-    };
-
     if(opts.userProductSeller){
-        const row=rowsCfg[Number(opts.variationIndex||0)]||rowsCfg[0];
-        const rowId=resolver(row);
-        if(!rowId){
-            const tam=tamanhoDaLinhaV55(row,chart)||'não informado';
-            const e=new Error(`Guia de tamanho ${gridId}: não encontrei uma linha válida para o tamanho ${tam}. O SIZE_GRID_ROW_ID antigo/manual foi ignorado para evitar o erro invalid.fashion_grid.grid_row_id.values. Carregue o guia correto e escolha um tamanho existente nele.`);
-            e.code='missing_size_grid_row'; throw e;
-        }
-        pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
+        const row=resolvidas[Number(opts.variationIndex||0)]||resolvidas[0];
+        pushUnique(payload.attributes,{...row.size});
+        pushUnique(payload.attributes,{id:'SIZE_GRID_ROW_ID',value_name:row.size_grid_row_id});
     }else if(Array.isArray(payload.variations)){
+        // No modelo legado SIZE fica na combinação e ROW_ID nos atributos da
+        // própria variação, sem um tamanho único conflitante no nível do item.
+        payload.attributes=payload.attributes.filter(a=>!['SIZE','SIZE_GRID_ROW_ID'].includes(String(a.id)));
         payload.variations=payload.variations.map((v,i)=>{
-            const row=rowsCfg[i]||rowsCfg[0];
-            const rowId=resolver(row);
-            if(!rowId){
-                const tam=tamanhoDaLinhaV55(row,chart)||'não informado';
-                const e=new Error(`Guia de tamanho ${gridId}: a variação ${i+1} (tamanho ${tam}) não corresponde a nenhuma linha válida do guia. O painel não enviará um SIZE_GRID_ROW_ID inválido.`);
-                e.code='missing_size_grid_row'; throw e;
-            }
-            const attrs=Array.isArray(v.attributes)?v.attributes:[];
-            pushUnique(attrs,{id:'SIZE_GRID_ROW_ID',value_name:rowId});
-            return {...v,attributes:attrs};
+            const row=resolvidas[i];
+            const combinations=(v.attribute_combinations||[]).filter(a=>!['SIZE','SIZE_GRID_ID','SIZE_GRID_ROW_ID'].includes(String(a.id)));
+            pushUnique(combinations,{...row.size});
+            const attrs=(v.attributes||[]).filter(a=>String(a.id)!=='SIZE');
+            pushUnique(attrs,{id:'SIZE_GRID_ROW_ID',value_name:row.size_grid_row_id});
+            return {...v,attribute_combinations:combinations,attributes:attrs};
         });
     }
     return payload;
@@ -7554,6 +7618,8 @@ function mapAtributoDefV46(a={}){
         name:String(a.name||a.id||''),
         value_type:String(a.value_type||'string'),
         value_max_length:Number(a.value_max_length||0)||null,
+        allowed_units:Array.isArray(a.allowed_units)?a.allowed_units.map(u=>({id:String(u.id||''),name:String(u.name||u.id||'')})):[],
+        default_unit:String(a.default_unit||''),
         values:Array.isArray(a.values)?a.values.slice(0,150).map(v=>({id:v?.id??'',name:String(v?.name||'')})):[],
         required:Boolean(a?.tags?.required),
         conditional_required:Boolean(a?.tags?.conditional_required),
@@ -7661,6 +7727,8 @@ async function obterCategoriaV46(token,categoryId,{force=false}={}){
             values:(Array.isArray(atual.values)&&atual.values.length)?atual.values:a.values,
             value_type:atual.value_type||a.value_type,
             value_max_length:atual.value_max_length||a.value_max_length,
+            allowed_units:atual.allowed_units?.length?atual.allowed_units:a.allowed_units,
+            default_unit:atual.default_unit||a.default_unit,
             required:Boolean(atual.required||a.required),
             hidden:Boolean(atual.hidden||a.hidden),
             read_only:Boolean(atual.read_only||a.read_only)
@@ -7731,6 +7799,10 @@ function sanitizarValorAtributoV46(attr,def){
         return {id,value_id:'-1',value_name:null};
     }
 
+    if(/^SELLER_PACKAGE_(HEIGHT|LENGTH|WIDTH|WEIGHT)$/.test(id)){
+        return normalizarMedidaAtributoV60(attr,def);
+    }
+
     if(valores.length){
         let match=null;
         if(valueId)match=valores.find(v=>String(v.id)===valueId)||null;
@@ -7758,12 +7830,6 @@ function sanitizarValorAtributoV46(attr,def){
 async function prepararPayloadPublicacaoV46(token,cfg,opts){
     const category=opts.category||{};
     const meta=await obterCategoriaV46(token,category.category_id);
-    const errosVariacaoV53=validarLinhasVariacaoV53(cfg?.variations||{},meta);
-    if(errosVariacaoV53.length){
-        const e=new Error(errosVariacaoV53.join(' '));
-        e.code='invalid_variations';
-        throw e;
-    }
     if(!meta.listing_allowed){
         const e=new Error(`A categoria ${category.category_name||category.category_id} não permite novas publicações.`);
         e.code='category_listing_not_allowed';throw e;
@@ -7782,7 +7848,12 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
 
     aplicarCodigoUniversalV51(payload,cfg,meta);
     ajustarSaleTermsCategoriaV51(payload,cfg,meta);
-    await aplicarGuiaTamanhoV55(token,payload,cfg,{...opts,userProductSeller:Boolean(opts?.userProductSeller)});
+    const guiaOptsV60={...opts,userProductSeller:Boolean(opts?.userProductSeller)};
+    await aplicarGuiaTamanhoV55(token,payload,cfg,guiaOptsV60);
+    const errosVariacaoV53=validarLinhasVariacaoV53(guiaOptsV60.variationsConfigV60||cfg?.variations||{},meta);
+    if(errosVariacaoV53.length){
+        const e=new Error(errosVariacaoV53.join(' '));e.code='invalid_variations';throw e;
+    }
 
     // Resolve automaticamente o envio permitido pela conta + categoria.
     // Evita deixar o Mercado Livre assumir ME1 quando a conta não possui mais esse modo.
@@ -7790,7 +7861,10 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
     let shippingInfo=null;
     if(sellerId){
         if(category?.shipping_strategy && category?.shipping_mode==='me2'){
+            const dimensoes_auto=completarDimensoesPacoteME2V50(payload,{category_dimensions:category.shipping_category_dimensions||{}},meta);
             shippingInfo={
+                dimensoes_auto,
+                category_dimensions:category.shipping_category_dimensions||null,
                 mode:'me2',
                 candidates:['me2'],
                 free_shipping:Boolean(category.shipping_free_shipping),
@@ -7820,7 +7894,8 @@ async function prepararPayloadPublicacaoV46(token,cfg,opts){
     }
 
     const enviados=new Set(payload.attributes.map(a=>a.id));
-    const enviadosVariacoes=new Set((Array.isArray(payload.variations)?payload.variations:[]).flatMap(v=>(v.attribute_combinations||[]).map(a=>String(a.id))));
+    const variations=Array.isArray(payload.variations)?payload.variations:[];
+    const enviadosVariacoes=new Set(variations.flatMap(v=>[...(v.attribute_combinations||[]),...(v.attributes||[])].map(a=>String(a.id))).filter(id=>variations.every(v=>[...(v.attribute_combinations||[]),...(v.attributes||[])].some(a=>String(a.id)===id))));
     const faltantes=meta.required
       .filter(d=>!enviados.has(d.id)&&!enviadosVariacoes.has(String(d.id)))
       .filter(d=>!['ITEM_CONDITION'].includes(d.id))
@@ -8623,8 +8698,45 @@ app.post('/api/v37/criar/ia/imagens-pack',async(req,res)=>{
 });
 
 app.get('/api/v51/build',(req,res)=>{
-    res.json({sucesso:true,version:'V59',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-100%-automatico',package_dimensions:'auto-category-defaults'});
+    res.json({sucesso:true,version:'V60',publication:'user-products-multivariacao-por-titulo',shipping:'ME2-explicito',attributes:'principais-secundarias',variations:'multi-atributo-por-linha+size-grid-100%-automatico',package_dimensions:'cm-g-com-unidades',size_values:'canonicos-do-guia',validation:'todas-as-variacoes'});
 });
+
+async function validarCategoriaPublicacaoV60(token,cfg,category,me){
+    const up=Array.isArray(me?.tags)&&me.tags.includes('user_product_seller');
+    const count=quantidadeVariacoesV53(cfg,up);
+    const sizeGuideCacheV60=new Map();
+    const entradas=[];
+    for(let variationIndex=0;variationIndex<count;variationIndex++){
+        try{
+            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex,userProductSeller:up,category,sellerId:me.id,sizeGuideCacheV60});
+            if(prepared.faltantes.length){
+                entradas.push({prepared,resultado:{category_id:category.category_id,category_name:category.category_name,variation_index:variationIndex,sucesso:false,erro:`Faltam características obrigatórias: ${prepared.faltantes.map(x=>x.name).join(', ')}.`,detalhes:prepared.faltantes.map(x=>`Preencha ${x.name} (${x.id}).`),campos_faltando:prepared.faltantes}});
+                continue;
+            }
+            const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,prepared.payload,prepared.shippingInfo);
+            const vd=validacao.data;
+            const override=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
+            const warningsOnly=Boolean(validacao.warnings_only)||somenteWarningsMercadoV51(vd);
+            const sucesso=validacao.response.ok||warningsOnly||override;
+            entradas.push({prepared,validacao,resultado:{
+                category_id:category.category_id,category_name:category.category_name,variation_index:variationIndex,
+                sucesso,validacao:vd,
+                aviso:warningsOnly?'O Mercado Livre retornou avisos não bloqueantes. Revise os avisos antes de publicar.':(override?'Envio confirmado em ME2.':null),
+                erro:sucesso?null:formatarErroMercadoLivre(vd),detalhes:sucesso?[]:detalhesValidacaoV46(vd),
+                shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
+                shipping_strategy:validacao.strategy||null,shipping_logistic_type:prepared.shippingInfo?.logistic_type||null,
+                shipping_free_shipping:Boolean(validacao.payload?.shipping?.free_shipping),
+                shipping_free_shipping_required:Boolean(prepared.shippingInfo?.free_shipping_required),
+                shipping_payload:validacao.payload?.shipping||null,shipping_tentativas:validacao.tentativas||[],
+                dimensoes_pacote_auto:prepared.shippingInfo?.dimensoes_auto||[],
+                fotos_enviadas:validacao.payload?.pictures?.length||0,limite_fotos:prepared.maxPics
+            }});
+        }catch(e){
+            entradas.push({resultado:{category_id:category.category_id,category_name:category.category_name,variation_index:variationIndex,sucesso:false,erro:e.message,detalhes:[e.message]}});
+        }
+    }
+    return entradas;
+}
 
 app.post('/api/v51/criar/validar',async(req,res)=>{
     const token=obterToken(req);
@@ -8639,55 +8751,8 @@ app.post('/api/v51/criar/validar',async(req,res)=>{
 
         const resultados=[];
         for(const category of categories){
-            try{
-                const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
-                const sample=prepared.payload;
-                if(up && cfg?.variations?.enabled) delete sample.variations;
-
-                if(prepared.faltantes.length){
-                    resultados.push({
-                        category_id:category.category_id,
-                        category_name:category.category_name,
-                        sucesso:false,
-                        erro:`Faltam características obrigatórias para publicar: ${prepared.faltantes.map(x=>x.name).join(', ')}.`,
-                        detalhes:prepared.faltantes.map(x=>`Preencha ${x.name} (${x.id}).`),
-                        campos_faltando:prepared.faltantes,
-                        fotos_enviadas:sample.pictures?.length||0,
-                        limite_fotos:prepared.maxPics
-                    });
-                    continue;
-                }
-
-                const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
-                const vr=validacao.response;
-                const vd=validacao.data;
-                const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
-                const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
-                const liberado=vr.ok||warningsOnly||overrideLostMe1;
-                resultados.push({
-                    category_id:category.category_id,
-                    category_name:category.category_name,
-                    sucesso:liberado,
-                    validacao:vd,
-                    aviso:warningsOnly
-                      ? 'O Mercado Livre retornou apenas avisos não bloqueantes. Eles serão aplicados/normalizados automaticamente na publicação.'
-                      : (overrideLostMe1?'O pré-validador retornou uma regra antiga de ME1, mas o payload está confirmado em ME2. A publicação real será tentada em ME2.':null),
-                    erro:liberado?null:formatarErroMercadoLivre(vd),
-                    detalhes:liberado?[]:detalhesValidacaoV46(vd),
-                    shipping_mode:validacao.mode||prepared.shippingInfo?.mode||null,
-                    shipping_strategy:validacao.strategy||null,
-                    shipping_logistic_type:prepared.shippingInfo?.logistic_type||null,
-                    shipping_free_shipping:Boolean(validacao.payload?.shipping?.free_shipping),
-                    shipping_free_shipping_required:Boolean(prepared.shippingInfo?.free_shipping_required),
-                    shipping_payload:validacao.payload?.shipping||null,
-                    shipping_tentativas:validacao.tentativas||[],
-                    dimensoes_pacote_auto:prepared.shippingInfo?.dimensoes_auto||[],
-                    fotos_enviadas:validacao.payload?.pictures?.length||sample.pictures?.length||0,
-                    limite_fotos:prepared.maxPics
-                });
-            }catch(e){
-                resultados.push({category_id:category.category_id,category_name:category.category_name,sucesso:false,erro:e.message,detalhes:[e.message]});
-            }
+            const entradas=await validarCategoriaPublicacaoV60(token,cfg,category,me);
+            resultados.push(...entradas.map(x=>x.resultado));
         }
 
         const ok=resultados.every(x=>x.sucesso);
@@ -8730,41 +8795,28 @@ app.post('/api/v51/criar/publicar',async(req,res)=>{
             return respostaErro(res,400,'Preencha as linhas das variações antes de publicar.');
         }
 
-        // Pré-valida uma amostra em TODAS as categorias antes de abrir o job.
-        // Assim a fila não começa condenada por um campo inválido.
+        // Pré-valida todas as variações em cada categoria antes de abrir a fila.
         const errosValidacao=[];
         const categoriasLimpas=[];
         let maxPicsGlobal=manualPictureSources.length||pictureIds.length;
         for(const category of categories){
-            const prepared=await prepararPayloadPublicacaoV46(token,cfg,{familyIndex:0,variationIndex:0,userProductSeller:up,category,sellerId:me.id});
-            if(prepared.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,prepared.maxPics);
-            if(prepared.faltantes.length){
-                errosValidacao.push(`${category.category_name}: faltam ${prepared.faltantes.map(x=>x.name).join(', ')}`);
-                continue;
+            const entradas=await validarCategoriaPublicacaoV60(token,cfg,category,me);
+            for(const entrada of entradas){
+                if(entrada.prepared?.maxPics)maxPicsGlobal=Math.min(maxPicsGlobal,entrada.prepared.maxPics);
+                if(!entrada.resultado.sucesso){
+                    const r=entrada.resultado;
+                    errosValidacao.push(`${category.category_name}${up&&varCfg.enabled?` · variação ${r.variation_index+1}`:''}: ${(r.detalhes||[]).join(' / ')||r.erro}`);
+                }
             }
-            const sample=prepared.payload;
-            if(up&&varCfg.enabled)delete sample.variations;
-            const validacao=await validarPayloadMercadoComFallbackEnvioV50(token,sample,prepared.shippingInfo);
-            const vr=validacao.response;
-            const vd=validacao.data;
-            const overrideLostMe1=podeIgnorarLostMe1NoValidadorV50(validacao,prepared.shippingInfo);
-            const warningsOnly=Boolean(validacao?.warnings_only)||somenteWarningsMercadoV51(vd);
-            if(!vr.ok&&!overrideLostMe1&&!warningsOnly){
-                errosValidacao.push(`${category.category_name}: ${formatarErroMercadoLivre(vd)}`);
-                continue;
-            }
-            // Se apenas o validador legado reclamar de ME1, mas todo o preflight confirmou ME2,
-            // não bloqueamos a fila: o POST /items real será a fonte final de verdade.
-            // Salva o modo ME2 para o worker usar a mesma configuração.
+            if(entradas.some(x=>!x.resultado.sucesso))continue;
+            const {prepared,validacao}=entradas[0];
             category.shipping_mode='me2';
             category.shipping_strategy=validacao.strategy||'me2_full';
-            category.shipping_free_shipping=Boolean(validacao.payload?.shipping?.free_shipping ?? prepared.shippingInfo?.free_shipping);
+            category.shipping_free_shipping=entradas.some(x=>Boolean(x.validacao.payload?.shipping?.free_shipping ?? x.prepared.shippingInfo?.free_shipping));
             category.shipping_local_pick_up=Boolean(validacao.payload?.shipping?.local_pick_up ?? prepared.shippingInfo?.local_pick_up);
             category.shipping_logistic_type=String(prepared.shippingInfo?.logistic_type||'');
-            categoriasLimpas.push({
-                ...category,
-                attributes:prepared.payload.attributes
-            });
+            category.shipping_category_dimensions=prepared.shippingInfo?.category_dimensions||null;
+            categoriasLimpas.push({...category,attributes:prepared.payload.attributes});
         }
         if(errosValidacao.length){
             return res.status(400).json({
@@ -9353,6 +9405,9 @@ app.get('/api/v57/criar/guia-tamanho/:gridId', async (req,res)=>{
                 row_number:String(row?.id??row?.row_id??i+1),
                 label,
                 sizes,
+                size_values:valoresTamanhoGuiaV60(chart,row),
+                size_attribute:atributoSizeDaLinhaGuiaV60(chart,row),
+                main_attribute_id:String(chart?.main_attribute_id||''),
                 attributes:Array.isArray(row?.attributes)?row.attributes:[]
             };
         }).filter(x=>x.row_id);
