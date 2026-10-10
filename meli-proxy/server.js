@@ -3091,6 +3091,198 @@ app.get('/api/v2/anuncios', async (req, res) => {
    V86 — PUXAR ANÚNCIOS DIRETO / SEM POSTGRESQL
    100 anúncios por página, checkpoint no navegador.
 ========================================================= */
+
+function chaveComissaoDiretaV87(item){
+    const shipping=item?.shipping||{};
+    return [
+        String(item?.site_id||'MLB'),
+        Number(item?.price||0).toFixed(2),
+        String(item?.currency_id||'BRL'),
+        String(item?.listing_type_id||''),
+        String(item?.catalog_product_id||''),
+        String(item?.category_id||''),
+        String(shipping?.logistic_type||''),
+        String(shipping?.mode||'')
+    ].join('|');
+}
+
+async function enriquecerComissoesDiretoV87(rawItens,token){
+    const itens=Array.isArray(rawItens)?rawItens:[];
+    if(!itens.length)return {mapa:new Map(),erros:0,consultas:0};
+
+    // Muitos anúncios possuem exatamente o mesmo contexto de taxa.
+    // Consultamos a API uma vez por combinação realmente diferente.
+    const grupos=new Map();
+    for(const item of itens){
+        const k=chaveComissaoDiretaV87(item);
+        if(!grupos.has(k))grupos.set(k,[]);
+        grupos.get(k).push(item);
+    }
+
+    const entradas=[...grupos.entries()];
+    const resultados=new Map();
+    let cursor=0;
+    let erros=0;
+
+    const concorrencia=Math.max(
+        4,
+        Math.min(24,Number(process.env.ML_COMMISSION_CONCURRENCY||16))
+    );
+
+    async function worker(){
+        while(true){
+            const idx=cursor++;
+            if(idx>=entradas.length)return;
+
+            const [key,grupo]=entradas[idx];
+            const amostra=grupo[0];
+
+            try{
+                const fee=await consultarComissaoItemV28(amostra,token);
+                resultados.set(key,{
+                    sale_fee:Number(fee.sale_fee_amount||0),
+                    commission_percentage:Number(fee.percentage_fee||0),
+                    erro:null
+                });
+            }catch(e){
+                erros++;
+                resultados.set(key,{
+                    sale_fee:0,
+                    commission_percentage:0,
+                    erro:String(e?.message||e||'Falha ao consultar comissão.')
+                });
+            }
+        }
+    }
+
+    await Promise.all(
+        Array.from(
+            {length:Math.min(concorrencia,Math.max(1,entradas.length))},
+            ()=>worker()
+        )
+    );
+
+    const mapa=new Map();
+    for(const item of itens){
+        const r=resultados.get(chaveComissaoDiretaV87(item))||{
+            sale_fee:0,
+            commission_percentage:0,
+            erro:'Comissão não retornada.'
+        };
+        mapa.set(String(item.id),r);
+    }
+
+    return {
+        mapa,
+        erros,
+        consultas:entradas.length
+    };
+}
+
+
+app.get('/api/v87/anuncios/scan', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const scrollId=String(req.query.scroll_id||'').trim();
+
+        const pagina=await buscarPaginaScanV84({
+            sellerId,
+            token,
+            scrollId:scrollId||null
+        });
+
+        if(pagina.cursor_expirado){
+            return res.status(409).json({
+                sucesso:false,
+                cursor_expirado:true,
+                seller_id:sellerId,
+                erro:'Cursor expirado.'
+            });
+        }
+
+        const ids=Array.isArray(pagina.results)?pagina.results.map(String).filter(Boolean):[];
+        let mapa={};
+
+        if(ids.length){
+            const detalhes=await buscarItensBulkFreteRapido(token,ids);
+            mapa=detalhes?.mapa||{};
+        }
+
+        const raws=ids.map(id=>mapa[String(id)]).filter(Boolean);
+
+        // Comissão exata via listing_prices, com deduplicação por contexto.
+        const comissoes=raws.length
+          ? await enriquecerComissoesDiretoV87(raws,token)
+          : {mapa:new Map(),erros:0,consultas:0};
+
+        const itens=[];
+        for(const id of ids){
+            const raw=mapa[String(id)];
+            if(!raw)continue;
+
+            const n=normalizarItemGestao(raw);
+            const fee=comissoes.mapa.get(String(id))||{
+                sale_fee:0,
+                commission_percentage:0
+            };
+
+            const price=Number(n.preco||0);
+            const shippingCost=Number(raw?.shipping_cost||0);
+            const saleFee=Math.max(0,Number(fee.sale_fee||0));
+            const commissionPercentage=Math.max(0,Number(fee.commission_percentage||0));
+
+            itens.push({
+                id:String(n.id||id),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price,
+                sale_fee:saleFee,
+                commission_percentage:commissionPercentage,
+                shipping_cost:shippingCost,
+                net_received:Math.max(0,price-saleFee-shippingCost),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                last_updated:n.atualizado_em||raw?.last_updated||null,
+                date_created:raw?.date_created||null
+            });
+        }
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_v87_commission',
+            seller_id:sellerId,
+            total:Number(pagina.total||0),
+            ids_count:ids.length,
+            itens_count:itens.length,
+            commission_queries:Number(comissoes.consultas||0),
+            commission_errors:Number(comissoes.erros||0),
+            scroll_id:pagina.scroll_id||null,
+            terminou:ids.length===0 || !pagina.scroll_id,
+            itens
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária. Repita a chamada; o checkpoint local continua salvo.'
+              : 'Erro ao puxar anúncios e comissão: '+msg
+        );
+    }
+});
+
 app.get('/api/v86/anuncios/scan', async (req,res)=>{
     const token=obterToken(req);
     if(!token)return respostaErro(res,401,'Token não fornecido.');
