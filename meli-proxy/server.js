@@ -10727,11 +10727,26 @@ app.get('/api/v77/promocoes/anuncios',async(req,res)=>{
         const limit=Math.max(20,Math.min(200,Number(req.query.limit||100)));
         const offset=(page-1)*limit;
         const q=String(req.query.q||'').trim();
+        const searchField=String(req.query.search_field||'sku').trim().toLowerCase();
         const status=String(req.query.status||'').trim();
         const participation=String(req.query.participation||'').trim();
 
-        const params=[sellerId],conds=['m.seller_id=$1'];
-        if(q){params.push(`%${q}%`);conds.push(`(m.title ILIKE $${params.length} OR m.sku ILIKE $${params.length} OR m.item_id ILIKE $${params.length})`)}
+        const params=[sellerId],conds=['m.seller_id::text=$1'];
+        if(q){
+            if(searchField==='sku'){
+                params.push(q);
+                conds.push(`LOWER(COALESCE(m.sku,''))=LOWER($${params.length})`);
+            }else if(searchField==='mlb'){
+                params.push(q);
+                conds.push(`LOWER(m.item_id)=LOWER($${params.length})`);
+            }else if(searchField==='title'){
+                params.push(`%${q}%`);
+                conds.push(`m.title ILIKE $${params.length}`);
+            }else{
+                params.push(`%${q}%`);
+                conds.push(`(m.title ILIKE $${params.length} OR m.sku ILIKE $${params.length} OR m.item_id ILIKE $${params.length})`);
+            }
+        }
         if(status){params.push(status);conds.push(`m.status=$${params.length}`)}
         if(participation&&promotionId&&promotionType){
             if(participation==='candidate')conds.push(`COALESCE(pi.promo_status,'')='candidate'`);
@@ -10745,7 +10760,7 @@ app.get('/api/v77/promocoes/anuncios',async(req,res)=>{
             params.push(promotionId);const pId=params.length;
             params.push(promotionType);const pType=params.length;
             join=`LEFT JOIN ml_promotion_items_v77 pi
-              ON pi.seller_id=m.seller_id AND pi.item_id=m.item_id
+              ON pi.seller_id=m.seller_id::text AND pi.item_id=m.item_id
               AND pi.promotion_id=$${pId} AND pi.promotion_type=$${pType}`;
         }else{
             join=`LEFT JOIN LATERAL (
@@ -10815,10 +10830,10 @@ async function executarAcaoPromocaoItemV77(token,sellerId,{id,action,promotionId
       SELECT m.price::float8 price,pi.promo_status,pi.offer_id,pi.raw promo_raw,
              p.raw campaign_raw,p.start_date,p.finish_date
       FROM ml_items m
-      LEFT JOIN ml_promotion_items_v77 pi ON pi.seller_id=m.seller_id AND pi.item_id=m.item_id
+      LEFT JOIN ml_promotion_items_v77 pi ON pi.seller_id=m.seller_id::text AND pi.item_id=m.item_id
         AND pi.promotion_id=$3 AND pi.promotion_type=$4
-      LEFT JOIN ml_promotions_v77 p ON p.seller_id=m.seller_id AND p.promotion_id=$3 AND p.promotion_type=$4
-      WHERE m.seller_id=$1 AND m.item_id=$2
+      LEFT JOIN ml_promotions_v77 p ON p.seller_id=m.seller_id::text AND p.promotion_id=$3 AND p.promotion_type=$4
+      WHERE m.seller_id::text=$1 AND m.item_id=$2
       LIMIT 1
     `,[String(sellerId),String(id),promotionId,promotionType])).rows[0];
     if(!meta)throw new Error('Anúncio não encontrado no cache da Gestão.');
@@ -10878,6 +10893,46 @@ app.post('/api/v77/promocoes/acao',async(req,res)=>{
     }catch(e){respostaErro(res,400,e.message)}
 });
 
+
+function filtroPromocaoMassaV78(filtro={},params){
+    const conds=[];
+    const q=String(filtro?.q||'').trim();
+    const field=String(filtro?.search_field||'sku').trim().toLowerCase();
+    const status=String(filtro?.status||'').trim();
+    const participation=String(filtro?.participation||'').trim();
+
+    if(q){
+        if(field==='sku'){
+            params.push(q);
+            conds.push(`LOWER(COALESCE(m.sku,''))=LOWER($${params.length})`);
+        }else if(field==='mlb'){
+            params.push(q);
+            conds.push(`LOWER(m.item_id)=LOWER($${params.length})`);
+        }else if(field==='title'){
+            params.push(`%${q}%`);
+            conds.push(`m.title ILIKE $${params.length}`);
+        }else{
+            params.push(`%${q}%`);
+            conds.push(`(m.title ILIKE $${params.length} OR m.sku ILIKE $${params.length} OR m.item_id ILIKE $${params.length})`);
+        }
+    }
+
+    if(status){
+        params.push(status);
+        conds.push(`m.status=$${params.length}`);
+    }
+
+    if(participation==='candidate'){
+        conds.push(`COALESCE(pi.promo_status,'')='candidate'`);
+    }else if(participation==='participating'){
+        conds.push(`COALESCE(pi.promo_status,'') IN ('started','pending')`);
+    }else if(participation==='not_participating'){
+        conds.push(`COALESCE(pi.promo_status,'') NOT IN ('started','pending')`);
+    }
+
+    return conds;
+}
+
 async function processarPromocaoMassaV77(job){
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token)throw new Error('Token Mercado Livre indisponível para gerenciar promoções.');
@@ -10889,11 +10944,22 @@ async function processarPromocaoMassaV77(job){
 
     if(p.all_eligible){
         const statuses=action==='leave'?['started','pending']:['candidate'];
+        const params=[String(job.seller_id),promotionId,promotionType,statuses];
+        const filtroConds=filtroPromocaoMassaV78(p.filter||{},params);
+
         const r=await dbQuery(`
-          SELECT item_id id FROM ml_promotion_items_v77
-          WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3 AND promo_status=ANY($4::text[])
-          ORDER BY item_id
-        `,[String(job.seller_id),promotionId,promotionType,statuses]);
+          SELECT pi.item_id id
+          FROM ml_promotion_items_v77 pi
+          JOIN ml_items m
+            ON m.item_id=pi.item_id
+           AND m.seller_id::text=pi.seller_id
+          WHERE pi.seller_id=$1
+            AND pi.promotion_id=$2
+            AND pi.promotion_type=$3
+            AND pi.promo_status=ANY($4::text[])
+            ${filtroConds.length?'AND '+filtroConds.join(' AND '):''}
+          ORDER BY pi.item_id
+        `,params);
         items=r.rows;
     }
 
@@ -10941,17 +11007,29 @@ app.post('/api/v77/promocoes/acao-massa',async(req,res)=>{
         const items=Array.isArray(body.items)?body.items.slice(0,100000):[];
         if(!items.length&&!body.all_eligible)return respostaErro(res,400,'Selecione pelo menos um anúncio ou use todos os elegíveis.');
 
-        const total=body.all_eligible
-          ? Number((await dbQuery(`
-              SELECT COUNT(*)::int n FROM ml_promotion_items_v77
-              WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3
-                AND promo_status=ANY($4::text[])
-            `,[sellerId,promotionId,promotionType,action==='leave'?['started','pending']:['candidate']])).rows[0]?.n||0)
-          : items.length;
+        let total=items.length;
+        if(body.all_eligible){
+            const params=[sellerId,promotionId,promotionType,action==='leave'?['started','pending']:['candidate']];
+            const filtroConds=filtroPromocaoMassaV78(body.filter||{},params);
+            const tr=await dbQuery(`
+              SELECT COUNT(*)::int n
+              FROM ml_promotion_items_v77 pi
+              JOIN ml_items m
+                ON m.item_id=pi.item_id
+               AND m.seller_id::text=pi.seller_id
+              WHERE pi.seller_id=$1
+                AND pi.promotion_id=$2
+                AND pi.promotion_type=$3
+                AND pi.promo_status=ANY($4::text[])
+                ${filtroConds.length?'AND '+filtroConds.join(' AND '):''}
+            `,params);
+            total=Number(tr.rows[0]?.n||0);
+        }
 
         const job=await criarJob(sellerId,'promotion_mass_v77',{
             promotion_id:promotionId,promotion_type:promotionType,action,
-            percent:Number(body.percent||0),items,all_eligible:Boolean(body.all_eligible)
+            percent:Number(body.percent||0),items,all_eligible:Boolean(body.all_eligible),
+            filter:body.filter||{}
         });
         await dbQuery(`
           UPDATE ml_jobs SET progress_total=$2,progress_current=0,processed=0,errors=0,cursor='0',
