@@ -1384,7 +1384,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 <button
                     onclick="puxarNovosAnuncios()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
-                    title="Sincroniza os an&#250;ncios em lotes l&#243;gicos de at&#233; 5.000 e retoma se houver interrup&#231;&#227;o"
+                    title="Sincroniza todos os an&#250;ncios em lotes de 1.000, salva checkpoint e retoma automaticamente do ponto salvo"
                 >
                     &#8595; Puxar an&#250;ncios
                 </button>
@@ -2019,7 +2019,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 5.000</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; V84</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -10641,34 +10641,57 @@ async function iniciarJobSyncV26(tipo,url){
     const token=obterToken();
     if(!token){solicitarToken();return}
 
-    atualizarProgressoV26(tipo,{status:'queued',mensagem:'Solicitando sincroniza\u00e7\u00e3o ao servidor...'});
+    atualizarProgressoV26(tipo,{
+        status:'queued',
+        mensagem:tipo==='anuncios'
+            ? 'Solicitando sincronização em lotes de 1.000...'
+            : 'Solicitando sincronização ao servidor...'
+    });
 
     try{
-        const r=await fetch(`${RENDER_URL}${url}?_=${Date.now()}`,{
-            method:'POST',
-            cache:'no-store',
-            headers:{Authorization:token,'Content-Type':'application/json'},
-            body:'{}'
-        });
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),15000);
+        let r;
+        try{
+            r=await fetch(`${RENDER_URL}${url}?_=${Date.now()}`,{
+                method:'POST',
+                cache:'no-store',
+                signal:controller.signal,
+                headers:{Authorization:token,'Content-Type':'application/json'},
+                body:'{}'
+            });
+        }finally{
+            clearTimeout(timer);
+        }
+
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
 
         const jobId=d.job?.id;
-        if(!jobId)throw new Error('Servidor n\u00e3o retornou o ID da sincroniza\u00e7\u00e3o.');
+        if(!jobId)throw new Error('Servidor não retornou o ID da sincronização.');
 
         localStorage.setItem(`mlHubPro_sync_v26_${tipo}`,String(jobId));
+
         atualizarProgressoV26(tipo,{
             status:d.job?.status||'queued',
             atual:Number(d.job?.progress_current||0),
             total:Number(d.job?.progress_total||0),
-            mensagem:d.mensagem||d.job?.message||'Sincroniza\u00e7\u00e3o iniciada.'
+            mensagem:d.mensagem||d.job?.message||'Sincronização iniciada.'
         });
 
         acompanharJobSyncV26(tipo,jobId);
     }catch(e){
-        atualizarProgressoV26(tipo,{status:'failed',mensagem:e.message||'Falha ao iniciar sincroniza\u00e7\u00e3o.'});
+        const msg=String(e?.message||e||'');
+        const temporario=/AbortError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|network|fetch|failed to fetch|connection|57P03|database system|recovery|502|503|504/i.test(msg);
+        atualizarProgressoV26(tipo,{
+            status:'queued',
+            mensagem:temporario
+                ? 'Servidor/banco temporariamente indisponível. O progresso anterior permanece salvo; tente novamente em alguns segundos.'
+                : msg
+        });
     }
 }
+
 
 async function acompanharJobSyncV26(tipo,jobId){
     clearTimeout(syncTimersV26[tipo]);
@@ -10677,14 +10700,24 @@ async function acompanharJobSyncV26(tipo,jobId){
     if(!token)return;
 
     try{
-        const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{
-            cache:'no-store',
-            headers:{Authorization:token,Accept:'application/json'}
-        });
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),12000);
+        let r;
+        try{
+            r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{
+                cache:'no-store',
+                signal:controller.signal,
+                headers:{Authorization:token,Accept:'application/json'}
+            });
+        }finally{
+            clearTimeout(timer);
+        }
+
         const d=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
 
         const j=d.job||{};
+
         atualizarProgressoV26(tipo,{
             status:j.status||'running',
             atual:Number(j.progress_current||0),
@@ -10693,66 +10726,73 @@ async function acompanharJobSyncV26(tipo,jobId){
         });
 
         if(['queued','running'].includes(j.status)){
-            if(tipo==='anuncios')mostrarCancelarSyncV82(true);
+            // Se a fila ficar quieta, apenas "acorda" o servidor. Não cria outro job.
             if(j.status==='queued'){
                 if(!syncQueuedDesdeV76[tipo])syncQueuedDesdeV76[tipo]=Date.now();
-                const segundos=Math.floor((Date.now()-syncQueuedDesdeV76[tipo])/1000);
-                if(segundos>=8){
-                    atualizarProgressoV26(tipo,{
-                        status:'running',
-                        atual:Number(j.progress_current||0),
-                        total:Number(j.progress_total||0),
-                        mensagem:tipo==='anuncios'
-                          ? 'Acordando sincronização dedicada · lote de 5.000'
-                          : 'Aguardando worker do servidor'
-                    });
-                    if(tipo==='anuncios' && Date.now()-(syncWakeTentativaV79.anuncios||0)>8000){
-                        syncWakeTentativaV79.anuncios=Date.now();
-                        fetch(`${RENDER_URL}/api/scale/sync`,{
-                            method:'POST',cache:'no-store',
-                            headers:{Authorization:obterToken(),Accept:'application/json'}
-                        }).catch(()=>{});
-                    }
+                const segundos=(Date.now()-syncQueuedDesdeV76[tipo])/1000;
+
+                if(tipo==='anuncios' && segundos>=10 && Date.now()-(syncWakeTentativaV79.anuncios||0)>10000){
+                    syncWakeTentativaV79.anuncios=Date.now();
+                    fetch(`${RENDER_URL}/api/scale/sync`,{
+                        method:'POST',
+                        cache:'no-store',
+                        headers:{Authorization:token,'Content-Type':'application/json'},
+                        body:'{}'
+                    }).catch(()=>{});
                 }
             }else{
                 syncQueuedDesdeV76[tipo]=0;
             }
-            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),1200);
+
+            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),1500);
             return;
         }
 
         if(j.status==='completed'){
             localStorage.removeItem(`mlHubPro_sync_v26_${tipo}`);
+            syncQueuedDesdeV76[tipo]=0;
 
-            // Se an\u00fancio, pre\u00e7o ou frete mudou, a pr\u00f3xima entrada atualiza uma vez.
-            if(typeof invalidarCacheAnunciosV30==='function'){
-                invalidarCacheAnunciosV30();
-            }
+            if(typeof invalidarCacheAnunciosV30==='function')invalidarCacheAnunciosV30();
 
             if(typeof carregarGestaoEscala==='function'){
-                await carregarGestaoEscala(gestaoPagina||1,{silencioso:true});
+                await carregarGestaoEscala(1,{silencioso:true});
             }
             return;
         }
 
         if(j.status==='failed'){
-            // Mant\u00e9m o job salvo para o pr\u00f3ximo clique poder retom\u00e1-lo.
+            /*
+              O job fica salvo no navegador de propósito.
+              Ao clicar em Puxar anúncios novamente, o servidor V84 retoma o MESMO
+              job/checkpoint, em vez de começar tudo do zero.
+            */
+            atualizarProgressoV26(tipo,{
+                status:'queued',
+                atual:Number(j.progress_current||0),
+                total:Number(j.progress_total||0),
+                mensagem:(j.message||'Sincronização pausada.')+' · Clique em Puxar anúncios para retomar do ponto salvo.'
+            });
             return;
         }
     }catch(e){
         const msg=String(e?.message||e||'');
-        const temporario=/ECONNRESET|network|fetch|failed to fetch|connection|57P03|database system|recovery|502|503|504/i.test(msg);
+        const temporario=/AbortError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|network|fetch|failed to fetch|connection|57P03|57P01|database system|recovery|502|503|504/i.test(msg);
+
         if(temporario){
             atualizarProgressoV26(tipo,{
                 status:'running',
                 mensagem:tipo==='anuncios'
-                  ? 'Servidor/banco reconectando · pipeline de 5.000 retomará automaticamente'
-                  : 'Servidor reconectando · retomada automática'
+                    ? 'Conexão temporariamente indisponível · o checkpoint está salvo e a sincronização será retomada'
+                    : 'Servidor reconectando · retomada automática'
             });
-            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),2500);
+            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),3000);
             return;
         }
-        atualizarProgressoV26(tipo,{status:'failed',mensagem:'Erro ao acompanhar: '+msg});
+
+        atualizarProgressoV26(tipo,{
+            status:'queued',
+            mensagem:'Acompanhamento pausado: '+msg+' · o progresso foi preservado'
+        });
     }
 }
 
