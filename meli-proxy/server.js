@@ -8297,6 +8297,130 @@ app.post('/api/scale/precos',async(req,res)=>{
     }
 });
 
+
+/* =========================================================
+   V89 — FRETE DIRETO, SEM POSTGRESQL
+   Recebe até 100 IDs já salvos no navegador, consulta o
+   Mercado Livre e devolve o custo exato por anúncio.
+========================================================= */
+app.post('/api/v89/fretes/direto',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const ids=[...new Set(
+            (Array.isArray(req.body?.ids)?req.body.ids:[])
+              .map(String)
+              .filter(Boolean)
+        )].slice(0,100);
+
+        if(!ids.length){
+            return res.json({
+                sucesso:true,
+                resultados:[],
+                total:0,
+                falhas:0
+            });
+        }
+
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const raws=ids
+          .map(id=>detalhes?.mapa?.[String(id)])
+          .filter(Boolean);
+
+        const resultados=new Array(raws.length);
+        let cursor=0;
+
+        const CONC=Math.max(
+            4,
+            Math.min(20,Number(process.env.ML_FREIGHT_DIRECT_CONCURRENCY||12))
+        );
+
+        async function worker(){
+            while(true){
+                const idx=cursor++;
+                if(idx>=raws.length)return;
+
+                const item=raws[idx];
+                try{
+                    const fr=await calcularFreteEscalaRobusto(item,token);
+                    resultados[idx]={
+                        id:String(item.id),
+                        sucesso:true,
+                        shipping_cost:Number(fr.custo||0),
+                        free_shipping:Boolean(fr.gratis),
+                        erro:null
+                    };
+                }catch(e){
+                    // Fallback legado: ainda tenta shipping_options/free + shipping.costs.
+                    try{
+                        const custo=await calcularFreteExato(item,token);
+                        resultados[idx]={
+                            id:String(item.id),
+                            sucesso:true,
+                            shipping_cost:Number(custo||0),
+                            free_shipping:Boolean(item?.shipping?.free_shipping),
+                            fallback:true,
+                            erro:null
+                        };
+                    }catch(e2){
+                        resultados[idx]={
+                            id:String(item.id),
+                            sucesso:false,
+                            shipping_cost:null,
+                            free_shipping:Boolean(item?.shipping?.free_shipping),
+                            erro:String(e2?.message||e?.message||'Falha ao consultar frete.')
+                        };
+                    }
+                }
+            }
+        }
+
+        await Promise.all(
+            Array.from(
+                {length:Math.min(CONC,Math.max(1,raws.length))},
+                ()=>worker()
+            )
+        );
+
+        const porId=new Map((resultados||[]).filter(Boolean).map(x=>[String(x.id),x]));
+
+        // IDs não retornados pelo /items/bulk ficam explícitos como falha,
+        // para o navegador preservar o valor anterior.
+        const saida=ids.map(id=>{
+            if(porId.has(String(id)))return porId.get(String(id));
+            return {
+                id:String(id),
+                sucesso:false,
+                shipping_cost:null,
+                free_shipping:false,
+                erro:detalhes?.falhas?.get?.(String(id))||'Mercado Livre não retornou os detalhes deste anúncio.'
+            };
+        });
+
+        const falhas=saida.filter(x=>!x.sucesso).length;
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_freight_v89',
+            total:saida.length,
+            falhas,
+            resultados:saida
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária ao consultar fretes. Tente novamente; o progresso local continua salvo.'
+              : 'Erro ao puxar fretes: '+msg
+        );
+    }
+});
+
 app.post('/api/scale/fretes',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token n\u00e3o fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL n\u00e3o configurado.');
