@@ -10739,7 +10739,19 @@ async function acompanharJobSyncV26(tipo,jobId){
             return;
         }
     }catch(e){
-        atualizarProgressoV26(tipo,{status:'failed',mensagem:'Erro ao acompanhar: '+e.message});
+        const msg=String(e?.message||e||'');
+        const temporario=/ECONNRESET|network|fetch|failed to fetch|connection|57P03|database system|recovery|502|503|504/i.test(msg);
+        if(temporario){
+            atualizarProgressoV26(tipo,{
+                status:'running',
+                mensagem:tipo==='anuncios'
+                  ? 'Servidor/banco reconectando · retomada automática do lote de 5.000'
+                  : 'Servidor reconectando · retomada automática'
+            });
+            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),2500);
+            return;
+        }
+        atualizarProgressoV26(tipo,{status:'failed',mensagem:'Erro ao acompanhar: '+msg});
     }
 }
 
