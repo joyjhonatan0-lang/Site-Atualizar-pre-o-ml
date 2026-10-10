@@ -10693,6 +10693,7 @@ async function acompanharJobSyncV26(tipo,jobId){
         });
 
         if(['queued','running'].includes(j.status)){
+            if(tipo==='anuncios')mostrarCancelarSyncV82(true);
             if(j.status==='queued'){
                 if(!syncQueuedDesdeV76[tipo])syncQueuedDesdeV76[tipo]=Date.now();
                 const segundos=Math.floor((Date.now()-syncQueuedDesdeV76[tipo])/1000);
@@ -10745,7 +10746,7 @@ async function acompanharJobSyncV26(tipo,jobId){
             atualizarProgressoV26(tipo,{
                 status:'running',
                 mensagem:tipo==='anuncios'
-                  ? 'Servidor/banco reconectando · retomada automática do lote de 5.000'
+                  ? 'Servidor/banco reconectando · pipeline de 5.000 retomará automaticamente'
                   : 'Servidor reconectando · retomada automática'
             });
             syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),2500);
