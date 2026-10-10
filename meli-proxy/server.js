@@ -2936,17 +2936,62 @@ app.put('/api/alterar-status-anuncio', async (req, res) => {
 ========================================================= */
 
 
-function limparTituloRealV76(valor){
+function limparTituloRealV76(valor,raw=null){
     let t=String(valor??'')
       .replace(/\u0000/g,' ')
       .replace(/<[^>]*>/g,' ')
       .replace(/\r?\n+/g,' ')
       .replace(/\s+/g,' ')
+      .replace(/^[\s,;:|·\-–—)]+/,'')
       .trim();
 
-    // Remove somente sufixos claramente técnicos, caso alguma origem/cache antigo
-    // tenha concatenado metadados ao título. Não corta palavras normais do anúncio.
+    // Remove metadados técnicos anexados por alguma origem/cache legado.
     t=t.replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'').trim();
+
+    // V79: alguns anúncios com variação retornam a COR anexada ao fim do título.
+    // Usamos a própria ficha do item para remover SOMENTE uma cor confirmada
+    // e SOMENTE quando ela aparece como sufixo final.
+    const obj=(raw&&typeof raw==='object')?raw:{};
+    const cores=new Set();
+
+    const adicionarCor=(v)=>{
+        const s=String(v??'').replace(/\s+/g,' ').trim();
+        if(s && s.length<=80)cores.add(s);
+    };
+
+    const attrs=Array.isArray(obj.attributes)?obj.attributes:[];
+    for(const a of attrs){
+        const id=String(a?.id||'').toUpperCase();
+        const nome=String(a?.name||'').toLowerCase();
+        if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
+            adicionarCor(a?.value_name);
+            for(const v of (Array.isArray(a?.values)?a.values:[]))adicionarCor(v?.name||v?.value_name);
+        }
+    }
+
+    const vars=Array.isArray(obj.variations)?obj.variations:[];
+    for(const v of vars){
+        for(const a of [...(Array.isArray(v?.attribute_combinations)?v.attribute_combinations:[]),...(Array.isArray(v?.attributes)?v.attributes:[])]){
+            const id=String(a?.id||'').toUpperCase();
+            const nome=String(a?.name||'').toLowerCase();
+            if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
+                adicionarCor(a?.value_name);
+                for(const vv of (Array.isArray(a?.values)?a.values:[]))adicionarCor(vv?.name||vv?.value_name);
+            }
+        }
+    }
+
+    const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const normPattern=s=>esc(s).replace(/[\s\-–—_/]+/g,'[\\s\\-–—_/]+');
+
+    for(const cor of [...cores].sort((a,b)=>b.length-a.length)){
+        const rg=new RegExp(`(?:\\s|\\-|–|—|/)+${normPattern(cor)}\\s*$`,'i');
+        if(rg.test(t)){
+            t=t.replace(rg,'').trim();
+            break;
+        }
+    }
+
     return t;
 }
 
@@ -2957,7 +3002,7 @@ function normalizarItemGestao(item) {
     );
     return {
         id: item.id,
-        titulo: limparTituloRealV76(item.title),
+        titulo: limparTituloRealV76(item.title,item),
         sku: item.seller_custom_field || skuAttr?.value_name || '',
         preco: Number(item.price || 0),
         estoque: Number(item.available_quantity || 0),
@@ -4355,6 +4400,7 @@ async function claimJob() {
         const r=await client.query(`
           SELECT * FROM ml_jobs
           WHERE status='queued' AND available_at<=NOW()
+            AND type<>'full_sync'
           ORDER BY created_at ASC
           FOR UPDATE SKIP LOCKED LIMIT 1
         `);
@@ -4409,7 +4455,7 @@ async function syncWorkerDedicadoV76(){
                         locked_at=NULL,
                         cursor=CASE WHEN $2='queued' THEN cursor ELSE cursor END,
                         message=$3,
-                        available_at=NOW()+INTERVAL '5 seconds',
+                        available_at=NOW()+INTERVAL '2 seconds',
                         updated_at=NOW(),
                         finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
                       WHERE id=$1
@@ -4419,8 +4465,32 @@ async function syncWorkerDedicadoV76(){
         }catch(e){
             console.error('[SYNC WORKER V76]',e.message);
         }
-        await new Promise(r=>setTimeout(r,350));
+        await new Promise(r=>setTimeout(r,120));
     }
+}
+
+
+let syncWakeV79=false;
+async function acordarSyncV79(){
+    if(syncWakeV79||!db||!ML_WORKER_ENABLED)return;
+    syncWakeV79=true;
+    setImmediate(async()=>{
+        try{
+            const job=await claimJobTipoV76('full_sync');
+            if(job){
+                try{await processarSyncCompleto(job)}
+                catch(e){
+                    const retry=Number(job.attempts||0)<6;
+                    await dbQuery(`
+                      UPDATE ml_jobs SET status=$2,locked_at=NULL,available_at=NOW()+INTERVAL '2 seconds',
+                        message=$3,updated_at=NOW(),finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
+                      WHERE id=$1
+                    `,[job.id,retry?'queued':'failed',String(e.message||e).slice(0,500)]);
+                }
+            }
+        }catch(e){console.error('[SYNC WAKE V79]',e.message)}
+        finally{syncWakeV79=false}
+    });
 }
 
 async function processarSyncCompleto(job) {
@@ -4442,7 +4512,7 @@ async function processarSyncCompleto(job) {
     // A API de busca entrega no m\u00e1ximo 100 IDs por chamada. A V42 re\u00fane
     // essas p\u00e1ginas em um lote l\u00f3gico de at\u00e9 5.000 e s\u00f3 ent\u00e3o processa os
     // detalhes em paralelo via /items/bulk, preservando o cursor do scan.
-    const TAMANHO_LOTE_LOGICO=Math.max(500,Math.min(5000,Number(process.env.ML_AD_SYNC_BATCH||2000)));
+    const TAMANHO_LOTE_LOGICO=5000;
     const MAX_PAGINAS_POR_LOTE=Math.max(5,Math.ceil(TAMANHO_LOTE_LOGICO/100));
 
     while(!scanCompleto && paginasLidas<2000){
@@ -6773,8 +6843,7 @@ async function workerLoop(indice) {
             const job=await claimJob();
             if(job) {
                 try {
-                    if(job.type==='full_sync') await processarSyncCompleto(job);
-                    else if(job.type==='price_sync') await processarPrecosEscala(job);
+                    if(job.type==='price_sync') await processarPrecosEscala(job);
                     else if(job.type==='freight_sync') await processarFretesEscala(job);
                     else if(job.type==='price_update_mass') await processarAtualizacaoPrecosMassaV36(job);
                     else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
@@ -6940,7 +7009,7 @@ async function buscarItensBulkFreteRapido(token,ids){
 
     const mapa={};
     const falhas=new Map();
-    const concorrencia=Math.max(8,Math.min(40,Number(process.env.ML_BULK_CONCURRENCY||24)));
+    const concorrencia=Math.max(12,Math.min(80,Number(process.env.ML_BULK_CONCURRENCY||50)));
     let cursor=0;
 
     async function worker(){
@@ -6954,7 +7023,7 @@ async function buscarItensBulkFreteRapido(token,ids){
                     const r=await mlFetchFreteComTimeout(
                       `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
                       token,
-                      15000
+                      10000
                     );
                     const d=await jsonSeguro(r);
                     if(r.ok && Array.isArray(d)){
@@ -6971,7 +7040,7 @@ async function buscarItensBulkFreteRapido(token,ids){
                 }catch(e){
                     ultimoErro=e?.name==='AbortError'?'Timeout ao buscar detalhes.':e.message;
                 }
-                if(tentativa<2)await esperarFrete(700*tentativa);
+                if(tentativa<2)await esperarFrete(250*tentativa);
             }
             if(ultimoErro){
                 for(const id of bloco)if(!mapa[id])falhas.set(String(id),ultimoErro);
@@ -7588,6 +7657,7 @@ app.post('/api/scale/price-update/start',async(req,res)=>{
         `,[me.id]);
 
         if(ativo.rows.length){
+            acordarSyncV79();
             return res.status(202).json({
                 sucesso:true,
                 job:ativo.rows[0],
@@ -9197,8 +9267,38 @@ app.post('/api/scale/sync',async(req,res)=>{
           WHERE seller_id=$1
             AND type='full_sync'
             AND status='running'
-            AND updated_at<NOW()-INTERVAL '90 seconds'
+            AND updated_at<NOW()-INTERVAL '30 seconds'
         `,[me.id]);
+
+
+        // V79_CURSOR_EXPIRADO: scroll_id do Mercado Livre não deve ser reaproveitado
+        // depois de ficar parado por vários minutos. Reinicia somente o cursor, mantendo
+        // o banco já carregado; o upsert é idempotente.
+        const stale=await dbQuery(`
+          SELECT id FROM ml_jobs
+          WHERE seller_id=$1 AND type='full_sync'
+            AND status='queued'
+            AND cursor IS NOT NULL
+            AND updated_at<NOW()-INTERVAL '4 minutes'
+          ORDER BY id DESC LIMIT 1
+        `,[me.id]);
+
+        if(stale.rows.length){
+            await dbQuery(`
+              UPDATE ml_jobs SET
+                cursor=NULL,
+                processed=0,
+                progress_current=0,
+                errors=0,
+                attempts=0,
+                available_at=NOW(),
+                locked_at=NULL,
+                message='Cursor expirado detectado. Reiniciando varredura em lote de 5.000.',
+                updated_at=NOW()
+              WHERE id=$1
+            `,[stale.rows[0].id]);
+            await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[stale.rows[0].id]);
+        }
 
         const ativo=await dbQuery(`
           SELECT * FROM ml_jobs
@@ -9238,6 +9338,7 @@ app.post('/api/scale/sync',async(req,res)=>{
               WHERE id=$1 RETURNING *
             `,[falhoRecente.rows[0].id]);
 
+            acordarSyncV79();
             return res.status(202).json({
                 sucesso:true,
                 job:r.rows[0],
@@ -9262,6 +9363,7 @@ app.post('/api/scale/sync',async(req,res)=>{
           WHERE id=$1 RETURNING *
         `,[job.id]);
 
+        acordarSyncV79();
         return res.status(202).json({
             sucesso:true,
             job:jr.rows[0],
@@ -9324,7 +9426,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
                 : "COALESCE(NULLIF(raw->>'date_created','')::timestamptz,ml_updated_at) DESC NULLS LAST,item_id";
 
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,raw,ml_updated_at last_updated,
         COALESCE(NULLIF(raw->>'date_created','')::timestamptz,ml_updated_at) date_created,
         sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced,
         CASE WHEN status='active' AND NOT (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN true ELSE false END price_update_allowed,
@@ -9340,7 +9442,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         FROM ml_items WHERE ${where} ORDER BY ${orderSql} LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
-        const itensSaida=rows.rows.map(x=>({...x,title:limparTituloRealV76(x.title)}));
+        const itensSaida=rows.rows.map(x=>{const y={...x,title:limparTituloRealV76(x.title,x.raw)};delete y.raw;return y});
         res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:itensSaida});
     }catch(e){respostaErro(res,500,e.message)}
 });
@@ -9466,7 +9568,7 @@ app.get('/api/scale/anuncios-restritos',async(req,res)=>{
 
         const queryParams=[...params,limit,offset];
         const rows=await dbQuery(`
-          SELECT m.item_id id,m.title,m.sku,m.price::float8 price,m.available_quantity,m.sold_quantity,
+          SELECT m.item_id id,m.title,m.sku,m.price::float8 price,m.available_quantity,m.sold_quantity,m.raw item_raw,
                  m.status status_api,
                  (${exprStatus}) status_real,
                  m.listing_type_id,m.category_id,m.thumbnail,m.permalink,
@@ -10793,7 +10895,7 @@ app.get('/api/v77/promocoes/anuncios',async(req,res)=>{
         res.json({
             sucesso:true,page,limit,total:Number(count.rows[0]?.total||0),
             paginas:Math.max(1,Math.ceil(Number(count.rows[0]?.total||0)/limit)),
-            itens:r.rows.map(x=>({...x,title:typeof limparTituloRealV76==='function'?limparTituloRealV76(x.title):x.title}))
+            itens:r.rows.map(x=>{const y={...x,title:typeof limparTituloRealV76==='function'?limparTituloRealV76(x.title,x.item_raw):x.title};delete y.item_raw;return y})
         });
     }catch(e){respostaErro(res,500,'Erro ao carregar anúncios da Central de Promoções: '+e.message)}
 });
