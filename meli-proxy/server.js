@@ -3086,6 +3086,94 @@ app.get('/api/v2/anuncios', async (req, res) => {
 });
 
 
+
+/* =========================================================
+   V86 — PUXAR ANÚNCIOS DIRETO / SEM POSTGRESQL
+   100 anúncios por página, checkpoint no navegador.
+========================================================= */
+app.get('/api/v86/anuncios/scan', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const scrollId=String(req.query.scroll_id||'').trim();
+
+        const pagina=await buscarPaginaScanV84({
+            sellerId,
+            token,
+            scrollId:scrollId||null
+        });
+
+        if(pagina.cursor_expirado){
+            return res.status(409).json({
+                sucesso:false,
+                cursor_expirado:true,
+                seller_id:sellerId,
+                erro:'Cursor expirado.'
+            });
+        }
+
+        const ids=Array.isArray(pagina.results)?pagina.results.map(String).filter(Boolean):[];
+        let mapa={};
+
+        if(ids.length){
+            const detalhes=await buscarItensBulkFreteRapido(token,ids);
+            mapa=detalhes?.mapa||{};
+        }
+
+        const itens=[];
+        for(const id of ids){
+            const raw=mapa[String(id)];
+            if(!raw)continue;
+
+            const n=normalizarItemGestao(raw);
+            itens.push({
+                id:String(n.id||id),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price:Number(n.preco||0),
+                sale_fee:Number(raw?.sale_fee||0),
+                commission_percentage:Number(raw?.commission_percentage||0),
+                shipping_cost:Number(raw?.shipping_cost||0),
+                net_received:Number(n.preco||0),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                last_updated:n.atualizado_em||raw?.last_updated||null,
+                date_created:raw?.date_created||null
+            });
+        }
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_v86',
+            seller_id:sellerId,
+            total:Number(pagina.total||0),
+            ids_count:ids.length,
+            itens_count:itens.length,
+            scroll_id:pagina.scroll_id||null,
+            terminou:ids.length===0 || !pagina.scroll_id,
+            itens
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária. Repita a chamada; o checkpoint local continua salvo.'
+              : 'Erro ao puxar anúncios: '+msg
+        );
+    }
+});
+
 /* =========================================================
    V85 — SINCRONIZAÇÃO DIRETA DE ANÚNCIOS, SEM POSTGRESQL
    Esta rota depende somente da API do Mercado Livre.
