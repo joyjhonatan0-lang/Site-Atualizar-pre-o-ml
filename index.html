@@ -2019,7 +2019,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; V84</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; direto V85</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -8646,6 +8646,65 @@ function normalizarItemEscala(i){
   };
 }
 
+
+async function carregarGestaoLocalV85(page=1,{silencioso=false}={}){
+    if(gestaoCarregando)return;
+    gestaoCarregando=true;
+    if(!silencioso)mostrarLoading('Carregando anúncios salvos localmente...');
+    try{
+        await carregarMasterLocalV32();
+
+        let lista=[...masterAnunciosV32];
+        const busca=String(gestaoBusca||'').trim().toLowerCase();
+        if(busca){
+            lista=lista.filter(x=>
+                String(x.id||'').toLowerCase().includes(busca) ||
+                String(x.sku||'').toLowerCase().includes(busca) ||
+                String(x.title||'').toLowerCase().includes(busca)
+            );
+        }
+        if(gestaoStatusV76){
+            lista=lista.filter(x=>String(x.status||'')===String(gestaoStatusV76));
+        }
+
+        const tempo=x=>new Date(x.date_created||x.last_updated||x.last_synced||0).getTime()||0;
+        if(gestaoOrdenacaoV76==='sold'){
+            lista.sort((a,b)=>Number(b.sold_quantity||0)-Number(a.sold_quantity||0)||tempo(b)-tempo(a));
+        }else if(gestaoOrdenacaoV76==='oldest'){
+            lista.sort((a,b)=>tempo(a)-tempo(b));
+        }else if(gestaoOrdenacaoV76==='status'){
+            lista.sort((a,b)=>String(a.status||'').localeCompare(String(b.status||''))||tempo(b)-tempo(a));
+        }else{
+            lista.sort((a,b)=>tempo(b)-tempo(a));
+        }
+
+        gestaoTotalFiltro=lista.length;
+        gestaoPaginas=Math.max(1,Math.ceil(lista.length/50));
+        gestaoPagina=Math.max(1,Math.min(gestaoPaginas,Number(page||1)));
+        cacheItens=lista.slice((gestaoPagina-1)*50,gestaoPagina*50);
+        montarTabelaGestao(cacheItens);
+
+        const totalConta=masterAnunciosV32.length;
+        const ativos=masterAnunciosV32.filter(x=>x.status==='active').length;
+        const tl=document.getElementById('total-listado');
+        const ta=document.getElementById('total-ativos');
+        const to=document.getElementById('total-outros');
+        if(tl)tl.innerText=totalConta.toLocaleString('pt-BR');
+        if(ta)ta.innerText=ativos.toLocaleString('pt-BR');
+        if(to)to.innerText=(totalConta-ativos).toLocaleString('pt-BR');
+        atualizarPaginacaoGestao();
+
+        const meta=await idbMetaV32('direct_sync_v85').catch(()=>null);
+        const info=document.getElementById('gestao-paginacao-info');
+        if(info && meta?.processed!=null){
+            info.textContent=`${gestaoTotalFiltro.toLocaleString('pt-BR')} resultado(s) · cache local · ${Number(meta.processed||0).toLocaleString('pt-BR')}/${Number(meta.total||0).toLocaleString('pt-BR')} sincronizados`;
+        }
+    }finally{
+        gestaoCarregando=false;
+        if(!silencioso)esconderLoading();
+    }
+}
+
 async function carregarGestaoEscala(page=1,{silencioso=false}={}){
   if(gestaoCarregando)return;
   const token=obterToken(); if(!token){solicitarToken();return}
@@ -8800,6 +8859,7 @@ let atualFiltroRenderKeyV30='';
 const CACHE_DB_V32='mlHubProAnunciosV43';
 const STORE_ITENS_V32='itens';
 const STORE_META_V32='meta';
+const STORE_SEEN_V85='seen_v85';
 let dbCachePromiseV32=null;
 let masterAnunciosV32=[];
 let masterMapV32=new Map();
@@ -8811,11 +8871,12 @@ const DELTA_INTERVALO_V32=180000;
 function abrirDbCacheV32(){
     if(dbCachePromiseV32)return dbCachePromiseV32;
     dbCachePromiseV32=new Promise((resolve,reject)=>{
-        const req=indexedDB.open(CACHE_DB_V32,1);
+        const req=indexedDB.open(CACHE_DB_V32,2);
         req.onupgradeneeded=()=>{
             const db=req.result;
             if(!db.objectStoreNames.contains(STORE_ITENS_V32))db.createObjectStore(STORE_ITENS_V32,{keyPath:'id'});
             if(!db.objectStoreNames.contains(STORE_META_V32))db.createObjectStore(STORE_META_V32,{keyPath:'key'});
+            if(!db.objectStoreNames.contains(STORE_SEEN_V85))db.createObjectStore(STORE_SEEN_V85,{keyPath:'id'});
         };
         req.onsuccess=()=>resolve(req.result);
         req.onerror=()=>reject(req.error||new Error('N\u00e3o foi poss\u00edvel abrir o cache local.'));
@@ -8856,11 +8917,45 @@ async function idbSalvarItensV32(itens){
         tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
     });
 }
+
+async function idbSalvarSeenV85(ids){
+    const lista=[...new Set((ids||[]).map(String).filter(Boolean))];
+    if(!lista.length)return;
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_SEEN_V85,'readwrite');
+        const st=tx.objectStore(STORE_SEEN_V85);
+        lista.forEach(id=>st.put({id}));
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error);
+    });
+}
+
+async function idbLimparSeenV85(){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_SEEN_V85,'readwrite');
+        tx.objectStore(STORE_SEEN_V85).clear();
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error);
+    });
+}
+
+async function idbContarSeenV85(){
+    const db=await abrirDbCacheV32();
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_SEEN_V85,'readonly');
+        const req=tx.objectStore(STORE_SEEN_V85).count();
+        req.onsuccess=()=>resolve(Number(req.result||0));
+        req.onerror=()=>reject(req.error);
+    });
+}
+
 async function idbLimparV32(){
     const db=await abrirDbCacheV32();
     return new Promise((resolve,reject)=>{
-        const tx=db.transaction([STORE_ITENS_V32,STORE_META_V32],'readwrite');
-        tx.objectStore(STORE_ITENS_V32).clear();tx.objectStore(STORE_META_V32).clear();
+        const tx=db.transaction([STORE_ITENS_V32,STORE_META_V32,STORE_SEEN_V85],'readwrite');
+        tx.objectStore(STORE_ITENS_V32).clear();tx.objectStore(STORE_META_V32).clear();tx.objectStore(STORE_SEEN_V85).clear();
         tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
     });
 }
@@ -10798,7 +10893,7 @@ async function acompanharJobSyncV26(tipo,jobId){
 
 // Sobrescreve somente os tr\u00eas bot\u00f5es de sincroniza\u00e7\u00e3o.
 window.puxarNovosAnuncios=function(){
-    return iniciarJobSyncV26('anuncios','/api/scale/sync');
+    return sincronizarAnunciosDiretoV85();
 };
 
 window.sincronizarPrecosApi=function(){
@@ -10816,7 +10911,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         const so=document.getElementById('gestao-ordenacao-v76');if(so)so.value=gestaoOrdenacaoV76;
         const ss=document.getElementById('gestao-status-v76');if(ss)ss.value=gestaoStatusV76;
     }catch(e){}
-    ['anuncios','precos','fretes'].forEach(tipo=>{
+    ['precos','fretes'].forEach(tipo=>{
         const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
         if(id)acompanharJobSyncV26(tipo,id);
     });
@@ -14325,6 +14420,33 @@ async function acompanharJobPromocaoV77(jobId){
     await carregarAnunciosPromocaoV77(promocoesEstadoV77.pagina);
   }catch(e){setTimeout(()=>acompanharJobPromocaoV77(jobId),2500)}
 }
+</script>
+
+<script id="mlhub-v85-direct-sync-boot">
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(async()=>{
+    try{
+      // V85: Gestão passa a usar o cache IndexedDB e não depende do PostgreSQL.
+      carregarGestaoEscala=carregarGestaoLocalV85;
+      try{localStorage.removeItem('mlHubPro_sync_v26_anuncios')}catch(e){}
+
+      await carregarGestaoLocalV85(1,{silencioso:true});
+
+      const meta=await idbMetaV32('direct_sync_v85').catch(()=>null);
+      if(meta && meta.completed===false && obterToken()){
+        atualizarProgressoV26('anuncios',{
+          status:'running',
+          atual:Number(meta.processed||0),
+          total:Number(meta.total||0),
+          mensagem:'Retomando automaticamente a sincronização local'
+        });
+        sincronizarAnunciosDiretoV85();
+      }
+    }catch(e){
+      console.warn('[V85 BOOT]',e);
+    }
+  },500);
+});
 </script>
 
 </body>
