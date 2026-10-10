@@ -2041,7 +2041,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div id="sync-card-fretes-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-emerald-400">Fretes &#183; lote 1.000</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-emerald-400">Fretes &#183; lote 1.000 &#183; direto V89</div>
                         <div id="sync-status-fretes-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -10901,7 +10901,7 @@ window.sincronizarPrecosApi=function(){
 };
 
 window.sincronizarFretesApi=function(){
-    return iniciarJobSyncV26('fretes','/api/scale/fretes');
+    return sincronizarFretesDiretoV89();
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
@@ -10911,7 +10911,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         const so=document.getElementById('gestao-ordenacao-v76');if(so)so.value=gestaoOrdenacaoV76;
         const ss=document.getElementById('gestao-status-v76');if(ss)ss.value=gestaoStatusV76;
     }catch(e){}
-    ['precos','fretes'].forEach(tipo=>{
+    ['precos'].forEach(tipo=>{
         const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
         if(id)acompanharJobSyncV26(tipo,id);
     });
@@ -14776,6 +14776,303 @@ document.addEventListener('DOMContentLoaded',()=>{
             console.warn('[V88 BOOT]',e);
         }
     },700);
+});
+</script>
+
+
+<script id="mlhub-v89-direct-freight">
+/* =========================================================
+   V89 — PUXAR FRETES DIRETO
+   - usa os anúncios já salvos no IndexedDB;
+   - não depende do PostgreSQL;
+   - processa 1.000 por lote lógico;
+   - checkpoint a cada 100 anúncios;
+   - retoma do ponto salvo.
+========================================================= */
+
+let freteV89Executando=false;
+
+function freteV89Temporario(msg){
+  return /AbortError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timeout|network|fetch|failed to fetch|socket|429|500|502|503|504/i.test(String(msg||''));
+}
+
+function freteV89Sleep(ms){
+  return new Promise(r=>setTimeout(r,ms));
+}
+
+async function freteV89Checkpoint(obj){
+  await idbSalvarMetaV32({
+    key:'direct_freight_v89',
+    offset:Number(obj.offset||0),
+    total:Number(obj.total||0),
+    completed:Boolean(obj.completed),
+    failed:Number(obj.failed||0),
+    updated_at:new Date().toISOString(),
+    last_error:String(obj.last_error||'')
+  });
+}
+
+async function freteV89Enviar(ids){
+  const token=obterToken();
+  if(!token)throw new Error('Token Mercado Livre não informado.');
+
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),45000);
+
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v89/fretes/direto?_=${Date.now()}`,{
+      method:'POST',
+      cache:'no-store',
+      signal:controller.signal,
+      headers:{
+        Authorization:token,
+        'Content-Type':'application/json',
+        Accept:'application/json'
+      },
+      body:JSON.stringify({ids})
+    });
+
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    return d;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function aplicarFretesV89(resultados){
+  if(!Array.isArray(resultados)||!resultados.length)return {ok:0,failed:0};
+
+  const alterados=[];
+  let ok=0,failed=0;
+
+  for(const r of resultados){
+    const id=String(r?.id||'');
+    if(!id)continue;
+
+    const atual=masterMapV32.get(id);
+    if(!atual)continue;
+
+    if(!r.sucesso || !Number.isFinite(Number(r.shipping_cost))){
+      failed++;
+      continue;
+    }
+
+    const shipping=Number(r.shipping_cost||0);
+
+    const novo={
+      ...atual,
+      shipping_cost:shipping,
+      free_shipping:Boolean(r.free_shipping),
+      net_received:Math.max(
+        0,
+        Number(atual.price||0)
+          - Number(atual.sale_fee||0)
+          - shipping
+      ),
+      freight_synced_at:new Date().toISOString()
+    };
+
+    masterMapV32.set(id,novo);
+    alterados.push(novo);
+    ok++;
+  }
+
+  if(alterados.length){
+    await idbSalvarItensV32(alterados);
+    masterAnunciosV32=[...masterMapV32.values()];
+    simFiltroRenderKeyV30='';
+    atualFiltroRenderKeyV30='';
+    anunciosEscalaCacheV30.clear();
+  }
+
+  return {ok,failed};
+}
+
+async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
+  if(freteV89Executando)return;
+
+  const token=obterToken();
+  if(!token){
+    solicitarToken();
+    return;
+  }
+
+  freteV89Executando=true;
+
+  // Esta função não usa mais o job antigo do PostgreSQL.
+  try{localStorage.removeItem('mlHubPro_sync_v26_fretes')}catch(e){}
+
+  try{
+    masterCarregadoV32=false;
+    await carregarMasterLocalV32();
+
+    const lista=[...masterAnunciosV32]
+      .filter(x=>x && x.id)
+      .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+
+    const total=lista.length;
+    if(!total){
+      atualizarProgressoV26('fretes',{
+        status:'completed',
+        atual:0,
+        total:0,
+        mensagem:'Nenhum anúncio salvo. Clique primeiro em Puxar anúncios.'
+      });
+      return;
+    }
+
+    let meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+    let offset=0;
+    let failed=0;
+
+    if(meta && meta.completed===false && Number(meta.total||0)===total){
+      offset=Math.max(0,Math.min(total,Number(meta.offset||0)));
+      failed=Number(meta.failed||0);
+    }else{
+      await freteV89Checkpoint({
+        offset:0,total,completed:false,failed:0
+      });
+    }
+
+    atualizarProgressoV26('fretes',{
+      status:'running',
+      atual:offset,
+      total,
+      mensagem:offset
+        ? `Retomando fretes do checkpoint · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`
+        : `Iniciando fretes · lote lógico de 1.000 · ${total.toLocaleString('pt-BR')} anúncios`
+    });
+
+    let falhasTemporarias=0;
+
+    while(offset<total){
+      const loteInicio=Math.floor(offset/1000)*1000;
+      const loteNumero=Math.floor(offset/1000)+1;
+
+      // 100 anúncios por chamada = checkpoint frequente e seguro.
+      const chunk=lista.slice(offset,Math.min(total,offset+100));
+      const ids=chunk.map(x=>String(x.id));
+
+      let d;
+      try{
+        d=await freteV89Enviar(ids);
+        falhasTemporarias=0;
+      }catch(e){
+        const msg=String(e?.message||e||'');
+
+        if(!freteV89Temporario(msg)){
+          throw e;
+        }
+
+        falhasTemporarias++;
+        const espera=Math.min(15000,1000*Math.max(1,falhasTemporarias));
+
+        atualizarProgressoV26('fretes',{
+          status:'running',
+          atual:offset,
+          total,
+          mensagem:`Instabilidade temporária · tentando frete novamente em ${Math.ceil(espera/1000)}s · checkpoint preservado`
+        });
+
+        await freteV89Sleep(espera);
+        continue;
+      }
+
+      const ap=await aplicarFretesV89(d.resultados||[]);
+      failed+=Number(ap.failed||0);
+
+      offset+=chunk.length;
+
+      await freteV89Checkpoint({
+        offset,total,completed:false,failed
+      });
+
+      const pct=total?Math.round(offset/total*100):100;
+      const dentroLote=offset-loteInicio;
+
+      atualizarProgressoV26('fretes',{
+        status:'running',
+        atual:offset,
+        total,
+        mensagem:`Fretes · lote ${loteNumero.toLocaleString('pt-BR')} · ${Math.min(1000,dentroLote).toLocaleString('pt-BR')}/1.000 · ${pct}%${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) preservadas`:''}`
+      });
+
+      // Atualiza visualmente a Gestão a cada 1.000 ou no fim.
+      if(offset%1000===0 || offset>=total){
+        if(typeof v88CarregarGestaoLocal==='function'){
+          await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+        }else if(typeof carregarGestaoEscala==='function'){
+          await carregarGestaoEscala(gestaoPagina,{silencioso:true});
+        }
+        await freteV89Sleep(0);
+      }
+    }
+
+    await freteV89Checkpoint({
+      offset:total,total,completed:true,failed
+    });
+
+    atualizarProgressoV26('fretes',{
+      status:'completed',
+      atual:total,
+      total,
+      mensagem:`Fretes concluídos: ${total.toLocaleString('pt-BR')} anúncio(s) · valores salvos localmente${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) mantiveram o valor anterior`:''}`
+    });
+
+    if(typeof v88CarregarGestaoLocal==='function'){
+      await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+    }
+  }catch(e){
+    const msg=String(e?.message||e||'Erro desconhecido.');
+    const meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+
+    await freteV89Checkpoint({
+      offset:Number(meta?.offset||0),
+      total:Number(meta?.total||masterAnunciosV32.length||0),
+      completed:false,
+      failed:Number(meta?.failed||0),
+      last_error:msg
+    }).catch(()=>{});
+
+    atualizarProgressoV26('fretes',{
+      status:'queued',
+      atual:Number(meta?.offset||0),
+      total:Number(meta?.total||masterAnunciosV32.length||0),
+      mensagem:`Fretes pausados com checkpoint salvo · ${msg} · clique em Puxar fretes para continuar`
+    });
+
+    if(!retomarAutomatico && !freteV89Temporario(msg)){
+      alert('Erro ao puxar fretes: '+msg);
+    }
+  }finally{
+    freteV89Executando=false;
+  }
+}
+
+// Substitui definitivamente o botão antigo baseado em PostgreSQL.
+window.sincronizarFretesApi=()=>sincronizarFretesDiretoV89();
+
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(async()=>{
+    try{
+      localStorage.removeItem('mlHubPro_sync_v26_fretes');
+
+      const meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+      if(meta && meta.completed===false && obterToken()){
+        atualizarProgressoV26('fretes',{
+          status:'running',
+          atual:Number(meta.offset||0),
+          total:Number(meta.total||0),
+          mensagem:'Retomando automaticamente os fretes do checkpoint local'
+        });
+
+        sincronizarFretesDiretoV89({retomarAutomatico:true});
+      }
+    }catch(e){
+      console.warn('[V89 FRETE BOOT]',e);
+    }
+  },1000);
 });
 </script>
 
