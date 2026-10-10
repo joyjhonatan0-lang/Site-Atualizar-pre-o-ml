@@ -855,7 +855,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         <button class="painel-sidebar-v24-item" data-aba="promocoes" onclick="mudarAba('promocoes')">
             <span class="painel-sidebar-v24-icone">&#9733;</span>
-            <span>Central de promo&#231;&#245;es</span>
+            <span>Central de promo&#231;&#245;es · V91</span>
         </button>
 
         <div class="painel-sidebar-v24-divisor"></div>
@@ -3091,6 +3091,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
       <div>
         <div class="text-sm font-black text-white">A&#231;&#245;es em massa</div>
         <div id="promocao-selecao-resumo-v77" class="text-[10px] text-slate-500 mt-1">0 selecionados</div>
+        <div class="text-[9px] text-slate-600 mt-1">Lotes automáticos de 100 · retry em limite da API · retomada se o servidor reiniciar.</div>
       </div>
       <div class="flex flex-wrap gap-2">
         <button onclick="selecionarPaginaPromocaoV77(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-black">Selecionar p&#225;gina</button>
@@ -14537,10 +14538,14 @@ async function acaoMassaPromocaoV77(action,allEligible=false){
     : `${items.length} anúncio(s) selecionado(s)`;
   if(!confirm(`${action==='join'?'Participar':'Sair'}: confirmar ação em ${escopo}?`))return;
   try{
-    const r=await fetch(`${RENDER_URL}/api/v77/promocoes/acao-massa`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
+    const r=await fetch(`${RENDER_URL}/api/v91/promocoes/acao-massa`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
       body:JSON.stringify({promotion_id:p.id,promotion_type:p.type,action,percent:Number(document.getElementById('promocao-percent-v77')?.value||0),items,all_eligible:allEligible,filter})});
     const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-    promocoesEstadoV77.jobId=d.job_id;acompanharJobPromocaoV77(d.job_id);
+    promocoesEstadoV77.jobId=d.job_id;
+    const box=document.getElementById('promocao-job-v77');box?.classList.remove('hidden');
+    const msg=document.getElementById('promocao-job-msg-v77');
+    if(msg)msg.textContent=d.mensagem||`Preparando ${Number(d.total||0).toLocaleString('pt-BR')} anúncio(s) em lotes de 100...`;
+    acompanharJobPromocaoV77(d.job_id);
   }catch(e){alert(e.message)}
 }
 
@@ -14554,10 +14559,11 @@ async function acompanharJobPromocaoV77(jobId){
     const msg=document.getElementById('promocao-job-msg-v77');if(msg)msg.textContent=j.message||'Processando...';
     const pe=document.getElementById('promocao-job-pct-v77');if(pe)pe.textContent=pct+'%';
     const bar=document.getElementById('promocao-job-bar-v77');if(bar)bar.style.width=pct+'%';
-    if(['queued','running'].includes(j.status)){setTimeout(()=>acompanharJobPromocaoV77(jobId),1000);return}
-    promocoesEstadoV77.jobId=null;promocoesEstadoV77.selecionados.clear();
-    await sincronizarItensPromocaoV77(true);
+    if(['queued','running'].includes(j.status)){setTimeout(()=>acompanharJobPromocaoV77(jobId),1500);return}
+    promocoesEstadoV77.jobId=null;
+    promocoesEstadoV77.selecionados.clear();
     await carregarAnunciosPromocaoV77(promocoesEstadoV77.pagina);
+    setTimeout(()=>sincronizarItensPromocaoV77(true),800);
   }catch(e){setTimeout(()=>acompanharJobPromocaoV77(jobId),2500)}
 }
 </script>
