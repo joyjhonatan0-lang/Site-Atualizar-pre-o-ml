@@ -3860,12 +3860,88 @@ const db = DATABASE_URL ? new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     max: Math.max(2, Number(process.env.DB_POOL_MAX || 10)),
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000
+    connectionTimeoutMillis: 12000,
+    keepAlive:true,
+    keepAliveInitialDelayMillis:10000,
+    allowExitOnIdle:false
 }) : null;
 
-async function dbQuery(text, params=[]) {
-    if (!db) throw new Error('PostgreSQL n\u00e3o configurado. Adicione DATABASE_URL no Render.');
-    return db.query(text, params);
+/* V80 — PostgreSQL resiliente no Render.
+   O banco pode reiniciar/entrar em recovery e devolver:
+   57P03, ECONNRESET, "Connection terminated unexpectedly" etc.
+   Esses erros não devem derrubar o processo nem marcar o sync como falho. */
+function erroPostgresTemporarioV80(e){
+    const code=String(e?.code||'');
+    const msg=String(e?.message||e||'').toLowerCase();
+    return [
+        '57p03','57p01','57p02','57p04','53300','08000','08001','08003',
+        '08004','08006','08007','08p01','econnreset','etimedout','econnrefused',
+        'epipe'
+    ].includes(code.toLowerCase())
+      || msg.includes('database system is not yet accepting connections')
+      || msg.includes('consistent recovery state has not been yet reached')
+      || msg.includes('connection terminated unexpectedly')
+      || msg.includes('connection terminated')
+      || msg.includes('connection reset')
+      || msg.includes('socket hang up')
+      || msg.includes('server closed the connection unexpectedly')
+      || msg.includes('cannot connect now')
+      || msg.includes('the database system is starting up')
+      || msg.includes('the database system is shutting down');
+}
+
+function esperarDbV80(ms){return new Promise(r=>setTimeout(r,ms))}
+
+if(db){
+    db.on('error',err=>{
+        // Erros de conexão idle do pg precisam de listener; sem isso Node pode emitir
+        // "Unhandled error event" e reiniciar o serviço.
+        if(erroPostgresTemporarioV80(err)){
+            console.warn('[POSTGRES V80] conexão temporariamente indisponível:',err.code||'',err.message);
+        }else{
+            console.error('[POSTGRES V80] erro de pool:',err);
+        }
+    });
+}
+
+async function dbQuery(text, params=[], opcoes={}) {
+    if (!db) throw new Error('PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
+
+    const maxTentativas=Math.max(1,Math.min(8,Number(opcoes.tentativas||5)));
+    let ultimo;
+
+    for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+        try{
+            return await db.query(text,params);
+        }catch(e){
+            ultimo=e;
+            if(!erroPostgresTemporarioV80(e) || tentativa>=maxTentativas)throw e;
+
+            // Backoff curto com limite. Em recovery do Render, insistimos sem derrubar o job.
+            const espera=Math.min(8000,350*Math.pow(2,tentativa-1));
+            console.warn(`[POSTGRES V80] tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Nova tentativa em ${espera}ms.`);
+            await esperarDbV80(espera);
+        }
+    }
+    throw ultimo;
+}
+
+async function aguardarPostgresProntoV80(){
+    if(!db)return false;
+    let tentativa=0;
+    while(true){
+        tentativa++;
+        try{
+            await dbQuery('SELECT 1 AS ok',[],{tentativas:1});
+            if(tentativa>1)console.log(`[POSTGRES V80] banco disponível após ${tentativa} tentativa(s).`);
+            return true;
+        }catch(e){
+            if(!erroPostgresTemporarioV80(e))throw e;
+            const espera=Math.min(15000,1000*Math.min(tentativa,15));
+            console.warn(`[POSTGRES V80] banco em inicialização/recovery. Tentando novamente em ${espera}ms...`);
+            await esperarDbV80(espera);
+        }
+    }
 }
 
 async function inicializarBancoEscala() {
@@ -4448,18 +4524,24 @@ async function syncWorkerDedicadoV76(){
                 try{
                     await processarSyncCompleto(job);
                 }catch(e){
-                    const retry=Number(job.attempts||0)<5;
-                    await dbQuery(`
-                      UPDATE ml_jobs SET
-                        status=$2,
-                        locked_at=NULL,
-                        cursor=CASE WHEN $2='queued' THEN cursor ELSE cursor END,
-                        message=$3,
-                        available_at=NOW()+INTERVAL '2 seconds',
-                        updated_at=NOW(),
-                        finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
-                      WHERE id=$1
-                    `,[job.id,retry?'queued':'failed',String(e.message||e).slice(0,500)]);
+                    const dbTemp=erroPostgresTemporarioV80(e);
+                    const retry=dbTemp || Number(job.attempts||0)<6;
+                    try{
+                        await dbQuery(`
+                          UPDATE ml_jobs SET
+                            status=$2,
+                            locked_at=NULL,
+                            message=$3,
+                            available_at=NOW()+INTERVAL '2 seconds',
+                            updated_at=NOW(),
+                            finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
+                          WHERE id=$1
+                        `,[job.id,retry?'queued':'failed',
+                           dbTemp?'PostgreSQL reiniciando. Retomada automática ativa.':String(e.message||e).slice(0,500)]);
+                    }catch(e2){
+                        if(!erroPostgresTemporarioV80(e2))console.error('[SYNC WORKER V80 REQUEUE]',e2.message);
+                    }
+                    if(dbTemp)await esperarDbV80(1500);
                 }
             }
         }catch(e){
@@ -4480,12 +4562,18 @@ async function acordarSyncV79(){
             if(job){
                 try{await processarSyncCompleto(job)}
                 catch(e){
-                    const retry=Number(job.attempts||0)<6;
-                    await dbQuery(`
-                      UPDATE ml_jobs SET status=$2,locked_at=NULL,available_at=NOW()+INTERVAL '2 seconds',
-                        message=$3,updated_at=NOW(),finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
-                      WHERE id=$1
-                    `,[job.id,retry?'queued':'failed',String(e.message||e).slice(0,500)]);
+                    const dbTemp=erroPostgresTemporarioV80(e);
+                    const retry=dbTemp || Number(job.attempts||0)<6;
+                    try{
+                        await dbQuery(`
+                          UPDATE ml_jobs SET status=$2,locked_at=NULL,available_at=NOW()+INTERVAL '2 seconds',
+                            message=$3,updated_at=NOW(),finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
+                          WHERE id=$1
+                        `,[job.id,retry?'queued':'failed',
+                           dbTemp?'PostgreSQL reiniciando. Retomada automática ativa.':String(e.message||e).slice(0,500)]);
+                    }catch(e2){
+                        if(!erroPostgresTemporarioV80(e2))console.error('[SYNC WAKE V80 REQUEUE]',e2.message);
+                    }
                 }
             }
         }catch(e){console.error('[SYNC WAKE V79]',e.message)}
@@ -6857,7 +6945,10 @@ async function workerLoop(indice) {
                 }
             }
             await processarNotificacaoFila();
-        } catch(e){console.error(`[WORKER ${indice}]`,e.message)}
+        } catch(e){
+            if(erroPostgresTemporarioV80(e))console.warn(`[WORKER ${indice}] PostgreSQL temporariamente indisponível.`);
+            else console.error(`[WORKER ${indice}]`,e.message);
+        }
         await new Promise(r=>setTimeout(r,jobSleepMs()));
     }
 }
@@ -11142,16 +11233,41 @@ app.post('/api/v77/promocoes/acao-massa',async(req,res)=>{
     }catch(e){respostaErro(res,500,'Erro ao iniciar ação em massa: '+e.message)}
 });
 
+let coreEscalaIniciadoV80=false;
+
 async function iniciarCoreEscala(){
+    if(coreEscalaIniciadoV80)return;
     try{
-        await inicializarBancoEscala();
-        if(db){try{await inicializarAgentesV62();await inicializarAcervoV65();iniciarAtualizacaoAgentesV62();}catch(e){console.error('[AGENTES INIT V62]',e.message);}}
-        if(db && ML_WORKER_ENABLED){
-            syncWorkerDedicadoV76();
-            for(let i=1;i<=ML_WORKER_CONCURRENCY;i++) workerLoop(i);
-            console.log(`[ESCALA] ${ML_WORKER_CONCURRENCY} worker(s) iniciado(s).`);
+        if(!db){
+            console.warn('[ESCALA] PostgreSQL não configurado.');
+            return;
         }
-    }catch(e){console.error('[ESCALA INIT]',e)}
+
+        // Não abandona a inicialização se o PostgreSQL do Render estiver reiniciando.
+        await aguardarPostgresProntoV80();
+        await inicializarBancoEscala();
+
+        try{
+            await inicializarAgentesV62();
+            await inicializarAcervoV65();
+            iniciarAtualizacaoAgentesV62();
+        }catch(e){
+            console.error('[AGENTES INIT V62]',e.message);
+        }
+
+        if(ML_WORKER_ENABLED){
+            coreEscalaIniciadoV80=true;
+            syncWorkerDedicadoV76();
+            for(let i=1;i<=ML_WORKER_CONCURRENCY;i++)workerLoop(i);
+            console.log(`[ESCALA V80] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados.`);
+        }
+    }catch(e){
+        console.error('[ESCALA INIT V80]',e);
+        if(erroPostgresTemporarioV80(e)){
+            console.warn('[ESCALA INIT V80] PostgreSQL temporariamente indisponível. Reiniciando inicialização em 5s.');
+            setTimeout(()=>iniciarCoreEscala().catch(err=>console.error('[ESCALA RETRY V80]',err)),5000);
+        }
+    }
 }
 iniciarCoreEscala();
 
