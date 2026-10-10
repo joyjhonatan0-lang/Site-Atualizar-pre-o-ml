@@ -4195,7 +4195,7 @@ async function upsertItensDb(sellerId, itens) {
       Isso acelera 5.000 itens sem saturar o PostgreSQL do Render.
     */
     const TAMANHO=Math.max(250,Math.min(1000,Number(process.env.ML_DB_UPSERT_BATCH||1000)));
-    const CONC=Math.max(1,Math.min(4,Number(process.env.ML_DB_UPSERT_CONCURRENCY||2)));
+    const CONC=1;
 
     const lotes=[];
     for(let inicio=0;inicio<itens.length;inicio+=TAMANHO){
@@ -4613,7 +4613,7 @@ async function syncWorkerDedicadoV76(){
                     await processarSyncCompleto(job);
                 }catch(e){
                     const dbTemp=erroPostgresTemporarioV80(e);
-                    const retry=dbTemp || Number(job.attempts||0)<6;
+                    const retry=dbTemp || Number(job.attempts||0)<20;
                     try{
                         await dbQuery(`
                           UPDATE ml_jobs SET
@@ -4633,7 +4633,7 @@ async function syncWorkerDedicadoV76(){
                 }
             }
         }catch(e){
-            console.error('[SYNC WORKER V76]',e.message);
+            console.error('[SYNC WORKER V84]',e.message);
         }
         await new Promise(r=>setTimeout(r,120));
     }
@@ -4651,7 +4651,7 @@ async function acordarSyncV79(){
                 try{await processarSyncCompleto(job)}
                 catch(e){
                     const dbTemp=erroPostgresTemporarioV80(e);
-                    const retry=dbTemp || Number(job.attempts||0)<6;
+                    const retry=dbTemp || Number(job.attempts||0)<20;
                     try{
                         await dbQuery(`
                           UPDATE ml_jobs SET status=$2,locked_at=NULL,available_at=NOW()+INTERVAL '2 seconds',
@@ -4664,174 +4664,272 @@ async function acordarSyncV79(){
                     }
                 }
             }
-        }catch(e){console.error('[SYNC WAKE V79]',e.message)}
+        }catch(e){console.error('[SYNC WAKE V84]',e.message)}
         finally{syncWakeV79=false}
     });
+}
+
+
+function erroCursorScanV84(status,data){
+    const txt=(String(data?.message||'')+' '+String(data?.error||'')+' '+JSON.stringify(data?.cause||[])).toLowerCase();
+    return status===400 && (
+        txt.includes('scroll') ||
+        txt.includes('search_type') ||
+        txt.includes('invalid') ||
+        txt.includes('expired')
+    );
+}
+
+async function buscarPaginaScanV84({sellerId,token,scrollId}){
+    let ultimoErro=null;
+
+    for(let tentativa=1;tentativa<=5;tentativa++){
+        try{
+            const params=new URLSearchParams({search_type:'scan',limit:'100'});
+            if(scrollId)params.set('scroll_id',scrollId);
+
+            const controller=new AbortController();
+            const timer=setTimeout(()=>controller.abort(),15000);
+            let r;
+            try{
+                r=await mlFetch(
+                    `${ML_API}/users/${sellerId}/items/search?${params.toString()}`,
+                    token,
+                    {signal:controller.signal,headers:{Accept:'application/json'}}
+                );
+            }finally{
+                clearTimeout(timer);
+            }
+
+            const d=await jsonSeguro(r);
+
+            if(r.ok){
+                return {
+                    ok:true,
+                    results:Array.isArray(d?.results)?d.results.map(String).filter(Boolean):[],
+                    scroll_id:d?.scroll_id||null,
+                    total:Number(d?.paging?.total||0)
+                };
+            }
+
+            if(scrollId && erroCursorScanV84(r.status,d)){
+                return {ok:false,cursor_expirado:true,status:r.status,data:d};
+            }
+
+            ultimoErro=new Error(formatarErroMercadoLivre(d)||`Mercado Livre HTTP ${r.status}`);
+
+            if(![408,429,500,502,503,504].includes(r.status))throw ultimoErro;
+
+            const retryAfter=Number(r.headers?.get?.('retry-after')||0);
+            const espera=retryAfter>0
+                ? Math.min(10000,retryAfter*1000)
+                : Math.min(5000,500*Math.pow(2,tentativa-1));
+            await esperarFrete(espera);
+        }catch(e){
+            ultimoErro=e;
+            if(tentativa>=5)break;
+            await esperarFrete(Math.min(5000,500*Math.pow(2,tentativa-1)));
+        }
+    }
+
+    throw ultimoErro||new Error('Falha ao consultar a lista de anúncios do Mercado Livre.');
 }
 
 async function processarSyncCompleto(job) {
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token)throw new Error('Token Mercado Livre indisponível para o seller do job.');
 
-    let scrollCommitado=job.cursor||null;
-    let processed=Number(job.processed||0);
-    let errors=Number(job.errors||0);
+    const TAMANHO_LOTE=1000;
+
+    let scrollId=job.cursor||null;
     let total=Number(job.progress_total||0);
+    let errors=Number(job.errors||0);
     let removidos=0;
 
-    const TAMANHO_LOTE=5000;
-    const PAGINAS_POR_LOTE=50; // scan retorna até 100 IDs
-    const BUFFER_MAX=Math.max(1,Math.min(3,Number(process.env.ML_SYNC_PIPELINE_BUFFER||2)));
+    /*
+      O contador verdadeiro vem da tabela ml_sync_seen. Isso resolve o caso em que
+      o processo caiu depois de salvar o lote mas antes de atualizar ml_jobs.
+    */
+    let seenCount=Number((await dbQuery(
+        `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
+        [job.id]
+    )).rows[0]?.total||0);
 
-    if(processed===0 && !scrollCommitado){
+    let processed=Math.max(Number(job.processed||0),seenCount);
+
+    if(processed===0 && !scrollId){
         await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
+        seenCount=0;
     }
 
-    let cancelado=false;
-    let produtorTerminou=false;
-    let produtorErro=null;
-    const fila=[];
-    const esperandoConsumidor=[];
-    const esperandoProdutor=[];
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='running',
+        processed=$2,
+        progress_current=$2,
+        message=$3,
+        updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,processed,
+       processed
+         ? `Retomando sincronização do ponto salvo · ${processed.toLocaleString('pt-BR')} anúncio(s) concluído(s).`
+         : 'Iniciando sincronização em lotes de 1.000 anúncios.'
+    ]);
 
-    const acordarConsumidor=()=>{
-        while(esperandoConsumidor.length && fila.length)esperandoConsumidor.shift()();
-    };
-    const acordarProdutor=()=>{
-        while(esperandoProdutor.length && fila.length<BUFFER_MAX)esperandoProdutor.shift()();
-    };
+    let terminou=false;
+    let paginasDesdeHeartbeat=0;
+    let reiniciosCursor=0;
 
-    async function esperarItemFila(){
-        while(!fila.length){
-            if(produtorErro)throw produtorErro;
-            if(produtorTerminou)return null;
-            await new Promise(r=>esperandoConsumidor.push(r));
-        }
-        const item=fila.shift();
-        acordarProdutor();
-        return item;
-    }
+    while(!terminou){
+        const idsLote=[];
+        let paginasLote=0;
 
-    async function esperarEspacoFila(){
-        while(fila.length>=BUFFER_MAX){
-            if(cancelado)return;
-            await new Promise(r=>esperandoProdutor.push(r));
-        }
-    }
+        /*
+          Coleta até 1.000 IDs NOVOS. Quando o scroll expira, reiniciamos o scan
+          do começo, mas pulamos tudo que já está em ml_sync_seen. Assim a carga
+          continua logicamente do ponto salvo sem perder nem duplicar anúncios.
+        */
+        while(idsLote.length<TAMANHO_LOTE && !terminou){
+            let pagina=await buscarPaginaScanV84({
+                sellerId:job.seller_id,
+                token,
+                scrollId
+            });
 
-    async function produtor(){
-        let scanCursor=scrollCommitado;
-        let loteSeq=Math.floor(processed/TAMANHO_LOTE);
-        try{
-            while(!cancelado){
-                await esperarEspacoFila();
-                if(cancelado)break;
+            if(pagina.cursor_expirado){
+                reiniciosCursor++;
+                scrollId=null;
 
-                const ids=[];
-                let paginas=0;
-                let fim=false;
-                let cursorInicio=scanCursor;
+                await dbQuery(`
+                  UPDATE ml_jobs SET
+                    cursor=NULL,
+                    message=$2,
+                    updated_at=NOW()
+                  WHERE id=$1
+                `,[job.id,
+                   `Cursor do Mercado Livre expirou. Reconstruindo automaticamente a posição salva (${processed.toLocaleString('pt-BR')} já concluídos).`
+                ]);
 
-                while(ids.length<TAMANHO_LOTE && paginas<PAGINAS_POR_LOTE){
-                    const params=new URLSearchParams({search_type:'scan',limit:'100'});
-                    if(scanCursor)params.set('scroll_id',scanCursor);
-
-                    const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
-                    const sd=await jsonSeguro(sr);
-                    if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd)||`Mercado Livre HTTP ${sr.status}`);
-
-                    if(total<=0){
-                        total=Number(sd?.paging?.total||0);
-                        if(total>0){
-                            await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
-                        }
-                    }
-
-                    const loteIds=Array.isArray(sd?.results)?sd.results.map(String).filter(Boolean):[];
-                    paginas++;
-
-                    if(!loteIds.length){
-                        scanCursor=null;
-                        fim=true;
-                        break;
-                    }
-
-                    ids.push(...loteIds);
-                    scanCursor=sd?.scroll_id||null;
-
-                    if(!scanCursor){
-                        fim=true;
-                        break;
-                    }
-
-                    // heartbeat leve; não trava o pipeline com updates a cada página.
-                    if(ids.length===2500 || ids.length>=TAMANHO_LOTE){
-                        await dbQuery(`
-                          UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
-                        `,[job.id,
-                           `Pipeline · preparando lote ${(loteSeq+1).toLocaleString('pt-BR')} · ${ids.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE.toLocaleString('pt-BR')} IDs`]);
-                    }
+                // Evita loop infinito se a API rejeitar repetidamente um cursor.
+                if(reiniciosCursor>10){
+                    throw new Error('O Mercado Livre invalidou o cursor repetidas vezes. A sincronização será retomada automaticamente.');
                 }
+                continue;
+            }
 
-                if(!ids.length){
-                    produtorTerminou=true;
-                    acordarConsumidor();
-                    return;
-                }
+            if(total<=0 && pagina.total>0){
+                total=pagina.total;
+                await dbQuery(`
+                  UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1
+                `,[job.id,total]);
+            }
 
-                loteSeq++;
-                fila.push({
-                    seq:loteSeq,
-                    ids:[...new Set(ids)],
-                    cursorInicio,
-                    cursorFim:scanCursor,
-                    fim
-                });
-                acordarConsumidor();
+            const idsPagina=pagina.results;
+            paginasLote++;
+            paginasDesdeHeartbeat++;
 
-                if(fim){
-                    produtorTerminou=true;
-                    acordarConsumidor();
-                    return;
+            if(!idsPagina.length){
+                terminou=true;
+                scrollId=null;
+                break;
+            }
+
+            /*
+              Consulta os IDs já confirmados neste mesmo job.
+              Na retomada após restart/cursor expirado, isso evita baixar tudo de novo.
+            */
+            const ja=await dbQuery(`
+              SELECT item_id
+              FROM ml_sync_seen
+              WHERE job_id=$1 AND item_id=ANY($2::text[])
+            `,[job.id,idsPagina]);
+
+            const vistos=new Set(ja.rows.map(r=>String(r.item_id)));
+            for(const id of idsPagina){
+                if(!vistos.has(String(id)) && !idsLote.includes(String(id))){
+                    idsLote.push(String(id));
+                    if(idsLote.length>=TAMANHO_LOTE)break;
                 }
             }
-        }catch(e){
-            produtorErro=e;
-            produtorTerminou=true;
-            acordarConsumidor();
+
+            scrollId=pagina.scroll_id||null;
+            if(!scrollId){
+                terminou=true;
+                break;
+            }
+
+            if(paginasDesdeHeartbeat>=5){
+                paginasDesdeHeartbeat=0;
+                await dbQuery(`
+                  UPDATE ml_jobs SET
+                    cursor=$2,
+                    processed=$3,
+                    progress_current=$3,
+                    progress_total=CASE WHEN $4>0 THEN $4 ELSE progress_total END,
+                    message=$5,
+                    updated_at=NOW()
+                  WHERE id=$1
+                `,[job.id,scrollId,processed,total,
+                   `Lendo Mercado Livre · próximo lote ${idsLote.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE.toLocaleString('pt-BR')} · ${processed.toLocaleString('pt-BR')} já salvos`
+                ]);
+            }
         }
-    }
 
-    async function processarLote(batch){
-        const ids=batch.ids;
+        if(!idsLote.length){
+            if(terminou)break;
+            continue;
+        }
 
-        // Registra vistos em uma única operação.
         await dbQuery(`
-          INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
-          SELECT $1,$2,x
-          FROM unnest($3::text[]) AS x
-          ON CONFLICT(job_id,item_id) DO NOTHING
-        `,[job.id,job.seller_id,ids]);
+          UPDATE ml_jobs SET
+            cursor=$2,
+            message=$3,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,scrollId,
+           `Baixando detalhes de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) · lote de 1.000`
+        ]);
 
-        // 5.000 IDs => 250 chamadas /items/bulk de 20 IDs.
-        // Elas rodam em paralelo com concorrência controlada.
-        const detalhes=await buscarItensBulkFreteRapido(token,ids);
-        const itens=ids.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
-        const faltantes=Math.max(0,ids.length-itens.length);
+        const detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+        const itens=idsLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
 
         if(itens.length){
             await upsertItensDb(job.seller_id,itens);
         }
 
-        errors+=faltantes;
-        processed+=ids.length;
-        scrollCommitado=batch.cursorFim;
+        /*
+          Mesmo um anúncio permanentemente indisponível precisa ser contabilizado
+          como "visitado"; caso contrário uma retomada ficaria presa nele para sempre.
+          As falhas ficam registradas em errors.
+        */
+        await dbQuery(`
+          INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
+          SELECT $1,$2,x
+          FROM unnest($3::text[]) AS x
+          ON CONFLICT(job_id,item_id) DO NOTHING
+        `,[job.id,job.seller_id,idsLote]);
+
+        const falhasLote=Math.max(0,idsLote.length-itens.length);
+        errors+=falhasLote;
+
+        // Recalcula do banco para checkpoint idempotente.
+        processed=Number((await dbQuery(
+            `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
+            [job.id]
+        )).rows[0]?.total||processed+idsLote.length);
 
         const totalExibido=total>0?total:processed;
         const pct=totalExibido?Math.min(100,Math.round(processed/totalExibido*100)):0;
 
+        /*
+          CHECKPOINT PROFISSIONAL:
+          cursor + quantidade + erros são persistidos somente depois que o lote
+          foi salvo. Se Node/Render/PostgreSQL cair depois daqui, volta exatamente
+          para este checkpoint.
+        */
         await dbQuery(`
           UPDATE ml_jobs SET
+            status='running',
             processed=$2,
             progress_current=$2,
             progress_total=CASE WHEN $3>0 THEN $3 ELSE progress_total END,
@@ -4840,31 +4938,15 @@ async function processarSyncCompleto(job) {
             message=$6,
             updated_at=NOW()
           WHERE id=$1
-        `,[
-            job.id,processed,total,errors,scrollCommitado,
-            `Pipeline 5.000 · lote ${batch.seq.toLocaleString('pt-BR')} concluído · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · próximo lote ${fila.length?'já preparado':'sendo coletado'}`
+        `,[job.id,processed,total,errors,scrollId,
+           `Lote concluído · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · ${itens.length.toLocaleString('pt-BR')} salvos${falhasLote?` · ${falhasLote} não retornados pelo ML`:''}`
         ]);
     }
 
-    const produtorPromise=produtor();
-
-    try{
-        while(true){
-            const batch=await esperarItemFila();
-            if(!batch)break;
-            await processarLote(batch);
-            if(batch.fim)break;
-        }
-        await produtorPromise;
-        if(produtorErro)throw produtorErro;
-    }catch(e){
-        cancelado=true;
-        acordarProdutor();
-        acordarConsumidor();
-        throw e;
-    }
-
-    // Só reconcilia exclusões quando o scan terminou de verdade.
+    /*
+      A exclusão local só acontece no final de uma varredura realmente concluída.
+      Durante pausas/restarts, nenhum anúncio existente é apagado.
+    */
     const del=await dbQuery(`
       DELETE FROM ml_items m
       WHERE m.seller_id=$1
@@ -4877,11 +4959,13 @@ async function processarSyncCompleto(job) {
         )
       RETURNING m.item_id
     `,[job.seller_id,job.id]);
+
     removidos=del.rowCount||0;
 
     await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
 
     const finalTotal=total>0?total:processed;
+
     await dbQuery(`
       UPDATE ml_jobs SET
         status='completed',
@@ -4894,9 +4978,8 @@ async function processarSyncCompleto(job) {
         finished_at=NOW(),
         updated_at=NOW()
       WHERE id=$1
-    `,[
-        job.id,processed,finalTotal,errors,
-        `Sincronização pipeline concluída: ${processed.toLocaleString('pt-BR')} anúncio(s) · lotes de 5.000 · ${removidos.toLocaleString('pt-BR')} removido(s) da base local · fretes preservados.`
+    `,[job.id,processed,finalTotal,errors,
+       `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) percorridos em lotes de 1.000 · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base local.`
     ]);
 }
 
@@ -7240,13 +7323,16 @@ function deveRepetirFrete(status){
 }
 
 async function buscarItensBulkFreteRapido(token,ids){
-    const unicos=[...new Set((ids||[]).filter(Boolean))];
+    const unicos=[...new Set((ids||[]).map(String).filter(Boolean))];
     const blocos=[];
     for(let i=0;i<unicos.length;i+=20)blocos.push(unicos.slice(i,i+20));
 
     const mapa={};
     const falhas=new Map();
-    const concorrencia=Math.max(12,Math.min(80,Number(process.env.ML_BULK_CONCURRENCY||60)));
+
+    // V84: 1.000 anúncios = 50 chamadas bulk. 24 simultâneas é rápido
+    // sem abrir conexões demais no Render/ML.
+    const concorrencia=Math.max(6,Math.min(32,Number(process.env.ML_BULK_CONCURRENCY||24)));
     let cursor=0;
 
     async function worker(){
@@ -7254,45 +7340,60 @@ async function buscarItensBulkFreteRapido(token,ids){
             const idx=cursor++;
             if(idx>=blocos.length)return;
             const bloco=blocos[idx];
-            let ultimoErro='Falha ao buscar detalhes do an\u00fancio.';
-            for(let tentativa=1;tentativa<=2;tentativa++){
+            let ultimoErro='Falha ao buscar detalhes do anúncio.';
+
+            for(let tentativa=1;tentativa<=4;tentativa++){
                 try{
                     const r=await mlFetchFreteComTimeout(
-                      `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
-                      token,
-                      10000
+                        `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
+                        token,
+                        15000
                     );
                     const d=await jsonSeguro(r);
+
                     if(r.ok && Array.isArray(d)){
                         for(const reg of d){
                             const body=reg?.body;
                             const id=reg?.id||body?.id;
                             if(id&&body)mapa[String(id)]=body;
                         }
-                        ultimoErro='';
-                        break;
+
+                        // Se o bulk respondeu mas faltaram alguns IDs, tenta esses
+                        // novamente nas próximas tentativas antes de desistir.
+                        const faltaram=bloco.filter(id=>!mapa[String(id)]);
+                        if(!faltaram.length){
+                            ultimoErro='';
+                            break;
+                        }
+                        ultimoErro=`Mercado Livre não retornou ${faltaram.length} item(ns) do bloco.`;
+                    }else{
+                        ultimoErro=`Detalhes HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
+                        if(!deveRepetirFrete(r.status))break;
                     }
-                    ultimoErro=`Detalhes HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
-                    if(!deveRepetirFrete(r.status))break;
+
+                    const retryAfter=Number(r.headers?.get?.('retry-after')||0);
+                    const espera=retryAfter>0
+                        ? Math.min(8000,retryAfter*1000)
+                        : Math.min(3000,300*Math.pow(2,tentativa-1));
+                    await esperarFrete(espera);
                 }catch(e){
-                    ultimoErro=e?.name==='AbortError'?'Timeout ao buscar detalhes.':e.message;
+                    ultimoErro=e?.name==='AbortError'
+                        ? 'Timeout ao buscar detalhes.'
+                        : String(e?.message||e);
+                    if(tentativa<4)await esperarFrete(Math.min(3000,300*Math.pow(2,tentativa-1)));
                 }
-                if(tentativa<2)await esperarFrete(250*tentativa);
             }
-            if(ultimoErro){
-                for(const id of bloco)if(!mapa[id])falhas.set(String(id),ultimoErro);
-            }else{
-                for(const id of bloco)if(!mapa[id])falhas.set(String(id),'Mercado Livre n\u00e3o retornou os detalhes deste an\u00fancio.');
+
+            for(const id of bloco){
+                if(!mapa[String(id)])falhas.set(String(id),ultimoErro);
             }
         }
     }
 
     await Promise.all(
-      Array.from(
-        {length:Math.min(concorrencia,Math.max(1,blocos.length))},
-        ()=>worker()
-      )
+        Array.from({length:Math.min(concorrencia,Math.max(1,blocos.length))},()=>worker())
     );
+
     return {mapa,falhas};
 }
 
@@ -9508,81 +9609,66 @@ app.post('/api/scale/sync/cancel',async(req,res)=>{
 });
 
 app.post('/api/scale/sync',async(req,res)=>{
-    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token n\u00e3o fornecido.');
-    if(!db)return respostaErro(res,503,'PostgreSQL n\u00e3o configurado. Adicione DATABASE_URL no Render.');
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
 
     try{
         const me=await usuarioML(token);
+        const sellerId=me.id;
 
+        // Se o processo morreu com job "running", libera para retomada.
         await dbQuery(`
           UPDATE ml_jobs SET
             status='queued',
             locked_at=NULL,
             available_at=NOW(),
-            message='Retomando sincroniza\u00e7\u00e3o de an\u00fancios.',
+            message='Servidor reiniciado. Retomada automática a partir do checkpoint.',
             updated_at=NOW()
           WHERE seller_id=$1
             AND type='full_sync'
             AND status='running'
-            AND updated_at<NOW()-INTERVAL '30 seconds'
-        `,[me.id]);
+            AND updated_at<NOW()-INTERVAL '45 seconds'
+        `,[sellerId]);
 
-
-        // V79_CURSOR_EXPIRADO: scroll_id do Mercado Livre não deve ser reaproveitado
-        // depois de ficar parado por vários minutos. Reinicia somente o cursor, mantendo
-        // o banco já carregado; o upsert é idempotente.
-        const stale=await dbQuery(`
-          SELECT id FROM ml_jobs
-          WHERE seller_id=$1 AND type='full_sync'
-            AND status='queued'
-            AND cursor IS NOT NULL
-            AND updated_at<NOW()-INTERVAL '4 minutes'
-          ORDER BY id DESC LIMIT 1
-        `,[me.id]);
-
-        if(stale.rows.length){
-            await dbQuery(`
-              UPDATE ml_jobs SET
-                cursor=NULL,
-                processed=0,
-                progress_current=0,
-                errors=0,
-                attempts=0,
-                available_at=NOW(),
-                locked_at=NULL,
-                message='Cursor expirado detectado. Reiniciando varredura em lote de 5.000.',
-                updated_at=NOW()
-              WHERE id=$1
-            `,[stale.rows[0].id]);
-            await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[stale.rows[0].id]);
-        }
-
+        // 1) Se já existe queued/running, usa o MESMO job.
         const ativo=await dbQuery(`
-          SELECT * FROM ml_jobs
-          WHERE seller_id=$1 AND type='full_sync' AND status IN ('queued','running')
-          ORDER BY id DESC LIMIT 1
-        `,[me.id]);
+          SELECT *
+          FROM ml_jobs
+          WHERE seller_id=$1
+            AND type='full_sync'
+            AND status IN ('queued','running')
+          ORDER BY id DESC
+          LIMIT 1
+        `,[sellerId]);
+
         if(ativo.rows.length){
+            acordarSyncV79();
             return res.status(202).json({
                 sucesso:true,
                 job:ativo.rows[0],
                 retomado:true,
-                batch_size:5000,
-                mensagem:'A sincroniza\u00e7\u00e3o de an\u00fancios j\u00e1 est\u00e1 em andamento e continuar\u00e1 do ponto salvo.'
+                batch_size:1000,
+                mensagem:'Sincronização já está em andamento. O sistema continuará do checkpoint salvo.'
             });
         }
 
-        // O scroll_id expira em 5 minutos. S\u00f3 retomamos falha recente;
-        // falha antiga recome\u00e7a do in\u00edcio para n\u00e3o usar cursor expirado.
-        const falhoRecente=await dbQuery(`
-          SELECT * FROM ml_jobs
-          WHERE seller_id=$1 AND type='full_sync' AND status='failed'
-            AND cursor IS NOT NULL
-            AND updated_at>NOW()-INTERVAL '4 minutes'
-          ORDER BY id DESC LIMIT 1
-        `,[me.id]);
+        // 2) Qualquer job falho/cancelado que tenha progresso vira retomada.
+        const anterior=await dbQuery(`
+          SELECT j.*,
+                 (SELECT COUNT(*)::int FROM ml_sync_seen s WHERE s.job_id=j.id) AS seen_total
+          FROM ml_jobs j
+          WHERE j.seller_id=$1
+            AND j.type='full_sync'
+            AND j.status='failed'
+          ORDER BY j.id DESC
+          LIMIT 1
+        `,[sellerId]);
 
-        if(falhoRecente.rows.length){
+        if(anterior.rows.length){
+            const j=anterior.rows[0];
+            const visto=Math.max(Number(j.processed||0),Number(j.seen_total||0));
+
             const r=await dbQuery(`
               UPDATE ml_jobs SET
                 status='queued',
@@ -9590,46 +9676,62 @@ app.post('/api/scale/sync',async(req,res)=>{
                 available_at=NOW(),
                 locked_at=NULL,
                 finished_at=NULL,
-                message='Retomando an\u00fancios do \u00faltimo scroll v\u00e1lido.',
+                processed=$2,
+                progress_current=$2,
+                message=$3,
                 updated_at=NOW()
-              WHERE id=$1 RETURNING *
-            `,[falhoRecente.rows[0].id]);
+              WHERE id=$1
+              RETURNING *
+            `,[j.id,visto,
+               `Retomada preparada · ${visto.toLocaleString('pt-BR')} anúncio(s) já concluído(s). Se o cursor expirou, ele será reconstruído automaticamente sem perder o progresso.`
+            ]);
 
             acordarSyncV79();
+
             return res.status(202).json({
                 sucesso:true,
                 job:r.rows[0],
                 retomado:true,
-                batch_size:5000,
-                mensagem:'Sincroniza\u00e7\u00e3o de an\u00fancios retomada do ponto salvo.'
+                batch_size:1000,
+                mensagem:'Retomando a sincronização do último checkpoint salvo.'
             });
         }
 
-        const job=await criarJob(me.id,'full_sync',{
-            source:'manual_v26',
-            batch_size:5000
+        // 3) Nova varredura.
+        const job=await criarJob(sellerId,'full_sync',{
+            source:'manual_v84',
+            batch_size:1000,
+            resume_strategy:'seen_checkpoint'
         });
+
         const jr=await dbQuery(`
           UPDATE ml_jobs SET
-            message='An\u00fancios: preparando lote de at\u00e9 5.000',
+            message='Preparando primeiro lote de até 1.000 anúncios.',
             progress_current=0,
             processed=0,
             errors=0,
             cursor=NULL,
             updated_at=NOW()
-          WHERE id=$1 RETURNING *
+          WHERE id=$1
+          RETURNING *
         `,[job.id]);
 
         acordarSyncV79();
+
         return res.status(202).json({
             sucesso:true,
             job:jr.rows[0],
             retomado:false,
-            batch_size:5000,
-            mensagem:'Sincroniza\u00e7\u00e3o completa de an\u00fancios iniciada em lotes l\u00f3gicos de at\u00e9 5.000.'
+            batch_size:1000,
+            mensagem:'Sincronização iniciada em lotes de 1.000 com checkpoint automático.'
         });
     }catch(e){
-        respostaErro(res,500,e.message);
+        console.error('[SYNC V84 START]',e);
+        respostaErro(res,erroPostgresTemporarioV80(e)?503:500,
+            erroPostgresTemporarioV80(e)
+              ? 'PostgreSQL temporariamente indisponível. Tente novamente em alguns segundos; o progresso salvo não será perdido.'
+              : e.message
+        );
     }
 });
 
