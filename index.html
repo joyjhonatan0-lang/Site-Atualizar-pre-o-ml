@@ -427,6 +427,12 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 }
 </style>
 
+
+<style id="mlhub-v72-performance">
+#restritos-tbody-v40 tr{content-visibility:auto;contain-intrinsic-size:auto 66px}
+#secao-agentes-produto .panel,#secao-criar-massa .panel{contain:layout style paint}
+#secao-agentes-produto.hidden,#secao-criar-massa.hidden{content-visibility:hidden}
+</style>
 </head>
 
 <body
@@ -840,11 +846,6 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <button class="painel-sidebar-v24-item" data-aba="criar-massa" onclick="mudarAba('criar-massa')">
             <span class="painel-sidebar-v24-icone">&#10010;</span>
             <span>Criar an&#250;ncios em massa</span>
-        </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="agentes-produto" onclick="mudarAba('agentes-produto')">
-            <span class="painel-sidebar-v24-icone">&#10022;</span>
-            <span>Agentes de produto</span>
         </button>
 
         <button class="painel-sidebar-v24-item" data-aba="anuncios-restritos" onclick="mudarAba('anuncios-restritos')">
@@ -2513,6 +2514,10 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
      V37 &#8212; CRIAR AN&#218;NCIOS EM MASSA COM FOTO / SEO / URLS
 ===================================================== -->
 <section id="secao-agentes-produto" class="hidden space-y-6">
+    <div class="panel rounded-2xl p-2 flex flex-wrap gap-2" aria-label="Ferramentas de criação em massa">
+        <button onclick="mudarAba('criar-massa')" class="px-4 py-2.5 rounded-xl text-xs font-black text-slate-300 hover:bg-slate-800">＋ Criar anúncios em massa</button>
+        <button class="px-4 py-2.5 rounded-xl text-xs font-black bg-yellow-400 text-slate-950">✦ Agentes de produto</button>
+    </div>
     <div class="hub-page-head">
         <div>
             <div class="hub-eyebrow">Conhecimento, pesquisa e conte&#250;do</div>
@@ -2603,6 +2608,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
 <section id="secao-criar-massa" class="hidden space-y-6">
 
+    <div class="panel rounded-2xl p-2 flex flex-wrap gap-2" aria-label="Ferramentas de criação em massa">
+        <button class="px-4 py-2.5 rounded-xl text-xs font-black bg-yellow-400 text-slate-950">＋ Criar anúncios em massa</button>
+        <button onclick="mudarAba('agentes-produto')" class="px-4 py-2.5 rounded-xl text-xs font-black text-slate-300 hover:bg-slate-800">✦ Agentes de produto</button>
+    </div>
+
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div>
             <div class="text-[10px] uppercase tracking-[.16em] text-emerald-400 font-bold">Publica&#231;&#227;o, IA e imagens</div>
@@ -2628,7 +2638,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                     <select id="criar-agente-v62" onchange="selecionarAgenteCriacaoV62()" class="hub-input mt-2"><option value="">Gerar com os dados preenchidos abaixo</option></select>
                     <div class="flex flex-wrap gap-2 mt-3">
                         <button onclick="usarInformacoesAgenteCriacaoV62()" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Usar informa&#231;&#245;es do agente</button>
-                        <button onclick="mudarAba('agentes-produto')" class="border border-slate-700 text-slate-300 text-xs font-bold px-3 py-2 rounded-lg">Gerenciar agentes</button>
+                        <button onclick="mudarAba('agentes-produto')" class="border border-slate-700 text-slate-300 text-xs font-bold px-3 py-2 rounded-lg">Abrir agentes de produto</button>
                     </div>
                     <p id="criar-agente-info-v62" class="text-[11px] text-slate-400 mt-3">Escolha um agente para usar a ficha t&#233;cnica, as informa&#231;&#245;es revisadas e as palavras-chave salvas.</p>
                 </div>
@@ -2976,6 +2986,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         </div>
         <button onclick="selecionarVisiveisRestritosV41(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Selecionar vis&#237;veis</button>
         <button onclick="selecionarVisiveisRestritosV41(false)" class="bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Limpar sele&#231;&#227;o</button>
+        <button id="restritos-excluir-todos-v72" onclick="excluirTodosRestritosV72()" class="bg-red-950 hover:bg-red-900 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-[10px] font-black">&#128465; Excluir todos deste filtro</button>
         <button id="restritos-excluir-btn-v41" onclick="excluirSelecionadosRestritosV41()" class="bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-[10px] font-black" disabled>&#128465; Excluir selecionados (0)</button>
       </div>
     </div>
@@ -2986,7 +2997,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <th class="px-3 py-3 text-center w-12"><input id="restritos-check-all-v41" type="checkbox" onchange="selecionarVisiveisRestritosV41(this.checked)" class="w-4 h-4 accent-yellow-400"></th>
             <th class="px-3 py-3 text-left">An&#250;ncio</th>
             <th class="px-3 py-3 text-left">MLB / SKU</th>
-            <th class="px-3 py-3 text-left">Situa&#231;&#227;o</th>
+            <th class="px-3 py-3 text-left">Situa&#231;&#227;o real ML</th>
             <th class="px-3 py-3 text-left min-w-[420px]">Motivo real / solu&#231;&#227;o</th>
             <th class="px-3 py-3 text-right">Pre&#231;o</th>
             <th class="px-3 py-3 text-right">Estoque</th>
@@ -4625,7 +4636,11 @@ function mudarAba(aba) {
     if (aba === 'central' && typeof carregarCentralPro === 'function') carregarCentralPro();
     if (aba === 'reclamacoes' && typeof carregarReclamacoesPro === 'function') carregarReclamacoesPro();
     if (aba === 'criar-massa' && typeof carregarCriacaoMassaV36 === 'function') carregarCriacaoMassaV36();
-    if ((aba === 'agentes-produto' || aba === 'criar-massa') && typeof carregarAgentesProdutoV62 === 'function') carregarAgentesProdutoV62(aba === 'agentes-produto');
+    if (aba === 'agentes-produto' && typeof carregarAgentesProdutoV62 === 'function') carregarAgentesProdutoV62(false);
+    if (aba === 'criar-massa' && typeof carregarAgentesProdutoV62 === 'function') {
+        const lazy=()=>carregarAgentesProdutoV62(false).catch?.(()=>{});
+        if('requestIdleCallback' in window)requestIdleCallback(lazy,{timeout:1800});else setTimeout(lazy,250);
+    }
     if (aba === 'integracoes' && typeof carregarIntegracoesPro === 'function') carregarIntegracoesPro();
     if (aba === 'oportunidades' && typeof carregarOportunidades === 'function') carregarOportunidades();
     if (aba === 'operacao' && typeof carregarOperacaoV2 === 'function') carregarOperacaoV2(1);
@@ -10335,7 +10350,7 @@ mudarAba=function(aba){
 
     _mudarAbaV21(aba);
 
-    const destaqueMenu=destino==='sku-base'?'simulacao':destino;
+    const destaqueMenu=destino==='sku-base'?'simulacao':(destino==='agentes-produto'?'criar-massa':destino);
     document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
         btn.classList.toggle('active',btn.dataset.aba===destaqueMenu);
     });
@@ -10360,7 +10375,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.body.classList.toggle('atendimento-isolado',abaInicial==='atendimento');
     document.body.classList.toggle('painel-menu-v24',abasPainelV24.includes(abaInicial));
 
-    const destaqueInicial=abaInicial==='sku-base'?'simulacao':abaInicial;
+    const destaqueInicial=abaInicial==='sku-base'?'simulacao':(abaInicial==='agentes-produto'?'criar-massa':abaInicial);
     document.querySelectorAll('#painel-sidebar-v24 [data-aba]').forEach(btn=>{
         btn.classList.toggle('active',btn.dataset.aba===destaqueInicial);
     });
@@ -11906,7 +11921,11 @@ function alternarVariacoesV37(){
 /* V65 \u2014 t\u00edtulos exclusivos e caracter\u00edsticas confirmadas. */
 /* V66: mesma compara\u00e7\u00e3o no navegador e no PostgreSQL. */
 function assinaturaTituloV66(valor){
-    return [...new Set(chaveTextoV65(valor).split(' ').filter(p=>p&&!/^(de|do|da|dos|das|e|com|para|sem|em|a|o|as|os)$/.test(p)))].sort().join(' ');
+    // V72: unicidade pela SEQUÊNCIA completa das palavras.
+    // Normaliza acentos, caixa e pontuação, mas PRESERVA a ordem.
+    // Assim, títulos com a mesma sequência são bloqueados; uma ordem realmente diferente
+    // é considerada outra sequência e não dispara falso duplicado por “mesmas palavras”.
+    return chaveTextoV65(valor);
 }
 
 function chaveTextoV65(valor){
@@ -11929,7 +11948,7 @@ function validarTitulosUnicosV65(config){
         const t=textoConteudoV61(titulos[i]),key=assinaturaTituloV66(t);
         if(!key)falhar(`O t\u00edtulo ${i+1} est\u00e1 vazio.`);
         if(t.length>60)falhar(`O t\u00edtulo ${i+1} ultrapassa 60 caracteres.`);
-        if(seen.has(key))falhar(`O t\u00edtulo ${i+1} repete as mesmas palavras de outro t\u00edtulo. Cada t\u00edtulo da lista precisa ser \u00fanico.`);
+        if(seen.has(key))falhar(`O t\u00edtulo ${i+1} repete a mesma sequ\u00eancia de palavras de outro t\u00edtulo. Cada t\u00edtulo precisa ter uma sequ\u00eancia completa \u00fanica.`);
         seen.add(key);
     }
     return true;
@@ -12902,6 +12921,8 @@ const restritosSelecionadosV41=new Set();
 let restritosCarregandoMotivosV41=false;
 let restritosExcluindoV41=false;
 const restritosErrosExclusaoV41=new Map();
+let restritosStatusRealAtualizadoV72=false;
+let restritosRefreshRealEmCursoV72=false;
 
 function normalizarSubstatusV40(v){
     if(Array.isArray(v))return v.join(', ');
@@ -12946,7 +12967,10 @@ function atualizarBotaoExcluirRestritosV41(){
     const btn=document.getElementById('restritos-excluir-btn-v41');
     if(btn){btn.disabled=restritosSelecionadosV41.size===0||restritosExcluindoV41;btn.textContent=`\ud83d\uddd1 Excluir selecionados (${restritosSelecionadosV41.size.toLocaleString('pt-BR')})`;}
     const all=document.getElementById('restritos-check-all-v41');
-    if(all){const vis=listaRestritosVisiveisV41();all.checked=vis.length>0&&vis.every(i=>restritosSelecionadosV41.has(String(i.id)));}
+    const vis=listaRestritosVisiveisV41();
+    if(all)all.checked=vis.length>0&&vis.every(i=>restritosSelecionadosV41.has(String(i.id)));
+    const todos=document.getElementById('restritos-excluir-todos-v72');
+    if(todos){todos.disabled=!vis.length||restritosExcluindoV41;const rot=filtroRestritosV40?`Excluir todos: ${nomeStatusRestritoV40(filtroRestritosV40)}`:'Excluir todos os 4 status';todos.textContent=`🗑 ${rot} (${vis.length.toLocaleString('pt-BR')})`;}
 }
 function alternarSelecaoRestritoV41(id,checked){
     const key=String(id||'');
@@ -12961,16 +12985,18 @@ function selecionarVisiveisRestritosV41(marcar=true){
 
 async function carregarAnunciosRestritosV40(forcar=false){
     if(anunciosRestritosCarregadoV40&&!forcar){renderAnunciosRestritosV40();return;}
+    if(forcar&&restritosRefreshRealEmCursoV72)return;
+    if(forcar)restritosRefreshRealEmCursoV72=true;
     const token=obterToken();if(!token){solicitarToken();return}
     const st=document.getElementById('restritos-status-v40');
     if(st)st.textContent='Carregando todos os an\u00fancios nas quatro situa\u00e7\u00f5es...';
     try{
         const todos=[];let offset=0,total=0,totais=null;
         do{
-            const r=await fetch(`${RENDER_URL}/api/scale/anuncios-restritos?limit=2000&offset=${offset}&_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+            const r=await fetch(`${RENDER_URL}/api/scale/anuncios-restritos?limit=2000&offset=${offset}${forcar&&offset===0?'&refresh=1':''}&_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
             const d=await r.json().catch(()=>({}));
             if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-            total=Number(d.total||0);totais=d.totais||totais;
+            total=Number(d.total||0);totais=d.totais||totais;if(d.status_real){restritosStatusRealAtualizadoV72=!d.status_real.erro;if(st)st.textContent=d.status_real.erro?'Status real: '+d.status_real.erro:`Status real confirmado no Mercado Livre · ${Number(d.status_real.atualizados||0).toLocaleString('pt-BR')} item(ns) revalidado(s).`;}
             const itens=Array.isArray(d.itens)?d.itens:[];
             todos.push(...itens);offset+=itens.length;
             if(st)st.textContent=`Carregando ${todos.length.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}...`;
@@ -12984,10 +13010,11 @@ async function carregarAnunciosRestritosV40(forcar=false){
         const sets=[['restritos-pausados-v40',t.pausados],['restritos-inativos-v40',t.inativos],['restritos-finalizados-v40',t.finalizados],['restritos-revisao-v40',t.revisao]];
         sets.forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=Number(v||0).toLocaleString('pt-BR');});
         renderAnunciosRestritosV40();
-        carregarMotivosReaisRestritosV41();
+        const motivosLazy=()=>carregarMotivosReaisRestritosV41(40);if('requestIdleCallback' in window)requestIdleCallback(motivosLazy,{timeout:2500});else setTimeout(motivosLazy,500);
+        if(!forcar&&!restritosStatusRealAtualizadoV72&&!restritosRefreshRealEmCursoV72)setTimeout(()=>carregarAnunciosRestritosV40(true),120);
     }catch(e){
         if(st)st.textContent='Erro ao carregar: '+e.message;
-    }
+    }finally{if(forcar)restritosRefreshRealEmCursoV72=false;}
 }
 function filtrarAnunciosRestritosV40(status=''){
     filtroRestritosV40=String(status||'');
@@ -13012,7 +13039,7 @@ function renderAnunciosRestritosV40(){
           <td class="px-3 py-3 text-center"><input type="checkbox" class="w-4 h-4 accent-yellow-400" ${checked?'checked':''} onchange="alternarSelecaoRestritoV41('${textoEscapeV37(i.id)}',this.checked)"></td>
           <td class="px-3 py-3"><div class="flex items-center gap-3">${i.thumbnail?`<img src="${textoEscapeV37(i.thumbnail)}" class="w-11 h-11 rounded-lg object-cover bg-white">`:''}<div class="max-w-[420px]"><div class="font-bold text-white line-clamp-2">${textoEscapeV37(i.title||'Sem t\u00edtulo')}</div></div></div></td>
           <td class="px-3 py-3"><div class="font-mono text-slate-300">${textoEscapeV37(i.id||'')}</div><div class="text-[10px] text-slate-500 mt-1">SKU: ${textoEscapeV37(i.sku||'\u2014')}</div></td>
-          <td class="px-3 py-3 font-black ${classeStatusRestritoV40(i.status)}">${textoEscapeV37(nomeStatusRestritoV40(i.status))}</td>
+          <td class="px-3 py-3"><div class="font-black ${classeStatusRestritoV40(i.status)}">${textoEscapeV37(nomeStatusRestritoV40(i.status))}</div><div class="text-[9px] text-emerald-500 mt-1">Status atual do Mercado Livre</div></td>
           <td id="restrito-motivo-${textoEscapeV37(i.id)}" class="px-3 py-3 max-w-[480px]"><div class="text-slate-200 font-semibold leading-relaxed">${textoEscapeV37(motivo)}</div>${remedy?`<div class="text-emerald-400 mt-1 leading-relaxed"><b>Solu\u00e7\u00e3o:</b> ${textoEscapeV37(remedy)}</div>`:''}<div class="text-[9px] text-slate-600 mt-1">Detalhe da situa\u00e7\u00e3o: ${textoEscapeV37(sub)}</div></td>
           <td class="px-3 py-3 text-right text-white font-bold">${textoEscapeV37(moeda(Number(i.price||0)))}</td>
           <td class="px-3 py-3 text-right text-slate-300">${Number(i.available_quantity||0).toLocaleString('pt-BR')}</td>
@@ -13023,16 +13050,16 @@ function renderAnunciosRestritosV40(){
     atualizarBotaoExcluirRestritosV41();
 }
 
-async function carregarMotivosReaisRestritosV41(){
+async function carregarMotivosReaisRestritosV41(limite=40){
     if(restritosCarregandoMotivosV41||!anunciosRestritosV40.length)return;
     const token=obterToken();if(!token)return;
     restritosCarregandoMotivosV41=true;
     const status=document.getElementById('restritos-motivos-status-v41');
     try{
-        const alvos=anunciosRestritosV40.filter(i=>!i.moderation_checked).map(i=>String(i.id));
+        const alvos=anunciosRestritosV40.filter(i=>!i.moderation_checked&&String(i.status)==='under_review').slice(0,Math.max(1,Number(limite)||40)).map(i=>String(i.id));
         let done=0;
-        for(let p=0;p<alvos.length;p+=15){
-            const bloco=alvos.slice(p,p+15);
+        for(let p=0;p<alvos.length;p+=25){
+            const bloco=alvos.slice(p,p+25);
             if(status)status.textContent=`Consultando motivo real no Mercado Livre: ${done.toLocaleString('pt-BR')}/${alvos.length.toLocaleString('pt-BR')}...`;
             const r=await fetch(`${RENDER_URL}/api/v41/anuncios-restritos/motivos`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({ids:bloco})});
             const d=await r.json().catch(()=>({}));
@@ -13066,23 +13093,26 @@ function atualizarProgressoExclusaoV41(processados,total,sucesso,falhas,msg=''){
     const me=document.getElementById('restritos-exclusao-msg-v41');if(me)me.textContent=msg||'Excluindo an\u00fancios no Mercado Livre...';
 }
 
-async function excluirSelecionadosRestritosV41(){
+
+async function excluirIdsRestritosV72(ids,{confirmar=true}={}){
     if(restritosExcluindoV41)return;
-    const ids=[...restritosSelecionadosV41];
-    if(!ids.length)return alert('Selecione pelo menos um an\u00fancio para excluir.');
-    const ok=confirm(`ATEN\u00c7\u00c3O: voc\u00ea est\u00e1 prestes a excluir permanentemente ${ids.length.toLocaleString('pt-BR')} an\u00fancio(s) do Mercado Livre.\n\nEssa a\u00e7\u00e3o \u00e9 irrevers\u00edvel. Deseja continuar?`);
-    if(!ok)return;
-    const ok2=confirm('Confirme novamente: os an\u00fancios selecionados ser\u00e3o finalizados quando necess\u00e1rio e depois marcados como exclu\u00eddos no Mercado Livre. Continuar?');
-    if(!ok2)return;
+    ids=[...new Set((ids||[]).map(String).filter(Boolean))];
+    if(!ids.length)return alert('Nenhum anúncio destas situações foi encontrado para excluir.');
+    if(confirmar){
+        const ok=confirm(`ATENÇÃO: você está prestes a excluir permanentemente ${ids.length.toLocaleString('pt-BR')} anúncio(s) do Mercado Livre.\n\nSerão processados somente anúncios que estejam realmente como pausado, inativo, finalizado ou em revisão. Continuar?`);
+        if(!ok)return;
+        const ok2=confirm('Confirme novamente: a exclusão é irreversível. O sistema revalida o status no Mercado Livre antes de excluir cada anúncio.');
+        if(!ok2)return;
+    }
     const token=obterToken();if(!token){solicitarToken();return}
     restritosExcluindoV41=true;restritosErrosExclusaoV41.clear();atualizarBotaoExcluirRestritosV41();
     const errosEl=document.getElementById('restritos-exclusao-erros-v41');if(errosEl){errosEl.classList.add('hidden');errosEl.innerHTML='';}
     let processados=0,sucesso=0,falhas=0;const erros=[];
-    atualizarProgressoExclusaoV41(0,ids.length,0,0,'Preparando exclus\u00e3o...');
+    atualizarProgressoExclusaoV41(0,ids.length,0,0,'Preparando exclusão...');
     try{
-        for(let p=0;p<ids.length;p+=20){
-            const bloco=ids.slice(p,p+20);
-            atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo lote ${Math.floor(p/20)+1}...`);
+        for(let p=0;p<ids.length;p+=100){
+            const bloco=ids.slice(p,p+100);
+            atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo lote ${Math.floor(p/100)+1}...`);
             const r=await fetch(`${RENDER_URL}/api/v41/anuncios-restritos/excluir-lote`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},body:JSON.stringify({ids:bloco})});
             const d=await r.json().catch(()=>({}));
             if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
@@ -13092,20 +13122,31 @@ async function excluirSelecionadosRestritosV41(){
                     sucesso++;restritosSelecionadosV41.delete(String(x.id));
                     anunciosRestritosV40=anunciosRestritosV40.filter(i=>String(i.id)!==String(x.id));
                 }else{
-                    falhas++;const msg=String(x.erro||'Mercado Livre n\u00e3o permitiu excluir este an\u00fancio.');restritosErrosExclusaoV41.set(String(x.id),msg);erros.push(`${x.id}: ${msg}`);
+                    falhas++;const msg=String(x.erro||'Mercado Livre não permitiu excluir este anúncio.');restritosErrosExclusaoV41.set(String(x.id),msg);erros.push(`${x.id}: ${msg}`);
                 }
-                atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo an\u00fancios: ${processados.toLocaleString('pt-BR')}/${ids.length.toLocaleString('pt-BR')}`);
             }
+            atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Excluindo anúncios: ${processados.toLocaleString('pt-BR')}/${ids.length.toLocaleString('pt-BR')}`);
             renderAnunciosRestritosV40();
+            await new Promise(resolve=>setTimeout(resolve,20));
         }
-        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Conclu\u00eddo: ${sucesso.toLocaleString('pt-BR')} exclu\u00eddo(s) e ${falhas.toLocaleString('pt-BR')} falha(s).`);
-        if(erros.length&&errosEl){errosEl.classList.remove('hidden');errosEl.innerHTML='<div class="font-black mb-2">An\u00fancios que n\u00e3o foram exclu\u00eddos:</div>'+erros.map(e=>`<div class="py-1 border-t border-red-900/50">${textoEscapeV37(e)}</div>`).join('');}
-        anunciosRestritosCarregadoV40=false;
+        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,`Concluído: ${sucesso.toLocaleString('pt-BR')} excluído(s) e ${falhas.toLocaleString('pt-BR')} falha(s).`);
+        if(erros.length&&errosEl){errosEl.classList.remove('hidden');errosEl.innerHTML='<div class="font-black mb-2">Anúncios que o Mercado Livre não permitiu excluir:</div>'+erros.map(e=>`<div class="py-1 border-t border-red-900/50">${textoEscapeV37(e)}</div>`).join('');}
+        anunciosRestritosCarregadoV40=false;restritosStatusRealAtualizadoV72=false;
         await carregarAnunciosRestritosV40(true);
     }catch(e){
-        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,'Erro durante a exclus\u00e3o: '+e.message);
+        atualizarProgressoExclusaoV41(processados,ids.length,sucesso,falhas,'Erro durante a exclusão: '+e.message);
     }finally{restritosExcluindoV41=false;atualizarBotaoExcluirRestritosV41();}
 }
+
+function excluirTodosRestritosV72(){
+    const ids=listaRestritosVisiveisV41().map(i=>String(i.id));
+    return excluirIdsRestritosV72(ids,{confirmar:true});
+}
+
+async function excluirSelecionadosRestritosV41(){
+    return excluirIdsRestritosV72([...restritosSelecionadosV41],{confirmar:true});
+}
+
 
 document.addEventListener('DOMContentLoaded',()=>{
     setTimeout(()=>{try{bindPreviewListenersV37();renderPlanilhaPreviewV37();}catch(e){}},300);
@@ -13313,7 +13354,7 @@ async function pesquisarTermosTitulosV69(entrada,run,ativo){
     finally{clearTimeout(timer);run.controllersV68.delete(controller);}
 }
 
-/* V70: micro-lotes contínuos. Um timeout não encerra a geração inteira. */
+/* V71: micro-lotes contínuos + unicidade pela sequência completa das palavras. */
 function esperarTitulosV70(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 async function executarLotesTitulosV68({total,request,aceitar,ativo,progresso,iniciais=[],bloqueados=[]}){
     let etapa=0,reservados=0,vaziasConsecutivas=0,falhasConsecutivas=0;
