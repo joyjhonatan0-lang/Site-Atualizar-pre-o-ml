@@ -3096,9 +3096,9 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <button onclick="selecionarPaginaPromocaoV77(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-black">Selecionar p&#225;gina</button>
         <button onclick="selecionarPaginaPromocaoV77(false)" class="bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-black">Limpar sele&#231;&#227;o</button>
         <button onclick="acaoMassaPromocaoV77('join',false)" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Participar selecionados</button>
-        <button onclick="acaoMassaPromocaoV77('join',true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Participar todos eleg&#237;veis</button>
+        <button onclick="acaoMassaPromocaoV77('join',true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Participar todos eleg&#237;veis do filtro</button>
         <button onclick="acaoMassaPromocaoV77('leave',false)" class="bg-red-950 hover:bg-red-900 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-[10px] font-black">Deixar selecionados</button>
-        <button onclick="acaoMassaPromocaoV77('leave',true)" class="bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-[10px] font-black">Deixar todos participantes</button>
+        <button onclick="acaoMassaPromocaoV77('leave',true)" class="bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-[10px] font-black">Deixar todos participantes do filtro</button>
       </div>
     </div>
     <div id="promocao-job-v77" class="hidden mt-4">
@@ -3114,7 +3114,16 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         <div id="promocao-anuncios-status-v77" class="text-[10px] text-slate-500 mt-1">Selecione uma promo&#231;&#227;o para visualizar os valores finais.</div>
       </div>
       <div class="flex flex-wrap gap-2 items-end">
-        <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Buscar</label><input id="promocao-busca-v77" onkeydown="if(event.key==='Enter')carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]" placeholder="T&#237;tulo, SKU ou MLB"></div>
+        <div>
+          <label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Filtrar por</label>
+          <select id="promocao-busca-campo-v78" onchange="carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]">
+            <option value="sku">SKU exato</option>
+            <option value="mlb">MLB exato</option>
+            <option value="title">T&#237;tulo cont&#233;m</option>
+            <option value="all">Todos os campos</option>
+          </select>
+        </div>
+        <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Buscar</label><input id="promocao-busca-v77" onkeydown="if(event.key==='Enter')carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]" placeholder="Digite o SKU, MLB ou t&#237;tulo"></div>
         <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Situa&#231;&#227;o</label><select id="promocao-status-filtro-v77" onchange="carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]"><option value="">Todas</option><option value="active">Ativos</option><option value="paused">Pausados</option><option value="under_review">Em revis&#227;o</option><option value="closed">Finalizados</option></select></div>
         <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Participa&#231;&#227;o</label><select id="promocao-participacao-filtro-v77" onchange="carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]"><option value="">Todos</option><option value="candidate">Eleg&#237;veis</option><option value="participating">Participando</option><option value="not_participating">Fora da promo&#231;&#227;o</option></select></div>
         <button onclick="carregarAnunciosPromocaoV77(1)" class="bg-yellow-400 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Filtrar</button>
@@ -10581,6 +10590,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    V26 \u2014 PROGRESSO DE AN\u00daNCIOS / PRE\u00c7OS / FRETES
 ========================================================= */
 const syncTimersV26={anuncios:null,precos:null,fretes:null};
+const syncQueuedDesdeV76={anuncios:0,precos:0,fretes:0};
 
 function syncRefsV26(tipo){
     return {
@@ -14102,6 +14112,7 @@ async function carregarAnunciosPromocaoV77(page=1){
   const token=obterToken();if(!token)return;
   const qs=new URLSearchParams({page:String(Math.max(1,page)),limit:'100',promotion_id:p.id,promotion_type:p.type});
   const q=document.getElementById('promocao-busca-v77')?.value.trim();if(q)qs.set('q',q);
+  const sf=document.getElementById('promocao-busca-campo-v78')?.value||'sku';qs.set('search_field',sf);
   const s=document.getElementById('promocao-status-filtro-v77')?.value;if(s)qs.set('status',s);
   const pa=document.getElementById('promocao-participacao-filtro-v77')?.value;if(pa)qs.set('participation',pa);
   const st=document.getElementById('promocao-anuncios-status-v77');if(st)st.textContent='Abrindo anúncios do cache da Gestão...';
@@ -14109,7 +14120,11 @@ async function carregarAnunciosPromocaoV77(page=1){
     const r=await fetch(`${RENDER_URL}/api/v77/promocoes/anuncios?${qs.toString()}`,{cache:'no-store',headers:{Authorization:token}});
     const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
     promocoesEstadoV77.pagina=d.page||1;promocoesEstadoV77.paginas=d.paginas||1;promocoesEstadoV77.itens=d.itens||[];
-    if(st)st.textContent=`${Number(d.total||0).toLocaleString('pt-BR')} anúncio(s) · dados principais carregados do cache da Gestão.`;
+    const filtroAtual=filtrosAtuaisPromocaoV78();
+    const detalheFiltro=filtroAtual.q
+      ? ` · filtro ${filtroAtual.search_field==='sku'?'SKU exato':filtroAtual.search_field.toUpperCase()}: ${filtroAtual.q}`
+      : '';
+    if(st)st.textContent=`${Number(d.total||0).toLocaleString('pt-BR')} anúncio(s) · dados principais carregados do cache da Gestão${detalheFiltro}.`;
     const pg=document.getElementById('promocao-pagina-v77');if(pg)pg.textContent=`Página ${d.page} de ${d.paginas}`;
     renderAnunciosPromocaoV77();
   }catch(e){if(st)st.textContent='Erro: '+e.message}
@@ -14195,15 +14210,30 @@ async function acaoIndividualPromocaoV77(id,action){
   }catch(e){alert(e.message)}
 }
 
+
+function filtrosAtuaisPromocaoV78(){
+  return {
+    q:document.getElementById('promocao-busca-v77')?.value.trim()||'',
+    search_field:document.getElementById('promocao-busca-campo-v78')?.value||'sku',
+    status:document.getElementById('promocao-status-filtro-v77')?.value||'',
+    participation:document.getElementById('promocao-participacao-filtro-v77')?.value||''
+  };
+}
+
 async function acaoMassaPromocaoV77(action,allEligible=false){
   const p=promocoesEstadoV77.selecionada;if(!p)return;
   const token=obterToken();if(!token)return;
   const items=[...promocoesEstadoV77.selecionados.entries()].map(([id,percent])=>({id,percent}));
   if(!allEligible&&!items.length){alert('Selecione pelo menos um anúncio.');return}
-  if(!confirm(action==='join'?'Confirmar participação na promoção?':'Confirmar saída da promoção?'))return;
+  const filter=filtrosAtuaisPromocaoV78();
+  const temFiltro=Boolean(filter.q||filter.status||filter.participation);
+  const escopo=allEligible
+    ? (temFiltro?'todos os anúncios elegíveis que correspondem ao filtro atual':'todos os anúncios elegíveis da promoção')
+    : `${items.length} anúncio(s) selecionado(s)`;
+  if(!confirm(`${action==='join'?'Participar':'Sair'}: confirmar ação em ${escopo}?`))return;
   try{
     const r=await fetch(`${RENDER_URL}/api/v77/promocoes/acao-massa`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
-      body:JSON.stringify({promotion_id:p.id,promotion_type:p.type,action,percent:Number(document.getElementById('promocao-percent-v77')?.value||0),items,all_eligible:allEligible})});
+      body:JSON.stringify({promotion_id:p.id,promotion_type:p.type,action,percent:Number(document.getElementById('promocao-percent-v77')?.value||0),items,all_eligible:allEligible,filter})});
     const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
     promocoesEstadoV77.jobId=d.job_id;acompanharJobPromocaoV77(d.job_id);
   }catch(e){alert(e.message)}
