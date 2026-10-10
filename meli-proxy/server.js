@@ -90,6 +90,25 @@ async function renovarAccessTokenSeNecessario(forcar = false) {
     finally { oauthRefreshPromise = null; }
 }
 
+
+app.get('/api/v81/database-health', async (req,res)=>{
+    const host=hostBancoSeguroV81();
+    if(!db)return res.status(503).json({ok:false,database:false,host,erro:'DATABASE_URL não configurada.'});
+    try{
+        await dbQuery('SELECT 1 ok',[],{tentativas:1});
+        return res.json({ok:true,database:true,host,status:'connected'});
+    }catch(e){
+        return res.status(503).json({
+            ok:false,database:false,host,
+            status:erroDnsBancoV81(e)?'dns_unresolved':'temporarily_unavailable',
+            code:String(e?.code||''),
+            erro:erroDnsBancoV81(e)
+                ? 'O hostname do PostgreSQL não foi encontrado. Confira a DATABASE_URL no Render.'
+                : String(e?.message||e)
+        });
+    }
+});
+
 app.get('/', (req, res) => {
     res.send('Servidor proxy do Mercado Livre online!');
 });
@@ -3876,7 +3895,7 @@ function erroPostgresTemporarioV80(e){
     return [
         '57p03','57p01','57p02','57p04','53300','08000','08001','08003',
         '08004','08006','08007','08p01','econnreset','etimedout','econnrefused',
-        'epipe'
+        'epipe','enotfound','eai_again','enodata'
     ].includes(code.toLowerCase())
       || msg.includes('database system is not yet accepting connections')
       || msg.includes('consistent recovery state has not been yet reached')
@@ -3887,10 +3906,30 @@ function erroPostgresTemporarioV80(e){
       || msg.includes('server closed the connection unexpectedly')
       || msg.includes('cannot connect now')
       || msg.includes('the database system is starting up')
-      || msg.includes('the database system is shutting down');
+      || msg.includes('the database system is shutting down')
+      || msg.includes('getaddrinfo enotfound')
+      || msg.includes('getaddrinfo eai_again')
+      || msg.includes('name or service not known')
+      || msg.includes('temporary failure in name resolution');
 }
 
 function esperarDbV80(ms){return new Promise(r=>setTimeout(r,ms))}
+
+function hostBancoSeguroV81(){
+    try{
+        return DATABASE_URL ? new URL(DATABASE_URL).hostname : '';
+    }catch(e){return ''}
+}
+
+function erroDnsBancoV81(e){
+    const code=String(e?.code||'').toLowerCase();
+    const msg=String(e?.message||e||'').toLowerCase();
+    return ['enotfound','eai_again','enodata'].includes(code)
+      || msg.includes('getaddrinfo enotfound')
+      || msg.includes('getaddrinfo eai_again')
+      || msg.includes('name or service not known');
+}
+
 
 if(db){
     db.on('error',err=>{
@@ -3919,7 +3958,11 @@ async function dbQuery(text, params=[], opcoes={}) {
 
             // Backoff curto com limite. Em recovery do Render, insistimos sem derrubar o job.
             const espera=Math.min(8000,350*Math.pow(2,tentativa-1));
-            console.warn(`[POSTGRES V80] tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Nova tentativa em ${espera}ms.`);
+            if(erroDnsBancoV81(e)){
+                console.warn(`[POSTGRES V81] DNS do PostgreSQL indisponível (${hostBancoSeguroV81()}) · tentativa ${tentativa}/${maxTentativas}.`);
+            }else{
+                console.warn(`[POSTGRES V81] tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Nova tentativa em ${espera}ms.`);
+            }
             await esperarDbV80(espera);
         }
     }
@@ -3938,7 +3981,11 @@ async function aguardarPostgresProntoV80(){
         }catch(e){
             if(!erroPostgresTemporarioV80(e))throw e;
             const espera=Math.min(15000,1000*Math.min(tentativa,15));
-            console.warn(`[POSTGRES V80] banco em inicialização/recovery. Tentando novamente em ${espera}ms...`);
+            if(erroDnsBancoV81(e)){
+                console.warn(`[POSTGRES V81] DNS não encontrou o banco "${hostBancoSeguroV81()}". O serviço continuará tentando. Se persistir, atualize DATABASE_URL com a Internal Database URL atual do PostgreSQL no Render.`);
+            }else{
+                console.warn(`[POSTGRES V81] banco em inicialização/recovery. Tentando novamente em ${espera}ms...`);
+            }
             await esperarDbV80(espera);
         }
     }
