@@ -3304,7 +3304,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                         mt-1
                     "
                 >
-                    Aplique os valores nos an&#250;ncios. Premium e Cl&#225;ssico permitem substituir manualmente a taxa trazida pelo Mercado Livre.
+                    Aplique custo, imposto e lucro nos an&#250;ncios. A taxa de comiss&#227;o agora &#233; sempre a taxa exata trazida pela API do Mercado Livre para cada an&#250;ncio (Cl&#225;ssico ou Premium).
                 </p>
 
             </div>
@@ -3330,14 +3330,15 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
                 >
 <div class="flex flex-col gap-1 min-w-[118px]">
                     <label for="massa-taxa-premium" class="text-[9px] uppercase tracking-[.08em] text-amber-500 font-black">
-                        Taxa Premium %
+                        Taxa Premium % &#183; API
                     </label>
                     <input
                         type="number"
                         step="0.1"
                         id="massa-taxa-premium"
-                        placeholder="Ex.: 17"
-                        title="Taxa manual em massa para todos os an&#250;ncios Premium"
+                        placeholder="Autom&#225;tica"
+                        title="A taxa Premium &#233; puxada automaticamente da API do Mercado Livre para cada an&#250;ncio"
+                        disabled
                         class="
                             input-simulacao
                             w-full
@@ -3347,14 +3348,15 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div class="flex flex-col gap-1 min-w-[118px]">
                     <label for="massa-taxa-classico" class="text-[9px] uppercase tracking-[.08em] text-blue-500 font-black">
-                        Taxa Cl&#225;ssico %
+                        Taxa Cl&#225;ssico % &#183; API
                     </label>
                     <input
                         type="number"
                         step="0.1"
                         id="massa-taxa-classico"
-                        placeholder="Ex.: 14"
-                        title="Taxa manual em massa para todos os an&#250;ncios Cl&#225;ssico"
+                        placeholder="Autom&#225;tica"
+                        title="A taxa Cl&#225;ssico &#233; puxada automaticamente da API do Mercado Livre para cada an&#250;ncio"
+                        disabled
                         class="
                             input-simulacao
                             w-full
@@ -8958,11 +8960,13 @@ function parametrosSimV21(item){
     const margemBase=temBase ? Number(regra.margem||0) : null;
 
     return {
+        // V73: a comiss&#227;o exata sincronizada pela API do Mercado Livre sempre tem prioridade.
+        // Valores manuais antigos ficam somente como fallback caso o item ainda n&#227;o tenha taxa sincronizada.
         taxa:Number(
+          taxaApi ??
           salvo.taxa ??
           taxaManualTipo ??
           simMassaV21.taxa ??
-          taxaApi ??
           (premium?17:12)
         ),
 
@@ -9030,6 +9034,15 @@ function atributosBaseSkuV34(item,campo){
     return `readonly title="${escapeHtml(rotulo)}" class="input-simulacao w-${campo==='custo'?'20':'16'} !border-emerald-400 !bg-emerald-50 !text-emerald-800 cursor-not-allowed"`;
 }
 
+function atributosTaxaExataV73(item){
+    const taxa=Number(item?.commission_percentage||0);
+    const valor=Number(item?.sale_fee||0);
+    if(!(taxa>0))return 'class="input-simulacao w-16" title="Taxa ainda n&#227;o sincronizada; usando fallback at&#233; a pr&#243;xima sincroniza&#231;&#227;o."';
+    const tipo=String(item?.listing_type_id||'')==='gold_pro'?'Premium':'Cl&#225;ssico';
+    const titulo=`Taxa exata ${tipo} trazida pela API do Mercado Livre${valor>0?` &#183; Comiss&#227;o atual: ${moeda(valor)}`:''}`;
+    return `readonly class="input-simulacao w-16 !border-blue-400 !bg-blue-50 !text-blue-800 cursor-not-allowed" title="${escapeHtml(titulo)}"`;
+}
+
 function montarTabelaSimulacaoV21(itens){
     const tbody=document.getElementById('tabela-simulacao');if(!tbody)return;
     tbody.innerHTML='';
@@ -9053,7 +9066,7 @@ function montarTabelaSimulacaoV21(itens){
           <td class="p-3">${moeda(item.shipping_cost)}</td>
           <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
           <td class="p-3">${tipo}</td>
-          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+          <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="taxa_${sid}" value="${Number(p.taxa).toFixed(2)}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${atributosTaxaExataV73(item)}></td>
           <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
           <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
           <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
@@ -9072,8 +9085,10 @@ function recalcularV21(id){
     const base=regraSkuV27(item);
     const atuais=parametrosSimV21(item);
 
+    const taxaApiExata=Number(item.commission_percentage||0)>0 ? Number(item.commission_percentage) : null;
     const p={
-        taxa:parseFloat(document.getElementById(`taxa_${sid}`)?.value ?? atuais.taxa)||0,
+        // V73: nunca substitui uma taxa exata da API por valor manual/local.
+        taxa:taxaApiExata ?? (parseFloat(document.getElementById(`taxa_${sid}`)?.value ?? atuais.taxa)||0),
 
         // SKU cadastrado na Base Financeira n\u00e3o pode ser sobrescrito por valor antigo/manual.
         custo:base
@@ -9247,7 +9262,7 @@ function linhaSimulacaoV43(item){
         <td class="p-3">${moeda(item.shipping_cost)}</td>
         <td class="p-3 font-black text-blue-700 bg-blue-50">R$ 78,90</td>
         <td class="p-3">${tipo}</td>
-        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="taxa_${sid}" value="${p.taxa}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
+        <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="taxa_${sid}" value="${Number(p.taxa).toFixed(2)}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${atributosTaxaExataV73(item)}></td>
         <td class="p-3 bg-yellow-50/60"><input type="number" step="0.01" id="custo_${sid}" value="${p.custo}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'custo'):'class="input-simulacao w-20"'}></td>
         <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="imposto_${sid}" value="${p.imposto}" oninput="recalcularV21('${escapeHtml(item.id)}')" class="input-simulacao w-16"></td>
         <td class="p-3 bg-yellow-50/60"><input type="number" step="0.1" id="lucro_${sid}" value="${p.lucro}" oninput="recalcularV21('${escapeHtml(item.id)}')" ${regraSkuV27(item)?atributosBaseSkuV34(item,'lucro'):'class="input-simulacao w-16"'}></td>
@@ -9586,11 +9601,13 @@ function simIrPaginaV21(){}
 aplicarEmMassa=function(){
     const vals={
       custo:document.getElementById('massa-custo')?.value,
-      taxaPremium:document.getElementById('massa-taxa-premium')?.value,
-      taxaClassico:document.getElementById('massa-taxa-classico')?.value,
       imposto:document.getElementById('massa-imposto')?.value,
       lucro:document.getElementById('massa-lucro')?.value
     };
+    // V73: remove substitui&#231;&#245;es manuais antigas para a simula&#231;&#227;o usar a taxa exata da API.
+    simMassaV21.taxa=null;
+    simMassaV21.taxaPremium=null;
+    simMassaV21.taxaClassico=null;
     Object.entries(vals).forEach(([k,v])=>{if(v!==''&&v!==undefined)simMassaV21[k]=Number(v)});
     simItensV21.forEach(item=>{delete simParametrosPorIdV21[item.id]});
     renderizarSimulacaoCompletaV29(simItensV21);
@@ -13779,5 +13796,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 
+<!-- ML HUB PRO V73 - SIMULACAO COM TAXA EXATA DA API -->
 </body>
 </html>
