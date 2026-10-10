@@ -3915,6 +3915,27 @@ function erroPostgresTemporarioV80(e){
 
 function esperarDbV80(ms){return new Promise(r=>setTimeout(r,ms))}
 
+let dbCooldownAteV83=0;
+let dbFalhasConsecutivasV83=0;
+
+function ativarCooldownDbV83(e){
+    if(!erroPostgresTemporarioV80(e))return;
+    dbFalhasConsecutivasV83=Math.min(20,dbFalhasConsecutivasV83+1);
+    const ms=Math.min(15000,1000*Math.max(2,dbFalhasConsecutivasV83));
+    dbCooldownAteV83=Math.max(dbCooldownAteV83,Date.now()+ms);
+}
+
+async function esperarCooldownDbV83(){
+    const restante=dbCooldownAteV83-Date.now();
+    if(restante>0)await esperarDbV80(restante);
+}
+
+function limparCooldownDbV83(){
+    dbFalhasConsecutivasV83=0;
+    dbCooldownAteV83=0;
+}
+
+
 function hostBancoSeguroV81(){
     try{
         return DATABASE_URL ? new URL(DATABASE_URL).hostname : '';
@@ -3936,7 +3957,8 @@ if(db){
         // Erros de conexão idle do pg precisam de listener; sem isso Node pode emitir
         // "Unhandled error event" e reiniciar o serviço.
         if(erroPostgresTemporarioV80(err)){
-            console.warn('[POSTGRES V80] conexão temporariamente indisponível:',err.code||'',err.message);
+            ativarCooldownDbV83(err);
+            console.warn('[POSTGRES V83] conexão temporariamente indisponível:',err.code||'',err.message);
         }else{
             console.error('[POSTGRES V80] erro de pool:',err);
         }
@@ -3950,10 +3972,14 @@ async function dbQuery(text, params=[], opcoes={}) {
     let ultimo;
 
     for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+        await esperarCooldownDbV83();
         try{
-            return await db.query(text,params);
+            const resposta=await db.query(text,params);
+            limparCooldownDbV83();
+            return resposta;
         }catch(e){
             ultimo=e;
+            if(erroPostgresTemporarioV80(e))ativarCooldownDbV83(e);
             if(!erroPostgresTemporarioV80(e) || tentativa>=maxTentativas)throw e;
 
             // Backoff curto com limite. Em recovery do Render, insistimos sem derrubar o job.
@@ -4580,6 +4606,7 @@ async function claimJobTipoV76(type){
 async function syncWorkerDedicadoV76(){
     while(true){
         try{
+            await esperarCooldownDbV83();
             const job=await claimJobTipoV76('full_sync');
             if(job){
                 try{
@@ -7046,6 +7073,7 @@ async function processarCriacaoMassaV36(job){
 async function workerLoop(indice) {
     while(true) {
         try {
+            await esperarCooldownDbV83();
             const job=await claimJob();
             if(job) {
                 try {
@@ -11397,7 +11425,7 @@ async function iniciarCoreEscala(){
             coreEscalaIniciadoV80=true;
             syncWorkerDedicadoV76();
             for(let i=1;i<=ML_WORKER_CONCURRENCY;i++)workerLoop(i);
-            console.log(`[ESCALA V80] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados.`);
+            console.log(`[ESCALA V83] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · circuit breaker PostgreSQL ativo.`);
         }
     }catch(e){
         console.error('[ESCALA INIT V80]',e);
