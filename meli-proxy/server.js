@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const { Pool } = require('pg');
 
 const fetch = (...args) =>
@@ -1058,6 +1059,17 @@ app.post('/api/atualizar-preco', async (req, res) => {
 const esperarV35 = ms => new Promise(resolve => setTimeout(resolve, ms));
 let precoCooldownAteV35 = 0;
 
+// V75 — transporte persistente para atualização de preço em alta escala.
+// Reutiliza conexões TLS em vez de abrir uma conexão nova para cada anúncio.
+const ML_PRICE_KEEP_ALIVE_AGENT_V75 = new https.Agent({
+    keepAlive:true,
+    keepAliveMsecs:15000,
+    maxSockets:Math.max(16,Math.min(96,Number(process.env.ML_PRICE_MAX_SOCKETS||64))),
+    maxFreeSockets:Math.max(8,Math.min(48,Number(process.env.ML_PRICE_MAX_FREE_SOCKETS||32))),
+    timeout:30000
+});
+
+
 function statusItemPtV35(status){
     const mapa={
         active:'ativo',
@@ -1198,11 +1210,16 @@ async function esperarCooldownPrecoV35(){
 }
 
 async function atualizarPrecoItemV35(item,token,meta={}){
-    const maxTentativas=Math.max(3,Math.min(6,Number(process.env.ML_PRICE_UPDATE_RETRIES||5)));
+    // V75: timeout por chamada + keep-alive + retry curto.
+    const maxTentativas=Math.max(2,Math.min(4,Number(process.env.ML_PRICE_UPDATE_RETRIES||3)));
+    const timeoutMs=Math.max(5000,Math.min(30000,Number(process.env.ML_PRICE_REQUEST_TIMEOUT_MS||12000)));
     let ultimo=null;
 
     for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
         await esperarCooldownPrecoV35();
+
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),timeoutMs);
 
         try{
             const mlRes=await mlFetch(
@@ -1210,8 +1227,14 @@ async function atualizarPrecoItemV35(item,token,meta={}){
                 token,
                 {
                     method:'PUT',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({price:Number(item.price)})
+                    headers:{
+                        'Content-Type':'application/json',
+                        'Accept':'application/json',
+                        'Connection':'keep-alive'
+                    },
+                    body:JSON.stringify({price:Number(item.price)}),
+                    signal:controller.signal,
+                    agent:ML_PRICE_KEEP_ALIVE_AGENT_V75
                 }
             );
 
@@ -1270,8 +1293,8 @@ async function atualizarPrecoItemV35(item,token,meta={}){
 
             const retryAfter=Number(mlRes.headers.get('retry-after')||0);
             const espera=retryAfter>0
-                ? Math.min(30000,retryAfter*1000)
-                : Math.min(15000,1200*Math.pow(2,tentativa-1));
+                ? Math.min(20000,retryAfter*1000)
+                : Math.min(8000,450*Math.pow(2,tentativa-1));
 
             if(mlRes.status===429){
                 precoCooldownAteV35=Math.max(precoCooldownAteV35,Date.now()+espera);
@@ -1279,21 +1302,26 @@ async function atualizarPrecoItemV35(item,token,meta={}){
 
             await esperarV35(espera);
         }catch(err){
+            const timeout=err?.name==='AbortError';
             ultimo={
                 id:item.id,
                 sucesso:false,
                 requested_price:Number(item.price),
                 http_status:null,
-                codigo:'connection_error',
-                erro:'Houve uma falha tempor\u00e1ria de conex\u00e3o entre o servidor e o Mercado Livre. O sistema tentou novamente automaticamente.',
-                erro_tecnico:String(err?.message||err),
+                codigo:timeout?'request_timeout':'network_error',
+                erro:timeout
+                  ? 'A chamada ao Mercado Livre demorou além do limite e foi reenviada automaticamente.'
+                  : 'Falha temporária de conexão ao atualizar o preço. O sistema tentou novamente automaticamente.',
+                erro_tecnico:String(err?.message||err||'Falha de conexão.'),
                 tipo_falha:'temporario',
                 retryable:true,
                 tentativas:tentativa
             };
 
             if(tentativa>=maxTentativas)return ultimo;
-            await esperarV35(Math.min(10000,1000*Math.pow(2,tentativa-1)));
+            await esperarV35(Math.min(5000,350*Math.pow(2,tentativa-1)));
+        }finally{
+            clearTimeout(timer);
         }
     }
 
@@ -2907,6 +2935,21 @@ app.put('/api/alterar-status-anuncio', async (req, res) => {
    - webhook de notifica\u00e7\u00f5es
 ========================================================= */
 
+
+function limparTituloRealV76(valor){
+    let t=String(valor??'')
+      .replace(/\u0000/g,' ')
+      .replace(/<[^>]*>/g,' ')
+      .replace(/\r?\n+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+
+    // Remove somente sufixos claramente técnicos, caso alguma origem/cache antigo
+    // tenha concatenado metadados ao título. Não corta palavras normais do anúncio.
+    t=t.replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'').trim();
+    return t;
+}
+
 function normalizarItemGestao(item) {
     const attrs = Array.isArray(item.attributes) ? item.attributes : [];
     const skuAttr = attrs.find(a =>
@@ -2914,7 +2957,7 @@ function normalizarItemGestao(item) {
     );
     return {
         id: item.id,
-        titulo: item.title || '',
+        titulo: limparTituloRealV76(item.title),
         sku: item.seller_custom_field || skuAttr?.value_name || '',
         preco: Number(item.price || 0),
         estoque: Number(item.available_quantity || 0),
@@ -3766,7 +3809,7 @@ app.get('/api/v4/items/:id/competition',async(req,res)=>{
 ========================================================= */
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const ML_WORKER_ENABLED = String(process.env.ML_WORKER_ENABLED || 'true').toLowerCase() !== 'false';
-const ML_WORKER_CONCURRENCY = Math.max(1, Math.min(5, Number(process.env.ML_WORKER_CONCURRENCY || 2)));
+const ML_WORKER_CONCURRENCY = Math.max(1, Math.min(10, Number(process.env.ML_WORKER_CONCURRENCY || 3)));
 const db = DATABASE_URL ? new Pool({
     connectionString: DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -4323,6 +4366,63 @@ async function claimJob() {
     } catch(e){await client.query('ROLLBACK');throw e} finally{client.release()}
 }
 
+
+async function claimJobTipoV76(type){
+    const client=await db.connect();
+    try{
+        await client.query('BEGIN');
+        const r=await client.query(`
+          SELECT * FROM ml_jobs
+          WHERE status='queued' AND available_at<=NOW() AND type=$1
+          ORDER BY created_at ASC
+          FOR UPDATE SKIP LOCKED LIMIT 1
+        `,[type]);
+        if(!r.rows.length){await client.query('COMMIT');return null;}
+        const job=r.rows[0];
+        await client.query(`
+          UPDATE ml_jobs
+          SET status='running',locked_at=NOW(),updated_at=NOW(),attempts=attempts+1
+          WHERE id=$1
+        `,[job.id]);
+        await client.query('COMMIT');
+        return job;
+    }catch(e){
+        await client.query('ROLLBACK');
+        throw e;
+    }finally{
+        client.release();
+    }
+}
+
+async function syncWorkerDedicadoV76(){
+    while(true){
+        try{
+            const job=await claimJobTipoV76('full_sync');
+            if(job){
+                try{
+                    await processarSyncCompleto(job);
+                }catch(e){
+                    const retry=Number(job.attempts||0)<5;
+                    await dbQuery(`
+                      UPDATE ml_jobs SET
+                        status=$2,
+                        locked_at=NULL,
+                        cursor=CASE WHEN $2='queued' THEN cursor ELSE cursor END,
+                        message=$3,
+                        available_at=NOW()+INTERVAL '5 seconds',
+                        updated_at=NOW(),
+                        finished_at=CASE WHEN $2='failed' THEN NOW() ELSE NULL END
+                      WHERE id=$1
+                    `,[job.id,retry?'queued':'failed',String(e.message||e).slice(0,500)]);
+                }
+            }
+        }catch(e){
+            console.error('[SYNC WORKER V76]',e.message);
+        }
+        await new Promise(r=>setTimeout(r,350));
+    }
+}
+
 async function processarSyncCompleto(job) {
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token) throw new Error('Token Mercado Livre indispon\u00edvel para o seller do job.');
@@ -4342,8 +4442,8 @@ async function processarSyncCompleto(job) {
     // A API de busca entrega no m\u00e1ximo 100 IDs por chamada. A V42 re\u00fane
     // essas p\u00e1ginas em um lote l\u00f3gico de at\u00e9 5.000 e s\u00f3 ent\u00e3o processa os
     // detalhes em paralelo via /items/bulk, preservando o cursor do scan.
-    const TAMANHO_LOTE_LOGICO=5000;
-    const MAX_PAGINAS_POR_LOTE=50;
+    const TAMANHO_LOTE_LOGICO=Math.max(500,Math.min(5000,Number(process.env.ML_AD_SYNC_BATCH||2000)));
+    const MAX_PAGINAS_POR_LOTE=Math.max(5,Math.ceil(TAMANHO_LOTE_LOGICO/100));
 
     while(!scanCompleto && paginasLidas<2000){
         const idsLote=[];
@@ -4391,7 +4491,7 @@ async function processarSyncCompleto(job) {
                 await dbQuery(`
                   UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
                 `,[job.id,
-                   `Preparando lote ${loteNumero.toLocaleString('pt-BR')} \u00b7 ${idsLote.length.toLocaleString('pt-BR')}/5.000 IDs coletados`]);
+                   `Preparando lote ${loteNumero.toLocaleString('pt-BR')} \u00b7 ${idsLote.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE_LOGICO.toLocaleString('pt-BR')} IDs coletados`]);
             }
         }
 
@@ -4417,12 +4517,13 @@ async function processarSyncCompleto(job) {
         const itens=idsUnicos.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
         errors+=Math.max(0,idsUnicos.length-itens.length);
 
+        // V76: Puxar anúncios deve priorizar título/status/preço/estoque/vendas e terminar rápido.
+        // A comissão exata continua preservada quando já existe no banco e pode ser sincronizada
+        // pelo botão "Puxar preços". Não fazemos milhares de consultas individuais de comissão
+        // no meio da importação dos anúncios.
         let comissoesConsultadas=0;
         if(itens.length){
-            const enriquecidos=await enriquecerComissoesV28(job.seller_id,itens,token);
-            comissoesConsultadas=enriquecidos.consultados;
-            errors+=enriquecidos.erros;
-            await upsertItensDb(job.seller_id,enriquecidos.itens);
+            await upsertItensDb(job.seller_id,itens);
         }
 
         processed+=idsUnicos.length;
@@ -4590,7 +4691,7 @@ async function gravarErrosPrecoV36(jobId,sellerId,erros){
 
 async function processarAtualizacaoPrecosMassaV36(job){
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
-    if(!token)throw new Error('Token Mercado Livre indispon\u00edvel para atualizar pre\u00e7os.');
+    if(!token)throw new Error('Token Mercado Livre indisponível para atualizar preços.');
 
     const itens=Array.isArray(job.payload?.items)?job.payload.items:[];
     const total=itens.length;
@@ -4600,9 +4701,10 @@ async function processarAtualizacaoPrecosMassaV36(job){
     let bloqueados=Number(job.result?.blocked||0);
     let temporarios=Number(job.result?.temporary||0);
 
-    const CHUNK=Math.max(100,Math.min(1000,Number(process.env.ML_PRICE_MASS_CHUNK||500)));
-    const CONCORRENCIA=Math.max(2,Math.min(20,Number(process.env.ML_PRICE_MASS_CONCURRENCY||10)));
-    const PAUSA_GRUPO=Math.max(25,Math.min(1000,Number(process.env.ML_PRICE_MASS_GROUP_DELAY_MS||90)));
+    // V75 — pool de alta escala para 90 mil+ anúncios.
+    const CHUNK=Math.max(250,Math.min(5000,Number(process.env.ML_PRICE_MASS_CHUNK||2000)));
+    const CONCORRENCIA=Math.max(4,Math.min(50,Number(process.env.ML_PRICE_MASS_CONCURRENCY||30)));
+    const PAUSA_GRUPO=Math.max(0,Math.min(500,Number(process.env.ML_PRICE_MASS_GROUP_DELAY_MS||0)));
 
     if(indice===0){
         await dbQuery(`DELETE FROM ml_price_update_errors WHERE job_id=$1`,[job.id]);
@@ -4612,6 +4714,7 @@ async function processarAtualizacaoPrecosMassaV36(job){
         const lote=itens.slice(indice,Math.min(total,indice+CHUNK));
         const ids=lote.map(x=>String(x.id));
 
+        // Uma única leitura de metadata por lote.
         const meta=await dbQuery(`
           SELECT item_id,status,raw
           FROM ml_items
@@ -4632,7 +4735,7 @@ async function processarAtualizacaoPrecosMassaV36(job){
         const resultados=new Array(lote.length);
         let cursorLocal=0;
 
-        async function workerPreco(){
+        async function workerPrecoV75(){
             while(true){
                 const pos=cursorLocal++;
                 if(pos>=lote.length)return;
@@ -4667,7 +4770,7 @@ async function processarAtualizacaoPrecosMassaV36(job){
                         http_status:400,
                         codigo:'item.price.not_modifiable',
                         tentativas:0,
-                        erro:'Este an\u00fancio est\u00e1 com Automatiza\u00e7\u00e3o de Pre\u00e7os configurada no Mercado Livre. Desative a automatiza\u00e7\u00e3o antes de alterar o pre\u00e7o manualmente pela API.',
+                        erro:'Este anúncio está com Automatização de Preços configurada no Mercado Livre. Desative a automatização antes de alterar o preço manualmente pela API.',
                         erro_tecnico:'dynamic_standard_price'
                     };
                     continue;
@@ -4677,29 +4780,29 @@ async function processarAtualizacaoPrecosMassaV36(job){
             }
         }
 
-        for(let p=0;p<CONCORRENCIA;p++){
-            if(p>0)await esperarV35(Math.min(PAUSA_GRUPO,75));
-            workerPreco();
-        }
-
-        // Espera todos os workers terminarem usando polling leve do cursor/results.
-        while(resultados.filter(Boolean).length<lote.length){
-            await esperarV35(80);
-        }
+        // Todos os workers começam imediatamente. Não há mais atraso artificial de inicialização.
+        await Promise.all(
+            Array.from(
+                {length:Math.min(CONCORRENCIA,lote.length)},
+                ()=>workerPrecoV75()
+            )
+        );
 
         const ok=resultados.filter(r=>r?.sucesso);
-        const falhas=resultados.filter(r=>!r?.sucesso);
+        const falhas=resultados.filter(r=>r && !r.sucesso);
 
-        if(ok.length){
-            await atualizarPrecosDbLoteV26(
-                job.seller_id,
-                ok.map(r=>({id:r.id,price:r.price??r.requested_price}))
-            );
-        }
-
-        if(falhas.length){
-            await gravarErrosPrecoV36(job.id,job.seller_id,falhas);
-        }
+        // Banco atualizado em massa e em paralelo com a gravação das falhas.
+        await Promise.all([
+            ok.length
+              ? atualizarPrecosDbLoteV26(
+                    job.seller_id,
+                    ok.map(r=>({id:r.id,price:r.price??r.requested_price}))
+                )
+              : Promise.resolve(),
+            falhas.length
+              ? gravarErrosPrecoV36(job.id,job.seller_id,falhas)
+              : Promise.resolve()
+        ]);
 
         sucessos+=ok.length;
         erros+=falhas.length;
@@ -4714,7 +4817,8 @@ async function processarAtualizacaoPrecosMassaV36(job){
             blocked:bloqueados,
             temporary:temporarios,
             concurrency:CONCORRENCIA,
-            chunk:CHUNK
+            chunk:CHUNK,
+            engine:'v75-fast-price-pool'
         };
 
         await dbQuery(`
@@ -4730,10 +4834,10 @@ async function processarAtualizacaoPrecosMassaV36(job){
           WHERE id=$1
         `,[
             job.id,indice,total,erros,String(indice),JSON.stringify(result),
-            `Atualiza\u00e7\u00e3o de pre\u00e7os: ${indice.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} \u00b7 ${pct}% \u00b7 ${sucessos.toLocaleString('pt-BR')} atualizado(s) \u00b7 ${erros.toLocaleString('pt-BR')} n\u00e3o atualizado(s)`
+            `Atualização rápida: ${indice.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${sucessos.toLocaleString('pt-BR')} atualizado(s) · ${erros.toLocaleString('pt-BR')} não atualizado(s) · ${CONCORRENCIA} conexões paralelas`
         ]);
 
-        await esperarV35(PAUSA_GRUPO);
+        if(PAUSA_GRUPO>0)await esperarV35(PAUSA_GRUPO);
     }
 
     await dbQuery(`
@@ -4757,9 +4861,10 @@ async function processarAtualizacaoPrecosMassaV36(job){
             blocked:bloqueados,
             temporary:temporarios,
             concurrency:CONCORRENCIA,
-            chunk:CHUNK
+            chunk:CHUNK,
+            engine:'v75-fast-price-pool'
         }),
-        `Pre\u00e7os conclu\u00eddos: ${sucessos.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} n\u00e3o atualizado(s).`
+        `Preços concluídos: ${sucessos.toLocaleString('pt-BR')} atualizado(s), ${erros.toLocaleString('pt-BR')} não atualizado(s).`
     ]);
 }
 
@@ -6674,6 +6779,7 @@ async function workerLoop(indice) {
                     else if(job.type==='price_update_mass') await processarAtualizacaoPrecosMassaV36(job);
                     else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
                     else if(job.type==='mass_create_v37') await processarCriacaoMassaV37(job);
+                    else if(job.type==='promotion_mass_v77') await processarPromocaoMassaV77(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
                     const retry=Number(job.attempts||0)<4;
@@ -6834,7 +6940,7 @@ async function buscarItensBulkFreteRapido(token,ids){
 
     const mapa={};
     const falhas=new Map();
-    const concorrencia=Math.max(4,Math.min(24,Number(process.env.ML_BULK_CONCURRENCY||12)));
+    const concorrencia=Math.max(8,Math.min(40,Number(process.env.ML_BULK_CONCURRENCY||24)));
     let cursor=0;
 
     async function worker(){
@@ -7128,7 +7234,7 @@ async function prepararJobEscalaV26(sellerId,type,payload,total,{retomarFalha=tr
       WHERE seller_id=$1
         AND type=$2
         AND status='running'
-        AND updated_at<NOW()-INTERVAL '90 seconds'
+        AND updated_at<NOW()-INTERVAL '45 seconds'
     `,[sellerId,type]);
 
     const ativo=await dbQuery(`
@@ -9191,6 +9297,7 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         const page=Math.max(1,Number(req.query.page||1)),limit=Math.min(1000,Math.max(10,Number(req.query.limit||50))),offset=(page-1)*limit;
         const q=String(req.query.q||'').trim(),status=String(req.query.status||'').trim();
         const field=String(req.query.field||'all').trim().toLowerCase();
+        const sort=String(req.query.sort||'recent').trim().toLowerCase();
         const params=[me.id];let where=`seller_id=$1`;
         if(status){params.push(status);where+=` AND status=$${params.length}`}
         if(q){
@@ -9207,8 +9314,19 @@ app.get('/api/scale/anuncios',async(req,res)=>{
         }
         const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,params);
         const stats=await dbQuery(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE status='active')::int ativos FROM ml_items WHERE seller_id=$1`,[me.id]);
+        const orderSql=
+          sort==='sold'
+            ? 'sold_quantity DESC, ml_updated_at DESC NULLS LAST, item_id'
+            : sort==='oldest'
+              ? "COALESCE(NULLIF(raw->>'date_created','')::timestamptz,ml_updated_at) ASC NULLS LAST,item_id"
+              : sort==='status'
+                ? "status ASC, ml_updated_at DESC NULLS LAST,item_id"
+                : "COALESCE(NULLIF(raw->>'date_created','')::timestamptz,ml_updated_at) DESC NULLS LAST,item_id";
+
         params.push(limit,offset);
-        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced,
+        const rows=await dbQuery(`SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at last_updated,
+        COALESCE(NULLIF(raw->>'date_created','')::timestamptz,ml_updated_at) date_created,
+        sale_fee::float8 sale_fee,commission_percentage::float8 commission_percentage,shipping_cost::float8 shipping_cost,free_shipping,net_received::float8 net_received,synced_at last_synced,
         CASE WHEN status='active' AND NOT (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN true ELSE false END price_update_allowed,
         CASE
           WHEN status='under_review' THEN 'O an\u00fancio est\u00e1 em revis\u00e3o pelo Mercado Livre. O pre\u00e7o n\u00e3o pode ser alterado enquanto a revis\u00e3o n\u00e3o terminar.'
@@ -9219,10 +9337,11 @@ app.get('/api/scale/anuncios',async(req,res)=>{
           WHEN (COALESCE(raw->'tags','[]'::jsonb) ? 'dynamic_standard_price') THEN 'O an\u00fancio possui Automatiza\u00e7\u00e3o de Pre\u00e7os configurada no Mercado Livre e a edi\u00e7\u00e3o manual pela API est\u00e1 bloqueada.'
           ELSE NULL
         END price_update_block_reason
-        FROM ml_items WHERE ${where} ORDER BY ml_updated_at DESC NULLS LAST,item_id LIMIT $${params.length-1} OFFSET $${params.length}`,params);
+        FROM ml_items WHERE ${where} ORDER BY ${orderSql} LIMIT $${params.length-1} OFFSET $${params.length}`,params);
         const total=count.rows[0]?.total||0;
         const totalConta=stats.rows[0]?.total||0, ativos=stats.rows[0]?.ativos||0;
-        res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:rows.rows});
+        const itensSaida=rows.rows.map(x=>({...x,title:limparTituloRealV76(x.title)}));
+        res.json({sucesso:true,seller_id:String(me.id),pagina:page,limite:limit,total,paginas:Math.max(1,Math.ceil(total/limit)),total_conta:totalConta,ativos,outros:Math.max(0,totalConta-ativos),itens:itensSaida});
     }catch(e){respostaErro(res,500,e.message)}
 });
 
@@ -10271,11 +10390,584 @@ app.post('/api/v69/titulos/gerar',async(req,res)=>{
     try{res.json(await gerarTitulosIAV67(req));}catch(e){respostaErro(res,e.status||502,'Não foi possível gerar este micro-lote de títulos por IA: '+e.message);}
 });
 
+
+/* =========================================================
+   V77 — CENTRAL DE PROMOÇÕES
+   Cache persistente + leitura rápida dos anúncios já salvos.
+   API oficial: /seller-promotions (app_version=v2)
+========================================================= */
+
+let bancoPromocoesV77Promise=null;
+
+async function inicializarPromocoesV77(){
+    if(bancoPromocoesV77Promise)return bancoPromocoesV77Promise;
+    bancoPromocoesV77Promise=(async()=>{
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_promotions_v77(
+            seller_id TEXT NOT NULL,
+            promotion_id TEXT NOT NULL,
+            promotion_type TEXT NOT NULL,
+            status TEXT,
+            name TEXT,
+            start_date TIMESTAMPTZ,
+            finish_date TIMESTAMPTZ,
+            deadline_date TIMESTAMPTZ,
+            discount_percentage NUMERIC,
+            seller_percentage NUMERIC,
+            meli_percentage NUMERIC,
+            raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+            synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(seller_id,promotion_id,promotion_type)
+          )
+        `);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_ml_promotions_v77_seller_status ON ml_promotions_v77(seller_id,status,synced_at DESC)`);
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_promotion_items_v77(
+            seller_id TEXT NOT NULL,
+            promotion_id TEXT NOT NULL,
+            promotion_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            promo_status TEXT,
+            price NUMERIC,
+            original_price NUMERIC,
+            min_discounted_price NUMERIC,
+            max_discounted_price NUMERIC,
+            suggested_discounted_price NUMERIC,
+            seller_percentage NUMERIC,
+            meli_percentage NUMERIC,
+            offer_id TEXT,
+            raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+            synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(seller_id,promotion_id,promotion_type,item_id)
+          )
+        `);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_ml_promotion_items_v77_lookup ON ml_promotion_items_v77(seller_id,promotion_id,promotion_type,promo_status,item_id)`);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_ml_promotion_items_v77_item ON ml_promotion_items_v77(seller_id,item_id)`);
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_promotion_sync_v77(
+            seller_id TEXT NOT NULL,
+            promotion_id TEXT NOT NULL,
+            promotion_type TEXT NOT NULL,
+            promo_status TEXT NOT NULL,
+            search_after TEXT,
+            completed BOOLEAN NOT NULL DEFAULT FALSE,
+            synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(seller_id,promotion_id,promotion_type,promo_status)
+          )
+        `);
+    })().catch(e=>{bancoPromocoesV77Promise=null;throw e});
+    return bancoPromocoesV77Promise;
+}
+
+function numeroPromoV77(...valores){
+    for(const v of valores){
+        const n=Number(v);
+        if(Number.isFinite(n)&&n>=0)return n;
+    }
+    return null;
+}
+
+function descontoPromocaoV77(p={}){
+    const b=p?.benefits||{};
+    const seller=numeroPromoV77(
+        b.seller_percent,p.seller_percentage,p.seller_percent,
+        p.discount_seller_percentage,p.discount_percentage,p.percentage
+    );
+    const meli=numeroPromoV77(
+        b.meli_percent,p.meli_percentage,p.meli_percent,
+        p.discount_meli_percentage
+    );
+    const total=numeroPromoV77(
+        p.discount_percentage,p.percentage,
+        seller!=null||meli!=null?(seller||0)+(meli||0):null
+    );
+    return {
+        discount_percentage:total,
+        seller_percentage:seller,
+        meli_percentage:meli
+    };
+}
+
+function promocaoPublicaV77(row={}){
+    const raw=row.raw||{};
+    return {
+        id:String(row.promotion_id||raw.id||''),
+        type:String(row.promotion_type||raw.type||''),
+        status:String(row.status||raw.status||''),
+        name:String(row.name||raw.name||row.promotion_type||raw.type||'Promoção'),
+        start_date:row.start_date||raw.start_date||null,
+        finish_date:row.finish_date||raw.finish_date||null,
+        deadline_date:row.deadline_date||raw.deadline_date||null,
+        discount_percentage:row.discount_percentage==null?null:Number(row.discount_percentage),
+        seller_percentage:row.seller_percentage==null?null:Number(row.seller_percentage),
+        meli_percentage:row.meli_percentage==null?null:Number(row.meli_percentage),
+        raw
+    };
+}
+
+async function sincronizarPromocoesContaV77(token,sellerId){
+    await inicializarPromocoesV77();
+    const r=await mlFetch(`${ML_API}/seller-promotions/users/${encodeURIComponent(sellerId)}?app_version=v2`,token,{
+        headers:{Accept:'application/json'}
+    });
+    const d=await jsonSeguro(r);
+    if(!r.ok)throw new Error(formatarErroMercadoLivre(d)||`HTTP ${r.status}`);
+
+    const lista=Array.isArray(d?.results)?d.results:(Array.isArray(d)?d:[]);
+    for(const p of lista){
+        const id=String(p?.id||'').trim(),type=String(p?.type||'').trim();
+        if(!id||!type)continue;
+        const pct=descontoPromocaoV77(p);
+        await dbQuery(`
+          INSERT INTO ml_promotions_v77(
+            seller_id,promotion_id,promotion_type,status,name,start_date,finish_date,deadline_date,
+            discount_percentage,seller_percentage,meli_percentage,raw,synced_at
+          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,NOW())
+          ON CONFLICT(seller_id,promotion_id,promotion_type) DO UPDATE SET
+            status=EXCLUDED.status,name=EXCLUDED.name,start_date=EXCLUDED.start_date,
+            finish_date=EXCLUDED.finish_date,deadline_date=EXCLUDED.deadline_date,
+            discount_percentage=EXCLUDED.discount_percentage,
+            seller_percentage=EXCLUDED.seller_percentage,
+            meli_percentage=EXCLUDED.meli_percentage,
+            raw=EXCLUDED.raw,synced_at=NOW()
+        `,[
+            String(sellerId),id,type,String(p?.status||''),String(p?.name||type),
+            p?.start_date||null,p?.finish_date||null,p?.deadline_date||null,
+            pct.discount_percentage,pct.seller_percentage,pct.meli_percentage,JSON.stringify(p||{})
+        ]);
+    }
+    return lista.length;
+}
+
+app.get('/api/v77/promocoes',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token),sellerId=String(me.id);
+        await inicializarPromocoesV77();
+
+        const force=String(req.query.refresh||'')==='1';
+        const ultima=await dbQuery(`SELECT MAX(synced_at) t FROM ml_promotions_v77 WHERE seller_id=$1`,[sellerId]);
+        const idade=ultima.rows[0]?.t?Date.now()-new Date(ultima.rows[0].t).getTime():Infinity;
+        let atualizadas=0,erro_refresh=null;
+
+        if(force||idade>5*60*1000){
+            try{atualizadas=await sincronizarPromocoesContaV77(token,sellerId)}
+            catch(e){erro_refresh=e.message}
+        }
+
+        const r=await dbQuery(`
+          SELECT * FROM ml_promotions_v77
+          WHERE seller_id=$1
+            AND COALESCE(status,'') NOT IN ('finished','cancelled','canceled')
+          ORDER BY
+            CASE status WHEN 'started' THEN 1 WHEN 'pending' THEN 2 WHEN 'candidate' THEN 3 ELSE 4 END,
+            finish_date NULLS LAST,name,promotion_id
+        `,[sellerId]);
+
+        res.json({
+            sucesso:true,
+            atualizadas,
+            erro_refresh,
+            promocoes:r.rows.map(promocaoPublicaV77),
+            synced_at:r.rows[0]?.synced_at||ultima.rows[0]?.t||null
+        });
+    }catch(e){respostaErro(res,500,'Erro ao carregar promoções: '+e.message)}
+});
+
+function normalizarItemPromocaoV77(p={}){
+    const id=String(p?.id||p?.item_id||'').trim();
+    return {
+        id,
+        status:String(p?.status||p?.status_item||''),
+        price:numeroPromoV77(p?.price),
+        original_price:numeroPromoV77(p?.original_price),
+        min_discounted_price:numeroPromoV77(p?.min_discounted_price),
+        max_discounted_price:numeroPromoV77(p?.max_discounted_price),
+        suggested_discounted_price:numeroPromoV77(p?.suggested_discounted_price),
+        seller_percentage:numeroPromoV77(p?.seller_percentage,p?.seller_percent),
+        meli_percentage:numeroPromoV77(p?.meli_percentage,p?.meli_percent),
+        offer_id:String(p?.offer_id||p?.ref_id||p?.candidate_id||''),
+        raw:p
+    };
+}
+
+async function salvarItensPromocaoV77(sellerId,promotionId,promotionType,lista=[]){
+    for(const raw of lista){
+        const p=normalizarItemPromocaoV77(raw);
+        if(!p.id)continue;
+        await dbQuery(`
+          INSERT INTO ml_promotion_items_v77(
+            seller_id,promotion_id,promotion_type,item_id,promo_status,price,original_price,
+            min_discounted_price,max_discounted_price,suggested_discounted_price,
+            seller_percentage,meli_percentage,offer_id,raw,synced_at
+          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,NOW())
+          ON CONFLICT(seller_id,promotion_id,promotion_type,item_id) DO UPDATE SET
+            promo_status=EXCLUDED.promo_status,price=EXCLUDED.price,original_price=EXCLUDED.original_price,
+            min_discounted_price=EXCLUDED.min_discounted_price,max_discounted_price=EXCLUDED.max_discounted_price,
+            suggested_discounted_price=EXCLUDED.suggested_discounted_price,
+            seller_percentage=EXCLUDED.seller_percentage,meli_percentage=EXCLUDED.meli_percentage,
+            offer_id=EXCLUDED.offer_id,raw=EXCLUDED.raw,synced_at=NOW()
+        `,[String(sellerId),promotionId,promotionType,p.id,p.status,p.price,p.original_price,
+            p.min_discounted_price,p.max_discounted_price,p.suggested_discounted_price,
+            p.seller_percentage,p.meli_percentage,p.offer_id,JSON.stringify(raw||{})]);
+    }
+}
+
+async function sincronizarItensPromocaoV77(token,sellerId,promotionId,promotionType,{reset=false,tempoMs=11000}={}){
+    await inicializarPromocoesV77();
+    const statuses=['candidate','pending','started'];
+    if(reset){
+        await dbQuery(`DELETE FROM ml_promotion_sync_v77 WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3`,[String(sellerId),promotionId,promotionType]);
+    }
+    const inicio=Date.now();
+    let paginas=0,itens=0,parcial=false;
+
+    for(const status of statuses){
+        let st=(await dbQuery(`
+          SELECT search_after,completed FROM ml_promotion_sync_v77
+          WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3 AND promo_status=$4
+        `,[String(sellerId),promotionId,promotionType,status])).rows[0];
+
+        if(st?.completed)continue;
+        let cursor=String(st?.search_after||'');
+
+        while(Date.now()-inicio<tempoMs){
+            const qs=new URLSearchParams({
+                promotion_type:promotionType,app_version:'v2',limit:'50',status
+            });
+            if(cursor)qs.set('search_after',cursor);
+
+            const rr=await mlFetch(`${ML_API}/seller-promotions/promotions/${encodeURIComponent(promotionId)}/items?${qs.toString()}`,token,{headers:{Accept:'application/json'}});
+            const dd=await jsonSeguro(rr);
+            if(!rr.ok){
+                // Alguns tipos não aceitam o filtro status; tenta uma consulta sem filtro apenas uma vez.
+                if(paginas===0){
+                    const q2=new URLSearchParams({promotion_type:promotionType,app_version:'v2',limit:'50'});
+                    if(cursor)q2.set('search_after',cursor);
+                    const r2=await mlFetch(`${ML_API}/seller-promotions/promotions/${encodeURIComponent(promotionId)}/items?${q2.toString()}`,token,{headers:{Accept:'application/json'}});
+                    const d2=await jsonSeguro(r2);
+                    if(!r2.ok)throw new Error(formatarErroMercadoLivre(d2)||`HTTP ${r2.status}`);
+                    const arr2=Array.isArray(d2?.results)?d2.results:(Array.isArray(d2)?d2:[]);
+                    await salvarItensPromocaoV77(sellerId,promotionId,promotionType,arr2);
+                    itens+=arr2.length;paginas++;
+                    const next=String(d2?.paging?.searchAfter||d2?.searchAfter||'');
+                    await dbQuery(`
+                      INSERT INTO ml_promotion_sync_v77(seller_id,promotion_id,promotion_type,promo_status,search_after,completed,synced_at)
+                      VALUES($1,$2,$3,$4,$5,$6,NOW())
+                      ON CONFLICT(seller_id,promotion_id,promotion_type,promo_status) DO UPDATE SET
+                        search_after=EXCLUDED.search_after,completed=EXCLUDED.completed,synced_at=NOW()
+                    `,[String(sellerId),promotionId,promotionType,status,next,!next]);
+                    if(!next)break;
+                    cursor=next;
+                    continue;
+                }
+                throw new Error(formatarErroMercadoLivre(dd)||`HTTP ${rr.status}`);
+            }
+
+            const arr=Array.isArray(dd?.results)?dd.results:(Array.isArray(dd)?dd:[]);
+            await salvarItensPromocaoV77(sellerId,promotionId,promotionType,arr);
+            itens+=arr.length;paginas++;
+
+            const next=String(dd?.paging?.searchAfter||dd?.searchAfter||'');
+            const concluido=!next||arr.length===0;
+            await dbQuery(`
+              INSERT INTO ml_promotion_sync_v77(seller_id,promotion_id,promotion_type,promo_status,search_after,completed,synced_at)
+              VALUES($1,$2,$3,$4,$5,$6,NOW())
+              ON CONFLICT(seller_id,promotion_id,promotion_type,promo_status) DO UPDATE SET
+                search_after=EXCLUDED.search_after,completed=EXCLUDED.completed,synced_at=NOW()
+            `,[String(sellerId),promotionId,promotionType,status,next,concluido]);
+
+            if(concluido)break;
+            cursor=next;
+        }
+        if(Date.now()-inicio>=tempoMs){parcial=true;break}
+    }
+
+    const pend=await dbQuery(`
+      SELECT COUNT(*)::int n FROM ml_promotion_sync_v77
+      WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3 AND completed=false
+    `,[String(sellerId),promotionId,promotionType]);
+    parcial=parcial||Number(pend.rows[0]?.n||0)>0;
+    return {paginas,itens,parcial};
+}
+
+app.post('/api/v77/promocoes/:id/sincronizar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token),sellerId=String(me.id);
+        const promotionId=String(req.params.id||'').trim();
+        const promotionType=String(req.body?.promotion_type||'').trim();
+        if(!promotionId||!promotionType)return respostaErro(res,400,'Promoção ou tipo não informado.');
+        const d=await sincronizarItensPromocaoV77(token,sellerId,promotionId,promotionType,{
+            reset:Boolean(req.body?.reset),tempoMs:Math.max(3000,Math.min(15000,Number(req.body?.tempo_ms||10000)))
+        });
+        const c=await dbQuery(`
+          SELECT promo_status,COUNT(*)::int total
+          FROM ml_promotion_items_v77
+          WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3
+          GROUP BY promo_status
+        `,[sellerId,promotionId,promotionType]);
+        res.json({sucesso:true,...d,contagens:c.rows});
+    }catch(e){respostaErro(res,500,'Erro ao sincronizar itens da promoção: '+e.message)}
+});
+
+app.get('/api/v77/promocoes/anuncios',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token),sellerId=String(me.id);
+        await inicializarPromocoesV77();
+        const promotionId=String(req.query.promotion_id||'').trim();
+        const promotionType=String(req.query.promotion_type||'').trim();
+        const page=Math.max(1,Number(req.query.page||1));
+        const limit=Math.max(20,Math.min(200,Number(req.query.limit||100)));
+        const offset=(page-1)*limit;
+        const q=String(req.query.q||'').trim();
+        const status=String(req.query.status||'').trim();
+        const participation=String(req.query.participation||'').trim();
+
+        const params=[sellerId],conds=['m.seller_id=$1'];
+        if(q){params.push(`%${q}%`);conds.push(`(m.title ILIKE $${params.length} OR m.sku ILIKE $${params.length} OR m.item_id ILIKE $${params.length})`)}
+        if(status){params.push(status);conds.push(`m.status=$${params.length}`)}
+        if(participation&&promotionId&&promotionType){
+            if(participation==='candidate')conds.push(`COALESCE(pi.promo_status,'')='candidate'`);
+            else if(participation==='participating')conds.push(`COALESCE(pi.promo_status,'') IN ('started','pending')`);
+            else if(participation==='not_participating')conds.push(`COALESCE(pi.promo_status,'') NOT IN ('started','pending')`);
+        }
+        const where=conds.join(' AND ');
+
+        let join='',joinParams=[];
+        if(promotionId&&promotionType){
+            params.push(promotionId);const pId=params.length;
+            params.push(promotionType);const pType=params.length;
+            join=`LEFT JOIN ml_promotion_items_v77 pi
+              ON pi.seller_id=m.seller_id AND pi.item_id=m.item_id
+              AND pi.promotion_id=$${pId} AND pi.promotion_type=$${pType}`;
+        }else{
+            join=`LEFT JOIN LATERAL (
+              SELECT NULL::text promo_status,NULL::numeric price,NULL::numeric original_price,
+                     NULL::numeric min_discounted_price,NULL::numeric max_discounted_price,
+                     NULL::numeric suggested_discounted_price,NULL::numeric seller_percentage,
+                     NULL::numeric meli_percentage,NULL::text offer_id,'{}'::jsonb raw
+            ) pi ON true`;
+        }
+
+        const count=await dbQuery(`SELECT COUNT(*)::int total FROM ml_items m ${join} WHERE ${where}`,params);
+        params.push(limit,offset);
+        const r=await dbQuery(`
+          SELECT m.item_id id,m.title,m.sku,m.price::float8 price,m.available_quantity,m.sold_quantity,
+                 m.status,m.thumbnail,m.permalink,m.listing_type_id,m.category_id,
+                 pi.promo_status,pi.price::float8 promo_price,pi.original_price::float8 promo_original_price,
+                 pi.min_discounted_price::float8 min_discounted_price,
+                 pi.max_discounted_price::float8 max_discounted_price,
+                 pi.suggested_discounted_price::float8 suggested_discounted_price,
+                 pi.seller_percentage::float8 promo_seller_percentage,
+                 pi.meli_percentage::float8 promo_meli_percentage,
+                 pi.offer_id,pi.raw promo_raw
+          FROM ml_items m
+          ${join}
+          WHERE ${where}
+          ORDER BY m.sold_quantity DESC,m.ml_updated_at DESC NULLS LAST,m.item_id
+          LIMIT $${params.length-1} OFFSET $${params.length}
+        `,params);
+
+        res.json({
+            sucesso:true,page,limit,total:Number(count.rows[0]?.total||0),
+            paginas:Math.max(1,Math.ceil(Number(count.rows[0]?.total||0)/limit)),
+            itens:r.rows.map(x=>({...x,title:typeof limparTituloRealV76==='function'?limparTituloRealV76(x.title):x.title}))
+        });
+    }catch(e){respostaErro(res,500,'Erro ao carregar anúncios da Central de Promoções: '+e.message)}
+});
+
+function payloadParticipacaoPromocaoV77({item,promotionId,promotionType,dealPrice,percent,campaign}){
+    const type=String(promotionType||'').toUpperCase();
+    const raw=item?.promo_raw||item?.raw||{};
+    const offerId=String(item?.offer_id||raw?.offer_id||raw?.ref_id||raw?.candidate_id||'').trim();
+    const body={promotion_type:type};
+
+    if(!['PRICE_DISCOUNT','DOD','LIGHTNING'].includes(type)&&promotionId)body.promotion_id=promotionId;
+
+    if(['DEAL','DOD','LIGHTNING','PRICE_DISCOUNT','SELLER_CAMPAIGN'].includes(type)){
+        if(Number.isFinite(Number(dealPrice))&&Number(dealPrice)>0)body.deal_price=Number(Number(dealPrice).toFixed(2));
+    }
+    if(['SMART','PRICE_MATCHING'].includes(type)&&offerId)body.offer_id=offerId;
+
+    if(type==='LIGHTNING'){
+        const stock=Number(raw?.stock||raw?.minimum_stock||raw?.min_stock||0);
+        if(stock>0)body.stock=Math.floor(stock);
+    }
+
+    if(type==='PRICE_DISCOUNT'){
+        const start=campaign?.start_date||new Date().toISOString();
+        const finish=campaign?.finish_date||new Date(Date.now()+7*24*3600*1000).toISOString();
+        body.start_date=start;body.finish_date=finish;
+    }
+    return body;
+}
+
+async function executarAcaoPromocaoItemV77(token,sellerId,{id,action,promotionId,promotionType,percent,deal_price}){
+    await inicializarPromocoesV77();
+    const meta=(await dbQuery(`
+      SELECT m.price::float8 price,pi.promo_status,pi.offer_id,pi.raw promo_raw,
+             p.raw campaign_raw,p.start_date,p.finish_date
+      FROM ml_items m
+      LEFT JOIN ml_promotion_items_v77 pi ON pi.seller_id=m.seller_id AND pi.item_id=m.item_id
+        AND pi.promotion_id=$3 AND pi.promotion_type=$4
+      LEFT JOIN ml_promotions_v77 p ON p.seller_id=m.seller_id AND p.promotion_id=$3 AND p.promotion_type=$4
+      WHERE m.seller_id=$1 AND m.item_id=$2
+      LIMIT 1
+    `,[String(sellerId),String(id),promotionId,promotionType])).rows[0];
+    if(!meta)throw new Error('Anúncio não encontrado no cache da Gestão.');
+
+    if(action==='leave'){
+        const qs=new URLSearchParams({app_version:'v2',promotion_type:promotionType});
+        if(promotionId&&promotionType!=='PRICE_DISCOUNT')qs.set('promotion_id',promotionId);
+        if(meta.offer_id)qs.set('offer_id',String(meta.offer_id));
+        const rr=await mlFetch(`${ML_API}/seller-promotions/items/${encodeURIComponent(id)}?${qs.toString()}`,token,{method:'DELETE',headers:{Accept:'application/json'}});
+        const dd=await jsonSeguro(rr);
+        if(!rr.ok)throw new Error(formatarErroMercadoLivre(dd)||`HTTP ${rr.status}`);
+        await dbQuery(`
+          UPDATE ml_promotion_items_v77 SET promo_status='finished',synced_at=NOW()
+          WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3 AND item_id=$4
+        `,[String(sellerId),promotionId,promotionType,String(id)]);
+        return {id,sucesso:true,action:'leave'};
+    }
+
+    const base=Number(meta.price||0);
+    const pct=Number(percent||0);
+    const finalPrice=Number.isFinite(Number(deal_price))&&Number(deal_price)>0
+        ? Number(deal_price)
+        : (pct>0?Number((base*(1-pct/100)).toFixed(2)):base);
+
+    const campaign={...(meta.campaign_raw||{}),start_date:meta.start_date,finish_date:meta.finish_date};
+    const body=payloadParticipacaoPromocaoV77({
+        item:meta,promotionId,promotionType,dealPrice:finalPrice,percent:pct,campaign
+    });
+
+    const rr=await mlFetch(`${ML_API}/seller-promotions/items/${encodeURIComponent(id)}?app_version=v2`,token,{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Accept:'application/json'},
+        body:JSON.stringify(body)
+    });
+    const dd=await jsonSeguro(rr);
+    if(!rr.ok)throw new Error(formatarErroMercadoLivre(dd)||`HTTP ${rr.status}`);
+
+    const normal=normalizarItemPromocaoV77({id,status:'started',...dd});
+    await salvarItensPromocaoV77(sellerId,promotionId,promotionType,[{id,status:'started',...dd}]);
+    return {id,sucesso:true,action:'join',price:normal.price||finalPrice,data:dd};
+}
+
+app.post('/api/v77/promocoes/acao',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token),sellerId=String(me.id);
+        const id=String(req.body?.id||'').trim();
+        const action=String(req.body?.action||'join').trim();
+        const promotionId=String(req.body?.promotion_id||'').trim();
+        const promotionType=String(req.body?.promotion_type||'').trim();
+        if(!id||!promotionType)return respostaErro(res,400,'Anúncio e promoção são obrigatórios.');
+        const d=await executarAcaoPromocaoItemV77(token,sellerId,{
+            id,action,promotionId,promotionType,percent:req.body?.percent,deal_price:req.body?.deal_price
+        });
+        res.json({sucesso:true,...d});
+    }catch(e){respostaErro(res,400,e.message)}
+});
+
+async function processarPromocaoMassaV77(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para gerenciar promoções.');
+    await inicializarPromocoesV77();
+
+    const p=job.payload||{},promotionId=String(p.promotion_id||''),promotionType=String(p.promotion_type||'');
+    const action=String(p.action||'join'),percent=Number(p.percent||0);
+    let items=Array.isArray(p.items)?p.items:[];
+
+    if(p.all_eligible){
+        const statuses=action==='leave'?['started','pending']:['candidate'];
+        const r=await dbQuery(`
+          SELECT item_id id FROM ml_promotion_items_v77
+          WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3 AND promo_status=ANY($4::text[])
+          ORDER BY item_id
+        `,[String(job.seller_id),promotionId,promotionType,statuses]);
+        items=r.rows;
+    }
+
+    const total=items.length;
+    let idx=Math.max(0,Number(job.cursor||0)),success=Number(job.result?.success||0),failed=Number(job.errors||0);
+    const CONC=Math.max(2,Math.min(12,Number(process.env.ML_PROMO_CONCURRENCY||6)));
+
+    while(idx<total){
+        const batch=items.slice(idx,Math.min(total,idx+CONC));
+        const rs=await Promise.allSettled(batch.map(x=>executarAcaoPromocaoItemV77(token,job.seller_id,{
+            id:String(x.id||x.item_id||''),action,promotionId,promotionType,
+            percent:Number(x.percent??percent),deal_price:x.deal_price
+        })));
+        for(let i=0;i<rs.length;i++){
+            if(rs[i].status==='fulfilled')success++;
+            else failed++;
+        }
+        idx+=batch.length;
+        await dbQuery(`
+          UPDATE ml_jobs SET processed=$2,progress_current=$2,progress_total=$3,errors=$4,cursor=$5,
+            result=$6::jsonb,message=$7,updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,idx,total,failed,String(idx),JSON.stringify({success,failed}),
+           `Promoções: ${idx.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${success.toLocaleString('pt-BR')} sucesso(s) · ${failed.toLocaleString('pt-BR')} falha(s)`]);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET status='completed',processed=$2,progress_current=$2,progress_total=$3,errors=$4,cursor=NULL,
+        result=$5::jsonb,message=$6,finished_at=NOW(),updated_at=NOW()
+      WHERE id=$1
+    `,[job.id,total,total,failed,JSON.stringify({success,failed}),
+       `Promoção concluída: ${success.toLocaleString('pt-BR')} sucesso(s), ${failed.toLocaleString('pt-BR')} falha(s).`]);
+}
+
+app.post('/api/v77/promocoes/acao-massa',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token),sellerId=String(me.id);
+        await inicializarPromocoesV77();
+        const body=req.body||{};
+        const promotionId=String(body.promotion_id||'').trim(),promotionType=String(body.promotion_type||'').trim();
+        const action=String(body.action||'join').trim();
+        if(!promotionType)return respostaErro(res,400,'Selecione uma promoção.');
+        const items=Array.isArray(body.items)?body.items.slice(0,100000):[];
+        if(!items.length&&!body.all_eligible)return respostaErro(res,400,'Selecione pelo menos um anúncio ou use todos os elegíveis.');
+
+        const total=body.all_eligible
+          ? Number((await dbQuery(`
+              SELECT COUNT(*)::int n FROM ml_promotion_items_v77
+              WHERE seller_id=$1 AND promotion_id=$2 AND promotion_type=$3
+                AND promo_status=ANY($4::text[])
+            `,[sellerId,promotionId,promotionType,action==='leave'?['started','pending']:['candidate']])).rows[0]?.n||0)
+          : items.length;
+
+        const job=await criarJob(sellerId,'promotion_mass_v77',{
+            promotion_id:promotionId,promotion_type:promotionType,action,
+            percent:Number(body.percent||0),items,all_eligible:Boolean(body.all_eligible)
+        });
+        await dbQuery(`
+          UPDATE ml_jobs SET progress_total=$2,progress_current=0,processed=0,errors=0,cursor='0',
+            message=$3,result='{"success":0,"failed":0}'::jsonb,updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,total,`Promoção preparada: ${total.toLocaleString('pt-BR')} anúncio(s).`]);
+        res.status(202).json({sucesso:true,job_id:job.id,total});
+    }catch(e){respostaErro(res,500,'Erro ao iniciar ação em massa: '+e.message)}
+});
+
 async function iniciarCoreEscala(){
     try{
         await inicializarBancoEscala();
         if(db){try{await inicializarAgentesV62();await inicializarAcervoV65();iniciarAtualizacaoAgentesV62();}catch(e){console.error('[AGENTES INIT V62]',e.message);}}
         if(db && ML_WORKER_ENABLED){
+            syncWorkerDedicadoV76();
             for(let i=1;i<=ML_WORKER_CONCURRENCY;i++) workerLoop(i);
             console.log(`[ESCALA] ${ML_WORKER_CONCURRENCY} worker(s) iniciado(s).`);
         }
