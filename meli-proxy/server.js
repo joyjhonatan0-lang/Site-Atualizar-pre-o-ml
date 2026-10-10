@@ -7741,6 +7741,7 @@ async function workerLoop(indice) {
                     else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
                     else if(job.type==='mass_create_v37') await processarCriacaoMassaV37(job);
                     else if(job.type==='promotion_mass_v77') await processarPromocaoMassaV77(job);
+                    else if(job.type==='promotion_mass_v91') await processarPromocaoMassaV91(job);
                     else await dbQuery(`UPDATE ml_jobs SET status='failed',message='Tipo de job desconhecido',finished_at=NOW() WHERE id=$1`,[job.id]);
                 } catch(e) {
                     const retry=Number(job.attempts||0)<4;
@@ -12053,6 +12054,789 @@ app.post('/api/v77/promocoes/acao',async(req,res)=>{
     }catch(e){respostaErro(res,400,e.message)}
 });
 
+
+
+let bancoPromocoesV91Promise=null;
+
+async function inicializarPromocoesV91(){
+    if(bancoPromocoesV91Promise)return bancoPromocoesV91Promise;
+
+    bancoPromocoesV91Promise=(async()=>{
+        await inicializarPromocoesV77();
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_promotion_job_targets_v91(
+            job_id BIGINT NOT NULL,
+            seq INTEGER NOT NULL,
+            item_id TEXT NOT NULL,
+            percent NUMERIC,
+            deal_price NUMERIC,
+            state TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            last_http_status INTEGER,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(job_id,item_id)
+          )
+        `);
+
+        await dbQuery(`
+          CREATE INDEX IF NOT EXISTS idx_ml_promo_targets_v91_job_state_seq
+          ON ml_promotion_job_targets_v91(job_id,state,seq)
+        `);
+    })().catch(e=>{
+        bancoPromocoesV91Promise=null;
+        throw e;
+    });
+
+    return bancoPromocoesV91Promise;
+}
+
+function esperarPromocaoV91(ms){
+    return new Promise(r=>setTimeout(r,ms));
+}
+
+function erroApiPromocaoV91(response,data){
+    const erro=new Error(
+        formatarErroMercadoLivre(data) ||
+        String(data?.message||data?.error||'') ||
+        `HTTP ${response?.status||500}`
+    );
+
+    erro.status=Number(response?.status||0);
+    erro.retry_after=Number(response?.headers?.get?.('retry-after')||0);
+    erro.data=data;
+    return erro;
+}
+
+function textoErroPromocaoV91(e){
+    return (
+        String(e?.message||'')+' '+
+        String(e?.data?.message||'')+' '+
+        String(e?.data?.error||'')+' '+
+        JSON.stringify(e?.data?.cause||[])
+    ).toLowerCase();
+}
+
+function erroTemporarioPromocaoV91(e){
+    const status=Number(e?.status||0);
+    const code=String(e?.code||'').toUpperCase();
+    const txt=textoErroPromocaoV91(e);
+
+    return [408,409,423,425,429,500,502,503,504].includes(status)
+      || ['ECONNRESET','ECONNREFUSED','ETIMEDOUT','EAI_AGAIN','ENOTFOUND','EPIPE'].includes(code)
+      || txt.includes('timeout')
+      || txt.includes('temporarily')
+      || txt.includes('too many requests')
+      || txt.includes('rate limit')
+      || txt.includes('socket hang up')
+      || txt.includes('connection reset')
+      || txt.includes('service unavailable');
+}
+
+function resultadoIdempotentePromocaoV91(action,e){
+    const txt=textoErroPromocaoV91(e);
+
+    if(action==='join'){
+        return (
+            txt.includes('already participating') ||
+            txt.includes('already in promotion') ||
+            txt.includes('already exists') ||
+            txt.includes('offer already') ||
+            txt.includes('item already')
+        );
+    }
+
+    if(action==='leave'){
+        return (
+            txt.includes('no offers found') ||
+            txt.includes('offer not found') ||
+            txt.includes('already removed') ||
+            txt.includes('does not exist')
+        );
+    }
+
+    return false;
+}
+
+async function criarJobPromocaoV91(sellerId,payload,targets){
+    await inicializarPromocoesV91();
+
+    const client=await db.connect();
+
+    try{
+        await client.query('BEGIN');
+
+        // Fica indisponível até o snapshot dos alvos terminar.
+        const jr=await client.query(`
+          INSERT INTO ml_jobs(
+            seller_id,type,payload,status,available_at,
+            progress_total,progress_current,processed,errors,
+            cursor,result,message
+          )
+          VALUES(
+            $1,'promotion_mass_v91',$2::jsonb,'queued',
+            NOW()+INTERVAL '1 hour',
+            $3,0,0,0,'0',
+            '{"success":0,"failed":0,"retried":0}'::jsonb,
+            $4
+          )
+          RETURNING *
+        `,[
+            sellerId,
+            JSON.stringify(payload||{}),
+            targets.length,
+            `Preparando ${targets.length.toLocaleString('pt-BR')} anúncio(s) em lotes de 100.`
+        ]);
+
+        const job=jr.rows[0];
+
+        const TAM=2000;
+        for(let inicio=0;inicio<targets.length;inicio+=TAM){
+            const bloco=targets.slice(inicio,inicio+TAM).map((x,i)=>({
+                seq:inicio+i+1,
+                item_id:String(x.id||x.item_id||''),
+                percent:Number.isFinite(Number(x.percent))?Number(x.percent):null,
+                deal_price:Number.isFinite(Number(x.deal_price))&&Number(x.deal_price)>0
+                    ? Number(x.deal_price)
+                    : null
+            })).filter(x=>x.item_id);
+
+            if(!bloco.length)continue;
+
+            await client.query(`
+              INSERT INTO ml_promotion_job_targets_v91(
+                job_id,seq,item_id,percent,deal_price,state
+              )
+              SELECT
+                $1,
+                x.seq,
+                x.item_id,
+                x.percent,
+                x.deal_price,
+                'pending'
+              FROM jsonb_to_recordset($2::jsonb) AS x(
+                seq integer,
+                item_id text,
+                percent numeric,
+                deal_price numeric
+              )
+              ON CONFLICT(job_id,item_id) DO NOTHING
+            `,[job.id,JSON.stringify(bloco)]);
+        }
+
+        const cr=await client.query(`
+          SELECT COUNT(*)::int total
+          FROM ml_promotion_job_targets_v91
+          WHERE job_id=$1
+        `,[job.id]);
+
+        const totalReal=Number(cr.rows[0]?.total||0);
+
+        await client.query(`
+          UPDATE ml_jobs SET
+            progress_total=$2,
+            available_at=NOW(),
+            message=$3,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            job.id,
+            totalReal,
+            `Promoção preparada: ${totalReal.toLocaleString('pt-BR')} anúncio(s) · lotes de 100 · retomada automática.`
+        ]);
+
+        await client.query('COMMIT');
+
+        return {
+            ...job,
+            progress_total:totalReal
+        };
+    }catch(e){
+        try{await client.query('ROLLBACK')}catch(_){}
+        throw e;
+    }finally{
+        client.release();
+    }
+}
+
+async function carregarMetasPromocaoV91(sellerId,promotionId,promotionType,ids){
+    if(!ids.length)return new Map();
+
+    const r=await dbQuery(`
+      SELECT
+        m.item_id id,
+        m.price::float8 price,
+        pi.promo_status,
+        pi.offer_id,
+        pi.raw promo_raw,
+        pi.suggested_discounted_price::float8 suggested_discounted_price,
+        pi.min_discounted_price::float8 min_discounted_price,
+        pi.max_discounted_price::float8 max_discounted_price,
+        p.raw campaign_raw,
+        p.start_date,
+        p.finish_date
+      FROM ml_items m
+      LEFT JOIN ml_promotion_items_v77 pi
+        ON pi.seller_id=m.seller_id::text
+       AND pi.item_id=m.item_id
+       AND pi.promotion_id=$3
+       AND pi.promotion_type=$4
+      LEFT JOIN ml_promotions_v77 p
+        ON p.seller_id=m.seller_id::text
+       AND p.promotion_id=$3
+       AND p.promotion_type=$4
+      WHERE m.seller_id::text=$1
+        AND m.item_id=ANY($2::text[])
+    `,[
+        String(sellerId),
+        ids.map(String),
+        promotionId,
+        promotionType
+    ]);
+
+    return new Map(r.rows.map(x=>[String(x.id),x]));
+}
+
+async function executarAcaoPromocaoItemV91(
+    token,
+    sellerId,
+    {
+        id,
+        action,
+        promotionId,
+        promotionType,
+        percent,
+        deal_price,
+        meta
+    }
+){
+    if(!meta){
+        const e=new Error('Anúncio não encontrado no cache da Gestão.');
+        e.status=404;
+        throw e;
+    }
+
+    if(action==='leave'){
+        const qs=new URLSearchParams({
+            app_version:'v2',
+            promotion_type:promotionType
+        });
+
+        if(promotionId&&promotionType!=='PRICE_DISCOUNT'){
+            qs.set('promotion_id',promotionId);
+        }
+
+        if(meta.offer_id){
+            qs.set('offer_id',String(meta.offer_id));
+        }
+
+        const rr=await mlFetch(
+            `${ML_API}/seller-promotions/items/${encodeURIComponent(id)}?${qs.toString()}`,
+            token,
+            {
+                method:'DELETE',
+                headers:{Accept:'application/json'}
+            }
+        );
+
+        const dd=await jsonSeguro(rr);
+        if(!rr.ok)throw erroApiPromocaoV91(rr,dd);
+
+        return {
+            id:String(id),
+            sucesso:true,
+            action:'leave',
+            state:'finished'
+        };
+    }
+
+    const base=Number(meta.price||0);
+    const pct=Number(percent||0);
+
+    let finalPrice=
+        Number.isFinite(Number(deal_price))&&Number(deal_price)>0
+            ? Number(deal_price)
+            : (pct>0
+                ? Number((base*(1-pct/100)).toFixed(2))
+                : Number(meta.suggested_discounted_price||base)
+              );
+
+    // Se o ML informou limites da campanha, respeita-os.
+    const min=Number(meta.min_discounted_price);
+    const max=Number(meta.max_discounted_price);
+
+    if(Number.isFinite(min)&&min>0&&finalPrice<min){
+        finalPrice=min;
+    }
+    if(Number.isFinite(max)&&max>0&&finalPrice>max){
+        finalPrice=max;
+    }
+
+    const campaign={
+        ...(meta.campaign_raw||{}),
+        start_date:meta.start_date,
+        finish_date:meta.finish_date
+    };
+
+    const body=payloadParticipacaoPromocaoV77({
+        item:meta,
+        promotionId,
+        promotionType,
+        dealPrice:finalPrice,
+        percent:pct,
+        campaign
+    });
+
+    const rr=await mlFetch(
+        `${ML_API}/seller-promotions/items/${encodeURIComponent(id)}?app_version=v2`,
+        token,
+        {
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                Accept:'application/json'
+            },
+            body:JSON.stringify(body)
+        }
+    );
+
+    const dd=await jsonSeguro(rr);
+
+    if(!rr.ok){
+        throw erroApiPromocaoV91(rr,dd);
+    }
+
+    return {
+        id:String(id),
+        sucesso:true,
+        action:'join',
+        state:'started',
+        price:Number(dd?.price||finalPrice),
+        data:dd
+    };
+}
+
+async function executarPromocaoComRetryV91(ctx){
+    const MAX=8;
+    let ultima=null;
+
+    for(let tentativa=1;tentativa<=MAX;tentativa++){
+        try{
+            const resultado=await executarAcaoPromocaoItemV91(
+                ctx.token,
+                ctx.sellerId,
+                ctx
+            );
+
+            return {
+                ok:true,
+                id:String(ctx.id),
+                attempts:tentativa,
+                result:resultado
+            };
+        }catch(e){
+            ultima=e;
+
+            if(resultadoIdempotentePromocaoV91(ctx.action,e)){
+                return {
+                    ok:true,
+                    id:String(ctx.id),
+                    attempts:tentativa,
+                    idempotent:true,
+                    result:{
+                        id:String(ctx.id),
+                        sucesso:true,
+                        action:ctx.action,
+                        state:ctx.action==='join'?'started':'finished'
+                    }
+                };
+            }
+
+            if(!erroTemporarioPromocaoV91(e) || tentativa>=MAX){
+                return {
+                    ok:false,
+                    id:String(ctx.id),
+                    attempts:tentativa,
+                    permanent:!erroTemporarioPromocaoV91(e),
+                    status:Number(e?.status||0),
+                    error:String(e?.message||e||'Falha na promoção.').slice(0,500)
+                };
+            }
+
+            const retryAfter=Number(e?.retry_after||0);
+            const backoff=retryAfter>0
+                ? Math.min(60000,retryAfter*1000)
+                : Math.min(
+                    30000,
+                    800*Math.pow(2,tentativa-1) + Math.floor(Math.random()*350)
+                  );
+
+            await esperarPromocaoV91(backoff);
+        }
+    }
+
+    return {
+        ok:false,
+        id:String(ctx.id),
+        attempts:MAX,
+        permanent:false,
+        status:Number(ultima?.status||0),
+        error:String(ultima?.message||ultima||'Falha após múltiplas tentativas.').slice(0,500)
+    };
+}
+
+async function salvarResultadoLotePromocaoV91(jobId,resultados,action){
+    if(!resultados.length)return;
+
+    const linhas=resultados.map(r=>({
+        item_id:String(r.id),
+        state:r.ok?'success':'failed',
+        attempts:Number(r.attempts||1),
+        last_error:r.ok?null:String(r.error||'Falha').slice(0,500),
+        last_http_status:Number(r.status||0)||null
+    }));
+
+    await dbQuery(`
+      UPDATE ml_promotion_job_targets_v91 AS t SET
+        state=x.state,
+        attempts=t.attempts+x.attempts,
+        last_error=x.last_error,
+        last_http_status=x.last_http_status,
+        updated_at=NOW()
+      FROM jsonb_to_recordset($2::jsonb) AS x(
+        item_id text,
+        state text,
+        attempts integer,
+        last_error text,
+        last_http_status integer
+      )
+      WHERE t.job_id=$1
+        AND t.item_id=x.item_id
+    `,[jobId,JSON.stringify(linhas)]);
+
+    const sucessos=resultados.filter(r=>r.ok).map(r=>String(r.id));
+
+    if(sucessos.length){
+        await dbQuery(`
+          UPDATE ml_promotion_items_v77 SET
+            promo_status=$5,
+            synced_at=NOW()
+          WHERE seller_id=$1
+            AND promotion_id=$2
+            AND promotion_type=$3
+            AND item_id=ANY($4::text[])
+        `,[
+            String(resultados[0]?.seller_id||''),
+            String(resultados[0]?.promotion_id||''),
+            String(resultados[0]?.promotion_type||''),
+            sucessos,
+            action==='join'?'started':'finished'
+        ]).catch(()=>{});
+    }
+}
+
+async function processarPromocaoMassaV91(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para gerenciar promoções.');
+
+    await inicializarPromocoesV91();
+
+    const p=job.payload||{};
+    const promotionId=String(p.promotion_id||'');
+    const promotionType=String(p.promotion_type||'');
+    const action=String(p.action||'join');
+
+    const TAMANHO_LOTE=100;
+    const CONC=Math.max(
+        2,
+        Math.min(6,Number(process.env.ML_PROMO_CONCURRENCY||4))
+    );
+    const PAUSA_LOTE=Math.max(
+        500,
+        Math.min(10000,Number(process.env.ML_PROMO_BATCH_PAUSE_MS||2500))
+    );
+
+    while(true){
+        const tr=await dbQuery(`
+          SELECT seq,item_id,percent,deal_price,attempts
+          FROM ml_promotion_job_targets_v91
+          WHERE job_id=$1
+            AND state='pending'
+          ORDER BY seq
+          LIMIT $2
+        `,[job.id,TAMANHO_LOTE]);
+
+        const targets=tr.rows;
+        if(!targets.length)break;
+
+        const ids=targets.map(x=>String(x.item_id));
+        const metas=await carregarMetasPromocaoV91(
+            job.seller_id,
+            promotionId,
+            promotionType,
+            ids
+        );
+
+        let cursor=0;
+        const resultados=new Array(targets.length);
+
+        async function worker(){
+            while(true){
+                const idx=cursor++;
+                if(idx>=targets.length)return;
+
+                const t=targets[idx];
+
+                const r=await executarPromocaoComRetryV91({
+                    token,
+                    sellerId:String(job.seller_id),
+                    id:String(t.item_id),
+                    action,
+                    promotionId,
+                    promotionType,
+                    percent:Number(t.percent??p.percent??0),
+                    deal_price:t.deal_price,
+                    meta:metas.get(String(t.item_id))||null
+                });
+
+                resultados[idx]={
+                    ...r,
+                    seller_id:String(job.seller_id),
+                    promotion_id:promotionId,
+                    promotion_type:promotionType
+                };
+            }
+        }
+
+        await Promise.all(
+            Array.from(
+                {length:Math.min(CONC,targets.length)},
+                ()=>worker()
+            )
+        );
+
+        await salvarResultadoLotePromocaoV91(
+            job.id,
+            resultados.filter(Boolean),
+            action
+        );
+
+        const resumo=(await dbQuery(`
+          SELECT
+            COUNT(*)::int total,
+            COUNT(*) FILTER(WHERE state='success')::int success,
+            COUNT(*) FILTER(WHERE state='failed')::int failed,
+            COUNT(*) FILTER(WHERE state='pending')::int pending,
+            COALESCE(SUM(attempts),0)::int attempts
+          FROM ml_promotion_job_targets_v91
+          WHERE job_id=$1
+        `,[job.id])).rows[0];
+
+        const total=Number(resumo?.total||0);
+        const success=Number(resumo?.success||0);
+        const failed=Number(resumo?.failed||0);
+        const pending=Number(resumo?.pending||0);
+        const processed=success+failed;
+        const retried=Math.max(0,Number(resumo?.attempts||0)-processed);
+        const pct=total?Math.round(processed/total*100):100;
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            processed=$2,
+            progress_current=$2,
+            progress_total=$3,
+            errors=$4,
+            cursor=$5,
+            result=$6::jsonb,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            job.id,
+            processed,
+            total,
+            failed,
+            String(processed),
+            JSON.stringify({
+                success,
+                failed,
+                pending,
+                retried,
+                batch_size:TAMANHO_LOTE
+            }),
+            `Promoções · lote de 100 · ${processed.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · ${success.toLocaleString('pt-BR')} sucesso(s) · ${failed.toLocaleString('pt-BR')} falha(s) · ${retried.toLocaleString('pt-BR')} tentativa(s) extra`
+        ]);
+
+        if(pending>0){
+            await esperarPromocaoV91(PAUSA_LOTE);
+        }
+    }
+
+    const final=(await dbQuery(`
+      SELECT
+        COUNT(*)::int total,
+        COUNT(*) FILTER(WHERE state='success')::int success,
+        COUNT(*) FILTER(WHERE state='failed')::int failed,
+        COALESCE(SUM(attempts),0)::int attempts
+      FROM ml_promotion_job_targets_v91
+      WHERE job_id=$1
+    `,[job.id])).rows[0];
+
+    const total=Number(final?.total||0);
+    const success=Number(final?.success||0);
+    const failed=Number(final?.failed||0);
+    const retried=Math.max(0,Number(final?.attempts||0)-total);
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        processed=$2,
+        progress_current=$2,
+        progress_total=$3,
+        errors=$4,
+        cursor=NULL,
+        result=$5::jsonb,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+        job.id,
+        total,
+        total,
+        failed,
+        JSON.stringify({
+            success,
+            failed,
+            retried,
+            batch_size:TAMANHO_LOTE
+        }),
+        `Promoção concluída em lotes de 100: ${success.toLocaleString('pt-BR')} sucesso(s), ${failed.toLocaleString('pt-BR')} falha(s).`
+    ]);
+}
+
+app.post('/api/v91/promocoes/acao-massa',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+
+        await inicializarPromocoesV91();
+
+        const body=req.body||{};
+        const promotionId=String(body.promotion_id||'').trim();
+        const promotionType=String(body.promotion_type||'').trim();
+        const action=String(body.action||'join').trim();
+
+        if(!promotionType){
+            return respostaErro(res,400,'Selecione uma promoção.');
+        }
+
+        let targets=[];
+
+        if(body.all_eligible){
+            const statuses=action==='leave'
+                ? ['started','pending']
+                : ['candidate'];
+
+            const params=[
+                sellerId,
+                promotionId,
+                promotionType,
+                statuses
+            ];
+
+            const filtroConds=filtroPromocaoMassaV78(
+                body.filter||{},
+                params
+            );
+
+            const qr=await dbQuery(`
+              SELECT
+                pi.item_id id,
+                m.price::float8 price
+              FROM ml_promotion_items_v77 pi
+              JOIN ml_items m
+                ON m.item_id=pi.item_id
+               AND m.seller_id::text=pi.seller_id
+              WHERE pi.seller_id=$1
+                AND pi.promotion_id=$2
+                AND pi.promotion_type=$3
+                AND pi.promo_status=ANY($4::text[])
+                ${filtroConds.length?'AND '+filtroConds.join(' AND '):''}
+              ORDER BY pi.item_id
+            `,params);
+
+            const percent=Number(body.percent||0);
+
+            targets=qr.rows.map(x=>({
+                id:String(x.id),
+                percent
+            }));
+        }else{
+            const items=Array.isArray(body.items)
+                ? body.items.slice(0,100000)
+                : [];
+
+            targets=items.map(x=>({
+                id:String(x.id||x.item_id||''),
+                percent:Number(x.percent??body.percent??0),
+                deal_price:Number.isFinite(Number(x.deal_price))&&Number(x.deal_price)>0
+                    ? Number(x.deal_price)
+                    : null
+            })).filter(x=>x.id);
+        }
+
+        // Remove duplicados preservando a ordem.
+        const vistos=new Set();
+        targets=targets.filter(x=>{
+            if(vistos.has(x.id))return false;
+            vistos.add(x.id);
+            return true;
+        });
+
+        if(!targets.length){
+            return respostaErro(
+                res,
+                400,
+                'Nenhum anúncio elegível foi encontrado para esta ação.'
+            );
+        }
+
+        const job=await criarJobPromocaoV91(
+            sellerId,
+            {
+                promotion_id:promotionId,
+                promotion_type:promotionType,
+                action,
+                percent:Number(body.percent||0),
+                filter:body.filter||{},
+                all_eligible:Boolean(body.all_eligible),
+                engine:'v91_batch_100'
+            },
+            targets
+        );
+
+        return res.status(202).json({
+            sucesso:true,
+            job_id:job.id,
+            total:Number(job.progress_total||targets.length),
+            batch_size:100,
+            mensagem:'Ação em massa preparada em lotes de 100 com retry automático.'
+        });
+    }catch(e){
+        console.error('[PROMO V91 START]',e);
+        return respostaErro(
+            res,
+            500,
+            'Erro ao iniciar promoção em massa: '+e.message
+        );
+    }
+});
 
 function filtroPromocaoMassaV78(filtro={},params){
     const conds=[];
