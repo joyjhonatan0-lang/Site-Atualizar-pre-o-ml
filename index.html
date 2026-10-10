@@ -853,6 +853,11 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <span>An&#250;ncios inativos / revis&#227;o</span>
         </button>
 
+        <button class="painel-sidebar-v24-item" data-aba="promocoes" onclick="mudarAba('promocoes')">
+            <span class="painel-sidebar-v24-icone">&#9733;</span>
+            <span>Central de promo&#231;&#245;es</span>
+        </button>
+
         <div class="painel-sidebar-v24-divisor"></div>
 
         <button class="painel-sidebar-v24-item painel-sidebar-v24-voltar" onclick="mudarAba('inicio')">
@@ -1981,6 +1986,35 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
         </div>
 
+
+        <div id="gestao-filtros-v76" class="px-5 py-3 border-b border-slate-800 bg-slate-950/20 flex flex-col lg:flex-row lg:items-center gap-3">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-black">Ordenar</span>
+                <select id="gestao-ordenacao-v76" onchange="aplicarFiltrosGestaoV76()"
+                    class="bg-slate-950 border border-slate-700 text-slate-200 text-[11px] px-3 py-2 rounded-lg outline-none">
+                    <option value="recent">Mais recentes</option>
+                    <option value="sold">Mais vendidos</option>
+                    <option value="oldest">Mais antigos</option>
+                    <option value="status">Por situação</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-black">Situação</span>
+                <select id="gestao-status-v76" onchange="aplicarFiltrosGestaoV76()"
+                    class="bg-slate-950 border border-slate-700 text-slate-200 text-[11px] px-3 py-2 rounded-lg outline-none">
+                    <option value="">Todas</option>
+                    <option value="active">Ativos</option>
+                    <option value="paused">Pausados</option>
+                    <option value="under_review">Em revisão</option>
+                    <option value="inactive">Inativos</option>
+                    <option value="closed">Finalizados</option>
+                </select>
+            </div>
+            <div id="gestao-filtro-resumo-v76" class="text-[10px] text-slate-500 lg:ml-auto">
+                Filtros aplicados no servidor para manter a tela leve.
+            </div>
+        </div>
+
         <div id="sync-progress-area-v26" class="px-5 py-4 border-b border-slate-800 bg-slate-950/30">
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
@@ -3007,6 +3041,106 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
         </thead>
         <tbody id="restritos-tbody-v40" class="divide-y divide-slate-800 bg-slate-950/30"><tr><td colspan="9" class="px-4 py-10 text-center text-slate-600">Nenhum dado carregado.</td></tr></tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+
+<section id="secao-promocoes" class="hidden space-y-6">
+  <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+    <div>
+      <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-black">Vendas e descontos</div>
+      <h1 class="text-2xl font-black text-white mt-1">Central de promo&#231;&#245;es</h1>
+      <p class="text-xs text-slate-500 mt-1">Usa os an&#250;ncios j&#225; salvos na Gest&#227;o para abrir r&#225;pido. As campanhas e elegibilidades s&#227;o sincronizadas com a API oficial do Mercado Livre e ficam em cache.</p>
+    </div>
+    <button onclick="carregarPromocoesV77(true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-3 rounded-xl text-xs font-black">&#8635; Atualizar promo&#231;&#245;es</button>
+  </div>
+
+  <div class="panel rounded-2xl p-5">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <div class="text-sm font-black text-white">Promo&#231;&#245;es dispon&#237;veis</div>
+        <div id="promocoes-status-v77" class="text-[10px] text-slate-500 mt-1">Carregando campanhas...</div>
+      </div>
+      <div id="promocoes-cache-v77" class="text-[9px] text-slate-600"></div>
+    </div>
+    <div id="promocoes-cards-v77" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
+      <div class="border border-slate-800 rounded-xl p-4 text-xs text-slate-600">Nenhuma promo&#231;&#227;o carregada.</div>
+    </div>
+  </div>
+
+  <div id="promocao-selecionada-v77" class="panel rounded-2xl p-5 hidden">
+    <div class="flex flex-col xl:flex-row xl:items-end gap-4">
+      <div class="min-w-0 flex-1">
+        <div class="text-[10px] uppercase tracking-[.12em] text-yellow-400 font-black">Promo&#231;&#227;o selecionada</div>
+        <div id="promocao-nome-v77" class="text-lg font-black text-white mt-1">—</div>
+        <div id="promocao-detalhe-v77" class="text-[10px] text-slate-500 mt-1"></div>
+      </div>
+      <div class="w-full xl:w-48">
+        <label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Desconto %</label>
+        <input id="promocao-percent-v77" type="number" min="0" max="80" step="0.1" oninput="aplicarPercentualPromocaoV77(this.value)"
+          class="w-full bg-slate-950 border border-slate-700 text-white px-3 py-2.5 rounded-xl text-xs font-black" placeholder="Ex.: 15">
+      </div>
+      <button onclick="sincronizarItensPromocaoV77(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-black">Sincronizar eleg&#237;veis</button>
+    </div>
+    <div id="promocao-sync-v77" class="text-[10px] text-cyan-400 mt-3"></div>
+  </div>
+
+  <div id="promocao-acoes-v77" class="panel rounded-2xl p-4 hidden">
+    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+      <div>
+        <div class="text-sm font-black text-white">A&#231;&#245;es em massa</div>
+        <div id="promocao-selecao-resumo-v77" class="text-[10px] text-slate-500 mt-1">0 selecionados</div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="selecionarPaginaPromocaoV77(true)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-black">Selecionar p&#225;gina</button>
+        <button onclick="selecionarPaginaPromocaoV77(false)" class="bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px] font-black">Limpar sele&#231;&#227;o</button>
+        <button onclick="acaoMassaPromocaoV77('join',false)" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Participar selecionados</button>
+        <button onclick="acaoMassaPromocaoV77('join',true)" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Participar todos eleg&#237;veis</button>
+        <button onclick="acaoMassaPromocaoV77('leave',false)" class="bg-red-950 hover:bg-red-900 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-[10px] font-black">Deixar selecionados</button>
+        <button onclick="acaoMassaPromocaoV77('leave',true)" class="bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-[10px] font-black">Deixar todos participantes</button>
+      </div>
+    </div>
+    <div id="promocao-job-v77" class="hidden mt-4">
+      <div class="flex justify-between text-[10px]"><span id="promocao-job-msg-v77" class="text-slate-400">Processando...</span><span id="promocao-job-pct-v77" class="font-black text-white">0%</span></div>
+      <div class="h-2.5 bg-slate-800 rounded-full overflow-hidden mt-2"><div id="promocao-job-bar-v77" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="panel rounded-2xl overflow-hidden">
+    <div class="p-4 border-b border-slate-800 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+      <div>
+        <div class="font-black text-white text-sm">An&#250;ncios da conta</div>
+        <div id="promocao-anuncios-status-v77" class="text-[10px] text-slate-500 mt-1">Selecione uma promo&#231;&#227;o para visualizar os valores finais.</div>
+      </div>
+      <div class="flex flex-wrap gap-2 items-end">
+        <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Buscar</label><input id="promocao-busca-v77" onkeydown="if(event.key==='Enter')carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]" placeholder="T&#237;tulo, SKU ou MLB"></div>
+        <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Situa&#231;&#227;o</label><select id="promocao-status-filtro-v77" onchange="carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]"><option value="">Todas</option><option value="active">Ativos</option><option value="paused">Pausados</option><option value="under_review">Em revis&#227;o</option><option value="closed">Finalizados</option></select></div>
+        <div><label class="block text-[9px] uppercase font-black text-slate-500 mb-1">Participa&#231;&#227;o</label><select id="promocao-participacao-filtro-v77" onchange="carregarAnunciosPromocaoV77(1)" class="bg-slate-950 border border-slate-700 text-white px-3 py-2 rounded-lg text-[10px]"><option value="">Todos</option><option value="candidate">Eleg&#237;veis</option><option value="participating">Participando</option><option value="not_participating">Fora da promo&#231;&#227;o</option></select></div>
+        <button onclick="carregarAnunciosPromocaoV77(1)" class="bg-yellow-400 text-slate-950 px-4 py-2 rounded-lg text-[10px] font-black">Filtrar</button>
+      </div>
+    </div>
+    <div class="overflow-auto max-h-[68vh]">
+      <table class="w-full min-w-[1550px] text-[11px]">
+        <thead class="sticky top-0 z-10 bg-slate-900 text-slate-300 uppercase tracking-[.07em]">
+          <tr>
+            <th class="px-3 py-3 text-center w-12"><input type="checkbox" onchange="selecionarPaginaPromocaoV77(this.checked)" class="accent-yellow-400"></th>
+            <th class="px-3 py-3 text-left">An&#250;ncio</th>
+            <th class="px-3 py-3 text-left">MLB / SKU</th>
+            <th class="px-3 py-3 text-right">Pre&#231;o atual</th>
+            <th class="px-3 py-3 text-center">Desconto %</th>
+            <th class="px-3 py-3 text-right">Valor final</th>
+            <th class="px-3 py-3 text-center">Promo&#231;&#227;o</th>
+            <th class="px-3 py-3 text-center">A&#231;&#227;o</th>
+          </tr>
+        </thead>
+        <tbody id="promocao-tbody-v77" class="divide-y divide-slate-800 bg-slate-950/30"><tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Selecione uma promo&#231;&#227;o.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="p-3 border-t border-slate-800 flex items-center justify-between gap-3">
+      <button onclick="paginaPromocaoV77(-1)" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">&#8592; Anterior</button>
+      <div id="promocao-pagina-v77" class="text-[10px] text-slate-500">P&#225;gina 1</div>
+      <button onclick="paginaPromocaoV77(1)" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold">Pr&#243;xima &#8594;</button>
     </div>
   </div>
 </section>
@@ -4573,6 +4707,7 @@ function mudarAba(aba) {
         'criar-massa',
         'agentes-produto',
         'anuncios-restritos',
+        'promocoes',
         'integracoes',
         'oportunidades',
         'qualidade',
@@ -5219,17 +5354,17 @@ function montarTabelaGestao(
                                 <input
                                     id="titulo_gestao_${index}"
                                     type="text"
-                                    value="${escapeHtml(item.title)}"
-                                    maxlength="200"
+                                    value="${escapeHtml(tituloSomenteV76(item.title))}"
+                                    maxlength="60"
                                     oninput="atualizarContadorTituloGestao(${index})"
                                     class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 pr-14 rounded-lg outline-none focus:border-yellow-400/60"
                                     title="Editar t\u00edtulo do an\u00fancio - limite de 60 caracteres"
                                 >
                                 <span
                                     id="contador_titulo_gestao_${index}"
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold ${String(item.title || '').length > 60 ? 'text-red-500' : 'text-slate-500'}"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold ${tituloSomenteV76(item.title).length > 60 ? 'text-red-500' : 'text-slate-500'}"
                                 >
-                                    ${String(item.title || '').length}/60
+                                    ${tituloSomenteV76(item.title).length}/60
                                 </span>
                             </div>
 
@@ -8464,21 +8599,32 @@ async function enviarRespostaClaim(id){
 <script id="mlhub-scale90k">
 let mlScaleJobId=null, mlScaleTimer=null;
 let gestaoPagina=1, gestaoPaginas=1, gestaoTotalFiltro=0, gestaoBusca='', gestaoCarregando=false;
+let gestaoOrdenacaoV76='recent', gestaoStatusV76='';
 
 async function verificarModoEscala(){
   try{const r=await fetch(`${RENDER_URL}/api/scale/status`),d=await r.json();return !!d.database}catch(e){return false}
 }
 
+function tituloSomenteV76(valor){
+  return String(valor??'')
+    .replace(/\u0000/g,' ')
+    .replace(/<[^>]*>/g,' ')
+    .replace(/\r?\n+/g,' ')
+    .replace(/\s+/g,' ')
+    .replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'')
+    .trim();
+}
+
 function normalizarItemEscala(i){
   return {
-    id:i.id||'', title:i.title||'', sku:i.sku||'Sem SKU',
+    id:i.id||'', title:tituloSomenteV76(i.title), sku:i.sku||'Sem SKU',
     price:Number(i.price||0), sale_fee:Number(i.sale_fee||0),
     commission_percentage:Number(i.commission_percentage||0),
     shipping_cost:Number(i.shipping_cost||0), net_received:Number(i.net_received ?? i.price ?? 0),
     available_quantity:Number(i.available_quantity||0), sold_quantity:Number(i.sold_quantity||0),
     status:i.status||'', listing_type_id:i.listing_type_id||'',
     category_id:i.category_id||'', thumbnail:i.thumbnail||'', permalink:i.permalink||'',
-    last_updated:i.last_updated||null,last_synced:i.last_synced||null,
+    last_updated:i.last_updated||null,date_created:i.date_created||null,last_synced:i.last_synced||null,
     price_update_allowed:i.price_update_allowed!==false,
     price_update_block_reason:i.price_update_block_reason||''
   };
@@ -8490,8 +8636,9 @@ async function carregarGestaoEscala(page=1,{silencioso=false}={}){
   gestaoCarregando=true;
   if(!silencioso)mostrarLoading('Carregando an\u00fancios do banco...');
   try{
-    const p=new URLSearchParams({page:String(Math.max(1,page)),limit:'50'});
+    const p=new URLSearchParams({page:String(Math.max(1,page)),limit:'50',sort:gestaoOrdenacaoV76||'recent'});
     if(gestaoBusca)p.set('q',gestaoBusca);
+    if(gestaoStatusV76)p.set('status',gestaoStatusV76);
     const r=await fetch(`${RENDER_URL}/api/scale/anuncios?${p}`,{headers:{Authorization:token}});
     const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Erro ao consultar an\u00fancios.');
     gestaoPagina=Number(d.pagina||1); gestaoPaginas=Number(d.paginas||1); gestaoTotalFiltro=Number(d.total||0);
@@ -8527,6 +8674,24 @@ async function carregarGestaoEscala(page=1,{silencioso=false}={}){
     // c\u00f3pia completa para a Simula\u00e7\u00e3o. Depois disso a Simula\u00e7\u00e3o abre do cache local.
     if(typeof aquecerCacheSimulacaoV43==='function')aquecerCacheSimulacaoV43();
   }catch(e){alert(e.message)}finally{gestaoCarregando=false;if(!silencioso)esconderLoading()}
+}
+
+
+function aplicarFiltrosGestaoV76(){
+  gestaoOrdenacaoV76=document.getElementById('gestao-ordenacao-v76')?.value||'recent';
+  gestaoStatusV76=document.getElementById('gestao-status-v76')?.value||'';
+  gestaoPagina=1;
+  try{
+    localStorage.setItem('mlHubPro_gestaoOrdenacao_v76',gestaoOrdenacaoV76);
+    localStorage.setItem('mlHubPro_gestaoStatus_v76',gestaoStatusV76);
+  }catch(e){}
+  const resumo=document.getElementById('gestao-filtro-resumo-v76');
+  if(resumo){
+    const nomes={recent:'Mais recentes',sold:'Mais vendidos',oldest:'Mais antigos',status:'Por situação'};
+    const sts={active:'Ativos',paused:'Pausados',under_review:'Em revisão',inactive:'Inativos',closed:'Finalizados'};
+    resumo.textContent=`${nomes[gestaoOrdenacaoV76]||'Mais recentes'} · ${sts[gestaoStatusV76]||'Todas as situações'}`;
+  }
+  return carregarGestaoEscala(1);
 }
 
 function atualizarPaginacaoGestao(){
@@ -10356,7 +10521,7 @@ async function salvarBaseSkuV27(){
 const _mudarAbaV21=mudarAba;
 mudarAba=function(aba){
     const destino=String(aba);
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos','promocoes'];
 
     document.body.classList.toggle('atendimento-isolado',destino==='atendimento');
     document.body.classList.toggle('configuracoes-isolado-v23',destino==='configuracoes');
@@ -10377,13 +10542,14 @@ mudarAba=function(aba){
     if(aba==='atualizacao')setTimeout(()=>{sincronizarFiltroCamposV21();carregarAtualizacaoEscalaV21()},0);
     if(aba==='pedidos')setTimeout(()=>carregarPedidosV21(pedidosPaginaV21),0);
     if(aba==='anuncios-restritos')setTimeout(()=>carregarAnunciosRestritosV40(false),0);
+    if(aba==='promocoes')setTimeout(()=>carregarPromocoesV77(false),0);
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
     sincronizarFiltroCamposV21();
     hidratarBaseSkuCacheV42().catch(e=>console.warn('[BASE SKU START V42]',e));
     const abaInicial=localStorage.getItem('mlHubPro_abaAtual_v1')||'inicio';
-    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos'];
+    const abasPainelV24=['gestao','simulacao','sku-base','atualizacao','pedidos','perguntas','reclamacoes','criar-massa','agentes-produto','anuncios-restritos','promocoes'];
 
     document.body.classList.toggle('configuracoes-isolado-v23',abaInicial==='configuracoes');
     document.body.classList.toggle('configuracoes-isolado-v24',abaInicial==='configuracoes');
@@ -10509,7 +10675,21 @@ async function acompanharJobSyncV26(tipo,jobId){
         });
 
         if(['queued','running'].includes(j.status)){
-            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),1500);
+            if(j.status==='queued'){
+                if(!syncQueuedDesdeV76[tipo])syncQueuedDesdeV76[tipo]=Date.now();
+                const segundos=Math.floor((Date.now()-syncQueuedDesdeV76[tipo])/1000);
+                if(segundos>=20){
+                    atualizarProgressoV26(tipo,{
+                        status:'running',
+                        atual:Number(j.progress_current||0),
+                        total:Number(j.progress_total||0),
+                        mensagem:'Aguardando worker dedicado do servidor · retomada automática ativa'
+                    });
+                }
+            }else{
+                syncQueuedDesdeV76[tipo]=0;
+            }
+            syncTimersV26[tipo]=setTimeout(()=>acompanharJobSyncV26(tipo,jobId),1200);
             return;
         }
 
@@ -10550,6 +10730,12 @@ window.sincronizarFretesApi=function(){
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
+    try{
+        gestaoOrdenacaoV76=localStorage.getItem('mlHubPro_gestaoOrdenacao_v76')||'recent';
+        gestaoStatusV76=localStorage.getItem('mlHubPro_gestaoStatus_v76')||'';
+        const so=document.getElementById('gestao-ordenacao-v76');if(so)so.value=gestaoOrdenacaoV76;
+        const ss=document.getElementById('gestao-status-v76');if(ss)ss.value=gestaoStatusV76;
+    }catch(e){}
     ['anuncios','precos','fretes'].forEach(tipo=>{
         const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
         if(id)acompanharJobSyncV26(tipo,id);
@@ -13014,7 +13200,7 @@ async function carregarAnunciosRestritosV40(forcar=false){
             const d=await r.json().catch(()=>({}));
             if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
             total=Number(d.total||0);totais=d.totais||totais;if(d.status_real){restritosStatusRealAtualizadoV72=!d.status_real.erro;if(st)st.textContent=d.status_real.erro?'Status real: '+d.status_real.erro:`Status real confirmado no Mercado Livre · ${Number(d.status_real.atualizados||0).toLocaleString('pt-BR')} item(ns) revalidado(s).`;}
-            const itens=Array.isArray(d.itens)?d.itens:[];
+            const itens=(Array.isArray(d.itens)?d.itens:[]).map(i=>({...i,status_api:i.status_api||i.status,status:i.status_real||i.status}));
             todos.push(...itens);offset+=itens.length;
             if(st)st.textContent=`Carregando ${todos.length.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}...`;
             if(!itens.length)break;
@@ -13048,7 +13234,8 @@ function renderAnunciosRestritosV40(){
     tbody.innerHTML=lista.map(i=>{
         const sub=normalizarSubstatusV40(i.sub_status)||'\u2014';
         const dt=i.last_updated?new Date(i.last_updated).toLocaleString('pt-BR'):'\u2014';
-        const motivo=String(i.moderation_reason||i.motivo_pt||traduzirSubstatusRestritoV41(i.status,sub,i.tags)||'');
+        const statusVisual=String(i.status_real||i.status||'');
+        const motivo=String(i.moderation_reason||i.motivo_pt||traduzirSubstatusRestritoV41(statusVisual,sub,i.tags)||'');
         const remedy=String(i.moderation_remedy||'');
         const checked=restritosSelecionadosV41.has(String(i.id));
         const erroExcluir=restritosErrosExclusaoV41.get(String(i.id))||'';
@@ -13056,7 +13243,7 @@ function renderAnunciosRestritosV40(){
           <td class="px-3 py-3 text-center"><input type="checkbox" class="w-4 h-4 accent-yellow-400" ${checked?'checked':''} onchange="alternarSelecaoRestritoV41('${textoEscapeV37(i.id)}',this.checked)"></td>
           <td class="px-3 py-3"><div class="flex items-center gap-3">${i.thumbnail?`<img src="${textoEscapeV37(i.thumbnail)}" class="w-11 h-11 rounded-lg object-cover bg-white">`:''}<div class="max-w-[420px]"><div class="font-bold text-white line-clamp-2">${textoEscapeV37(i.title||'Sem t\u00edtulo')}</div></div></div></td>
           <td class="px-3 py-3"><div class="font-mono text-slate-300">${textoEscapeV37(i.id||'')}</div><div class="text-[10px] text-slate-500 mt-1">SKU: ${textoEscapeV37(i.sku||'\u2014')}</div></td>
-          <td class="px-3 py-3"><div class="font-black ${classeStatusRestritoV40(i.status)}">${textoEscapeV37(nomeStatusRestritoV40(i.status))}</div><div class="text-[9px] text-emerald-500 mt-1">Status atual do Mercado Livre</div></td>
+          <td class="px-3 py-3"><div class="font-black ${classeStatusRestritoV40(statusVisual)}">${textoEscapeV37(nomeStatusRestritoV40(statusVisual))}</div><div class="text-[9px] text-emerald-500 mt-1">Status atual do Mercado Livre</div></td>
           <td id="restrito-motivo-${textoEscapeV37(i.id)}" class="px-3 py-3 max-w-[480px]"><div class="text-slate-200 font-semibold leading-relaxed">${textoEscapeV37(motivo)}</div>${remedy?`<div class="text-emerald-400 mt-1 leading-relaxed"><b>Solu\u00e7\u00e3o:</b> ${textoEscapeV37(remedy)}</div>`:''}<div class="text-[9px] text-slate-600 mt-1">Detalhe da situa\u00e7\u00e3o: ${textoEscapeV37(sub)}</div></td>
           <td class="px-3 py-3 text-right text-white font-bold">${textoEscapeV37(moeda(Number(i.price||0)))}</td>
           <td class="px-3 py-3 text-right text-slate-300">${Number(i.available_quantity||0).toLocaleString('pt-BR')}</td>
@@ -13073,7 +13260,7 @@ async function carregarMotivosReaisRestritosV41(limite=40){
     restritosCarregandoMotivosV41=true;
     const status=document.getElementById('restritos-motivos-status-v41');
     try{
-        const alvos=anunciosRestritosV40.filter(i=>!i.moderation_checked&&String(i.status)==='under_review').slice(0,Math.max(1,Number(limite)||40)).map(i=>String(i.id));
+        const alvos=anunciosRestritosV40.filter(i=>!i.moderation_checked&&String(i.status_api||i.status)==='under_review').slice(0,Math.max(1,Number(limite)||40)).map(i=>String(i.id));
         let done=0;
         for(let p=0;p<alvos.length;p+=25){
             const bloco=alvos.slice(p,p+25);
@@ -13797,5 +13984,248 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 <!-- ML HUB PRO V73 - SIMULACAO COM TAXA EXATA DA API -->
+
+<script id="mlhub-promocoes-v77">
+const promocoesEstadoV77={
+  promocoes:[],selecionada:null,pagina:1,paginas:1,itens:[],selecionados:new Map(),jobId:null,syncAtivo:false
+};
+
+function moedaPromoV77(v){
+  const n=Number(v||0);
+  return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+function pctPromoV77(v){
+  const n=Number(v);
+  return Number.isFinite(n)?n:0;
+}
+function nomeTipoPromoV77(t){
+  const m={DEAL:'Campanha tradicional',MARKETPLACE_CAMPAIGN:'Campanha cofinanciada',VOLUME:'Desconto por quantidade',
+    DOD:'Oferta do dia',LIGHTNING:'Oferta relâmpago',PRICE_DISCOUNT:'Desconto individual',
+    PRE_NEGOTIATED:'Desconto pré-acordado',SELLER_CAMPAIGN:'Campanha do vendedor',SMART:'Campanha SMART',
+    PRICE_MATCHING:'Preço competitivo',UNHEALTHY_STOCK:'Liquidação de estoque',SELLER_COUPON_CAMPAIGN:'Cupom do vendedor'};
+  return m[String(t||'').toUpperCase()]||String(t||'Promoção');
+}
+function descontoPadraoPromoV77(p){
+  const d=Number(p?.discount_percentage);
+  if(Number.isFinite(d)&&d>0)return d;
+  const s=Number(p?.seller_percentage||0),m=Number(p?.meli_percentage||0);
+  return Math.max(0,s+m);
+}
+function statusPromoV77(s){
+  const m={started:'Ativa',pending:'Programada',candidate:'Disponível',finished:'Finalizada'};
+  return m[String(s||'').toLowerCase()]||String(s||'');
+}
+
+async function carregarPromocoesV77(forcar=false){
+  const token=obterToken();if(!token){solicitarToken();return}
+  const st=document.getElementById('promocoes-status-v77');
+  if(st)st.textContent=forcar?'Atualizando promoções no Mercado Livre...':'Carregando promoções salvas...';
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v77/promocoes${forcar?'?refresh=1':''}`,{cache:'no-store',headers:{Authorization:token}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    promocoesEstadoV77.promocoes=Array.isArray(d.promocoes)?d.promocoes:[];
+    if(st)st.textContent=`${promocoesEstadoV77.promocoes.length} promoção(ões) disponível(is)${d.erro_refresh?' · mantendo cache: '+d.erro_refresh:''}.`;
+    const cache=document.getElementById('promocoes-cache-v77');
+    if(cache)cache.textContent=d.synced_at?`Cache: ${new Date(d.synced_at).toLocaleString('pt-BR')}`:'';
+    renderPromocoesV77();
+    if(promocoesEstadoV77.selecionada){
+      const atual=promocoesEstadoV77.promocoes.find(p=>p.id===promocoesEstadoV77.selecionada.id&&p.type===promocoesEstadoV77.selecionada.type);
+      if(atual)promocoesEstadoV77.selecionada=atual;
+    }
+  }catch(e){if(st)st.textContent='Erro: '+e.message}
+}
+
+function renderPromocoesV77(){
+  const box=document.getElementById('promocoes-cards-v77');if(!box)return;
+  const ps=promocoesEstadoV77.promocoes;
+  if(!ps.length){box.innerHTML='<div class="border border-slate-800 rounded-xl p-4 text-xs text-slate-600">Nenhuma promoção disponível retornada pelo Mercado Livre.</div>';return}
+  box.innerHTML=ps.map((p,i)=>{
+    const pct=descontoPadraoPromoV77(p),sel=promocoesEstadoV77.selecionada?.id===p.id&&promocoesEstadoV77.selecionada?.type===p.type;
+    const contrib=[p.seller_percentage!=null?`Você ${Number(p.seller_percentage).toFixed(1)}%`:'',p.meli_percentage!=null?`ML ${Number(p.meli_percentage).toFixed(1)}%`:''].filter(Boolean).join(' + ');
+    return `<button onclick="selecionarPromocaoV77(${i})" class="text-left rounded-2xl border ${sel?'border-yellow-400 bg-yellow-400/5':'border-slate-800 bg-slate-950/40 hover:border-slate-700'} p-4 transition">
+      <div class="flex items-start justify-between gap-2"><div class="text-[10px] text-yellow-400 font-black uppercase">${escapeHtml(nomeTipoPromoV77(p.type))}</div><span class="text-[9px] px-2 py-1 rounded-full bg-slate-800 text-slate-300">${escapeHtml(statusPromoV77(p.status))}</span></div>
+      <div class="font-black text-white text-sm mt-2 line-clamp-1">${escapeHtml(p.name||p.id)}</div>
+      <div class="text-2xl font-black ${pct?'text-emerald-400':'text-slate-400'} mt-3">${pct?pct.toFixed(1)+'%':'—'}</div>
+      <div class="text-[9px] text-slate-500 mt-1">${escapeHtml(contrib||'Percentual definido conforme os itens elegíveis')}</div>
+      <div class="text-[9px] text-slate-600 mt-2">${p.finish_date?'Até '+new Date(p.finish_date).toLocaleDateString('pt-BR'):'Sem data final informada'}</div>
+    </button>`;
+  }).join('');
+}
+
+function selecionarPromocaoV77(i){
+  const p=promocoesEstadoV77.promocoes[i];if(!p)return;
+  promocoesEstadoV77.selecionada=p;
+  promocoesEstadoV77.selecionados.clear();
+  const pct=descontoPadraoPromoV77(p);
+  const pctEl=document.getElementById('promocao-percent-v77');if(pctEl)pctEl.value=pct||'';
+  document.getElementById('promocao-selecionada-v77')?.classList.remove('hidden');
+  document.getElementById('promocao-acoes-v77')?.classList.remove('hidden');
+  const nome=document.getElementById('promocao-nome-v77');if(nome)nome.textContent=p.name||nomeTipoPromoV77(p.type);
+  const det=document.getElementById('promocao-detalhe-v77');
+  if(det)det.textContent=`${nomeTipoPromoV77(p.type)} · ${p.id} · ${statusPromoV77(p.status)}`;
+  renderPromocoesV77();
+  aplicarPercentualPromocaoV77(pct);
+  carregarAnunciosPromocaoV77(1);
+  sincronizarItensPromocaoV77(false);
+}
+
+async function sincronizarItensPromocaoV77(reset=false){
+  const p=promocoesEstadoV77.selecionada;if(!p||promocoesEstadoV77.syncAtivo)return;
+  const token=obterToken();if(!token)return;
+  promocoesEstadoV77.syncAtivo=true;
+  const st=document.getElementById('promocao-sync-v77');if(st)st.textContent='Sincronizando elegibilidade da promoção em segundo plano...';
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v77/promocoes/${encodeURIComponent(p.id)}/sincronizar`,{
+      method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
+      body:JSON.stringify({promotion_type:p.type,reset,tempo_ms:9000})
+    });
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    if(st)st.textContent=`Elegibilidade: +${Number(d.itens||0).toLocaleString('pt-BR')} item(ns) sincronizado(s)${d.parcial?' · continuando em segundo plano...':' · concluída'}.`;
+    await carregarAnunciosPromocaoV77(promocoesEstadoV77.pagina);
+    if(d.parcial)setTimeout(()=>{promocoesEstadoV77.syncAtivo=false;sincronizarItensPromocaoV77(false)},700);
+  }catch(e){if(st)st.textContent='Elegibilidade: '+e.message}
+  finally{if(!st?.textContent?.includes('continuando'))promocoesEstadoV77.syncAtivo=false}
+}
+
+function aplicarPercentualPromocaoV77(valor){
+  const pct=Math.max(0,Math.min(80,Number(valor||0)));
+  document.querySelectorAll('[data-promo-percent-v77]').forEach(el=>{el.value=pct});
+  document.querySelectorAll('[data-promo-price-v77]').forEach(el=>{
+    const base=Number(el.dataset.base||0);
+    el.textContent=moedaPromoV77(base*(1-pct/100));
+  });
+}
+
+async function carregarAnunciosPromocaoV77(page=1){
+  const p=promocoesEstadoV77.selecionada;if(!p)return;
+  const token=obterToken();if(!token)return;
+  const qs=new URLSearchParams({page:String(Math.max(1,page)),limit:'100',promotion_id:p.id,promotion_type:p.type});
+  const q=document.getElementById('promocao-busca-v77')?.value.trim();if(q)qs.set('q',q);
+  const s=document.getElementById('promocao-status-filtro-v77')?.value;if(s)qs.set('status',s);
+  const pa=document.getElementById('promocao-participacao-filtro-v77')?.value;if(pa)qs.set('participation',pa);
+  const st=document.getElementById('promocao-anuncios-status-v77');if(st)st.textContent='Abrindo anúncios do cache da Gestão...';
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v77/promocoes/anuncios?${qs.toString()}`,{cache:'no-store',headers:{Authorization:token}});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    promocoesEstadoV77.pagina=d.page||1;promocoesEstadoV77.paginas=d.paginas||1;promocoesEstadoV77.itens=d.itens||[];
+    if(st)st.textContent=`${Number(d.total||0).toLocaleString('pt-BR')} anúncio(s) · dados principais carregados do cache da Gestão.`;
+    const pg=document.getElementById('promocao-pagina-v77');if(pg)pg.textContent=`Página ${d.page} de ${d.paginas}`;
+    renderAnunciosPromocaoV77();
+  }catch(e){if(st)st.textContent='Erro: '+e.message}
+}
+
+function statusParticipacaoV77(x){
+  const s=String(x.promo_status||'').toLowerCase();
+  if(s==='started')return ['Participando','text-emerald-400'];
+  if(s==='pending')return ['Programado','text-blue-400'];
+  if(s==='candidate')return ['Elegível','text-yellow-400'];
+  if(s==='finished')return ['Finalizado','text-red-400'];
+  return ['Não identificado','text-slate-500'];
+}
+
+function renderAnunciosPromocaoV77(){
+  const tbody=document.getElementById('promocao-tbody-v77');if(!tbody)return;
+  const pctGlobal=Math.max(0,Math.min(80,Number(document.getElementById('promocao-percent-v77')?.value||0)));
+  if(!promocoesEstadoV77.itens.length){tbody.innerHTML='<tr><td colspan="8" class="px-4 py-10 text-center text-slate-600">Nenhum anúncio encontrado.</td></tr>';return}
+  tbody.innerHTML=promocoesEstadoV77.itens.map(x=>{
+    const sel=promocoesEstadoV77.selecionados.has(String(x.id));
+    const [status,cls]=statusParticipacaoV77(x);
+    const base=Number(x.price||0);
+    const suggested=Number(x.suggested_discounted_price);
+    const final=(Number.isFinite(suggested)&&suggested>0)?suggested:base*(1-pctGlobal/100);
+    const pctReal=base>0?Math.max(0,(1-final/base)*100):pctGlobal;
+    return `<tr data-promo-row-v77="${escapeHtml(x.id)}" class="hover:bg-slate-900/50">
+      <td class="px-3 py-3 text-center"><input type="checkbox" ${sel?'checked':''} onchange="selecionarItemPromocaoV77('${escapeHtml(x.id)}',this.checked)" class="w-4 h-4 accent-yellow-400"></td>
+      <td class="px-3 py-3"><div class="flex items-center gap-3"><img src="${escapeHtml(x.thumbnail||'')}" class="w-10 h-10 rounded-lg object-cover bg-white" onerror="this.style.visibility='hidden'"><div class="font-black text-white max-w-[420px]">${escapeHtml(x.title||'Sem título')}</div></div></td>
+      <td class="px-3 py-3"><div class="text-slate-300 font-bold">${escapeHtml(x.id)}</div><div class="text-[9px] text-slate-600 mt-1">SKU: ${escapeHtml(x.sku||'—')}</div></td>
+      <td class="px-3 py-3 text-right font-black text-white">${moedaPromoV77(base)}</td>
+      <td class="px-3 py-3 text-center"><input data-promo-percent-v77 data-id="${escapeHtml(x.id)}" type="number" min="0" max="80" step="0.1" value="${pctReal.toFixed(1)}" oninput="atualizarLinhaPromocaoV77('${escapeHtml(x.id)}',this.value)" class="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-center text-yellow-300 font-black"></td>
+      <td data-promo-price-v77 data-base="${base}" data-id="${escapeHtml(x.id)}" class="px-3 py-3 text-right font-black text-emerald-400">${moedaPromoV77(final)}</td>
+      <td class="px-3 py-3 text-center"><div class="${cls} font-black">${escapeHtml(status)}</div>${x.promo_seller_percentage!=null||x.promo_meli_percentage!=null?`<div class="text-[9px] text-slate-600 mt-1">Você ${Number(x.promo_seller_percentage||0).toFixed(1)}% · ML ${Number(x.promo_meli_percentage||0).toFixed(1)}%</div>`:''}</td>
+      <td class="px-3 py-3 text-center"><div class="flex justify-center gap-2"><button onclick="acaoIndividualPromocaoV77('${escapeHtml(x.id)}','join')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-2 rounded-lg text-[9px] font-black">Participar</button><button onclick="acaoIndividualPromocaoV77('${escapeHtml(x.id)}','leave')" class="bg-red-950 border border-red-800 text-red-200 px-3 py-2 rounded-lg text-[9px] font-black">Sair</button></div></td>
+    </tr>`;
+  }).join('');
+  atualizarResumoSelecaoPromocaoV77();
+}
+
+function atualizarLinhaPromocaoV77(id,pct){
+  const row=document.querySelector(`[data-promo-row-v77="${CSS.escape(String(id))}"]`);if(!row)return;
+  const price=row.querySelector(`[data-promo-price-v77]`),base=Number(price?.dataset.base||0),p=Math.max(0,Math.min(80,Number(pct||0)));
+  if(price)price.textContent=moedaPromoV77(base*(1-p/100));
+  if(promocoesEstadoV77.selecionados.has(String(id)))promocoesEstadoV77.selecionados.set(String(id),p);
+}
+function selecionarItemPromocaoV77(id,on){
+  if(on){
+    const el=document.querySelector(`[data-promo-row-v77="${CSS.escape(String(id))}"] [data-promo-percent-v77]`);
+    promocoesEstadoV77.selecionados.set(String(id),Number(el?.value||0));
+  }else promocoesEstadoV77.selecionados.delete(String(id));
+  atualizarResumoSelecaoPromocaoV77();
+}
+function selecionarPaginaPromocaoV77(on){
+  promocoesEstadoV77.itens.forEach(x=>{
+    if(on){
+      const el=document.querySelector(`[data-promo-row-v77="${CSS.escape(String(x.id))}"] [data-promo-percent-v77]`);
+      promocoesEstadoV77.selecionados.set(String(x.id),Number(el?.value||document.getElementById('promocao-percent-v77')?.value||0));
+    }else promocoesEstadoV77.selecionados.delete(String(x.id));
+  });
+  renderAnunciosPromocaoV77();
+}
+function atualizarResumoSelecaoPromocaoV77(){
+  const el=document.getElementById('promocao-selecao-resumo-v77');
+  if(el)el.textContent=`${promocoesEstadoV77.selecionados.size.toLocaleString('pt-BR')} anúncio(s) selecionado(s)`;
+}
+function paginaPromocaoV77(delta){
+  const p=Math.max(1,Math.min(promocoesEstadoV77.paginas,promocoesEstadoV77.pagina+delta));
+  if(p!==promocoesEstadoV77.pagina)carregarAnunciosPromocaoV77(p);
+}
+
+async function acaoIndividualPromocaoV77(id,action){
+  const p=promocoesEstadoV77.selecionada;if(!p)return;
+  const token=obterToken();if(!token)return;
+  const row=document.querySelector(`[data-promo-row-v77="${CSS.escape(String(id))}"]`);
+  const pct=Number(row?.querySelector('[data-promo-percent-v77]')?.value||0);
+  const base=Number(row?.querySelector('[data-promo-price-v77]')?.dataset.base||0);
+  const deal=Number((base*(1-pct/100)).toFixed(2));
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v77/promocoes/acao`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
+      body:JSON.stringify({id,action,promotion_id:p.id,promotion_type:p.type,percent:pct,deal_price:deal})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    await carregarAnunciosPromocaoV77(promocoesEstadoV77.pagina);
+  }catch(e){alert(e.message)}
+}
+
+async function acaoMassaPromocaoV77(action,allEligible=false){
+  const p=promocoesEstadoV77.selecionada;if(!p)return;
+  const token=obterToken();if(!token)return;
+  const items=[...promocoesEstadoV77.selecionados.entries()].map(([id,percent])=>({id,percent}));
+  if(!allEligible&&!items.length){alert('Selecione pelo menos um anúncio.');return}
+  if(!confirm(action==='join'?'Confirmar participação na promoção?':'Confirmar saída da promoção?'))return;
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v77/promocoes/acao-massa`,{method:'POST',headers:{Authorization:token,'Content-Type':'application/json'},
+      body:JSON.stringify({promotion_id:p.id,promotion_type:p.type,action,percent:Number(document.getElementById('promocao-percent-v77')?.value||0),items,all_eligible:allEligible})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    promocoesEstadoV77.jobId=d.job_id;acompanharJobPromocaoV77(d.job_id);
+  }catch(e){alert(e.message)}
+}
+
+async function acompanharJobPromocaoV77(jobId){
+  const token=obterToken();if(!token)return;
+  const box=document.getElementById('promocao-job-v77');box?.classList.remove('hidden');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,{cache:'no-store',headers:{Authorization:token}});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    const j=d.job||{},total=Number(j.progress_total||0),atual=Number(j.progress_current||0),pct=total?Math.round(atual/total*100):0;
+    const msg=document.getElementById('promocao-job-msg-v77');if(msg)msg.textContent=j.message||'Processando...';
+    const pe=document.getElementById('promocao-job-pct-v77');if(pe)pe.textContent=pct+'%';
+    const bar=document.getElementById('promocao-job-bar-v77');if(bar)bar.style.width=pct+'%';
+    if(['queued','running'].includes(j.status)){setTimeout(()=>acompanharJobPromocaoV77(jobId),1000);return}
+    promocoesEstadoV77.jobId=null;promocoesEstadoV77.selecionados.clear();
+    await sincronizarItensPromocaoV77(true);
+    await carregarAnunciosPromocaoV77(promocoesEstadoV77.pagina);
+  }catch(e){setTimeout(()=>acompanharJobPromocaoV77(jobId),2500)}
+}
+</script>
+
 </body>
 </html>
