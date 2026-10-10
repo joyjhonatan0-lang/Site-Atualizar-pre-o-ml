@@ -1382,7 +1382,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 <div class="flex items-center gap-2 flex-wrap justify-end">
 
                 <button
-                    onclick="puxarNovosAnuncios()"
+                    onclick="sincronizarAnunciosDiretoV86()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
                     title="Sincroniza todos os an&#250;ncios em lotes de 1.000, salva checkpoint e retoma automaticamente do ponto salvo"
                 >
@@ -1959,7 +1959,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="flex items-center gap-2 flex-wrap justify-end">
 
                 <button
-                    onclick="puxarNovosAnuncios()"
+                    onclick="sincronizarAnunciosDiretoV86()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
                     title="Busca somente an&#250;ncios novos que ainda n&#227;o est&#227;o carregados no painel"
                 >
@@ -2019,7 +2019,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; direto V85</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; direto V86</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -10893,7 +10893,7 @@ async function acompanharJobSyncV26(tipo,jobId){
 
 // Sobrescreve somente os tr\u00eas bot\u00f5es de sincroniza\u00e7\u00e3o.
 window.puxarNovosAnuncios=function(){
-    return sincronizarAnunciosDiretoV85();
+    return sincronizarAnunciosDiretoV86();
 };
 
 window.sincronizarPrecosApi=function(){
@@ -14422,30 +14422,360 @@ async function acompanharJobPromocaoV77(jobId){
 }
 </script>
 
-<script id="mlhub-v85-direct-sync-boot">
-document.addEventListener('DOMContentLoaded',()=>{
-  setTimeout(async()=>{
+
+
+
+<script id="mlhub-v86-direct-sync">
+/* =========================================================
+   V86 — IMPORTAÇÃO DIRETA DO MERCADO LIVRE
+   Não usa PostgreSQL.
+   Checkpoint a cada página de até 100 anúncios.
+   Exibição/contador agrupados em lotes de 1.000.
+========================================================= */
+
+let syncV86Executando=false;
+let syncV86Abortar=false;
+
+function v86Temporario(msg){
+    return /AbortError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timeout|network|fetch|failed to fetch|socket|429|500|502|503|504/i.test(String(msg||''));
+}
+
+function v86Sleep(ms){
+    return new Promise(r=>setTimeout(r,ms));
+}
+
+async function v86BuscarPagina(scrollId){
+    const token=obterToken();
+    if(!token)throw new Error('Token Mercado Livre não informado.');
+
+    const qs=new URLSearchParams({_t:String(Date.now())});
+    if(scrollId)qs.set('scroll_id',scrollId);
+
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),30000);
+
     try{
-      // V85: Gestão passa a usar o cache IndexedDB e não depende do PostgreSQL.
-      carregarGestaoEscala=carregarGestaoLocalV85;
-      try{localStorage.removeItem('mlHubPro_sync_v26_anuncios')}catch(e){}
-
-      await carregarGestaoLocalV85(1,{silencioso:true});
-
-      const meta=await idbMetaV32('direct_sync_v85').catch(()=>null);
-      if(meta && meta.completed===false && obterToken()){
-        atualizarProgressoV26('anuncios',{
-          status:'running',
-          atual:Number(meta.processed||0),
-          total:Number(meta.total||0),
-          mensagem:'Retomando automaticamente a sincronização local'
+        const r=await fetch(`${RENDER_URL}/api/v86/anuncios/scan?${qs.toString()}`,{
+            cache:'no-store',
+            signal:controller.signal,
+            headers:{
+                Authorization:token,
+                Accept:'application/json'
+            }
         });
-        sincronizarAnunciosDiretoV85();
-      }
-    }catch(e){
-      console.warn('[V85 BOOT]',e);
+
+        const d=await r.json().catch(()=>({}));
+
+        if(r.status===401){
+            throw new Error(d.erro||'Token Mercado Livre inválido ou expirado.');
+        }
+
+        if(r.status===409 && d.cursor_expirado){
+            return {cursor_expirado:true,seller_id:String(d.seller_id||'')};
+        }
+
+        if(!r.ok){
+            throw new Error(d.erro||`HTTP ${r.status}`);
+        }
+
+        return d;
+    }finally{
+        clearTimeout(timer);
     }
-  },500);
+}
+
+async function v86SalvarCheckpoint({sellerId,total,processed,scrollId,completed,lastError=''}) {
+    await idbSalvarMetaV32({
+        key:'direct_sync_v86',
+        seller_id:String(sellerId||''),
+        total:Number(total||0),
+        processed:Number(processed||0),
+        scroll_id:scrollId||null,
+        completed:Boolean(completed),
+        last_error:String(lastError||''),
+        updated_at:new Date().toISOString()
+    });
+}
+
+async function v86CarregarGestaoLocal(page=1,{silencioso=false}={}){
+    if(gestaoCarregando)return;
+
+    gestaoCarregando=true;
+    if(!silencioso)mostrarLoading('Carregando anúncios salvos...');
+
+    try{
+        // Força releitura do IndexedDB para refletir tudo que acabou de chegar.
+        masterCarregadoV32=false;
+        await carregarMasterLocalV32();
+
+        let lista=[...masterAnunciosV32];
+
+        const busca=String(gestaoBusca||'').trim().toLowerCase();
+        if(busca){
+            lista=lista.filter(x=>
+                String(x.id||'').toLowerCase().includes(busca) ||
+                String(x.sku||'').toLowerCase().includes(busca) ||
+                String(x.title||'').toLowerCase().includes(busca)
+            );
+        }
+
+        if(gestaoStatusV76){
+            lista=lista.filter(x=>String(x.status||'')===String(gestaoStatusV76));
+        }
+
+        const tempo=x=>new Date(x.date_created||x.last_updated||x.last_synced||0).getTime()||0;
+
+        if(gestaoOrdenacaoV76==='sold'){
+            lista.sort((a,b)=>Number(b.sold_quantity||0)-Number(a.sold_quantity||0)||tempo(b)-tempo(a));
+        }else if(gestaoOrdenacaoV76==='oldest'){
+            lista.sort((a,b)=>tempo(a)-tempo(b));
+        }else if(gestaoOrdenacaoV76==='status'){
+            lista.sort((a,b)=>String(a.status||'').localeCompare(String(b.status||''))||tempo(b)-tempo(a));
+        }else{
+            lista.sort((a,b)=>tempo(b)-tempo(a));
+        }
+
+        gestaoTotalFiltro=lista.length;
+        gestaoPaginas=Math.max(1,Math.ceil(lista.length/50));
+        gestaoPagina=Math.max(1,Math.min(gestaoPaginas,Number(page||1)));
+
+        cacheItens=lista.slice((gestaoPagina-1)*50,gestaoPagina*50);
+        montarTabelaGestao(cacheItens);
+
+        const totalConta=masterAnunciosV32.length;
+        const ativos=masterAnunciosV32.filter(x=>String(x.status)==='active').length;
+
+        const tl=document.getElementById('total-listado');
+        const ta=document.getElementById('total-ativos');
+        const to=document.getElementById('total-outros');
+
+        if(tl)tl.innerText=totalConta.toLocaleString('pt-BR');
+        if(ta)ta.innerText=ativos.toLocaleString('pt-BR');
+        if(to)to.innerText=(totalConta-ativos).toLocaleString('pt-BR');
+
+        atualizarPaginacaoGestao();
+    }finally{
+        gestaoCarregando=false;
+        if(!silencioso)esconderLoading();
+    }
+}
+
+async function sincronizarAnunciosDiretoV86({retomarAutomatico=false}={}){
+    if(syncV86Executando)return;
+
+    const token=obterToken();
+    if(!token){
+        solicitarToken();
+        return;
+    }
+
+    syncV86Executando=true;
+    syncV86Abortar=false;
+
+    // Garante que o cache atual esteja carregado antes de acrescentar novos registros.
+    await carregarMasterLocalV32();
+
+    let meta=await idbMetaV32('direct_sync_v86').catch(()=>null);
+    let scrollId=null;
+    let total=0;
+    let sellerId='';
+    let processed=0;
+
+    if(meta && meta.completed===false){
+        scrollId=meta.scroll_id||null;
+        total=Number(meta.total||0);
+        sellerId=String(meta.seller_id||'');
+        processed=Number(meta.processed||0);
+    }else{
+        // Nova varredura. Mantém os anúncios existentes até a nova leitura terminar.
+        await idbLimparSeenV85();
+        meta=null;
+    }
+
+    atualizarProgressoV26('anuncios',{
+        status:'running',
+        atual:processed,
+        total,
+        mensagem:processed
+          ? `Retomando do checkpoint: ${processed.toLocaleString('pt-BR')} já salvos`
+          : 'Conectando ao Mercado Livre...'
+    });
+
+    let falhasSeguidas=0;
+    let paginasDesdeRender=0;
+    let reiniciosCursor=0;
+
+    try{
+        while(!syncV86Abortar){
+            let d;
+
+            try{
+                d=await v86BuscarPagina(scrollId);
+                falhasSeguidas=0;
+            }catch(e){
+                const msg=String(e?.message||e||'');
+
+                if(!v86Temporario(msg)){
+                    throw e;
+                }
+
+                falhasSeguidas++;
+                const espera=Math.min(15000,1000*Math.max(1,falhasSeguidas));
+
+                atualizarProgressoV26('anuncios',{
+                    status:'running',
+                    atual:processed,
+                    total,
+                    mensagem:`Instabilidade temporária · nova tentativa em ${Math.ceil(espera/1000)}s · progresso preservado`
+                });
+
+                await v86Sleep(espera);
+                continue;
+            }
+
+            if(d.cursor_expirado){
+                reiniciosCursor++;
+                scrollId=null;
+
+                await v86SalvarCheckpoint({
+                    sellerId:sellerId||d.seller_id,
+                    total,
+                    processed,
+                    scrollId:null,
+                    completed:false,
+                    lastError:'cursor_expirado'
+                });
+
+                atualizarProgressoV26('anuncios',{
+                    status:'running',
+                    atual:processed,
+                    total,
+                    mensagem:'Cursor expirou · reconstruindo a leitura sem apagar o que já foi salvo'
+                });
+
+                if(reiniciosCursor>8){
+                    throw new Error('O Mercado Livre expirou o cursor repetidamente. Clique novamente em Puxar anúncios para continuar do checkpoint.');
+                }
+
+                continue;
+            }
+
+            const sellerAtual=String(d.seller_id||'');
+
+            // Troca de conta: limpa o cache local para não misturar vendedores.
+            if(sellerId && sellerAtual && sellerId!==sellerAtual){
+                await idbLimparV32();
+                await idbLimparSeenV85();
+                masterAnunciosV32=[];
+                masterMapV32=new Map();
+                masterCarregadoV32=true;
+                processed=0;
+                scrollId=null;
+                total=0;
+            }
+
+            sellerId=sellerAtual||sellerId;
+            total=Number(d.total||total||0);
+
+            const itens=(Array.isArray(d.itens)?d.itens:[]).map(normalizarItemEscala);
+
+            if(itens.length){
+                await aplicarMudancasV32(itens);
+                await idbSalvarSeenV85(itens.map(x=>String(x.id)));
+            }
+
+            processed=await idbContarSeenV85().catch(()=>processed+itens.length);
+            scrollId=d.scroll_id||null;
+            paginasDesdeRender++;
+
+            await v86SalvarCheckpoint({
+                sellerId,
+                total,
+                processed,
+                scrollId,
+                completed:Boolean(d.terminou)
+            });
+
+            const lote=Math.max(1,Math.ceil(processed/1000));
+
+            atualizarProgressoV26('anuncios',{
+                status:d.terminou?'completed':'running',
+                atual:processed,
+                total,
+                mensagem:d.terminou
+                  ? `Concluído · ${processed.toLocaleString('pt-BR')} anúncios salvos`
+                  : `Lote ${lote.toLocaleString('pt-BR')} de 1.000 · checkpoint salvo a cada página`
+            });
+
+            // Atualiza a tabela a cada 1.000 (10 páginas) para não pesar a interface.
+            if(paginasDesdeRender>=10 || d.terminou){
+                paginasDesdeRender=0;
+                await v86CarregarGestaoLocal(1,{silencioso:true});
+                await v86Sleep(0);
+            }
+
+            if(d.terminou){
+                await v86CarregarGestaoLocal(1,{silencioso:true});
+                return;
+            }
+        }
+    }catch(e){
+        const msg=String(e?.message||e||'Erro desconhecido');
+
+        await v86SalvarCheckpoint({
+            sellerId,
+            total,
+            processed,
+            scrollId,
+            completed:false,
+            lastError:msg
+        }).catch(()=>{});
+
+        atualizarProgressoV26('anuncios',{
+            status:'queued',
+            atual:processed,
+            total,
+            mensagem:`Pausado com checkpoint salvo · ${msg} · clique em Puxar anúncios para continuar`
+        });
+
+        if(!retomarAutomatico && !v86Temporario(msg)){
+            alert(msg);
+        }
+    }finally{
+        syncV86Executando=false;
+    }
+}
+
+// O botão chama DIRETAMENTE esta função.
+window.sincronizarAnunciosDiretoV86=sincronizarAnunciosDiretoV86;
+window.puxarNovosAnuncios=()=>sincronizarAnunciosDiretoV86();
+
+// Gestão passa a ler o IndexedDB local em vez do PostgreSQL.
+window.carregarGestaoEscala=v86CarregarGestaoLocal;
+
+document.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(async()=>{
+        try{
+            // Remove job antigo de anúncios do sistema PostgreSQL.
+            localStorage.removeItem('mlHubPro_sync_v26_anuncios');
+
+            await v86CarregarGestaoLocal(1,{silencioso:true});
+
+            const meta=await idbMetaV32('direct_sync_v86').catch(()=>null);
+            if(meta && meta.completed===false && obterToken()){
+                atualizarProgressoV26('anuncios',{
+                    status:'running',
+                    atual:Number(meta.processed||0),
+                    total:Number(meta.total||0),
+                    mensagem:'Retomando automaticamente do checkpoint local'
+                });
+
+                sincronizarAnunciosDiretoV86({retomarAutomatico:true});
+            }
+        }catch(e){
+            console.warn('[V86 BOOT]',e);
+        }
+    },700);
 });
 </script>
 
