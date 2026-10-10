@@ -3085,6 +3085,87 @@ app.get('/api/v2/anuncios', async (req, res) => {
     }
 });
 
+
+/* =========================================================
+   V85 — SINCRONIZAÇÃO DIRETA DE ANÚNCIOS, SEM POSTGRESQL
+   Esta rota depende somente da API do Mercado Livre.
+========================================================= */
+app.get('/api/v85/anuncios/scan',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const scrollId=String(req.query.scroll_id||'').trim();
+
+        const pagina=await buscarPaginaScanV84({
+            sellerId:me.id,
+            token,
+            scrollId:scrollId||null
+        });
+
+        if(pagina.cursor_expirado){
+            return res.status(409).json({
+                sucesso:false,
+                cursor_expirado:true,
+                seller_id:String(me.id),
+                erro:'O cursor do Mercado Livre expirou. Reinicie a leitura; os anúncios já salvos localmente não serão perdidos.'
+            });
+        }
+
+        const ids=Array.isArray(pagina.results)?pagina.results:[];
+        const detalhes=ids.length
+          ? await buscarItensBulkFreteRapido(token,ids)
+          : {mapa:{},falhas:new Map()};
+
+        const itens=[];
+        for(const id of ids){
+            const raw=detalhes.mapa[String(id)];
+            if(!raw)continue;
+            const n=normalizarItemGestao(raw);
+            itens.push({
+                id:String(n.id||id),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price:Number(n.preco||0),
+                sale_fee:0,
+                commission_percentage:0,
+                shipping_cost:0,
+                net_received:Number(n.preco||0),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                last_updated:n.atualizado_em||raw?.last_updated||null,
+                date_created:raw?.date_created||null
+            });
+        }
+
+        res.json({
+            sucesso:true,
+            mode:'direct_v85',
+            seller_id:String(me.id),
+            total:Number(pagina.total||0),
+            quantidade_ids:ids.length,
+            quantidade_itens:itens.length,
+            scroll_id:pagina.scroll_id||null,
+            terminou:ids.length===0 || !pagina.scroll_id,
+            itens
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temporario=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timeout|socket|fetch|network|429|502|503|504/i.test(msg);
+        respostaErro(res,temporario?503:500,
+            temporario
+              ? 'Conexão temporária ao Mercado Livre/servidor. Tente novamente; o checkpoint local continua salvo.'
+              : 'Erro ao puxar anúncios do Mercado Livre: '+msg
+        );
+    }
+});
+
 app.get('/api/v2/sync/scan', async (req, res) => {
     const token = obterToken(req);
     if (!token) return respostaErro(res, 401, 'Token n\u00e3o fornecido.');
