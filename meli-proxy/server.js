@@ -3092,6 +3092,117 @@ app.get('/api/v2/anuncios', async (req, res) => {
    100 anúncios por página, checkpoint no navegador.
 ========================================================= */
 
+
+async function consultarComissaoItemV88(item,token){
+    const price=Number(item?.price||0);
+    const listingType=String(item?.listing_type_id||'').trim();
+    if(!(price>0)||!listingType)throw new Error('Anúncio sem preço/listing_type.');
+
+    const site=String(item?.site_id||'MLB');
+    const shipping=item?.shipping||{};
+
+    const baseParams={
+        price:String(price),
+        currency_id:String(item?.currency_id||'BRL'),
+        listing_type_id:listingType
+    };
+
+    if(item?.catalog_product_id){
+        baseParams.catalog_product_id=String(item.catalog_product_id);
+    }else if(item?.category_id){
+        baseParams.category_id=String(item.category_id);
+    }
+
+    // A documentação do ML tem exemplos com shipping_mode e shipping_modes.
+    // Tentamos os formatos mais completos primeiro e fazemos fallback sem logística
+    // para nunca zerar a comissão por incompatibilidade de parâmetro.
+    const variantes=[];
+
+    if(shipping?.logistic_type || shipping?.mode){
+        const v1={...baseParams};
+        if(shipping?.logistic_type)v1.logistic_type=String(shipping.logistic_type);
+        if(shipping?.mode)v1.shipping_mode=String(shipping.mode);
+        variantes.push(v1);
+
+        const v2={...baseParams};
+        if(shipping?.logistic_type)v2.logistic_type=String(shipping.logistic_type);
+        if(shipping?.mode)v2.shipping_modes=String(shipping.mode);
+        variantes.push(v2);
+    }
+
+    variantes.push({...baseParams});
+
+    let ultimo='Falha ao consultar comissão.';
+
+    for(const variante of variantes){
+        const params=new URLSearchParams(variante);
+
+        for(let tentativa=1;tentativa<=3;tentativa++){
+            const controller=new AbortController();
+            const timer=setTimeout(()=>controller.abort(),12000);
+
+            try{
+                const r=await mlFetch(
+                    `${ML_API}/sites/${encodeURIComponent(site)}/listing_prices?${params.toString()}`,
+                    token,
+                    {signal:controller.signal,headers:{Accept:'application/json'}}
+                );
+                const d=await jsonSeguro(r);
+
+                if(r.ok){
+                    const lista=flattenListingPricesV28(d);
+                    const row=
+                      lista.find(x=>String(x?.listing_type_id||x?.mapping||'')===listingType && Number.isFinite(Number(x?.sale_fee_amount))) ||
+                      lista.find(x=>Number.isFinite(Number(x?.sale_fee_amount))) ||
+                      null;
+
+                    if(row){
+                        const saleFee=Number(row.sale_fee_amount);
+                        let percentage=Number(row?.sale_fee_details?.percentage_fee);
+
+                        // Só como fallback visual quando a API não manda percentage_fee.
+                        // sale_fee_amount continua sendo o valor oficial usado no "Você recebe".
+                        if(!Number.isFinite(percentage) && price>0){
+                            percentage=(saleFee/price)*100;
+                        }
+
+                        if(Number.isFinite(saleFee) && saleFee>=0){
+                            return {
+                                sale_fee_amount:Number(saleFee.toFixed(2)),
+                                percentage_fee:Number.isFinite(percentage)?Number(percentage.toFixed(4)):0,
+                                source:'listing_prices'
+                            };
+                        }
+                    }
+
+                    ultimo='Listing Prices respondeu sem sale_fee_amount.';
+                    break;
+                }
+
+                ultimo=`Comissão HTTP ${r.status}: ${formatarErroMercadoLivre(d)}`;
+
+                // 400 pode ser incompatibilidade de parâmetro; passa para a próxima variante.
+                if(r.status===400)break;
+
+                if(![408,429,500,502,503,504].includes(r.status))break;
+
+                const retryAfter=Number(r.headers?.get?.('retry-after')||0);
+                await new Promise(resolve=>setTimeout(
+                    resolve,
+                    retryAfter>0?Math.min(6000,retryAfter*1000):400*tentativa
+                ));
+            }catch(e){
+                ultimo=e?.name==='AbortError'?'Timeout ao consultar comissão.':String(e?.message||e);
+                if(tentativa<3)await new Promise(r=>setTimeout(r,400*tentativa));
+            }finally{
+                clearTimeout(timer);
+            }
+        }
+    }
+
+    throw new Error(ultimo);
+}
+
 function chaveComissaoDiretaV87(item){
     const shipping=item?.shipping||{};
     return [
@@ -3138,7 +3249,7 @@ async function enriquecerComissoesDiretoV87(rawItens,token){
             const amostra=grupo[0];
 
             try{
-                const fee=await consultarComissaoItemV28(amostra,token);
+                const fee=await consultarComissaoItemV88(amostra,token);
                 resultados.set(key,{
                     sale_fee:Number(fee.sale_fee_amount||0),
                     commission_percentage:Number(fee.percentage_fee||0),
@@ -3179,6 +3290,109 @@ async function enriquecerComissoesDiretoV87(rawItens,token){
     };
 }
 
+
+app.get('/api/v88/anuncios/scan', async (req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const scrollId=String(req.query.scroll_id||'').trim();
+
+        const pagina=await buscarPaginaScanV84({
+            sellerId,
+            token,
+            scrollId:scrollId||null
+        });
+
+        if(pagina.cursor_expirado){
+            return res.status(409).json({
+                sucesso:false,
+                cursor_expirado:true,
+                seller_id:sellerId,
+                erro:'Cursor expirado.'
+            });
+        }
+
+        const ids=Array.isArray(pagina.results)?pagina.results.map(String).filter(Boolean):[];
+        let mapa={};
+
+        if(ids.length){
+            const detalhes=await buscarItensBulkFreteRapido(token,ids);
+            mapa=detalhes?.mapa||{};
+        }
+
+        const raws=ids.map(id=>mapa[String(id)]).filter(Boolean);
+
+        // Comissão exata via listing_prices, com deduplicação por contexto.
+        const comissoes=raws.length
+          ? await enriquecerComissoesDiretoV87(raws,token)
+          : {mapa:new Map(),erros:0,consultas:0};
+
+        const itens=[];
+        for(const id of ids){
+            const raw=mapa[String(id)];
+            if(!raw)continue;
+
+            const n=normalizarItemGestao(raw);
+            const fee=comissoes.mapa.get(String(id))||{
+                sale_fee:0,
+                commission_percentage:0
+            };
+
+            const price=Number(n.preco||0);
+            const shippingCost=Number(raw?.shipping_cost||0);
+            const saleFee=Math.max(0,Number(fee.sale_fee||0));
+            const commissionPercentage=Math.max(0,Number(fee.commission_percentage||0));
+
+            itens.push({
+                id:String(n.id||id),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price,
+                sale_fee:saleFee,
+                commission_percentage:commissionPercentage,
+                shipping_cost:shippingCost,
+                net_received:Math.max(0,price-saleFee-shippingCost),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                last_updated:n.atualizado_em||raw?.last_updated||null,
+                date_created:raw?.date_created||null
+            });
+        }
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_v88_commission',
+            seller_id:sellerId,
+            total:Number(pagina.total||0),
+            ids_count:ids.length,
+            itens_count:itens.length,
+            commission_queries:Number(comissoes.consultas||0),
+            commission_errors:Number(comissoes.erros||0),
+            scroll_id:pagina.scroll_id||null,
+            terminou:ids.length===0 || !pagina.scroll_id,
+            itens
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária. Repita a chamada; o checkpoint local continua salvo.'
+              : 'Erro ao puxar anúncios e comissão: '+msg
+        );
+    }
+});
 
 app.get('/api/v87/anuncios/scan', async (req,res)=>{
     const token=obterToken(req);
