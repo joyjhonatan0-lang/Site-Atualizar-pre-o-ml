@@ -9290,65 +9290,87 @@ async function atualizarStatusRealRestritosV72(token,sellerId){
     return {consultados:lista.length,atualizados:validos.length,removidos:[...new Set(ausentes)].length,avisos,synced_at:new Date().toISOString()};
 }
 
-/* V40 \u2014 an\u00fancios pausados, inativos, finalizados pelo ML e em revis\u00e3o. */
+/* V74 — status visual REAL do Seller Center.
+   A API de itens pode manter status="under_review" mesmo quando a interface do
+   Mercado Livre exibe "Finalizado pelo Mercado Livre". O sinal que diferencia
+   esse caso é o sub_status de moderação (principalmente "forbidden").
+   Portanto, preservamos status_api e calculamos status_real para a interface. */
+function statusRealRestritoSqlV74(alias='ml_items'){
+    return `CASE
+      WHEN ${alias}.status='under_review'
+       AND LOWER(COALESCE(${alias}.raw->>'sub_status','')) LIKE '%forbidden%'
+        THEN 'closed'
+      WHEN ${alias}.status='under_review'
+       AND LOWER(COALESCE(${alias}.raw::text,'')) LIKE '%"forbidden"%'
+        THEN 'closed'
+      ELSE ${alias}.status
+    END`;
+}
+
+/* V40/V74 — anúncios pausados, inativos, finalizados pelo ML e em revisão. */
 app.get('/api/scale/anuncios-restritos',async(req,res)=>{
-    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token n\u00e3o fornecido.');
-    if(!db)return respostaErro(res,503,'PostgreSQL n\u00e3o configurado.');
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
     try{
         const me=await usuarioML(token);
         const sellerId=me.id;
-        let status_real=null;
+        let status_real_sync=null;
         if(String(req.query.refresh||'')==='1'){
-            try{status_real=await atualizarStatusRealRestritosV72(token,sellerId);}
-            catch(e){status_real={erro:e.message,synced_at:new Date().toISOString()};}
+            try{status_real_sync=await atualizarStatusRealRestritosV72(token,sellerId);}
+            catch(e){status_real_sync={erro:e.message,synced_at:new Date().toISOString()};}
         }
         const limit=Math.min(5000,Math.max(100,Number(req.query.limit||2000)));
         const offset=Math.max(0,Number(req.query.offset||0));
         const filtro=String(req.query.status||'').trim().toLowerCase();
         const validos=new Set(['paused','inactive','closed','under_review']);
+        const exprStatus=statusRealRestritoSqlV74('m');
         const params=[sellerId];
-        let cond=`seller_id=$1 AND status IN ('paused','inactive','closed','under_review')`;
-        // "closed + deleted" \u00e9 exclus\u00e3o feita pelo seller; o usu\u00e1rio pediu para n\u00e3o listar exclu\u00eddos.
-        cond+=` AND NOT (status='closed' AND LOWER(COALESCE(raw::text,'')) LIKE '%\"deleted\"%')`;
+        let cond=`m.seller_id=$1 AND m.status IN ('paused','inactive','closed','under_review')`;
+        // "closed + deleted" é exclusão feita pelo seller; não mostrar como finalizado pelo ML.
+        cond+=` AND NOT (m.status='closed' AND LOWER(COALESCE(m.raw::text,'')) LIKE '%"deleted"%')`;
         if(filtro&&validos.has(filtro)){
             params.push(filtro);
-            cond+=` AND status=$${params.length}`;
+            cond+=` AND (${exprStatus})=$${params.length}`;
         }
 
         const [totais,total]=await Promise.all([
             dbQuery(`SELECT
-                COUNT(*) FILTER (WHERE status='paused')::int pausados,
-                COUNT(*) FILTER (WHERE status='inactive')::int inativos,
-                COUNT(*) FILTER (WHERE status='under_review')::int revisao,
-                COUNT(*) FILTER (WHERE status='closed' AND LOWER(COALESCE(raw::text,'')) NOT LIKE '%\"deleted\"%')::int finalizados
-              FROM ml_items WHERE seller_id=$1`,[sellerId]),
-            dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE ${cond}`,params)
+                COUNT(*) FILTER (WHERE (${statusRealRestritoSqlV74('m')})='paused')::int pausados,
+                COUNT(*) FILTER (WHERE (${statusRealRestritoSqlV74('m')})='inactive')::int inativos,
+                COUNT(*) FILTER (WHERE (${statusRealRestritoSqlV74('m')})='under_review')::int revisao,
+                COUNT(*) FILTER (WHERE (${statusRealRestritoSqlV74('m')})='closed'
+                  AND NOT (m.status='closed' AND LOWER(COALESCE(m.raw::text,'')) LIKE '%"deleted"%'))::int finalizados
+              FROM ml_items m
+              WHERE m.seller_id=$1 AND m.status IN ('paused','inactive','closed','under_review')`,[sellerId]),
+            dbQuery(`SELECT COUNT(*)::int total FROM ml_items m WHERE ${cond}`,params)
         ]);
 
         const queryParams=[...params,limit,offset];
         const rows=await dbQuery(`
-          SELECT item_id id,title,sku,price::float8 price,available_quantity,sold_quantity,
-                 status,listing_type_id,category_id,thumbnail,permalink,
-                 ml_updated_at last_updated,synced_at last_synced,
-                 raw->'sub_status' sub_status,
-                 raw->'tags' tags,
+          SELECT m.item_id id,m.title,m.sku,m.price::float8 price,m.available_quantity,m.sold_quantity,
+                 m.status status_api,
+                 (${exprStatus}) status_real,
+                 m.listing_type_id,m.category_id,m.thumbnail,m.permalink,
+                 m.ml_updated_at last_updated,m.synced_at last_synced,
+                 m.raw->'sub_status' sub_status,
+                 m.raw->'tags' tags,
                  CASE
-                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%waiting_for_patch%' THEN 'O Mercado Livre detectou uma infra\u00e7\u00e3o no an\u00fancio. \u00c9 necess\u00e1rio corrigir a publica\u00e7\u00e3o para que ela possa voltar a ficar ativa.'
-                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%forbidden%' THEN 'O an\u00fancio foi desativado pelo Mercado Livre por uma modera\u00e7\u00e3o e n\u00e3o pode ser reativado.'
-                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%held%' THEN 'O an\u00fancio est\u00e1 oculto enquanto passa por uma revis\u00e3o manual do Mercado Livre.'
-                   WHEN status='under_review' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%pending_documentation%' THEN 'O Mercado Livre solicitou documenta\u00e7\u00e3o relacionada \u00e0 modera\u00e7\u00e3o ou den\u00fancia.'
-                   WHEN status='paused' AND LOWER(COALESCE(raw->>'sub_status','')) LIKE '%picture_downloading_pending%' THEN 'O an\u00fancio est\u00e1 pausado enquanto o Mercado Livre processa uma imagem informada por URL.'
-                   WHEN status='paused' THEN 'O an\u00fancio est\u00e1 pausado no Mercado Livre.'
-                   WHEN status='inactive' THEN 'O an\u00fancio est\u00e1 inativo no Mercado Livre.'
-                   WHEN status='closed' THEN 'O an\u00fancio foi finalizado no Mercado Livre.'
-                   WHEN status='under_review' THEN 'O an\u00fancio est\u00e1 em revis\u00e3o pelo Mercado Livre.'
-                   ELSE 'Motivo ainda n\u00e3o informado pelo Mercado Livre.'
+                   WHEN (${exprStatus})='closed' AND m.status='under_review' THEN 'O anúncio foi finalizado pelo Mercado Livre por uma moderação e não pode ser reativado.'
+                   WHEN m.status='under_review' AND LOWER(COALESCE(m.raw->>'sub_status','')) LIKE '%waiting_for_patch%' THEN 'O Mercado Livre detectou uma infração no anúncio. É necessário corrigir a publicação para que ela possa voltar a ficar ativa.'
+                   WHEN m.status='under_review' AND LOWER(COALESCE(m.raw->>'sub_status','')) LIKE '%held%' THEN 'O anúncio está oculto enquanto passa por uma revisão manual do Mercado Livre.'
+                   WHEN m.status='under_review' AND LOWER(COALESCE(m.raw->>'sub_status','')) LIKE '%pending_documentation%' THEN 'O Mercado Livre solicitou documentação relacionada à moderação ou denúncia.'
+                   WHEN m.status='paused' AND LOWER(COALESCE(m.raw->>'sub_status','')) LIKE '%picture_downloading_pending%' THEN 'O anúncio está pausado enquanto o Mercado Livre processa uma imagem informada por URL.'
+                   WHEN (${exprStatus})='paused' THEN 'O anúncio está pausado no Mercado Livre.'
+                   WHEN (${exprStatus})='inactive' THEN 'O anúncio está inativo no Mercado Livre.'
+                   WHEN (${exprStatus})='closed' THEN 'O anúncio foi finalizado pelo Mercado Livre.'
+                   WHEN (${exprStatus})='under_review' THEN 'O anúncio está em revisão pelo Mercado Livre.'
+                   ELSE 'Motivo ainda não informado pelo Mercado Livre.'
                  END motivo_pt
-          FROM ml_items
+          FROM ml_items m
           WHERE ${cond}
           ORDER BY
-            CASE status WHEN 'under_review' THEN 1 WHEN 'inactive' THEN 2 WHEN 'paused' THEN 3 WHEN 'closed' THEN 4 ELSE 5 END,
-            ml_updated_at DESC NULLS LAST,item_id
+            CASE (${exprStatus}) WHEN 'closed' THEN 1 WHEN 'under_review' THEN 2 WHEN 'inactive' THEN 3 WHEN 'paused' THEN 4 ELSE 5 END,
+            m.ml_updated_at DESC NULLS LAST,m.item_id
           LIMIT $${queryParams.length-1} OFFSET $${queryParams.length}
         `,queryParams);
 
@@ -9357,10 +9379,10 @@ app.get('/api/scale/anuncios-restritos',async(req,res)=>{
             total:Number(total.rows[0]?.total||0),
             offset,limit,
             totais:totais.rows[0]||{pausados:0,inativos:0,revisao:0,finalizados:0},
-            status_real,
-            itens:rows.rows
+            status_real:status_real_sync,
+            itens:rows.rows.map(x=>({...x,status:x.status_real||x.status_api}))
         });
-    }catch(e){respostaErro(res,500,'Erro ao carregar an\u00fancios com status especial: '+e.message)}
+    }catch(e){respostaErro(res,500,'Erro ao carregar anúncios com status especial: '+e.message)}
 });
 
 
