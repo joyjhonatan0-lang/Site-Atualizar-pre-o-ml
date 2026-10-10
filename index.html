@@ -8615,13 +8615,20 @@ async function verificarModoEscala(){
 }
 
 function tituloSomenteV76(valor){
-  return String(valor??'')
+  let t=String(valor??'')
     .replace(/\u0000/g,' ')
     .replace(/<[^>]*>/g,' ')
     .replace(/\r?\n+/g,' ')
     .replace(/\s+/g,' ')
+    .replace(/^[\s,;:|·\-–—)]+/,'')
     .replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'')
     .trim();
+
+  // Fallback visual V79. O servidor remove a cor usando os atributos reais.
+  // Aqui cobrimos apenas sufixos de cores muito explícitos caso o navegador
+  // ainda esteja mostrando um cache antigo.
+  t=t.replace(/(?:\s|[-–—/])+(?:dourado(?:[-\s]+escuro|[-\s]+claro)?|preto|branco|azul|vermelho|verde|rosa|roxo|cinza|prata|bege|marrom)(?:\s*)$/i,'').trim();
+  return t;
 }
 
 function normalizarItemEscala(i){
@@ -10591,6 +10598,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 ========================================================= */
 const syncTimersV26={anuncios:null,precos:null,fretes:null};
 const syncQueuedDesdeV76={anuncios:0,precos:0,fretes:0};
+const syncWakeTentativaV79={anuncios:0,precos:0,fretes:0};
 
 function syncRefsV26(tipo){
     return {
@@ -10688,13 +10696,22 @@ async function acompanharJobSyncV26(tipo,jobId){
             if(j.status==='queued'){
                 if(!syncQueuedDesdeV76[tipo])syncQueuedDesdeV76[tipo]=Date.now();
                 const segundos=Math.floor((Date.now()-syncQueuedDesdeV76[tipo])/1000);
-                if(segundos>=20){
+                if(segundos>=8){
                     atualizarProgressoV26(tipo,{
                         status:'running',
                         atual:Number(j.progress_current||0),
                         total:Number(j.progress_total||0),
-                        mensagem:'Aguardando worker dedicado do servidor · retomada automática ativa'
+                        mensagem:tipo==='anuncios'
+                          ? 'Acordando sincronização dedicada · lote de 5.000'
+                          : 'Aguardando worker do servidor'
                     });
+                    if(tipo==='anuncios' && Date.now()-(syncWakeTentativaV79.anuncios||0)>8000){
+                        syncWakeTentativaV79.anuncios=Date.now();
+                        fetch(`${RENDER_URL}/api/scale/sync`,{
+                            method:'POST',cache:'no-store',
+                            headers:{Authorization:obterToken(),Accept:'application/json'}
+                        }).catch(()=>{});
+                    }
                 }
             }else{
                 syncQueuedDesdeV76[tipo]=0;
