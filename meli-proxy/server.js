@@ -4162,13 +4162,16 @@ async function upsertItensDb(sellerId, itens) {
     if(!Array.isArray(itens) || !itens.length)return;
 
     /*
-      V36:
-      - upsert em blocos via jsonb_to_recordset, muito mais r\u00e1pido para 90k+;
-      - shipping_cost/free_shipping/freight_synced_at N\u00c3O s\u00e3o tocados aqui;
-      - portanto Puxar an\u00fancios nunca zera nem altera o frete salvo.
+      V82:
+      - blocos de até 1.000 itens;
+      - até 2 blocos gravados em paralelo por padrão;
+      - frete/comissão boa já existente continuam preservados.
+      Isso acelera 5.000 itens sem saturar o PostgreSQL do Render.
     */
-    const TAMANHO=Math.max(100,Math.min(1000,Number(process.env.ML_DB_UPSERT_BATCH||500)));
+    const TAMANHO=Math.max(250,Math.min(1000,Number(process.env.ML_DB_UPSERT_BATCH||1000)));
+    const CONC=Math.max(1,Math.min(4,Number(process.env.ML_DB_UPSERT_CONCURRENCY||2)));
 
+    const lotes=[];
     for(let inicio=0;inicio<itens.length;inicio+=TAMANHO){
         const lote=itens.slice(inicio,inicio+TAMANHO).map(item=>{
             const n=normalizarItemGestao(item);
@@ -4196,111 +4199,122 @@ async function upsertItensDb(sellerId, itens) {
                 net_received:Math.max(0,Number(n.preco||0)-Math.max(0,saleFee))
             };
         }).filter(x=>x.item_id);
+        if(lote.length)lotes.push(lote);
+    }
 
-        if(!lote.length)continue;
+    let cursor=0;
+    async function gravador(){
+        while(true){
+            const idx=cursor++;
+            if(idx>=lotes.length)return;
+            const lote=lotes[idx];
 
-        await dbQuery(`
-          INSERT INTO ml_items (
-            seller_id,item_id,title,sku,price,available_quantity,sold_quantity,
-            status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,
-            raw,sale_fee,commission_percentage,commission_synced_at,net_received,synced_at
-          )
-          SELECT
-            $1::bigint,
-            x.item_id,x.title,x.sku,x.price,x.available_quantity,x.sold_quantity,
-            x.status,x.listing_type_id,x.category_id,x.thumbnail,x.permalink,
-            x.ml_updated_at,x.raw,x.sale_fee,x.commission_percentage,
-            x.commission_synced_at,x.net_received,NOW()
-          FROM jsonb_to_recordset($2::jsonb) AS x(
-            item_id text,
-            title text,
-            sku text,
-            price numeric,
-            available_quantity integer,
-            sold_quantity integer,
-            status text,
-            listing_type_id text,
-            category_id text,
-            thumbnail text,
-            permalink text,
-            ml_updated_at timestamptz,
-            raw jsonb,
-            sale_fee numeric,
-            commission_percentage numeric,
-            commission_synced_at timestamptz,
-            net_received numeric
-          )
-          ON CONFLICT(seller_id,item_id) DO UPDATE SET
-            title=EXCLUDED.title,
-            sku=EXCLUDED.sku,
-            price=EXCLUDED.price,
-            available_quantity=EXCLUDED.available_quantity,
-            sold_quantity=EXCLUDED.sold_quantity,
-            status=EXCLUDED.status,
-            listing_type_id=EXCLUDED.listing_type_id,
-            category_id=EXCLUDED.category_id,
-            thumbnail=EXCLUDED.thumbnail,
-            permalink=EXCLUDED.permalink,
-            ml_updated_at=EXCLUDED.ml_updated_at,
+            await dbQuery(`
+              INSERT INTO ml_items (
+                seller_id,item_id,title,sku,price,available_quantity,sold_quantity,
+                status,listing_type_id,category_id,thumbnail,permalink,ml_updated_at,
+                raw,sale_fee,commission_percentage,commission_synced_at,net_received,synced_at
+              )
+              SELECT
+                $1::bigint,
+                x.item_id,x.title,x.sku,x.price,x.available_quantity,x.sold_quantity,
+                x.status,x.listing_type_id,x.category_id,x.thumbnail,x.permalink,
+                x.ml_updated_at,x.raw,x.sale_fee,x.commission_percentage,
+                x.commission_synced_at,x.net_received,NOW()
+              FROM jsonb_to_recordset($2::jsonb) AS x(
+                item_id text,
+                title text,
+                sku text,
+                price numeric,
+                available_quantity integer,
+                sold_quantity integer,
+                status text,
+                listing_type_id text,
+                category_id text,
+                thumbnail text,
+                permalink text,
+                ml_updated_at timestamptz,
+                raw jsonb,
+                sale_fee numeric,
+                commission_percentage numeric,
+                commission_synced_at timestamptz,
+                net_received numeric
+              )
+              ON CONFLICT(seller_id,item_id) DO UPDATE SET
+                title=EXCLUDED.title,
+                sku=EXCLUDED.sku,
+                price=EXCLUDED.price,
+                available_quantity=EXCLUDED.available_quantity,
+                sold_quantity=EXCLUDED.sold_quantity,
+                status=EXCLUDED.status,
+                listing_type_id=EXCLUDED.listing_type_id,
+                category_id=EXCLUDED.category_id,
+                thumbnail=EXCLUDED.thumbnail,
+                permalink=EXCLUDED.permalink,
+                ml_updated_at=EXCLUDED.ml_updated_at,
 
-            sale_fee=CASE
-              WHEN EXCLUDED.commission_synced_at IS NOT NULL
-              THEN EXCLUDED.sale_fee
-              ELSE ml_items.sale_fee
-            END,
-
-            commission_percentage=CASE
-              WHEN EXCLUDED.commission_synced_at IS NOT NULL
-              THEN EXCLUDED.commission_percentage
-              ELSE ml_items.commission_percentage
-            END,
-
-            commission_synced_at=COALESCE(
-              EXCLUDED.commission_synced_at,
-              ml_items.commission_synced_at
-            ),
-
-            /* Frete preservado: s\u00f3 /api/scale/fretes pode alter\u00e1-lo. */
-            net_received=GREATEST(
-              0,
-              EXCLUDED.price -
-              (
-                CASE
+                sale_fee=CASE
                   WHEN EXCLUDED.commission_synced_at IS NOT NULL
                   THEN EXCLUDED.sale_fee
                   ELSE ml_items.sale_fee
+                END,
+
+                commission_percentage=CASE
+                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                  THEN EXCLUDED.commission_percentage
+                  ELSE ml_items.commission_percentage
+                END,
+
+                commission_synced_at=COALESCE(
+                  EXCLUDED.commission_synced_at,
+                  ml_items.commission_synced_at
+                ),
+
+                net_received=GREATEST(
+                  0,
+                  EXCLUDED.price -
+                  (
+                    CASE
+                      WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                      THEN EXCLUDED.sale_fee
+                      ELSE ml_items.sale_fee
+                    END
+                  ) -
+                  ml_items.shipping_cost
+                ),
+
+                raw=EXCLUDED.raw,
+
+                synced_at=CASE WHEN
+                    ml_items.title IS DISTINCT FROM EXCLUDED.title OR
+                    ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
+                    ml_items.price IS DISTINCT FROM EXCLUDED.price OR
+                    ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
+                    ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
+                    ml_items.status IS DISTINCT FROM EXCLUDED.status OR
+                    ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
+                    ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
+                    ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
+                    ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
+                    ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
+                    ml_items.sale_fee IS DISTINCT FROM (
+                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                           THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
+                    ) OR
+                    ml_items.commission_percentage IS DISTINCT FROM (
+                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                           THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
+                    )
+                  THEN NOW()
+                  ELSE ml_items.synced_at
                 END
-              ) -
-              ml_items.shipping_cost
-            ),
-
-            raw=EXCLUDED.raw,
-
-            synced_at=CASE WHEN
-                ml_items.title IS DISTINCT FROM EXCLUDED.title OR
-                ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
-                ml_items.price IS DISTINCT FROM EXCLUDED.price OR
-                ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
-                ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
-                ml_items.status IS DISTINCT FROM EXCLUDED.status OR
-                ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
-                ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
-                ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
-                ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
-                ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
-                ml_items.sale_fee IS DISTINCT FROM (
-                  CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                       THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
-                ) OR
-                ml_items.commission_percentage IS DISTINCT FROM (
-                  CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                       THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
-                )
-              THEN NOW()
-              ELSE ml_items.synced_at
-            END
-        `,[sellerId,JSON.stringify(lote)]);
+            `,[sellerId,JSON.stringify(lote)]);
+        }
     }
+
+    await Promise.all(
+        Array.from({length:Math.min(CONC,lotes.length)},()=>gravador())
+    );
 }
 
 /* =========================================================
@@ -4630,113 +4644,164 @@ async function acordarSyncV79(){
 
 async function processarSyncCompleto(job) {
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
-    if(!token) throw new Error('Token Mercado Livre indispon\u00edvel para o seller do job.');
+    if(!token)throw new Error('Token Mercado Livre indisponível para o seller do job.');
 
-    let scrollId=job.cursor||null;
+    let scrollCommitado=job.cursor||null;
     let processed=Number(job.processed||0);
     let errors=Number(job.errors||0);
     let total=Number(job.progress_total||0);
-    let paginasLidas=0;
-    let scanCompleto=false;
     let removidos=0;
 
-    if(processed===0 && !scrollId){
+    const TAMANHO_LOTE=5000;
+    const PAGINAS_POR_LOTE=50; // scan retorna até 100 IDs
+    const BUFFER_MAX=Math.max(1,Math.min(3,Number(process.env.ML_SYNC_PIPELINE_BUFFER||2)));
+
+    if(processed===0 && !scrollCommitado){
         await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
     }
 
-    // A API de busca entrega no m\u00e1ximo 100 IDs por chamada. A V42 re\u00fane
-    // essas p\u00e1ginas em um lote l\u00f3gico de at\u00e9 5.000 e s\u00f3 ent\u00e3o processa os
-    // detalhes em paralelo via /items/bulk, preservando o cursor do scan.
-    const TAMANHO_LOTE_LOGICO=5000;
-    const MAX_PAGINAS_POR_LOTE=Math.max(5,Math.ceil(TAMANHO_LOTE_LOGICO/100));
+    let cancelado=false;
+    let produtorTerminou=false;
+    let produtorErro=null;
+    const fila=[];
+    const esperandoConsumidor=[];
+    const esperandoProdutor=[];
 
-    while(!scanCompleto && paginasLidas<2000){
-        const idsLote=[];
-        let cursorLote=scrollId;
-        let fimEncontrado=false;
-        let paginasNoLote=0;
+    const acordarConsumidor=()=>{
+        while(esperandoConsumidor.length && fila.length)esperandoConsumidor.shift()();
+    };
+    const acordarProdutor=()=>{
+        while(esperandoProdutor.length && fila.length<BUFFER_MAX)esperandoProdutor.shift()();
+    };
 
-        while(idsLote.length<TAMANHO_LOTE_LOGICO && paginasNoLote<MAX_PAGINAS_POR_LOTE && paginasLidas<2000){
-            const params=new URLSearchParams({search_type:'scan',limit:'100'});
-            if(cursorLote)params.set('scroll_id',cursorLote);
+    async function esperarItemFila(){
+        while(!fila.length){
+            if(produtorErro)throw produtorErro;
+            if(produtorTerminou)return null;
+            await new Promise(r=>esperandoConsumidor.push(r));
+        }
+        const item=fila.shift();
+        acordarProdutor();
+        return item;
+    }
 
-            const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
-            const sd=await jsonSeguro(sr);
-            if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd)||`Mercado Livre HTTP ${sr.status}`);
+    async function esperarEspacoFila(){
+        while(fila.length>=BUFFER_MAX){
+            if(cancelado)return;
+            await new Promise(r=>esperandoProdutor.push(r));
+        }
+    }
 
-            if(total<=0){
-                total=Number(sd?.paging?.total||0);
-                if(total>0){
-                    await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
+    async function produtor(){
+        let scanCursor=scrollCommitado;
+        let loteSeq=Math.floor(processed/TAMANHO_LOTE);
+        try{
+            while(!cancelado){
+                await esperarEspacoFila();
+                if(cancelado)break;
+
+                const ids=[];
+                let paginas=0;
+                let fim=false;
+                let cursorInicio=scanCursor;
+
+                while(ids.length<TAMANHO_LOTE && paginas<PAGINAS_POR_LOTE){
+                    const params=new URLSearchParams({search_type:'scan',limit:'100'});
+                    if(scanCursor)params.set('scroll_id',scanCursor);
+
+                    const sr=await mlFetch(`${ML_API}/users/${job.seller_id}/items/search?${params}`,token);
+                    const sd=await jsonSeguro(sr);
+                    if(!sr.ok)throw new Error(formatarErroMercadoLivre(sd)||`Mercado Livre HTTP ${sr.status}`);
+
+                    if(total<=0){
+                        total=Number(sd?.paging?.total||0);
+                        if(total>0){
+                            await dbQuery(`UPDATE ml_jobs SET progress_total=$2,updated_at=NOW() WHERE id=$1`,[job.id,total]);
+                        }
+                    }
+
+                    const loteIds=Array.isArray(sd?.results)?sd.results.map(String).filter(Boolean):[];
+                    paginas++;
+
+                    if(!loteIds.length){
+                        scanCursor=null;
+                        fim=true;
+                        break;
+                    }
+
+                    ids.push(...loteIds);
+                    scanCursor=sd?.scroll_id||null;
+
+                    if(!scanCursor){
+                        fim=true;
+                        break;
+                    }
+
+                    // heartbeat leve; não trava o pipeline com updates a cada página.
+                    if(ids.length===2500 || ids.length>=TAMANHO_LOTE){
+                        await dbQuery(`
+                          UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
+                        `,[job.id,
+                           `Pipeline · preparando lote ${(loteSeq+1).toLocaleString('pt-BR')} · ${ids.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE.toLocaleString('pt-BR')} IDs`]);
+                    }
+                }
+
+                if(!ids.length){
+                    produtorTerminou=true;
+                    acordarConsumidor();
+                    return;
+                }
+
+                loteSeq++;
+                fila.push({
+                    seq:loteSeq,
+                    ids:[...new Set(ids)],
+                    cursorInicio,
+                    cursorFim:scanCursor,
+                    fim
+                });
+                acordarConsumidor();
+
+                if(fim){
+                    produtorTerminou=true;
+                    acordarConsumidor();
+                    return;
                 }
             }
-
-            const ids=Array.isArray(sd.results)?sd.results.map(String).filter(Boolean):[];
-            paginasLidas++;
-            paginasNoLote++;
-
-            if(!ids.length){
-                cursorLote=null;
-                fimEncontrado=true;
-                break;
-            }
-
-            idsLote.push(...ids);
-            cursorLote=sd.scroll_id||null;
-
-            if(!cursorLote){
-                fimEncontrado=true;
-                break;
-            }
-
-            // Atualiza\u00e7\u00e3o visual leve durante a coleta do lote, sem considerar
-            // os itens como processados antes de os detalhes entrarem no banco.
-            if(idsLote.length%1000===0 || idsLote.length>=TAMANHO_LOTE_LOGICO){
-                const loteNumero=Math.floor(processed/TAMANHO_LOTE_LOGICO)+1;
-                await dbQuery(`
-                  UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
-                `,[job.id,
-                   `Preparando lote ${loteNumero.toLocaleString('pt-BR')} \u00b7 ${idsLote.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE_LOGICO.toLocaleString('pt-BR')} IDs coletados`]);
-            }
+        }catch(e){
+            produtorErro=e;
+            produtorTerminou=true;
+            acordarConsumidor();
         }
+    }
 
-        if(!idsLote.length){
-            scanCompleto=true;
-            scrollId=null;
-            break;
-        }
+    async function processarLote(batch){
+        const ids=batch.ids;
 
-        const idsUnicos=[...new Set(idsLote)];
-
-        // Marca todos os IDs do lote em uma \u00fanica opera\u00e7\u00e3o SQL.
+        // Registra vistos em uma única operação.
         await dbQuery(`
           INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
           SELECT $1,$2,x
           FROM unnest($3::text[]) AS x
           ON CONFLICT(job_id,item_id) DO NOTHING
-        `,[job.id,job.seller_id,idsUnicos]);
+        `,[job.id,job.seller_id,ids]);
 
-        // Busca detalhes de todo o lote de 5.000 usando requisi\u00e7\u00f5es bulk
-        // paralelas e controladas. /items/bulk aceita at\u00e9 20 IDs por chamada.
-        const detalhes=await buscarItensBulkFreteRapido(token,idsUnicos);
-        const itens=idsUnicos.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
-        errors+=Math.max(0,idsUnicos.length-itens.length);
+        // 5.000 IDs => 250 chamadas /items/bulk de 20 IDs.
+        // Elas rodam em paralelo com concorrência controlada.
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const itens=ids.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+        const faltantes=Math.max(0,ids.length-itens.length);
 
-        // V76: Puxar anúncios deve priorizar título/status/preço/estoque/vendas e terminar rápido.
-        // A comissão exata continua preservada quando já existe no banco e pode ser sincronizada
-        // pelo botão "Puxar preços". Não fazemos milhares de consultas individuais de comissão
-        // no meio da importação dos anúncios.
-        let comissoesConsultadas=0;
         if(itens.length){
             await upsertItensDb(job.seller_id,itens);
         }
 
-        processed+=idsUnicos.length;
-        scrollId=cursorLote;
-        if(fimEncontrado||!scrollId)scanCompleto=true;
+        errors+=faltantes;
+        processed+=ids.length;
+        scrollCommitado=batch.cursorFim;
 
-        const loteAtual=Math.ceil(processed/TAMANHO_LOTE_LOGICO);
         const totalExibido=total>0?total:processed;
+        const pct=totalExibido?Math.min(100,Math.round(processed/totalExibido*100)):0;
 
         await dbQuery(`
           UPDATE ml_jobs SET
@@ -4749,21 +4814,30 @@ async function processarSyncCompleto(job) {
             updated_at=NOW()
           WHERE id=$1
         `,[
-            job.id,
-            processed,
-            total,
-            errors,
-            scrollId,
-            `Lote ${loteAtual.toLocaleString('pt-BR')} conclu\u00eddo \u00b7 ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} an\u00fancios \u00b7 at\u00e9 5.000 por lote \u00b7 ${comissoesConsultadas.toLocaleString('pt-BR')} comiss\u00e3o(\u00f5es) consultada(s)`
+            job.id,processed,total,errors,scrollCommitado,
+            `Pipeline 5.000 · lote ${batch.seq.toLocaleString('pt-BR')} concluído · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · próximo lote ${fila.length?'já preparado':'sendo coletado'}`
         ]);
     }
 
-    if(!scanCompleto){
-        throw new Error('A varredura n\u00e3o chegou ao final. A reconcilia\u00e7\u00e3o de exclus\u00f5es n\u00e3o foi executada por seguran\u00e7a.');
+    const produtorPromise=produtor();
+
+    try{
+        while(true){
+            const batch=await esperarItemFila();
+            if(!batch)break;
+            await processarLote(batch);
+            if(batch.fim)break;
+        }
+        await produtorPromise;
+        if(produtorErro)throw produtorErro;
+    }catch(e){
+        cancelado=true;
+        acordarProdutor();
+        acordarConsumidor();
+        throw e;
     }
 
-    // Espelha a conta: IDs que n\u00e3o apareceram na varredura completa s\u00e3o
-    // removidos da base local. Fretes dos itens existentes permanecem intactos.
+    // Só reconcilia exclusões quando o scan terminou de verdade.
     const del=await dbQuery(`
       DELETE FROM ml_items m
       WHERE m.seller_id=$1
@@ -4794,11 +4868,8 @@ async function processarSyncCompleto(job) {
         updated_at=NOW()
       WHERE id=$1
     `,[
-        job.id,
-        processed,
-        finalTotal,
-        errors,
-        `An\u00fancios conclu\u00eddos em lotes de at\u00e9 5.000: ${processed.toLocaleString('pt-BR')} processado(s) \u00b7 ${removidos.toLocaleString('pt-BR')} removido(s) da base por n\u00e3o existirem mais na conta \u00b7 fretes preservados.`
+        job.id,processed,finalTotal,errors,
+        `Sincronização pipeline concluída: ${processed.toLocaleString('pt-BR')} anúncio(s) · lotes de 5.000 · ${removidos.toLocaleString('pt-BR')} removido(s) da base local · fretes preservados.`
     ]);
 }
 
@@ -7147,7 +7218,7 @@ async function buscarItensBulkFreteRapido(token,ids){
 
     const mapa={};
     const falhas=new Map();
-    const concorrencia=Math.max(12,Math.min(80,Number(process.env.ML_BULK_CONCURRENCY||50)));
+    const concorrencia=Math.max(12,Math.min(80,Number(process.env.ML_BULK_CONCURRENCY||60)));
     let cursor=0;
 
     async function worker(){
@@ -9386,6 +9457,26 @@ app.post('/api/scale/sync-new', async (req,res)=>{
         console.error('[SYNC NOVOS]',e);
         respostaErro(res,500,'Erro ao buscar an\u00fancios novos: '+e.message);
     }
+});
+
+
+app.post('/api/scale/sync/cancel',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token não fornecido.');
+    if(!db)return respostaErro(res,503,'PostgreSQL não configurado.');
+    try{
+        const me=await usuarioML(token);
+        const r=await dbQuery(`
+          UPDATE ml_jobs SET
+            status='failed',
+            locked_at=NULL,
+            message='Sincronização cancelada pelo usuário. Clique em Puxar anúncios para reiniciar com segurança.',
+            finished_at=NOW(),
+            updated_at=NOW()
+          WHERE seller_id=$1 AND type='full_sync' AND status IN ('queued','running')
+          RETURNING id
+        `,[me.id]);
+        res.json({sucesso:true,cancelados:r.rowCount||0});
+    }catch(e){respostaErro(res,500,'Erro ao cancelar sincronização: '+e.message)}
 });
 
 app.post('/api/scale/sync',async(req,res)=>{
