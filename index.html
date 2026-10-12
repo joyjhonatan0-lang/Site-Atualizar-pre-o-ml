@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>ML Hub Pro | Gest&#227;o Mercado Livre</title>
+    <title>ML Hub Pro | Enterprise Commerce OS</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -433,91 +433,433 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 #secao-agentes-produto .panel,#secao-criar-massa .panel{contain:layout style paint}
 #secao-agentes-produto.hidden,#secao-criar-massa.hidden{content-visibility:hidden}
 </style>
+
+<style id="mlhub-v93-enterprise-design">
+:root{
+  --v93-bg:#03050a;
+  --v93-bg-2:#060a12;
+  --v93-panel:rgba(10,15,25,.88);
+  --v93-panel-2:rgba(14,21,34,.90);
+  --v93-line:rgba(130,151,183,.16);
+  --v93-line-strong:rgba(130,151,183,.27);
+  --v93-text:#f4f7fb;
+  --v93-muted:#7f90aa;
+  --v93-gold:#ffd21f;
+  --v93-gold-2:#f4b914;
+  --v93-green:#34e1a1;
+  --v93-blue:#5c9cff;
+  --v93-red:#ff6474;
+  --v93-shadow:0 24px 80px rgba(0,0,0,.34);
+}
+
+html{background:var(--v93-bg)}
+body{
+  background:
+    radial-gradient(900px 500px at 12% -10%,rgba(255,210,31,.075),transparent 62%),
+    radial-gradient(800px 500px at 100% 0%,rgba(92,156,255,.075),transparent 60%),
+    linear-gradient(180deg,#03050a 0%,#050912 45%,#03050a 100%) !important;
+  color:var(--v93-text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  letter-spacing:-.005em;
+}
+
+#app-header{
+  background:rgba(3,6,12,.86)!important;
+  border-bottom:1px solid var(--v93-line)!important;
+  box-shadow:0 14px 45px rgba(0,0,0,.22);
+  backdrop-filter:blur(22px) saturate(140%);
+}
+
+#painel-sidebar-v24{
+  background:
+    linear-gradient(180deg,rgba(5,9,16,.985),rgba(4,7,13,.985))!important;
+  border-right:1px solid var(--v93-line)!important;
+  box-shadow:16px 0 45px rgba(0,0,0,.14);
+}
+
+#painel-sidebar-v24 .nav-button{
+  border:1px solid transparent;
+  border-radius:14px!important;
+  min-height:46px;
+  color:#9aa9bf;
+  font-weight:750;
+  position:relative;
+  overflow:hidden;
+}
+#painel-sidebar-v24 .nav-button:hover{
+  color:white!important;
+  background:rgba(255,255,255,.035)!important;
+  border-color:var(--v93-line)!important;
+}
+#painel-sidebar-v24 .nav-button.active{
+  background:
+    linear-gradient(135deg,#ffe04b 0%,#ffc400 100%)!important;
+  color:#0a0d12!important;
+  box-shadow:0 10px 30px rgba(255,204,0,.17)!important;
+  border-color:rgba(255,225,85,.55)!important;
+}
+
+main{
+  background:transparent!important;
+}
+
+.panel{
+  background:
+    linear-gradient(145deg,rgba(13,19,31,.92),rgba(7,11,19,.96))!important;
+  border:1px solid var(--v93-line)!important;
+  box-shadow:0 18px 55px rgba(0,0,0,.19)!important;
+  backdrop-filter:blur(14px);
+}
+.panel:hover{
+  border-color:rgba(130,151,183,.23)!important;
+}
+
+.metric-card,
+.stat-card{
+  position:relative;
+  overflow:hidden;
+}
+.metric-card::before,
+.stat-card::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.024),transparent 45%);
+}
+.metric-card::after,
+.stat-card::after{
+  background:radial-gradient(circle,rgba(255,210,31,.08),transparent 68%)!important;
+}
+
+.hero-grid{
+  background:
+    linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px),
+    radial-gradient(800px 320px at 88% 0%,rgba(255,210,31,.08),transparent 65%),
+    linear-gradient(135deg,rgba(11,17,29,.94),rgba(6,10,18,.96))!important;
+  background-size:34px 34px,34px 34px,auto,auto!important;
+  border:1px solid var(--v93-line-strong)!important;
+  box-shadow:var(--v93-shadow)!important;
+}
+
+.futuristic-table{
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+.futuristic-table th{
+  background:#0a101b!important;
+  color:#8fa0b9!important;
+  font-size:9px!important;
+  letter-spacing:.13em!important;
+  border-bottom:1px solid var(--v93-line)!important;
+}
+.futuristic-table td{
+  border-bottom:1px solid rgba(130,151,183,.11)!important;
+}
+.futuristic-table tbody tr:hover{
+  background:rgba(92,156,255,.035)!important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,textarea{
+  background:#070b13!important;
+  border-color:rgba(130,151,183,.23)!important;
+  color:#edf3ff!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+input:focus,select:focus,textarea:focus{
+  border-color:rgba(255,210,31,.72)!important;
+  box-shadow:0 0 0 3px rgba(255,210,31,.09)!important;
+  outline:none!important;
+}
+.input-simulacao{
+  background:#f8fafc!important;
+  color:#0f172a!important;
+}
+
+button{
+  transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,opacity .16s ease;
+}
+button:hover:not(:disabled){
+  transform:translateY(-1px);
+}
+button:active:not(:disabled){
+  transform:translateY(0);
+}
+button:disabled{
+  opacity:.48;
+  cursor:not-allowed;
+}
+
+.bg-yellow-400{
+  background:linear-gradient(135deg,#ffe052,#ffc80c)!important;
+  box-shadow:0 8px 26px rgba(255,201,12,.12);
+}
+.bg-emerald-500{
+  background:linear-gradient(135deg,#38e6a8,#15c98d)!important;
+}
+.bg-slate-800{
+  background:linear-gradient(145deg,#142034,#0d1727)!important;
+}
+
+.rounded-2xl{border-radius:18px!important}
+.rounded-3xl{border-radius:24px!important}
+
+#secao-gestao .panel,
+#secao-simulacao .panel,
+#secao-atualizacao .panel,
+#secao-promocoes .panel,
+#secao-criar-massa .panel,
+#secao-agentes-produto .panel,
+#secao-restritos .panel{
+  box-shadow:0 16px 42px rgba(0,0,0,.18)!important;
+}
+
+/* LOGIN */
+#oauth-login-gate{
+  background:
+    radial-gradient(900px 550px at 10% 10%,rgba(255,210,31,.10),transparent 62%),
+    radial-gradient(800px 600px at 100% 100%,rgba(92,156,255,.11),transparent 65%),
+    #020409!important;
+}
+.v93-login-shell{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:34px 20px;
+}
+.v93-login-card{
+  width:min(1120px,100%);
+  min-height:680px;
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  border:1px solid rgba(156,174,201,.17);
+  border-radius:32px;
+  overflow:hidden;
+  background:rgba(5,8,14,.88);
+  box-shadow:0 40px 130px rgba(0,0,0,.55);
+  backdrop-filter:blur(24px);
+}
+.v93-login-brand{
+  padding:54px;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  overflow:hidden;
+  background:
+    linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px),
+    linear-gradient(145deg,#0c121e,#070b12);
+  background-size:40px 40px,40px 40px,auto;
+  border-right:1px solid rgba(156,174,201,.12);
+}
+.v93-login-brand-glow{
+  position:absolute;
+  width:520px;height:520px;
+  right:-230px;top:-220px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,210,31,.18),transparent 68%);
+  filter:blur(4px);
+}
+.v93-brand-lockup{display:flex;align-items:center;gap:14px}
+.v93-brand-mark{
+  width:50px;height:50px;border-radius:16px;
+  display:grid;place-items:center;
+  color:#090b0f;font-size:20px;font-weight:950;
+  background:linear-gradient(145deg,#ffe25b,#ffc400);
+  box-shadow:0 14px 34px rgba(255,196,0,.18);
+}
+.v93-brand-mark.small{width:38px;height:38px;border-radius:12px;font-size:16px}
+.v93-brand-name{font-size:20px;font-weight:900;color:#fff;letter-spacing:-.03em}
+.v93-brand-name span{color:var(--v93-gold)}
+.v93-brand-kicker{font-size:9px;letter-spacing:.20em;text-transform:uppercase;color:#667994;margin-top:3px;font-weight:800}
+.v93-pill{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:7px 11px;border-radius:999px;
+  border:1px solid rgba(255,210,31,.2);
+  background:rgba(255,210,31,.06);
+  color:#f7d948;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
+}
+.v93-pill span{width:6px;height:6px;border-radius:50%;background:#35e0a1;box-shadow:0 0 18px rgba(53,224,161,.8)}
+.v93-login-copy{margin-top:86px;max-width:520px}
+.v93-login-copy h1{font-size:46px;line-height:1.02;font-weight:950;letter-spacing:-.055em;color:#fff;margin-top:20px}
+.v93-login-copy p{font-size:14px;line-height:1.8;color:#8999b0;margin-top:18px;max-width:460px}
+.v93-login-points{display:grid;gap:12px;margin-top:38px}
+.v93-login-points>div{display:flex;gap:14px;align-items:flex-start;padding:13px 0;border-top:1px solid rgba(156,174,201,.09)}
+.v93-login-points>div>span{font-size:9px;color:#e9c92e;font-weight:900;letter-spacing:.12em;margin-top:2px}
+.v93-login-points strong{display:block;color:#edf3ff;font-size:12px}
+.v93-login-points small{display:block;color:#65758d;font-size:10px;line-height:1.55;margin-top:3px}
+.v93-login-brand-footer{position:relative;z-index:2;color:#43516a;font-size:9px;letter-spacing:.16em;font-weight:800}
+.v93-login-form{
+  padding:62px 58px;
+  background:linear-gradient(180deg,rgba(8,12,20,.97),rgba(4,7,13,.99));
+  display:flex;flex-direction:column;justify-content:center;
+}
+.v93-login-mobile-logo{display:none}
+.v93-form-eyebrow{font-size:9px;letter-spacing:.18em;color:var(--v93-gold);font-weight:900}
+.v93-login-form-head h2{font-size:30px;line-height:1.1;color:#fff;font-weight:950;letter-spacing:-.04em;margin-top:10px}
+.v93-login-form-head p{font-size:12px;color:#74859f;line-height:1.65;margin-top:10px}
+.v93-login-status{margin-top:20px;padding:12px 14px;border-radius:12px;font-size:11px;font-weight:750}
+.v93-login-fields{display:grid;gap:17px;margin-top:30px}
+.v93-field>span{display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#71829b;font-weight:850;margin-bottom:8px}
+.v93-input-wrap{display:flex;align-items:center;background:#050811;border:1px solid rgba(140,160,190,.19);border-radius:14px;overflow:hidden;transition:.18s}
+.v93-input-wrap:focus-within{border-color:rgba(255,210,31,.62);box-shadow:0 0 0 4px rgba(255,210,31,.06)}
+.v93-input-icon{width:48px;height:48px;display:grid;place-items:center;border-right:1px solid rgba(140,160,190,.12);font-size:9px;color:#c7d0de;font-weight:950;letter-spacing:.06em}
+.v93-input-wrap input{height:48px!important;flex:1;border:0!important;background:transparent!important;border-radius:0!important;padding:0 14px!important;font-size:12px!important;box-shadow:none!important}
+.v93-login-options{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px}
+.v93-remember{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.v93-remember input{position:absolute;opacity:0;pointer-events:none}
+.v93-check{width:18px;height:18px;border-radius:6px;border:1px solid rgba(140,160,190,.28);background:#080d16;position:relative}
+.v93-remember input:checked + .v93-check{background:var(--v93-gold);border-color:var(--v93-gold)}
+.v93-remember input:checked + .v93-check::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#05070b;font-size:12px;font-weight:950}
+.v93-remember strong{display:block;font-size:10px;color:#cdd6e4}
+.v93-remember small{display:block;font-size:9px;color:#586980;margin-top:1px}
+.v93-forget{background:none!important;color:#65778f;font-size:9px;font-weight:800;padding:6px!important}
+.v93-forget:hover{color:#f2c94c}
+.v93-login-actions{display:grid;gap:10px;margin-top:28px}
+.v93-primary-btn,.v93-secondary-btn{height:50px;border-radius:14px;font-size:11px;font-weight:900}
+.v93-primary-btn{
+  display:flex;align-items:center;justify-content:space-between;padding:0 18px;
+  background:linear-gradient(135deg,#ffe04b,#ffc400);
+  color:#080b0f;
+  box-shadow:0 16px 35px rgba(255,196,0,.14);
+}
+.v93-primary-btn b{font-size:18px}
+.v93-secondary-btn{border:1px solid rgba(140,160,190,.18);background:#0b121f;color:#dce4ef}
+.v93-login-security{display:flex;align-items:center;gap:10px;margin-top:20px;padding-top:18px;border-top:1px solid rgba(140,160,190,.10)}
+.v93-security-dot{width:8px;height:8px;border-radius:50%;background:#34e1a1;box-shadow:0 0 15px rgba(52,225,161,.58)}
+.v93-login-security strong{display:block;font-size:9px;color:#a9b6c8;text-transform:uppercase;letter-spacing:.08em}
+.v93-login-security small{display:block;color:#55667f;font-size:9px;margin-top:2px}
+
+@media(max-width:900px){
+  .v93-login-card{grid-template-columns:1fr;min-height:auto;max-width:570px}
+  .v93-login-brand{display:none}
+  .v93-login-form{padding:34px 26px}
+  .v93-login-mobile-logo{display:flex;align-items:center;gap:10px;margin-bottom:30px}
+}
+@media(max-width:640px){
+  .v93-login-shell{padding:12px}
+  .v93-login-card{border-radius:22px}
+  .v93-login-form{padding:28px 18px}
+  .v93-login-options{align-items:flex-start;flex-direction:column}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+}
+</style>
+
 </head>
 
 <body
     class="min-h-screen font-sans text-slate-100"
 >
 
-<div id="oauth-login-gate" class="hidden fixed inset-0 z-[10000] bg-slate-950 overflow-y-auto">
-    <div class="min-h-screen flex items-center justify-center px-4 py-10">
-        <div class="w-full max-w-2xl panel rounded-3xl border border-slate-800 p-6 md:p-8 shadow-2xl">
-            <div class="flex items-center gap-3 mb-7">
-                <div class="w-12 h-12 rounded-2xl bg-yellow-400 text-slate-950 flex items-center justify-center text-xl font-black">M</div>
-                <div>
-                    <div class="text-xl font-black text-white">ML Hub <span class="text-yellow-400">Pro</span></div>
-                    <div class="text-[10px] uppercase tracking-[.16em] text-slate-500 font-bold">Conectar aplica&#231;&#227;o Mercado Livre</div>
-                </div>
-            </div>
+<div id="oauth-login-gate" class="hidden fixed inset-0 z-[10000] overflow-y-auto">
+    <div class="v93-login-shell">
+        <div class="v93-login-card">
+            <section class="v93-login-brand">
+                <div class="v93-login-brand-glow"></div>
 
-            <h1 class="text-2xl md:text-3xl font-black text-white">Entrar no painel</h1>
-            <p class="text-sm text-slate-400 mt-2 leading-6">
-                Cadastre Client ID, Client Secret, URL de retorno e o Access Token que voc&#234; j&#225; gerou. Se voc&#234; tamb&#233;m tiver o Refresh Token, informe-o para ativar a renova&#231;&#227;o autom&#225;tica.
-                Depois de salvar, o painel usar&#225; o token guardado no servidor para consultar as APIs do Mercado Livre.
-            </p>
+                <div class="relative z-10">
+                    <div class="v93-brand-lockup">
+                        <div class="v93-brand-mark">M</div>
+                        <div>
+                            <div class="v93-brand-name">ML Hub <span>Pro</span></div>
+                            <div class="v93-brand-kicker">Commerce Operations OS</div>
+                        </div>
+                    </div>
 
-            <div id="oauth-login-status" class="hidden mt-4 p-3 rounded-xl text-xs font-bold"></div>
+                    <div class="v93-login-copy">
+                        <div class="v93-pill"><span></span> Mercado Livre conectado</div>
+                        <h1>Uma central para operar em escala.</h1>
+                        <p>
+                            Controle anúncios, preços, promoções, reputação e performance em uma interface criada para grandes operações.
+                        </p>
+                    </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                <div>
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client ID / App ID</label>
-                    <input id="oauth-client-id-login" type="text" autocomplete="off"
-                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                        placeholder="Client ID">
+                    <div class="v93-login-points">
+                        <div><span>01</span><div><strong>Operação massiva</strong><small>Fluxos preparados para dezenas de milhares de anúncios.</small></div></div>
+                        <div><span>02</span><div><strong>Retomada automática</strong><small>Checkpoints preservam o progresso em processos longos.</small></div></div>
+                        <div><span>03</span><div><strong>Dados centralizados</strong><small>Gestão, vendas e indicadores em um único ambiente.</small></div></div>
+                    </div>
                 </div>
-                <div>
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Client Secret</label>
-                    <input id="oauth-client-secret-login" type="password" autocomplete="new-password"
-                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                        placeholder="Client Secret">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">URL de retorno cadastrada no DevCenter</label>
-                    <input id="oauth-redirect-uri-login" type="url" autocomplete="off"
-                        value="https://site-atualizar-pre-o-ml.onrender.com/auth/callback"
-                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token</label>
-                    <input id="oauth-access-token-login" type="password" autocomplete="off"
-                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                        placeholder="APP_USR-...">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Refresh Token (opcional, recomendado)</label>
-                    <input id="oauth-refresh-token-login" type="password" autocomplete="off"
-                        class="mt-2 w-full bg-slate-950 border border-slate-700 text-white px-4 py-3 rounded-xl text-xs outline-none focus:border-yellow-400"
-                        placeholder="TG-...">
-                    <p class="text-[10px] text-slate-600 mt-2">Se voc&#234; colar tamb&#233;m o Refresh Token gerado junto com o Access Token, o servidor poder&#225; renovar o acesso automaticamente.</p>
-                </div>
-            </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
-                <button onclick="salvarCredenciaisEEntrar()" class="w-full bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm px-5 py-3.5 rounded-xl">
-                    Salvar dados e entrar
-                </button>
-                <button onclick="iniciarOAuthML('login')" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-black text-sm px-5 py-3.5 rounded-xl border border-slate-700">
-                    Autorizar e gerar Access Token
-                </button>
-            </div>
+                <div class="v93-login-brand-footer">ML HUB PRO · ENTERPRISE CONSOLE</div>
+            </section>
 
-            <div class="mt-5">
-                <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Token gerado</label>
-                <input id="oauth-token-gerado-login" type="text" readonly
-                    class="mt-2 w-full bg-slate-950 border border-slate-700 text-emerald-300 px-4 py-3 rounded-xl text-xs"
-                    placeholder="Ser&#225; preenchido ap&#243;s a autoriza&#231;&#227;o do Mercado Livre">
-                <p class="text-[10px] text-slate-600 mt-2">
-                    Por seguran&#231;a, o token completo permanece no servidor. O painel usa esse acesso automaticamente e o renova com Refresh Token.
-                </p>
-            </div>
+            <section class="v93-login-form">
+                <div class="v93-login-form-head">
+                    <div class="v93-login-mobile-logo">
+                        <div class="v93-brand-mark small">M</div>
+                        <div class="v93-brand-name">ML Hub <span>Pro</span></div>
+                    </div>
+                    <div class="v93-form-eyebrow">ACESSO SEGURO</div>
+                    <h2>Entrar no painel</h2>
+                    <p>Preencha somente os três dados usados pela sua operação.</p>
+                </div>
 
-            <p class="text-[10px] text-slate-600 mt-4 leading-5">
-                O Client Secret &#233; enviado diretamente ao seu servidor Render e n&#227;o &#233; salvo no localStorage do navegador.
-            </p>
+                <div id="oauth-login-status" class="hidden v93-login-status"></div>
+
+                <div class="v93-login-fields">
+                    <label class="v93-field">
+                        <span>Client ID / App ID</span>
+                        <div class="v93-input-wrap">
+                            <div class="v93-input-icon">ID</div>
+                            <input id="oauth-client-id-login" type="text" autocomplete="username" placeholder="Ex.: 8447530383468116">
+                        </div>
+                    </label>
+
+                    <label class="v93-field">
+                        <span>Client Secret</span>
+                        <div class="v93-input-wrap">
+                            <div class="v93-input-icon">••</div>
+                            <input id="oauth-client-secret-login" type="password" autocomplete="current-password" placeholder="Seu Client Secret">
+                        </div>
+                    </label>
+
+                    <label class="v93-field">
+                        <span>Access Token</span>
+                        <div class="v93-input-wrap">
+                            <div class="v93-input-icon">AT</div>
+                            <input id="oauth-access-token-login" type="password" autocomplete="off" placeholder="APP_USR-...">
+                        </div>
+                    </label>
+                </div>
+
+                <div class="v93-login-options">
+                    <label class="v93-remember">
+                        <input id="oauth-remember-login-v93" type="checkbox">
+                        <span class="v93-check"></span>
+                        <span>
+                            <strong>Salvar neste navegador</strong>
+                            <small>Use somente em computador pessoal.</small>
+                        </span>
+                    </label>
+                    <button type="button" onclick="apagarLoginLocalV93()" class="v93-forget">Esquecer dados</button>
+                </div>
+
+                <div class="v93-login-actions">
+                    <button onclick="salvarCredenciaisEEntrar()" class="v93-primary-btn">
+                        <span>Entrar no ML Hub Pro</span><b>→</b>
+                    </button>
+                    <button onclick="iniciarOAuthML('login')" class="v93-secondary-btn">
+                        Autorizar pelo Mercado Livre
+                    </button>
+                </div>
+
+                <div class="v93-login-security">
+                    <span class="v93-security-dot"></span>
+                    <div>
+                        <strong>Conexão protegida</strong>
+                        <small>A URL de retorno é configurada automaticamente pelo sistema.</small>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 </div>
-
 
 <!-- =====================================================
      HEADER
@@ -2019,7 +2361,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lote 1.000 &#183; direto V90 · persistente + comissão</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; 1.000 simult&#226;neos &#183; V93</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -2030,7 +2372,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div id="sync-card-precos-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-blue-400">Leitura de pre&#231;os &#183; lote 1.000</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-blue-400">Pre&#231;os &#183; 1.000 simult&#226;neos &#183; V93</div>
                         <div id="sync-status-precos-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -2041,7 +2383,7 @@ body.configuracoes-isolado-v24 #acao-atualizar-painel{
 
                 <div id="sync-card-fretes-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-emerald-400">Fretes &#183; lote 1.000 &#183; direto V89</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-emerald-400">Fretes &#183; 1.000 simult&#226;neos &#183; V93</div>
                         <div id="sync-status-fretes-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -8012,7 +8354,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('top10-home').innerHTML = top10;
 
             const dashboardSalvo = localStorage.getItem('mlHubPro_dashboardHome_v64');
-            if (dashboardSalvo) preencherDashboard(JSON.parse(dashboardSalvo));
+            if (dashboardSalvo) {
+                const salvo=JSON.parse(dashboardSalvo);
+                const hoje=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+                if(!salvo?.visitas_dia?.data_local || salvo.visitas_dia.data_local===hoje){
+                    preencherDashboard(salvo);
+                }else{
+                    const v=document.getElementById('home-dashboard-visitas');
+                    const vp=document.getElementById('home-dashboard-visitas-periodo');
+                    if(v)v.innerText='0';
+                    if(vp)vp.innerText='Hoje · aguardando atualização';
+                }
+            }
         } catch (erro) {
             console.warn('N\u00e3o foi poss\u00edvel restaurar os dados da Home:', erro);
         }
@@ -8020,19 +8373,98 @@ document.addEventListener('DOMContentLoaded', function () {
         // Atualiza ao entrar e depois consulta novamente a cada 60 segundos
         // enquanto a p\u00e1gina inicial estiver aberta.
         setTimeout(() => atualizarHomeTempoReal(false), 800);
-        setInterval(() => atualizarHomeTempoReal(false), 60000);
+        setInterval(() => atualizarHomeTempoReal(false), 30000);
     });
 
     // Atualiza tamb\u00e9m quando a aba do navegador volta a ficar vis\u00edvel.
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden) atualizarHomeTempoReal(false);
     });
+
+    let diaHomeV93=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+    setInterval(()=>{
+        const agoraDia=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+        if(agoraDia!==diaHomeV93){
+            diaHomeV93=agoraDia;
+
+            const visitas=document.getElementById('home-dashboard-visitas');
+            const periodo=document.getElementById('home-dashboard-visitas-periodo');
+
+            if(visitas)visitas.innerText='0';
+            if(periodo)periodo.innerText='Hoje · iniciando novo dia';
+
+            try{localStorage.removeItem('mlHubPro_dashboardHome_v64')}catch(e){}
+
+            atualizarHomeTempoReal(true);
+        }
+    },15000);
 })();
 </script>
 
 
 <script id="mlhub-oauth-renovavel">
 const ML_HUB_FRONTEND_URL = window.location.origin + window.location.pathname;
+
+const ML_HUB_REDIRECT_URI_V93 = 'https://site-atualizar-pre-o-ml.onrender.com/auth/callback';
+const ML_HUB_LOGIN_STORAGE_V93 = 'mlhub_login_credentials_v93';
+
+function credenciaisLoginLocalV93(){
+    try{
+        const raw=localStorage.getItem(ML_HUB_LOGIN_STORAGE_V93);
+        return raw?JSON.parse(raw):null;
+    }catch(e){return null}
+}
+
+function salvarLoginLocalV93(dados){
+    const lembrar=document.getElementById('oauth-remember-login-v93')?.checked===true;
+
+    if(!lembrar){
+        localStorage.removeItem(ML_HUB_LOGIN_STORAGE_V93);
+        return;
+    }
+
+    // Opção explícita do usuário. Evite ativar em computadores compartilhados.
+    localStorage.setItem(
+        ML_HUB_LOGIN_STORAGE_V93,
+        JSON.stringify({
+            client_id:String(dados.client_id||''),
+            client_secret:String(dados.client_secret||''),
+            access_token:String(dados.access_token||'')
+        })
+    );
+}
+
+function restaurarLoginLocalV93(){
+    const salvo=credenciaisLoginLocalV93();
+    if(!salvo)return;
+
+    const cid=document.getElementById('oauth-client-id-login');
+    const sec=document.getElementById('oauth-client-secret-login');
+    const tok=document.getElementById('oauth-access-token-login');
+    const chk=document.getElementById('oauth-remember-login-v93');
+
+    if(cid && !cid.value)cid.value=salvo.client_id||'';
+    if(sec && !sec.value)sec.value=salvo.client_secret||'';
+    if(tok && !tok.value)tok.value=salvo.access_token||'';
+    if(chk)chk.checked=true;
+}
+
+function apagarLoginLocalV93(){
+    localStorage.removeItem(ML_HUB_LOGIN_STORAGE_V93);
+
+    ['oauth-client-id-login','oauth-client-secret-login','oauth-access-token-login']
+      .forEach(id=>{
+          const el=document.getElementById(id);
+          if(el)el.value='';
+      });
+
+    const chk=document.getElementById('oauth-remember-login-v93');
+    if(chk)chk.checked=false;
+
+    mostrarStatusLoginOAuth('Dados salvos neste navegador foram apagados.');
+}
+
+
 
 function mostrarStatusLoginOAuth(mensagem, erro = false) {
     const el = document.getElementById('oauth-login-status');
@@ -8083,10 +8515,21 @@ async function atualizarStatusOAuthML() {
 
 function lerCamposOAuth(origem) {
     const sufixo = origem === 'config' ? 'config' : 'login';
+
+    if(origem==='login'){
+        return {
+            client_id: document.getElementById('oauth-client-id-login')?.value.trim() || '',
+            client_secret: document.getElementById('oauth-client-secret-login')?.value.trim() || '',
+            redirect_uri: ML_HUB_REDIRECT_URI_V93,
+            access_token: document.getElementById('oauth-access-token-login')?.value.trim() || '',
+            frontend_url: ML_HUB_FRONTEND_URL
+        };
+    }
+
     return {
         client_id: document.getElementById(`oauth-client-id-${sufixo}`)?.value.trim() || '',
         client_secret: document.getElementById(`oauth-client-secret-${sufixo}`)?.value.trim() || '',
-        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || '',
+        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || ML_HUB_REDIRECT_URI_V93,
         access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
         frontend_url: ML_HUB_FRONTEND_URL
     };
@@ -8095,24 +8538,31 @@ function lerCamposOAuth(origem) {
 
 async function salvarCredenciaisEEntrar() {
     const dados = lerCamposOAuth('login');
-    dados.refresh_token = document.getElementById('oauth-refresh-token-login')?.value.trim() || '';
 
-    if (!dados.client_id || !dados.client_secret || !dados.redirect_uri || !dados.access_token) {
-        mostrarStatusLoginOAuth('Preencha Client ID, Client Secret, URL de retorno e Access Token.', true);
+    if (!dados.client_id || !dados.client_secret || !dados.access_token) {
+        mostrarStatusLoginOAuth('Preencha Client ID, Client Secret e Access Token.', true);
         return;
     }
 
     try {
-        mostrarStatusLoginOAuth('Validando o Access Token e salvando a conta...');
+        mostrarStatusLoginOAuth('Validando credenciais e conectando sua conta...');
+
         const response = await fetch(`${RENDER_URL}/api/oauth/manual-credentials`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
+            body: JSON.stringify({
+                ...dados,
+                refresh_token:''
+            })
         });
+
         const data = await response.json();
+
         if (!response.ok || !data.sucesso) {
-            throw new Error(data.erro || 'N\u00e3o foi poss\u00edvel salvar as credenciais.');
+            throw new Error(data.erro || 'Não foi possível conectar a conta.');
         }
+
+        salvarLoginLocalV93(dados);
 
         localStorage.setItem('ml_oauth_connected', '1');
         localStorage.removeItem('ml_access_token');
@@ -8120,13 +8570,10 @@ async function salvarCredenciaisEEntrar() {
         const gate = document.getElementById('oauth-login-gate');
         if (gate) gate.classList.add('hidden');
 
-        mostrarStatusLoginOAuth(
-            data.renewable
-                ? 'Conta conectada. Renova\u00e7\u00e3o autom\u00e1tica ativada.'
-                : 'Conta conectada com o Access Token atual. Para renova\u00e7\u00e3o autom\u00e1tica, salve tamb\u00e9m o Refresh Token.'
-        );
+        mostrarStatusLoginOAuth('Conta conectada com sucesso.');
 
         await atualizarStatusOAuthML();
+
         if (typeof mudarAba === 'function') mudarAba('inicio');
     } catch (erro) {
         mostrarStatusLoginOAuth(erro.message, true);
@@ -8135,26 +8582,40 @@ async function salvarCredenciaisEEntrar() {
 
 async function iniciarOAuthML(origem = 'login') {
     const dados = lerCamposOAuth(origem);
+
     if (!dados.client_id || !dados.client_secret || !dados.redirect_uri) {
-        const msg = 'Preencha Client ID, Client Secret e URL de retorno.';
-        if (origem === 'login') mostrarStatusLoginOAuth(msg, true); else alert(msg);
+        const msg = origem==='login'
+            ? 'Preencha Client ID e Client Secret.'
+            : 'Preencha Client ID, Client Secret e URL de retorno.';
+
+        if (origem === 'login') mostrarStatusLoginOAuth(msg, true);
+        else alert(msg);
         return;
     }
 
+    if(origem==='login'){
+        salvarLoginLocalV93(dados);
+    }
+
     try {
-        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autoriza\u00e7\u00e3o segura...');
+        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização segura...');
+
         const response = await fetch(`${RENDER_URL}/api/oauth/configure`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dados)
         });
+
         const data = await response.json();
+
         if (!response.ok || !data.sucesso || !data.authorization_url) {
-            throw new Error(data.erro || 'N\u00e3o foi poss\u00edvel iniciar a autoriza\u00e7\u00e3o.');
+            throw new Error(data.erro || 'Não foi possível iniciar a autorização.');
         }
+
         window.location.href = data.authorization_url;
     } catch (erro) {
-        if (origem === 'login') mostrarStatusLoginOAuth(erro.message, true); else alert(erro.message);
+        if (origem === 'login') mostrarStatusLoginOAuth(erro.message, true);
+        else alert(erro.message);
     }
 }
 
@@ -8191,6 +8652,7 @@ async function desconectarOAuthML() {
 }
 
 document.addEventListener('DOMContentLoaded', async function () {
+    restaurarLoginLocalV93();
     const params = new URLSearchParams(window.location.search);
     if (params.get('oauth') === 'success') {
         localStorage.setItem('ml_oauth_connected', '1');
@@ -9057,7 +9519,7 @@ async function idbLimparV32(){
       V90: compatibilidade com rotinas antigas.
       Limpa somente a store temporária e o "seen".
       NÃO apaga STORE_PERSISTENTE_V90.
-      NÃO apaga checkpoints direct_sync_v88/direct_freight_v89.
+      NÃO apaga checkpoints direct_sync_v88/direct_freight_v92.
     */
     const db=await abrirDbCacheV32();
     return new Promise((resolve,reject)=>{
@@ -11038,7 +11500,7 @@ window.puxarNovosAnuncios=function(){
 };
 
 window.sincronizarPrecosApi=function(){
-    return iniciarJobSyncV26('precos','/api/scale/precos');
+    return sincronizarPrecosDiretoV92();
 };
 
 window.sincronizarFretesApi=function(){
@@ -11052,7 +11514,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         const so=document.getElementById('gestao-ordenacao-v76');if(so)so.value=gestaoOrdenacaoV76;
         const ss=document.getElementById('gestao-status-v76');if(ss)ss.value=gestaoStatusV76;
     }catch(e){}
-    ['precos'].forEach(tipo=>{
+    [].forEach(tipo=>{
         const id=localStorage.getItem(`mlHubPro_sync_v26_${tipo}`);
         if(id)acompanharJobSyncV26(tipo,id);
     });
@@ -14598,10 +15060,10 @@ async function v88BuscarPagina(scrollId){
     if(scrollId)qs.set('scroll_id',scrollId);
 
     const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),30000);
+    const timer=setTimeout(()=>controller.abort(),120000);
 
     try{
-        const r=await fetch(`${RENDER_URL}/api/v88/anuncios/scan?${qs.toString()}`,{
+        const r=await fetch(`${RENDER_URL}/api/v93/anuncios/lote1000?${qs.toString()}`,{
             cache:'no-store',
             signal:controller.signal,
             headers:{
@@ -14718,7 +15180,6 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
     syncV88Executando=true;
     syncV88Abortar=false;
 
-    // Garante que o cache atual esteja carregado antes de acrescentar novos registros.
     await carregarMasterLocalV32();
 
     let meta=await idbMetaV32('direct_sync_v88').catch(()=>null);
@@ -14733,7 +15194,6 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
         sellerId=String(meta.seller_id||'');
         processed=Number(meta.processed||0);
     }else{
-        // Nova varredura. Mantém os anúncios existentes até a nova leitura terminar.
         await idbLimparSeenV85();
         meta=null;
     }
@@ -14743,12 +15203,11 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
         atual:processed,
         total,
         mensagem:processed
-          ? `Retomando do checkpoint: ${processed.toLocaleString('pt-BR')} já salvos`
-          : 'Conectando ao Mercado Livre e calculando comissão exata...'
+          ? `Retomando no lote seguinte · ${processed.toLocaleString('pt-BR')} já salvos`
+          : 'Preparando primeiro lote simultâneo de até 1.000 anúncios...'
     });
 
     let falhasSeguidas=0;
-    let paginasDesdeRender=0;
     let reiniciosCursor=0;
 
     try{
@@ -14761,9 +15220,7 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
             }catch(e){
                 const msg=String(e?.message||e||'');
 
-                if(!v88Temporario(msg)){
-                    throw e;
-                }
+                if(!v88Temporario(msg))throw e;
 
                 falhasSeguidas++;
                 const espera=Math.min(15000,1000*Math.max(1,falhasSeguidas));
@@ -14772,7 +15229,7 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
                     status:'running',
                     atual:processed,
                     total,
-                    mensagem:`Instabilidade temporária · nova tentativa em ${Math.ceil(espera/1000)}s · progresso preservado`
+                    mensagem:`Lote preservado · conexão temporária · nova tentativa em ${Math.ceil(espera/1000)}s`
                 });
 
                 await v88Sleep(espera);
@@ -14792,15 +15249,8 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
                     lastError:'cursor_expirado'
                 });
 
-                atualizarProgressoV26('anuncios',{
-                    status:'running',
-                    atual:processed,
-                    total,
-                    mensagem:'Cursor expirou · reconstruindo a leitura sem apagar o que já foi salvo'
-                });
-
                 if(reiniciosCursor>8){
-                    throw new Error('O Mercado Livre expirou o cursor repetidamente. Clique novamente em Puxar anúncios para continuar do checkpoint.');
+                    throw new Error('O cursor expirou repetidamente. Clique em Puxar anúncios para reconstruir a leitura do checkpoint.');
                 }
 
                 continue;
@@ -14808,7 +15258,6 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
 
             const sellerAtual=String(d.seller_id||'');
 
-            // Troca de conta: limpa o cache local para não misturar vendedores.
             if(sellerId && sellerAtual && sellerId!==sellerAtual){
                 await idbLimparV32();
                 await idbLimparSeenV85();
@@ -14833,7 +15282,6 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
 
             processed=await idbContarSeenV85().catch(()=>processed+itens.length);
             scrollId=d.scroll_id||null;
-            paginasDesdeRender++;
 
             await v88SalvarCheckpoint({
                 sellerId,
@@ -14843,28 +15291,22 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
                 completed:Boolean(d.terminou)
             });
 
-            const lote=Math.max(1,Math.ceil(processed/1000));
+            const loteNumero=Math.max(1,Math.ceil(processed/1000));
+            const pct=total?Math.min(100,Math.round(processed/total*100)):0;
 
             atualizarProgressoV26('anuncios',{
                 status:d.terminou?'completed':'running',
                 atual:processed,
                 total,
                 mensagem:d.terminou
-                  ? `Concluído · ${processed.toLocaleString('pt-BR')} anúncios salvos com comissão`
-                  : `Lote ${lote.toLocaleString('pt-BR')} de 1.000 · anúncios + comissão exata do Mercado Livre · checkpoint salvo a cada página`
+                  ? `Concluído · ${processed.toLocaleString('pt-BR')} anúncios salvos`
+                  : `Lote ${loteNumero.toLocaleString('pt-BR')} concluído · ${Number(d.ids_count||itens.length).toLocaleString('pt-BR')} processados simultaneamente · ${processed.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}%`
             });
 
-            // Atualiza a tabela a cada 1.000 (10 páginas) para não pesar a interface.
-            if(paginasDesdeRender>=10 || d.terminou){
-                paginasDesdeRender=0;
-                await v88CarregarGestaoLocal(1,{silencioso:true});
-                await v88Sleep(0);
-            }
+            await v88CarregarGestaoLocal(1,{silencioso:true});
+            await v88Sleep(0);
 
-            if(d.terminou){
-                await v88CarregarGestaoLocal(1,{silencioso:true});
-                return;
-            }
+            if(d.terminou)return;
         }
     }catch(e){
         const msg=String(e?.message||e||'Erro desconhecido');
@@ -14949,7 +15391,7 @@ function freteV89Sleep(ms){
 
 async function freteV89Checkpoint(obj){
   await idbSalvarMetaV32({
-    key:'direct_freight_v89',
+    key:'direct_freight_v92',
     offset:Number(obj.offset||0),
     total:Number(obj.total||0),
     completed:Boolean(obj.completed),
@@ -14964,10 +15406,10 @@ async function freteV89Enviar(ids){
   if(!token)throw new Error('Token Mercado Livre não informado.');
 
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),45000);
+  const timer=setTimeout(()=>controller.abort(),120000);
 
   try{
-    const r=await fetch(`${RENDER_URL}/api/v89/fretes/direto?_=${Date.now()}`,{
+    const r=await fetch(`${RENDER_URL}/api/v93/fretes/lote1000?_=${Date.now()}`,{
       method:'POST',
       cache:'no-store',
       signal:controller.signal,
@@ -14976,7 +15418,7 @@ async function freteV89Enviar(ids){
         'Content-Type':'application/json',
         Accept:'application/json'
       },
-      body:JSON.stringify({ids})
+      body:JSON.stringify({ids:ids.slice(0,1000)})
     });
 
     const d=await r.json().catch(()=>({}));
@@ -15046,8 +15488,6 @@ async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
   }
 
   freteV89Executando=true;
-
-  // Esta função não usa mais o job antigo do PostgreSQL.
   try{localStorage.removeItem('mlHubPro_sync_v26_fretes')}catch(e){}
 
   try{
@@ -15059,6 +15499,7 @@ async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
       .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
 
     const total=lista.length;
+
     if(!total){
       atualizarProgressoV26('fretes',{
         status:'completed',
@@ -15069,17 +15510,15 @@ async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
       return;
     }
 
-    let meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+    let meta=await idbMetaV32('direct_freight_v92').catch(()=>null);
     let offset=0;
     let failed=0;
 
     if(meta && meta.completed===false && Number(meta.total||0)===total){
-      offset=Math.max(0,Math.min(total,Number(meta.offset||0)));
+      offset=Math.max(0,Math.min(total,Math.floor(Number(meta.offset||0)/1000)*1000));
       failed=Number(meta.failed||0);
     }else{
-      await freteV89Checkpoint({
-        offset:0,total,completed:false,failed:0
-      });
+      await freteV89Checkpoint({offset:0,total,completed:false,failed:0});
     }
 
     atualizarProgressoV26('fretes',{
@@ -15087,92 +15526,77 @@ async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
       atual:offset,
       total,
       mensagem:offset
-        ? `Retomando fretes do checkpoint · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`
-        : `Iniciando fretes · lote lógico de 1.000 · ${total.toLocaleString('pt-BR')} anúncios`
+        ? `Retomando fretes do lote ${Math.floor(offset/1000)+1} · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`
+        : `Preparando 1.000 fretes por lote simultâneo · ${total.toLocaleString('pt-BR')} anúncios`
     });
 
-    let falhasTemporarias=0;
-
     while(offset<total){
-      const loteInicio=Math.floor(offset/1000)*1000;
+      const lote=lista.slice(offset,Math.min(total,offset+1000));
       const loteNumero=Math.floor(offset/1000)+1;
-
-      // 100 anúncios por chamada = checkpoint frequente e seguro.
-      const chunk=lista.slice(offset,Math.min(total,offset+100));
-      const ids=chunk.map(x=>String(x.id));
-
-      let d;
-      try{
-        d=await freteV89Enviar(ids);
-        falhasTemporarias=0;
-      }catch(e){
-        const msg=String(e?.message||e||'');
-
-        if(!freteV89Temporario(msg)){
-          throw e;
-        }
-
-        falhasTemporarias++;
-        const espera=Math.min(15000,1000*Math.max(1,falhasTemporarias));
-
-        atualizarProgressoV26('fretes',{
-          status:'running',
-          atual:offset,
-          total,
-          mensagem:`Instabilidade temporária · tentando frete novamente em ${Math.ceil(espera/1000)}s · checkpoint preservado`
-        });
-
-        await freteV89Sleep(espera);
-        continue;
-      }
-
-      const ap=await aplicarFretesV89(d.resultados||[]);
-      failed+=Number(ap.failed||0);
-
-      offset+=chunk.length;
-
-      await freteV89Checkpoint({
-        offset,total,completed:false,failed
-      });
-
-      const pct=total?Math.round(offset/total*100):100;
-      const dentroLote=offset-loteInicio;
+      const ids=lote.map(x=>String(x.id));
 
       atualizarProgressoV26('fretes',{
         status:'running',
         atual:offset,
         total,
-        mensagem:`Fretes · lote ${loteNumero.toLocaleString('pt-BR')} · ${Math.min(1000,dentroLote).toLocaleString('pt-BR')}/1.000 · ${pct}%${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) preservadas`:''}`
+        mensagem:`Processando lote ${loteNumero.toLocaleString('pt-BR')} · ${ids.length.toLocaleString('pt-BR')} fretes simultâneos...`
       });
 
-      // Atualiza visualmente a Gestão a cada 1.000 ou no fim.
-      if(offset%1000===0 || offset>=total){
-        if(typeof v88CarregarGestaoLocal==='function'){
-          await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
-        }else if(typeof carregarGestaoEscala==='function'){
-          await carregarGestaoEscala(gestaoPagina,{silencioso:true});
+      let d=null;
+      let ultimoErro=null;
+
+      for(let tentativa=1;tentativa<=5;tentativa++){
+        try{
+          d=await freteV89Enviar(ids);
+          ultimoErro=null;
+          break;
+        }catch(e){
+          ultimoErro=e;
+          const msg=String(e?.message||e||'');
+
+          if(!freteV89Temporario(msg) || tentativa>=5)break;
+
+          await freteV89Sleep(
+            Math.min(10000,700*Math.pow(2,tentativa-1))
+          );
         }
-        await freteV89Sleep(0);
       }
-    }
 
-    await freteV89Checkpoint({
-      offset:total,total,completed:true,failed
-    });
+      if(!d){
+        throw ultimoErro||new Error('Falha no lote de fretes.');
+      }
 
-    atualizarProgressoV26('fretes',{
-      status:'completed',
-      atual:total,
-      total,
-      mensagem:`Fretes concluídos: ${total.toLocaleString('pt-BR')} anúncio(s) · valores salvos localmente${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) mantiveram o valor anterior`:''}`
-    });
+      const ap=await aplicarFretesV89(d.resultados||[]);
+      failed+=Number(ap.failed||0);
+      offset+=lote.length;
 
-    if(typeof v88CarregarGestaoLocal==='function'){
-      await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+      await freteV89Checkpoint({
+        offset,
+        total,
+        completed:offset>=total,
+        failed
+      });
+
+      const pct=total?Math.min(100,Math.round(offset/total*100)):100;
+
+      atualizarProgressoV26('fretes',{
+        status:offset>=total?'completed':'running',
+        atual:offset,
+        total,
+        mensagem:offset>=total
+          ? `Fretes concluídos · ${total.toLocaleString('pt-BR')} anúncios`
+          : `Lote ${loteNumero.toLocaleString('pt-BR')} concluído · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}%${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) preservadas`:''}`
+      });
+
+      if(typeof v88CarregarGestaoLocal==='function'){
+        await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+      }
+
+      await freteV89Sleep(0);
     }
   }catch(e){
     const msg=String(e?.message||e||'Erro desconhecido.');
-    const meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+    const meta=await idbMetaV32('direct_freight_v92').catch(()=>null);
 
     await freteV89Checkpoint({
       offset:Number(meta?.offset||0),
@@ -15205,7 +15629,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{
       localStorage.removeItem('mlHubPro_sync_v26_fretes');
 
-      const meta=await idbMetaV32('direct_freight_v89').catch(()=>null);
+      const meta=await idbMetaV32('direct_freight_v92').catch(()=>null);
       if(meta && meta.completed===false && obterToken()){
         atualizarProgressoV26('fretes',{
           status:'running',
@@ -15272,6 +15696,280 @@ document.addEventListener('DOMContentLoaded',()=>{
       console.warn('[V90 PERSISTÊNCIA]',e);
     }
   },300);
+});
+</script>
+
+
+<script id="mlhub-v92-direct-price">
+let precoV92Executando=false;
+
+function precoV92Temporario(msg){
+  return /AbortError|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timeout|network|fetch|failed to fetch|socket|429|500|502|503|504/i.test(String(msg||''));
+}
+
+function precoV92Sleep(ms){
+  return new Promise(r=>setTimeout(r,ms));
+}
+
+async function precoV92SalvarCheckpoint({offset,total,completed,failed=0,last_error=''}) {
+  await idbSalvarMetaV32({
+    key:'direct_price_v92',
+    offset:Number(offset||0),
+    total:Number(total||0),
+    completed:Boolean(completed),
+    failed:Number(failed||0),
+    last_error:String(last_error||''),
+    updated_at:new Date().toISOString()
+  });
+}
+
+async function precoV92Enviar(ids){
+  const token=obterToken();
+  if(!token)throw new Error('Token Mercado Livre não informado.');
+
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),120000);
+
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v92/precos/direto?_=${Date.now()}`,{
+      method:'POST',
+      cache:'no-store',
+      signal:controller.signal,
+      headers:{
+        Authorization:token,
+        'Content-Type':'application/json',
+        Accept:'application/json'
+      },
+      body:JSON.stringify({ids:ids.slice(0,1000)})
+    });
+
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    return d;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function aplicarPrecosV92(resultados){
+  if(!Array.isArray(resultados)||!resultados.length)return {ok:0,failed:0};
+
+  const alterados=[];
+  let ok=0,failed=0;
+
+  for(const r of resultados){
+    const id=String(r?.id||'');
+    if(!id)continue;
+
+    const atual=masterMapV32.get(id);
+    if(!atual)continue;
+
+    if(!r.sucesso || !Number.isFinite(Number(r.price))){
+      failed++;
+      continue;
+    }
+
+    const price=Number(r.price);
+
+    const novo={
+      ...atual,
+      price,
+      available_quantity:r.available_quantity!==undefined
+        ? Number(r.available_quantity||0)
+        : Number(atual.available_quantity||0),
+      sold_quantity:r.sold_quantity!==undefined
+        ? Number(r.sold_quantity||0)
+        : Number(atual.sold_quantity||0),
+      status:r.status||atual.status,
+      net_received:Math.max(
+        0,
+        price
+          - Number(atual.sale_fee||0)
+          - Number(atual.shipping_cost||0)
+      ),
+      price_synced_at:new Date().toISOString()
+    };
+
+    masterMapV32.set(id,novo);
+    alterados.push(novo);
+    ok++;
+  }
+
+  if(alterados.length){
+    await idbSalvarItensV32(alterados);
+    masterAnunciosV32=[...masterMapV32.values()];
+    simFiltroRenderKeyV30='';
+    atualFiltroRenderKeyV30='';
+    anunciosEscalaCacheV30.clear();
+  }
+
+  return {ok,failed};
+}
+
+async function sincronizarPrecosDiretoV92({retomarAutomatico=false}={}){
+  if(precoV92Executando)return;
+
+  const token=obterToken();
+  if(!token){
+    solicitarToken();
+    return;
+  }
+
+  precoV92Executando=true;
+  try{localStorage.removeItem('mlHubPro_sync_v26_precos')}catch(e){}
+
+  try{
+    masterCarregadoV32=false;
+    await carregarMasterLocalV32();
+
+    const lista=[...masterAnunciosV32]
+      .filter(x=>x && x.id)
+      .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+
+    const total=lista.length;
+    if(!total){
+      atualizarProgressoV26('precos',{
+        status:'completed',
+        atual:0,
+        total:0,
+        mensagem:'Nenhum anúncio salvo. Clique primeiro em Puxar anúncios.'
+      });
+      return;
+    }
+
+    let meta=await idbMetaV32('direct_price_v92').catch(()=>null);
+    let offset=0;
+    let failed=0;
+
+    if(meta && meta.completed===false && Number(meta.total||0)===total){
+      offset=Math.max(0,Math.min(total,Math.floor(Number(meta.offset||0)/1000)*1000));
+      failed=Number(meta.failed||0);
+    }else{
+      await precoV92SalvarCheckpoint({offset:0,total,completed:false,failed:0});
+    }
+
+    atualizarProgressoV26('precos',{
+      status:'running',
+      atual:offset,
+      total,
+      mensagem:offset
+        ? `Retomando preços · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · lote de 1.000`
+        : `Iniciando preços · ${total.toLocaleString('pt-BR')} anúncios · lote de 1.000`
+    });
+
+    while(offset<total){
+      const lote=lista.slice(offset,Math.min(total,offset+1000));
+      const loteNumero=Math.floor(offset/1000)+1;
+      const ids=lote.map(x=>String(x.id));
+
+      atualizarProgressoV26('precos',{
+        status:'running',
+        atual:offset,
+        total,
+        mensagem:`Processando lote ${loteNumero.toLocaleString('pt-BR')} · ${ids.length.toLocaleString('pt-BR')} preços...`
+      });
+
+      let d=null;
+      let ultimoErro=null;
+
+      for(let tentativa=1;tentativa<=5;tentativa++){
+        try{
+          d=await precoV92Enviar(ids);
+          ultimoErro=null;
+          break;
+        }catch(e){
+          ultimoErro=e;
+          const msg=String(e?.message||e||'');
+
+          if(!precoV92Temporario(msg) || tentativa>=5)break;
+
+          await precoV92Sleep(
+            Math.min(8000,500*Math.pow(2,tentativa-1))
+          );
+        }
+      }
+
+      if(!d){
+        throw ultimoErro||new Error('Falha ao puxar o lote de preços.');
+      }
+
+      const ap=await aplicarPrecosV92(d.resultados||[]);
+      failed+=Number(ap.failed||0);
+      offset+=lote.length;
+
+      await precoV92SalvarCheckpoint({
+        offset,
+        total,
+        completed:offset>=total,
+        failed
+      });
+
+      const pct=total?Math.min(100,Math.round(offset/total*100)):100;
+
+      atualizarProgressoV26('precos',{
+        status:offset>=total?'completed':'running',
+        atual:offset,
+        total,
+        mensagem:offset>=total
+          ? `Preços concluídos: ${total.toLocaleString('pt-BR')} anúncio(s)`
+          : `Lote ${loteNumero.toLocaleString('pt-BR')} concluído · ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${pct}% · lote de 1.000${failed?` · ${failed.toLocaleString('pt-BR')} falha(s) preservadas`:''}`
+      });
+
+      if(typeof v88CarregarGestaoLocal==='function'){
+        await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+      }
+
+      await precoV92Sleep(0);
+    }
+  }catch(e){
+    const msg=String(e?.message||e||'Erro desconhecido.');
+    const meta=await idbMetaV32('direct_price_v92').catch(()=>null);
+
+    await precoV92SalvarCheckpoint({
+      offset:Number(meta?.offset||0),
+      total:Number(meta?.total||masterAnunciosV32.length||0),
+      completed:false,
+      failed:Number(meta?.failed||0),
+      last_error:msg
+    }).catch(()=>{});
+
+    atualizarProgressoV26('precos',{
+      status:'queued',
+      atual:Number(meta?.offset||0),
+      total:Number(meta?.total||masterAnunciosV32.length||0),
+      mensagem:`Preços pausados com checkpoint salvo · ${msg} · clique em Puxar preços para continuar`
+    });
+
+    if(!retomarAutomatico && !precoV92Temporario(msg)){
+      alert('Erro ao puxar preços: '+msg);
+    }
+  }finally{
+    precoV92Executando=false;
+  }
+}
+
+window.sincronizarPrecosApi=()=>sincronizarPrecosDiretoV92();
+
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(async()=>{
+    try{
+      localStorage.removeItem('mlHubPro_sync_v26_precos');
+
+      const meta=await idbMetaV32('direct_price_v92').catch(()=>null);
+      if(meta && meta.completed===false && obterToken()){
+        atualizarProgressoV26('precos',{
+          status:'running',
+          atual:Number(meta.offset||0),
+          total:Number(meta.total||0),
+          mensagem:'Retomando automaticamente os preços do lote de 1.000'
+        });
+
+        sincronizarPrecosDiretoV92({retomarAutomatico:true});
+      }
+    }catch(e){
+      console.warn('[V92 PREÇO BOOT]',e);
+    }
+  },900);
 });
 </script>
 
