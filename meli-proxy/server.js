@@ -54,6 +54,14 @@ const ALLOWED_ORIGINS = new Set([
 
 const APP_AUTH_CONFIGURED = Boolean(ML_HUB_ADMIN_EMAIL && ML_HUB_ADMIN_PASSWORD);
 
+const ML_HUB_SAAS_AUTH = !/^(0|false|no)$/i.test(String(process.env.ML_HUB_SAAS_AUTH || 'true'));
+const ML_HUB_ALLOW_SIGNUP = !/^(0|false|no)$/i.test(String(process.env.ML_HUB_ALLOW_SIGNUP || 'true'));
+const ML_HUB_TOKEN_KEY_V95 = crypto.createHash('sha256')
+    .update(ML_HUB_TOKEN_ENCRYPTION_KEY || ML_HUB_SESSION_SECRET)
+    .digest();
+const refreshLocksV95 = new Map();
+
+
 app.disable('x-powered-by');
 
 app.use(cors({
@@ -99,10 +107,17 @@ function assinaturaV94(payload){
     return crypto.createHmac('sha256',ML_HUB_SESSION_SECRET).update(payload).digest('base64url');
 }
 
-function criarSessaoV94(email,remember=false){
+function criarSessaoV94(identidade,remember=false){
     const ttl=remember ? 30*24*60*60 : 12*60*60;
+    const dados=typeof identidade==='string'
+        ? {email:String(identidade||'').toLowerCase()}
+        : (identidade||{});
+
     const payload=base64urlV94(JSON.stringify({
-        sub:String(email||'').toLowerCase(),
+        sub:String(dados.email||'').toLowerCase(),
+        uid:dados.user_id?String(dados.user_id):null,
+        wid:dados.workspace_id?String(dados.workspace_id):null,
+        name:dados.name?String(dados.name):null,
         iat:Math.floor(Date.now()/1000),
         exp:Math.floor(Date.now()/1000)+ttl,
         nonce:crypto.randomBytes(10).toString('hex')
@@ -183,8 +198,313 @@ function compararSegredoV94(a,b){
     return crypto.timingSafeEqual(ha,hb);
 }
 
-app.post('/api/app/login',(req,res)=>{
-    if(!APP_AUTH_CONFIGURED){
+
+let saasInitV95=null;
+
+async function garantirSaasV95(){
+    if(saasInitV95)return saasInitV95;
+    saasInitV95=(async()=>{
+        if(!db)throw new Error('DATABASE_URL é obrigatória para o modo SaaS.');
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS mlhub_users_v95(
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL DEFAULT '',
+            password_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_login_at TIMESTAMPTZ
+          )
+        `);
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS mlhub_workspaces_v95(
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            owner_user_id TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS mlhub_memberships_v95(
+            workspace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'owner',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(workspace_id,user_id)
+          )
+        `);
+
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_connections_v95(
+            id BIGSERIAL PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            seller_id TEXT NOT NULL,
+            nickname TEXT,
+            access_token_enc TEXT,
+            refresh_token_enc TEXT,
+            expires_at BIGINT,
+            scope TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            connected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(workspace_id,seller_id)
+          )
+        `);
+
+        await dbQuery(`
+          CREATE INDEX IF NOT EXISTS idx_ml_connections_v95_user_active
+          ON ml_connections_v95(user_id,is_active,updated_at DESC)
+        `);
+
+        await dbQuery(`
+          CREATE INDEX IF NOT EXISTS idx_ml_connections_v95_seller
+          ON ml_connections_v95(seller_id,updated_at DESC)
+        `);
+    })().catch(e=>{
+        saasInitV95=null;
+        throw e;
+    });
+    return saasInitV95;
+}
+
+function hashSenhaV95(password,salt=crypto.randomBytes(16).toString('hex')){
+    const hash=crypto.scryptSync(String(password||''),salt,64).toString('hex');
+    return `scrypt$${salt}$${hash}`;
+}
+
+function validarSenhaV95(password,stored){
+    try{
+        const [alg,salt,hash]=String(stored||'').split('$');
+        if(alg!=='scrypt'||!salt||!hash)return false;
+        const atual=crypto.scryptSync(String(password||''),salt,64);
+        const esperado=Buffer.from(hash,'hex');
+        return atual.length===esperado.length && crypto.timingSafeEqual(atual,esperado);
+    }catch{return false}
+}
+
+function emailValidoV95(email){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email||''));
+}
+
+function criptografarV95(valor){
+    if(valor===null||valor===undefined||valor==='')return null;
+    const iv=crypto.randomBytes(12);
+    const cipher=crypto.createCipheriv('aes-256-gcm',ML_HUB_TOKEN_KEY_V95,iv);
+    const enc=Buffer.concat([
+        cipher.update(String(valor),'utf8'),
+        cipher.final()
+    ]);
+    return JSON.stringify({
+        v:1,
+        iv:iv.toString('base64'),
+        tag:cipher.getAuthTag().toString('base64'),
+        data:enc.toString('base64')
+    });
+}
+
+function descriptografarV95(envelope){
+    if(!envelope)return null;
+    try{
+        const obj=typeof envelope==='string'?JSON.parse(envelope):envelope;
+        const decipher=crypto.createDecipheriv(
+            'aes-256-gcm',
+            ML_HUB_TOKEN_KEY_V95,
+            Buffer.from(obj.iv,'base64')
+        );
+        decipher.setAuthTag(Buffer.from(obj.tag,'base64'));
+        return Buffer.concat([
+            decipher.update(Buffer.from(obj.data,'base64')),
+            decipher.final()
+        ]).toString('utf8');
+    }catch(e){
+        return null;
+    }
+}
+
+async function usuarioPorEmailV95(email){
+    await garantirSaasV95();
+    const r=await dbQuery(`
+      SELECT u.id,u.email,u.name,u.password_hash,u.status,
+             m.workspace_id,m.role,w.name workspace_name
+      FROM mlhub_users_v95 u
+      LEFT JOIN mlhub_memberships_v95 m ON m.user_id=u.id
+      LEFT JOIN mlhub_workspaces_v95 w ON w.id=m.workspace_id
+      WHERE u.email=$1
+      ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.created_at
+      LIMIT 1
+    `,[String(email||'').toLowerCase()]);
+    return r.rows[0]||null;
+}
+
+async function criarUsuarioV95({email,name,password}){
+    await garantirSaasV95();
+
+    const userId=crypto.randomUUID();
+    const workspaceId=crypto.randomUUID();
+    const cleanEmail=String(email||'').trim().toLowerCase();
+    const cleanName=String(name||'').trim().slice(0,120);
+    const passHash=hashSenhaV95(password);
+
+    const client=await db.connect();
+    try{
+        await client.query('BEGIN');
+
+        await client.query(`
+          INSERT INTO mlhub_users_v95(id,email,name,password_hash)
+          VALUES($1,$2,$3,$4)
+        `,[userId,cleanEmail,cleanName,passHash]);
+
+        await client.query(`
+          INSERT INTO mlhub_workspaces_v95(id,name,owner_user_id)
+          VALUES($1,$2,$3)
+        `,[workspaceId,cleanName?`${cleanName} · ML Hub Pro`:'Meu ML Hub Pro',userId]);
+
+        await client.query(`
+          INSERT INTO mlhub_memberships_v95(workspace_id,user_id,role)
+          VALUES($1,$2,'owner')
+        `,[workspaceId,userId]);
+
+        await client.query('COMMIT');
+
+        return {
+            id:userId,
+            email:cleanEmail,
+            name:cleanName,
+            workspace_id:workspaceId,
+            role:'owner'
+        };
+    }catch(e){
+        try{await client.query('ROLLBACK')}catch(_){}
+        throw e;
+    }finally{
+        client.release();
+    }
+}
+
+async function conexaoAtivaUsuarioV95(userId,workspaceId){
+    await garantirSaasV95();
+    const r=await dbQuery(`
+      SELECT *
+      FROM ml_connections_v95
+      WHERE user_id=$1
+        AND workspace_id=$2
+        AND is_active=TRUE
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,[String(userId),String(workspaceId)]);
+    return r.rows[0]||null;
+}
+
+async function conexaoPorIdV95(connectionId,userId,workspaceId){
+    await garantirSaasV95();
+    const r=await dbQuery(`
+      SELECT *
+      FROM ml_connections_v95
+      WHERE id=$1 AND user_id=$2 AND workspace_id=$3
+      LIMIT 1
+    `,[Number(connectionId),String(userId),String(workspaceId)]);
+    return r.rows[0]||null;
+}
+
+async function renovarConexaoV95(conexao,forcar=false){
+    if(!conexao)return null;
+
+    const expiresAt=Number(conexao.expires_at||0);
+    const access=descriptografarV95(conexao.access_token_enc);
+
+    if(
+        !forcar &&
+        access &&
+        (!expiresAt || Date.now()<expiresAt-120000)
+    ){
+        return access;
+    }
+
+    const refresh=descriptografarV95(conexao.refresh_token_enc);
+    if(!refresh || !ML_APP_CLIENT_ID || !ML_APP_CLIENT_SECRET){
+        return access||null;
+    }
+
+    const lockKey=String(conexao.id);
+    if(refreshLocksV95.has(lockKey))return refreshLocksV95.get(lockKey);
+
+    const p=(async()=>{
+        const body=new URLSearchParams({
+            grant_type:'refresh_token',
+            client_id:ML_APP_CLIENT_ID,
+            client_secret:ML_APP_CLIENT_SECRET,
+            refresh_token:refresh
+        });
+
+        const r=await fetch(`${ML_API}/oauth/token`,{
+            method:'POST',
+            headers:{
+                accept:'application/json',
+                'content-type':'application/x-www-form-urlencoded'
+            },
+            body
+        });
+
+        const d=await jsonSeguro(r);
+        if(!r.ok || !d.access_token){
+            throw new Error(formatarErroMercadoLivre(d)||'Não foi possível renovar o token da conta.');
+        }
+
+        const expires=Date.now()+Number(d.expires_in||21600)*1000;
+
+        await dbQuery(`
+          UPDATE ml_connections_v95 SET
+            access_token_enc=$2,
+            refresh_token_enc=COALESCE($3,refresh_token_enc),
+            expires_at=$4,
+            scope=COALESCE($5,scope),
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+            conexao.id,
+            criptografarV95(d.access_token),
+            d.refresh_token?criptografarV95(d.refresh_token):null,
+            expires,
+            d.scope||null
+        ]);
+
+        return d.access_token;
+    })();
+
+    refreshLocksV95.set(lockKey,p);
+    try{return await p}
+    finally{refreshLocksV95.delete(lockKey)}
+}
+
+async function tokenParaSessaoV95(sessao){
+    if(!sessao?.uid || !sessao?.wid)return null;
+    const c=await conexaoAtivaUsuarioV95(sessao.uid,sessao.wid);
+    if(!c)return null;
+    return renovarConexaoV95(c,false);
+}
+
+async function tokenParaSellerV95(sellerId){
+    await garantirSaasV95();
+    const r=await dbQuery(`
+      SELECT *
+      FROM ml_connections_v95
+      WHERE seller_id=$1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,[String(sellerId)]);
+    const c=r.rows[0]||null;
+    if(!c)return null;
+    return renovarConexaoV95(c,false);
+}
+
+app.post('/api/app/login',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH){
         return res.json({
             sucesso:true,
             configured:false,
@@ -197,32 +517,137 @@ app.post('/api/app/login',(req,res)=>{
         return respostaErro(res,429,'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.');
     }
 
-    const email=String(req.body?.email||'').trim().toLowerCase();
-    const password=String(req.body?.password||'');
-    const remember=Boolean(req.body?.remember);
+    try{
+        if(!db)return respostaErro(res,503,'PostgreSQL é obrigatório para o login multiusuário.');
 
-    if(
-        !compararSegredoV94(email,ML_HUB_ADMIN_EMAIL) ||
-        !compararSegredoV94(password,ML_HUB_ADMIN_PASSWORD)
-    ){
-        registrarFalhaLoginV94(req);
-        return respostaErro(res,401,'E-mail ou senha inválidos.');
+        const email=String(req.body?.email||'').trim().toLowerCase();
+        const password=String(req.body?.password||'');
+        const remember=Boolean(req.body?.remember);
+
+        if(!email||!password){
+            return respostaErro(res,400,'Informe e-mail e senha.');
+        }
+
+        await garantirSaasV95();
+        let user=await usuarioPorEmailV95(email);
+
+        // Migração opcional do antigo administrador do V94.
+        if(
+            !user &&
+            APP_AUTH_CONFIGURED &&
+            compararSegredoV94(email,ML_HUB_ADMIN_EMAIL) &&
+            compararSegredoV94(password,ML_HUB_ADMIN_PASSWORD)
+        ){
+            try{
+                await criarUsuarioV95({
+                    email,
+                    name:'Administrador',
+                    password
+                });
+            }catch(e){
+                if(!String(e?.code||'').includes('23505'))throw e;
+            }
+            user=await usuarioPorEmailV95(email);
+        }
+
+        if(!user || user.status!=='active' || !validarSenhaV95(password,user.password_hash)){
+            registrarFalhaLoginV94(req);
+            return respostaErro(res,401,'E-mail ou senha inválidos.');
+        }
+
+        limparFalhasLoginV94(req);
+
+        await dbQuery(`
+          UPDATE mlhub_users_v95
+          SET last_login_at=NOW(),updated_at=NOW()
+          WHERE id=$1
+        `,[user.id]);
+
+        const sessao=criarSessaoV94({
+            email:user.email,
+            user_id:user.id,
+            workspace_id:user.workspace_id,
+            name:user.name
+        },remember);
+
+        setCookieSessaoV94(res,sessao.token,sessao.ttl);
+
+        return res.json({
+            sucesso:true,
+            configured:true,
+            authenticated:true,
+            user:{
+                id:user.id,
+                email:user.email,
+                name:user.name,
+                workspace_id:user.workspace_id,
+                workspace_name:user.workspace_name,
+                role:user.role
+            }
+        });
+    }catch(e){
+        console.error('[LOGIN V95]',e);
+        return respostaErro(res,500,'Erro ao entrar: '+e.message);
     }
-
-    limparFalhasLoginV94(req);
-    const sessao=criarSessaoV94(email,remember);
-    setCookieSessaoV94(res,sessao.token,sessao.ttl);
-
-    return res.json({
-        sucesso:true,
-        configured:true,
-        authenticated:true,
-        email
-    });
 });
 
-app.get('/api/app/session',(req,res)=>{
-    if(!APP_AUTH_CONFIGURED){
+
+app.post('/api/app/register',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH){
+        return respostaErro(res,409,'Cadastro multiusuário está desativado.');
+    }
+    if(!ML_HUB_ALLOW_SIGNUP){
+        return respostaErro(res,403,'Novos cadastros estão temporariamente fechados.');
+    }
+    if(!db)return respostaErro(res,503,'PostgreSQL é obrigatório para criar contas.');
+
+    try{
+        const email=String(req.body?.email||'').trim().toLowerCase();
+        const name=String(req.body?.name||'').trim();
+        const password=String(req.body?.password||'');
+        const remember=Boolean(req.body?.remember);
+
+        if(!emailValidoV95(email)){
+            return respostaErro(res,400,'Informe um e-mail válido.');
+        }
+        if(name.length<2){
+            return respostaErro(res,400,'Informe seu nome ou nome da empresa.');
+        }
+        if(password.length<10){
+            return respostaErro(res,400,'A senha precisa ter pelo menos 10 caracteres.');
+        }
+
+        const existente=await usuarioPorEmailV95(email);
+        if(existente){
+            return respostaErro(res,409,'Já existe uma conta com este e-mail.');
+        }
+
+        const user=await criarUsuarioV95({email,name,password});
+        const sessao=criarSessaoV94({
+            email:user.email,
+            user_id:user.id,
+            workspace_id:user.workspace_id,
+            name:user.name
+        },remember);
+
+        setCookieSessaoV94(res,sessao.token,sessao.ttl);
+
+        return res.status(201).json({
+            sucesso:true,
+            authenticated:true,
+            user
+        });
+    }catch(e){
+        if(String(e?.code||'')==='23505'){
+            return respostaErro(res,409,'Já existe uma conta com este e-mail.');
+        }
+        console.error('[REGISTER V95]',e);
+        return respostaErro(res,500,'Erro ao criar conta: '+e.message);
+    }
+});
+
+app.get('/api/app/session',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH){
         return res.json({
             configured:false,
             authenticated:true,
@@ -231,10 +656,47 @@ app.get('/api/app/session',(req,res)=>{
     }
 
     const sessao=sessaoAtualV94(req);
+    if(!sessao){
+        return res.json({
+            configured:true,
+            authenticated:false
+        });
+    }
+
+    let user=null;
+    try{
+        if(db && sessao.uid){
+            await garantirSaasV95();
+            const r=await dbQuery(`
+              SELECT u.id,u.email,u.name,u.status,
+                     m.workspace_id,m.role,w.name workspace_name
+              FROM mlhub_users_v95 u
+              JOIN mlhub_memberships_v95 m ON m.user_id=u.id
+              JOIN mlhub_workspaces_v95 w ON w.id=m.workspace_id
+              WHERE u.id=$1 AND m.workspace_id=$2
+              LIMIT 1
+            `,[String(sessao.uid),String(sessao.wid)]);
+            user=r.rows[0]||null;
+        }
+    }catch(e){}
+
     return res.json({
         configured:true,
-        authenticated:Boolean(sessao),
-        email:sessao?.sub||null
+        authenticated:true,
+        email:user?.email||sessao.sub||null,
+        user:user?{
+            id:user.id,
+            email:user.email,
+            name:user.name,
+            workspace_id:user.workspace_id,
+            workspace_name:user.workspace_name,
+            role:user.role
+        }:{
+            id:sessao.uid||null,
+            email:sessao.sub||null,
+            name:sessao.name||null,
+            workspace_id:sessao.wid||null
+        }
     });
 });
 
@@ -247,8 +709,8 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v94-secure-saas-foundation',
-        auth_configured:APP_AUTH_CONFIGURED,
+        version: 'ml-hub-pro-v95-multiuser-multiconta',
+        auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
     });
@@ -259,6 +721,7 @@ app.use('/api',(req,res,next)=>{
 
     const publicos=new Set([
         '/api/app/login',
+        '/api/app/register',
         '/api/app/session',
         '/api/app/logout',
         '/api/healthz',
@@ -268,14 +731,47 @@ app.use('/api',(req,res,next)=>{
     ]);
 
     if(publicos.has(original))return next();
-    if(!APP_AUTH_CONFIGURED)return next();
+    if(!ML_HUB_SAAS_AUTH)return next();
 
     const sessao=sessaoAtualV94(req);
     if(!sessao){
         return respostaErro(res,401,'Sessão do ML Hub Pro expirada. Entre novamente.');
     }
 
+
     req.mlhubUser=sessao;
+    next();
+});
+
+app.use('/api',async(req,res,next)=>{
+    const original=String(req.originalUrl||'').split('?')[0];
+    const semTokenML=new Set([
+        '/api/app/login',
+        '/api/app/register',
+        '/api/app/session',
+        '/api/app/logout',
+        '/api/healthz',
+        '/api/version',
+        '/api/oauth/start',
+        '/api/oauth/status',
+        '/api/oauth/connections',
+        '/api/v94/security/status'
+    ]);
+
+    if(!ML_HUB_SAAS_AUTH || semTokenML.has(original))return next();
+    if(!req.mlhubUser?.uid || !req.mlhubUser?.wid)return next();
+
+    try{
+        const c=await conexaoAtivaUsuarioV95(req.mlhubUser.uid,req.mlhubUser.wid);
+        if(c){
+            req.mlhubConnection=c;
+            req.mlhubSellerId=String(c.seller_id||'');
+            req.mlhubAccessToken=await renovarConexaoV95(c,false);
+        }
+    }catch(e){
+        console.warn('[TOKEN SESSION V95]',e.message);
+    }
+
     next();
 });
 
@@ -327,14 +823,14 @@ async function registrarAuditoriaV94(req,status){
     try{
         if(typeof db==='undefined'||!db)return;
         await garantirAuditoriaV94();
-        const store=lerOAuthStore();
+        const store=ML_HUB_SAAS_AUTH?null:lerOAuthStore();
         await dbQuery(`
           INSERT INTO ml_audit_v94(
             actor,seller_id,method,path,status,ip,user_agent,request_id
           ) VALUES($1,$2,$3,$4,$5,$6,$7,$8)
         `,[
             String(req.mlhubUser?.sub||'app'),
-            store?.user_id?String(store.user_id):null,
+            req.mlhubSellerId?String(req.mlhubSellerId):(store?.user_id?String(store.user_id):null),
             String(req.method||''),
             String(req.originalUrl||'').split('?')[0].slice(0,500),
             Number(status||0),
@@ -528,8 +1024,10 @@ app.get('/', (req, res) => {
 ========================================================= */
 
 function obterToken(req) {
+    if(req?.mlhubAccessToken)return req.mlhubAccessToken;
+
     if(ML_HUB_ALLOW_LEGACY_TOKEN){
-        let token=req.headers['authorization'];
+        let token=req?.headers?.['authorization'];
         if(token){
             token=token.replace(/^Bearer\s+/i,'').trim();
             if(token && token!=='AUTO' && token!=='null' && token!=='undefined'){
@@ -538,8 +1036,7 @@ function obterToken(req) {
         }
     }
 
-    const store=lerOAuthStore();
-    return store.access_token || null;
+    return null;
 }
 
 function respostaErro(res, status, mensagem) {
@@ -693,44 +1190,122 @@ async function calcularFreteExato(itemObj, token) {
 ========================================================= */
 
 app.get('/api/oauth/status', async (req, res) => {
-    try {
-        const store = lerOAuthStore();
-        if (!store.access_token && !store.refresh_token) {
-            return res.json({ connected: false });
+    try{
+        if(ML_HUB_SAAS_AUTH){
+            if(!req.mlhubUser?.uid || !req.mlhubUser?.wid){
+                return res.json({connected:false});
+            }
+
+            const c=await conexaoAtivaUsuarioV95(req.mlhubUser.uid,req.mlhubUser.wid);
+            if(!c)return res.json({connected:false});
+
+            let token=null;
+            try{token=await renovarConexaoV95(c,false)}catch(e){}
+
+            return res.json({
+                connected:Boolean(token),
+                renewable:Boolean(c.refresh_token_enc && ML_APP_CLIENT_ID && ML_APP_CLIENT_SECRET),
+                connection_id:Number(c.id),
+                user_id:String(c.seller_id),
+                seller_id:String(c.seller_id),
+                nickname:c.nickname||null,
+                expires_at:c.expires_at||null,
+                token_preview:null,
+                workspace_id:String(c.workspace_id)
+            });
         }
 
-        let token = null;
-        try { token = await renovarAccessTokenSeNecessario(false); } catch (erro) { token = store.access_token || null; }
-
-        let nickname = store.nickname || null;
-        let userId = store.user_id || null;
-
-        if (token) {
-            try {
-                const meRes = await fetch(`${ML_API}/users/me`, {
-                    headers: { Authorization: 'Bearer ' + token }
-                });
-                const me = await jsonSeguro(meRes);
-                if (meRes.ok && me.id) {
-                    nickname = me.nickname || nickname;
-                    userId = me.id;
-                    salvarOAuthStore({ ...lerOAuthStore(), nickname, user_id: userId });
-                }
-            } catch (erro) {}
-        }
-
-        const atual = lerOAuthStore();
+        const store=lerOAuthStore();
         return res.json({
-            connected: Boolean(token),
-            renewable: Boolean(atual.refresh_token && ML_APP_CLIENT_ID && ML_APP_CLIENT_SECRET),
-            user_id: userId,
-            nickname,
-            expires_at: atual.expires_at || null,
-            redirect_uri: atual.redirect_uri || null,
-            token_preview: null
+            connected:Boolean(store.access_token||store.refresh_token),
+            renewable:Boolean(store.refresh_token&&ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET),
+            user_id:store.user_id||null,
+            nickname:store.nickname||null,
+            expires_at:store.expires_at||null,
+            token_preview:null
         });
-    } catch (erro) {
-        return respostaErro(res, 500, 'Erro ao consultar conex\u00e3o OAuth: ' + erro.message);
+    }catch(e){
+        return respostaErro(res,500,'Erro ao consultar conexão OAuth: '+e.message);
+    }
+});
+
+
+app.get('/api/oauth/connections',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH){
+        const s=lerOAuthStore();
+        return res.json({sucesso:true,itens:s.user_id?[{
+            id:1,
+            seller_id:String(s.user_id),
+            nickname:s.nickname||'Mercado Livre',
+            is_active:true
+        }]:[]});
+    }
+
+    if(!req.mlhubUser?.uid || !req.mlhubUser?.wid){
+        return respostaErro(res,401,'Sessão inválida.');
+    }
+
+    try{
+        await garantirSaasV95();
+        const r=await dbQuery(`
+          SELECT id,seller_id,nickname,is_active,connected_at,updated_at
+          FROM ml_connections_v95
+          WHERE user_id=$1 AND workspace_id=$2
+          ORDER BY is_active DESC,updated_at DESC
+        `,[String(req.mlhubUser.uid),String(req.mlhubUser.wid)]);
+
+        return res.json({
+            sucesso:true,
+            itens:r.rows.map(x=>({
+                id:Number(x.id),
+                seller_id:String(x.seller_id),
+                nickname:x.nickname||'Mercado Livre',
+                is_active:Boolean(x.is_active),
+                connected_at:x.connected_at,
+                updated_at:x.updated_at
+            }))
+        });
+    }catch(e){
+        return respostaErro(res,500,'Erro ao listar contas Mercado Livre: '+e.message);
+    }
+});
+
+app.post('/api/oauth/connections/:id/activate',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH)return respostaErro(res,409,'Modo multiusuário desativado.');
+    if(!req.mlhubUser?.uid || !req.mlhubUser?.wid)return respostaErro(res,401,'Sessão inválida.');
+
+    try{
+        const c=await conexaoPorIdV95(req.params.id,req.mlhubUser.uid,req.mlhubUser.wid);
+        if(!c)return respostaErro(res,404,'Conta Mercado Livre não encontrada.');
+
+        const client=await db.connect();
+        try{
+            await client.query('BEGIN');
+            await client.query(`
+              UPDATE ml_connections_v95
+              SET is_active=FALSE,updated_at=NOW()
+              WHERE user_id=$1 AND workspace_id=$2
+            `,[String(req.mlhubUser.uid),String(req.mlhubUser.wid)]);
+            await client.query(`
+              UPDATE ml_connections_v95
+              SET is_active=TRUE,updated_at=NOW()
+              WHERE id=$1
+            `,[Number(c.id)]);
+            await client.query('COMMIT');
+        }catch(e){
+            try{await client.query('ROLLBACK')}catch(_){}
+            throw e;
+        }finally{
+            client.release();
+        }
+
+        return res.json({
+            sucesso:true,
+            seller_id:String(c.seller_id),
+            nickname:c.nickname||null
+        });
+    }catch(e){
+        return respostaErro(res,500,'Erro ao trocar conta Mercado Livre: '+e.message);
     }
 });
 
@@ -755,10 +1330,16 @@ function frontendSeguroV94(valor){
     return DEFAULT_FRONTEND_URL;
 }
 
-function criarTransacaoOAuthV94(frontendUrl){
+function criarTransacaoOAuthV94(frontendUrl,identidade=null){
     if(!ML_APP_CLIENT_ID || !ML_APP_CLIENT_SECRET || !ML_APP_REDIRECT_URI){
-        const e=new Error('Configure ML_CLIENT_ID, ML_CLIENT_SECRET e ML_REDIRECT_URI no Render.');
+        const e=new Error('Configure as credenciais da APLICAÇÃO ML Hub Pro no Render.');
         e.status=503;
+        throw e;
+    }
+
+    if(ML_HUB_SAAS_AUTH && (!identidade?.uid || !identidade?.wid)){
+        const e=new Error('Entre no ML Hub Pro antes de conectar uma conta Mercado Livre.');
+        e.status=401;
         throw e;
     }
 
@@ -773,6 +1354,9 @@ function criarTransacaoOAuthV94(frontendUrl){
         state,
         verifier:codeVerifier,
         frontend:frontendSeguroV94(frontendUrl),
+        uid:identidade?.uid||null,
+        wid:identidade?.wid||null,
+        email:identidade?.sub||null,
         exp:Math.floor(Date.now()/1000)+15*60
     }));
 
@@ -784,8 +1368,7 @@ function criarTransacaoOAuthV94(frontendUrl){
         redirect_uri:ML_APP_REDIRECT_URI,
         state,
         code_challenge:codeChallenge,
-        code_challenge_method:'S256',
-        scope:'offline_access read write'
+        code_challenge_method:'S256'
     });
 
     return {
@@ -817,17 +1400,35 @@ function limparCookieOAuthV94(res){
 
 
 app.get('/api/v94/security/status',async(req,res)=>{
-    const store=lerOAuthStore();
+    let connected=false,sellerId=null,nickname=null;
+    try{
+        if(ML_HUB_SAAS_AUTH && req.mlhubUser?.uid && req.mlhubUser?.wid){
+            const c=await conexaoAtivaUsuarioV95(req.mlhubUser.uid,req.mlhubUser.wid);
+            connected=Boolean(c);
+            sellerId=c?.seller_id||null;
+            nickname=c?.nickname||null;
+        }else{
+            const store=lerOAuthStore();
+            connected=Boolean(store.access_token||store.refresh_token);
+            sellerId=store.user_id||null;
+            nickname=store.nickname||null;
+        }
+    }catch(e){}
+
     res.json({
         sucesso:true,
-        app_auth_configured:APP_AUTH_CONFIGURED,
+        app_auth_configured:ML_HUB_SAAS_AUTH,
+        signup_enabled:ML_HUB_ALLOW_SIGNUP,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
-        token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY),
+        token_encryption:true,
         legacy_token_enabled:ML_HUB_ALLOW_LEGACY_TOKEN,
-        connected:Boolean(store.access_token||store.refresh_token),
-        seller_id:store.user_id||null,
-        nickname:store.nickname||null,
-        session_user:req.mlhubUser?.sub||null
+        connected,
+        seller_id:sellerId,
+        nickname,
+        session_user:req.mlhubUser?.sub||null,
+        workspace_id:req.mlhubUser?.wid||null,
+        multiuser:true,
+        multiconnection:true
     });
 });
 
@@ -919,7 +1520,7 @@ app.get('/api/v94/audit',async(req,res)=>{
 
 app.post('/api/oauth/start', async (req,res)=>{
     try{
-        const tx=criarTransacaoOAuthV94(req.body?.frontend_url);
+        const tx=criarTransacaoOAuthV94(req.body?.frontend_url,req.mlhubUser);
         setCookieOAuthV94(res,tx.cookie);
         return res.json({
             sucesso:true,
@@ -933,7 +1534,7 @@ app.post('/api/oauth/start', async (req,res)=>{
 // Compatibilidade: a rota antiga agora usa SOMENTE as credenciais do servidor.
 app.post('/api/oauth/configure', async (req,res)=>{
     try{
-        const tx=criarTransacaoOAuthV94(req.body?.frontend_url);
+        const tx=criarTransacaoOAuthV94(req.body?.frontend_url,req.mlhubUser);
         setCookieOAuthV94(res,tx.cookie);
         return res.json({
             sucesso:true,
@@ -961,6 +1562,11 @@ app.get('/auth/callback', async (req, res) => {
     if(!tx || !code || !state || state!==tx.state){
         limparCookieOAuthV94(res);
         return res.status(400).send('OAuth inválido ou expirado. Volte ao ML Hub Pro e tente novamente.');
+    }
+
+    if(ML_HUB_SAAS_AUTH && (!tx.uid || !tx.wid)){
+        limparCookieOAuthV94(res);
+        return res.status(401).send('A sessão do ML Hub Pro expirou antes da autorização. Entre novamente.');
     }
 
     try{
@@ -1000,26 +1606,82 @@ app.get('/auth/callback', async (req, res) => {
         });
         const me=await jsonSeguro(meRes);
 
-        const novo={
-            client_id:ML_APP_CLIENT_ID,
-            redirect_uri:ML_APP_REDIRECT_URI,
-            frontend_url:frontend,
-            access_token:tokenData.access_token,
-            refresh_token:tokenData.refresh_token,
-            expires_in:Number(tokenData.expires_in||21600),
-            expires_at:Date.now()+Number(tokenData.expires_in||21600)*1000,
-            user_id:tokenData.user_id || me?.id || null,
-            nickname:me?.nickname || null,
-            scope:tokenData.scope || null,
-            connected_at:new Date().toISOString(),
-            updated_at:new Date().toISOString()
-        };
+        if(!meRes.ok || !me?.id){
+            limparCookieOAuthV94(res);
+            return res.status(400).send('O Mercado Livre não retornou o usuário autorizado.');
+        }
 
-        salvarOAuthStore(novo);
+        const sellerId=String(tokenData.user_id||me.id);
+        const expires=Date.now()+Number(tokenData.expires_in||21600)*1000;
+
+        if(ML_HUB_SAAS_AUTH){
+            await garantirSaasV95();
+
+            const client=await db.connect();
+            try{
+                await client.query('BEGIN');
+
+                await client.query(`
+                  UPDATE ml_connections_v95
+                  SET is_active=FALSE,updated_at=NOW()
+                  WHERE user_id=$1 AND workspace_id=$2
+                `,[String(tx.uid),String(tx.wid)]);
+
+                await client.query(`
+                  INSERT INTO ml_connections_v95(
+                    workspace_id,user_id,seller_id,nickname,
+                    access_token_enc,refresh_token_enc,expires_at,scope,
+                    is_active,connected_at,updated_at
+                  )
+                  VALUES($1,$2,$3,$4,$5,$6,$7,$8,TRUE,NOW(),NOW())
+                  ON CONFLICT(workspace_id,seller_id) DO UPDATE SET
+                    user_id=EXCLUDED.user_id,
+                    nickname=EXCLUDED.nickname,
+                    access_token_enc=EXCLUDED.access_token_enc,
+                    refresh_token_enc=EXCLUDED.refresh_token_enc,
+                    expires_at=EXCLUDED.expires_at,
+                    scope=EXCLUDED.scope,
+                    is_active=TRUE,
+                    updated_at=NOW()
+                `,[
+                    String(tx.wid),
+                    String(tx.uid),
+                    sellerId,
+                    me.nickname||null,
+                    criptografarV95(tokenData.access_token),
+                    tokenData.refresh_token?criptografarV95(tokenData.refresh_token):null,
+                    expires,
+                    tokenData.scope||null
+                ]);
+
+                await client.query('COMMIT');
+            }catch(e){
+                try{await client.query('ROLLBACK')}catch(_){}
+                throw e;
+            }finally{
+                client.release();
+            }
+        }else{
+            salvarOAuthStore({
+                client_id:ML_APP_CLIENT_ID,
+                redirect_uri:ML_APP_REDIRECT_URI,
+                frontend_url:frontend,
+                access_token:tokenData.access_token,
+                refresh_token:tokenData.refresh_token,
+                expires_in:Number(tokenData.expires_in||21600),
+                expires_at:expires,
+                user_id:sellerId,
+                nickname:me.nickname||null,
+                scope:tokenData.scope||null,
+                connected_at:new Date().toISOString(),
+                updated_at:new Date().toISOString()
+            });
+        }
+
         limparCookieOAuthV94(res);
 
         return res.redirect(
-            `${frontend}${frontend.includes('?')?'&':'?'}oauth=success`
+            `${frontend}${frontend.includes('?')?'&':'?'}oauth=success&seller=${encodeURIComponent(sellerId)}`
         );
     }catch(e){
         limparCookieOAuthV94(res);
@@ -1121,9 +1783,29 @@ app.post('/api/oauth/manual-token', (req, res) => {
     return res.json({ sucesso: true });
 });
 
-app.post('/api/oauth/disconnect', (req, res) => {
-    limparOAuthStore();
-    return res.json({ sucesso: true });
+app.post('/api/oauth/disconnect', async (req, res) => {
+    try{
+        if(ML_HUB_SAAS_AUTH){
+            if(!req.mlhubUser?.uid || !req.mlhubUser?.wid){
+                return respostaErro(res,401,'Sessão inválida.');
+            }
+
+            const c=await conexaoAtivaUsuarioV95(req.mlhubUser.uid,req.mlhubUser.wid);
+            if(c){
+                await dbQuery(`
+                  DELETE FROM ml_connections_v95
+                  WHERE id=$1 AND user_id=$2 AND workspace_id=$3
+                `,[Number(c.id),String(req.mlhubUser.uid),String(req.mlhubUser.wid)]);
+            }
+
+            return res.json({sucesso:true,connected:false});
+        }
+
+        limparOAuthStore();
+        return res.json({sucesso:true,connected:false});
+    }catch(e){
+        return respostaErro(res,500,'Erro ao desconectar: '+e.message);
+    }
 });
 
 /* =========================================================
@@ -6338,15 +7020,20 @@ async function processarSyncCompleto(job) {
 }
 
 async function obterTokenPersistenteParaSeller(sellerId) {
-    // O projeto atual usa um store OAuth \u00fanico. Valida se ele pertence ao seller do job.
-    try {
+    try{
+        if(ML_HUB_SAAS_AUTH){
+            return await tokenParaSellerV95(String(sellerId));
+        }
+
         const store=lerOAuthStore();
-        if(!store?.access_token) return null;
+        if(!store?.access_token)return null;
         const token=await renovarAccessTokenSeNecessario(false);
         const meRes=await mlFetch(`${ML_API}/users/me`,token);
         const me=await jsonSeguro(meRes);
         return String(me?.id)===String(sellerId)?token:null;
-    } catch(e){return null}
+    }catch(e){
+        return null;
+    }
 }
 
 async function processarNotificacaoFila() {
