@@ -1804,6 +1804,81 @@ app.get('/api/v22/top10',responderTop10V23);
  * - vendas reais
  * - top 10 an\u00fancios
  */
+
+function dataHoraSaoPauloV93(date=new Date()){
+    const tz='America/Sao_Paulo';
+    const fmt=new Intl.DateTimeFormat('en-CA',{
+        timeZone:tz,
+        year:'numeric',
+        month:'2-digit',
+        day:'2-digit',
+        hour:'2-digit',
+        minute:'2-digit',
+        second:'2-digit',
+        hourCycle:'h23'
+    });
+
+    const parts=Object.fromEntries(
+        fmt.formatToParts(date)
+          .filter(x=>x.type!=='literal')
+          .map(x=>[x.type,x.value])
+    );
+
+    const y=Number(parts.year),m=Number(parts.month),d=Number(parts.day);
+    const hh=Number(parts.hour),mm=Number(parts.minute),ss=Number(parts.second);
+
+    // Calcula o offset real do fuso naquela data; não fixa -03:00 no código.
+    const localComoUtc=Date.UTC(y,m-1,d,hh,mm,ss);
+    const offsetMin=Math.round((localComoUtc-date.getTime())/60000);
+    const sinal=offsetMin>=0?'+':'-';
+    const abs=Math.abs(offsetMin);
+    const offH=String(Math.floor(abs/60)).padStart(2,'0');
+    const offM=String(abs%60).padStart(2,'0');
+    const offset=`${sinal}${offH}:${offM}`;
+
+    const dia=`${parts.year}-${parts.month}-${parts.day}`;
+    const hora=`${parts.hour}:${parts.minute}:${parts.second}`;
+
+    return {
+        dia,
+        hora,
+        offset,
+        inicio:`${dia}T00:00:00${offset}`,
+        agora:`${dia}T${hora}${offset}`,
+        data_br:`${parts.day}/${parts.month}/${parts.year}`
+    };
+}
+
+async function buscarVisitasHojeV93(token,sellerId){
+    const sp=dataHoraSaoPauloV93(new Date());
+
+    const url=
+      `${ML_API}/users/${encodeURIComponent(String(sellerId))}/items_visits`+
+      `?date_from=${encodeURIComponent(sp.inicio)}`+
+      `&date_to=${encodeURIComponent(sp.agora)}`;
+
+    const r=await mlFetch(url,token);
+    const d=await jsonSeguro(r);
+
+    if(!r.ok){
+        const e=new Error(
+            formatarErroMercadoLivre(d) ||
+            `Não foi possível consultar as visitas de hoje (HTTP ${r.status}).`
+        );
+        e.status=r.status;
+        throw e;
+    }
+
+    return {
+        total:Number(d?.total_visits??0),
+        periodo:`${sp.data_br} · hoje · atualizado ${sp.hora.slice(0,5)}`,
+        data_local:sp.dia,
+        atualizado_em:sp.agora,
+        date_from:d?.date_from||sp.inicio,
+        date_to:d?.date_to||sp.agora
+    };
+}
+
 app.get('/api/dashboard', async (req, res) => {
     const token =
         obterToken(req);
@@ -1841,29 +1916,21 @@ app.get('/api/dashboard', async (req, res) => {
 
         const sellerId =
             user.id;
-
-        // Visitas recentes da conta. O recurso oficial retorna total_visits
-        // por janela di\u00e1ria para os an\u00fancios do vendedor.
-        let visitasDia = { total: null, periodo: 'Visitas do dia' };
+        // V93: visitas somente do DIA LOCAL atual do vendedor.
+        // O antigo last=1&unit=day fechava uma janela diária completa e podia
+        // exibir o dia anterior. Agora usamos 00:00 de São Paulo até o instante atual.
+        let visitasDia = {
+            total: null,
+            periodo: 'Visitas de hoje',
+            data_local: dataHoraSaoPauloV93(new Date()).dia
+        };
         try {
-            const vr = await mlFetch(
-                `${ML_API}/users/${sellerId}/items_visits/time_window?last=1&unit=day`,
-                token
-            );
-            const vd = await jsonSeguro(vr);
-            if (vr.ok) {
-                visitasDia = {
-                    total: Number(vd?.total_visits ?? 0),
-                    periodo: vd?.date_from && vd?.date_to
-                        ? `${new Date(vd.date_from).toLocaleDateString('pt-BR')} \u00b7 janela di\u00e1ria`
-                        : 'Janela di\u00e1ria da API'
-                };
-            }
+            visitasDia = await buscarVisitasHojeV93(token, sellerId);
         } catch (e) {
-            console.warn('[DASHBOARD VISITAS]', e.message);
+            console.warn('[DASHBOARD VISITAS V93]', e.message);
         }
 
-        const pedidos =
+const pedidos =
             await buscarPedidosDoVendedor(
                 token,
                 sellerId
@@ -3290,6 +3357,142 @@ async function enriquecerComissoesDiretoV87(rawItens,token){
     };
 }
 
+
+
+/* =========================================================
+   V93 — ANÚNCIOS · LOTE REAL DE ATÉ 1.000
+   - o scan do ML é encadeado (scroll_id), portanto as 10 páginas
+     de 100 precisam ser obtidas em sequência;
+   - assim que os 1.000 IDs estão reunidos, detalhes e comissão
+     são processados em paralelo com concorrência controlada;
+   - o frontend salva um checkpoint somente após fechar o lote.
+========================================================= */
+app.get('/api/v93/anuncios/lote1000',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        let scrollId=String(req.query.scroll_id||'').trim()||null;
+
+        const ids=[];
+        let total=0;
+        let terminou=false;
+
+        for(let paginaN=0;paginaN<10 && !terminou;paginaN++){
+            const pagina=await buscarPaginaScanV84({
+                sellerId,
+                token,
+                scrollId
+            });
+
+            if(pagina.cursor_expirado){
+                return res.status(409).json({
+                    sucesso:false,
+                    cursor_expirado:true,
+                    seller_id:sellerId,
+                    erro:'Cursor expirado.'
+                });
+            }
+
+            if(total<=0 && Number(pagina.total||0)>0){
+                total=Number(pagina.total||0);
+            }
+
+            const novos=Array.isArray(pagina.results)
+                ? pagina.results.map(String).filter(Boolean)
+                : [];
+
+            for(const id of novos){
+                if(!ids.includes(id)){
+                    ids.push(id);
+                    if(ids.length>=1000)break;
+                }
+            }
+
+            scrollId=pagina.scroll_id||null;
+
+            if(!novos.length || !scrollId || ids.length>=1000){
+                terminou=!scrollId || !novos.length;
+                break;
+            }
+        }
+
+        let mapa={};
+        if(ids.length){
+            const detalhes=await buscarItensBulkFreteRapido(token,ids);
+            mapa=detalhes?.mapa||{};
+        }
+
+        const raws=ids.map(id=>mapa[String(id)]).filter(Boolean);
+
+        const comissoes=raws.length
+            ? await enriquecerComissoesDiretoV87(raws,token)
+            : {mapa:new Map(),erros:0,consultas:0};
+
+        const itens=[];
+
+        for(const id of ids){
+            const raw=mapa[String(id)];
+            if(!raw)continue;
+
+            const n=normalizarItemGestao(raw);
+            const fee=comissoes.mapa.get(String(id))||{
+                sale_fee:0,
+                commission_percentage:0
+            };
+
+            const price=Number(n.preco||0);
+            const saleFee=Math.max(0,Number(fee.sale_fee||0));
+
+            itens.push({
+                id:String(n.id||id),
+                title:String(n.titulo||''),
+                sku:String(n.sku||''),
+                price,
+                sale_fee:saleFee,
+                commission_percentage:Math.max(0,Number(fee.commission_percentage||0)),
+                shipping_cost:Number(raw?.shipping_cost||0),
+                net_received:Math.max(0,price-saleFee-Number(raw?.shipping_cost||0)),
+                available_quantity:Number(n.estoque||0),
+                sold_quantity:Number(n.vendidos||0),
+                status:String(n.status||''),
+                listing_type_id:String(n.listing_type_id||''),
+                category_id:String(n.categoria||''),
+                thumbnail:String(n.thumbnail||''),
+                permalink:String(n.permalink||''),
+                last_updated:n.atualizado_em||raw?.last_updated||null,
+                date_created:raw?.date_created||null
+            });
+        }
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_v93_batch_1000',
+            seller_id:sellerId,
+            total,
+            ids_count:ids.length,
+            itens_count:itens.length,
+            commission_queries:Number(comissoes.consultas||0),
+            commission_errors:Number(comissoes.erros||0),
+            scroll_id:scrollId,
+            terminou:Boolean(terminou),
+            itens
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária no lote de anúncios. O checkpoint anterior permanece válido.'
+              : 'Erro ao puxar lote de 1.000 anúncios: '+msg
+        );
+    }
+});
 
 app.get('/api/v88/anuncios/scan', async (req,res)=>{
     const token=obterToken(req);
@@ -7908,7 +8111,7 @@ async function buscarItensBulkFreteRapido(token,ids){
 
     // V84: 1.000 anúncios = 50 chamadas bulk. 24 simultâneas é rápido
     // sem abrir conexões demais no Render/ML.
-    const concorrencia=Math.max(6,Math.min(32,Number(process.env.ML_BULK_CONCURRENCY||24)));
+    const concorrencia=Math.max(6,Math.min(40,Number(process.env.ML_BULK_CONCURRENCY||32)));
     let cursor=0;
 
     async function worker(){
@@ -8269,6 +8472,77 @@ async function prepararJobEscalaV26(sellerId,type,payload,total,{retomarFalha=tr
     return {job:r.rows[0],retomado:false};
 }
 
+
+/* =========================================================
+   V92 — PREÇOS DIRETO · LOTE REAL DE ATÉ 1.000
+   Não depende do PostgreSQL.
+========================================================= */
+app.post('/api/v92/precos/direto',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const ids=[...new Set(
+            (Array.isArray(req.body?.ids)?req.body.ids:[])
+              .map(String)
+              .filter(Boolean)
+        )].slice(0,1000);
+
+        if(!ids.length){
+            return res.json({
+                sucesso:true,
+                mode:'direct_price_v92',
+                total:0,
+                resultados:[]
+            });
+        }
+
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+
+        const resultados=ids.map(id=>{
+            const item=detalhes?.mapa?.[String(id)];
+            const price=Number(item?.price);
+
+            if(item && Number.isFinite(price)){
+                return {
+                    id:String(id),
+                    sucesso:true,
+                    price,
+                    available_quantity:Number(item.available_quantity||0),
+                    sold_quantity:Number(item.sold_quantity||0),
+                    status:String(item.status||'')
+                };
+            }
+
+            return {
+                id:String(id),
+                sucesso:false,
+                price:null,
+                erro:detalhes?.falhas?.get?.(String(id))||'Mercado Livre não retornou o preço deste anúncio.'
+            };
+        });
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_price_v92',
+            total:resultados.length,
+            falhas:resultados.filter(x=>!x.sucesso).length,
+            resultados
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária ao consultar preços. Tente novamente; o checkpoint local permanece salvo.'
+              : 'Erro ao puxar preços: '+msg
+        );
+    }
+});
+
 app.post('/api/scale/precos',async(req,res)=>{
     const token=obterToken(req);if(!token)return respostaErro(res,401,'Token n\u00e3o fornecido.');
     if(!db)return respostaErro(res,503,'PostgreSQL n\u00e3o configurado.');
@@ -8304,6 +8578,153 @@ app.post('/api/scale/precos',async(req,res)=>{
    Recebe até 100 IDs já salvos no navegador, consulta o
    Mercado Livre e devolve o custo exato por anúncio.
 ========================================================= */
+
+/* =========================================================
+   V93 — FRETES · LOTE REAL DE ATÉ 1.000
+   O lote inteiro chega de uma vez. Internamente usamos workers
+   adaptativos para manter velocidade sem explodir rate limit.
+========================================================= */
+app.post('/api/v93/fretes/lote1000',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
+    try{
+        const ids=[...new Set(
+            (Array.isArray(req.body?.ids)?req.body.ids:[])
+              .map(String)
+              .filter(Boolean)
+        )].slice(0,1000);
+
+        if(!ids.length){
+            return res.json({
+                sucesso:true,
+                mode:'direct_freight_v93_batch_1000',
+                total:0,
+                falhas:0,
+                resultados:[]
+            });
+        }
+
+        const detalhes=await buscarItensBulkFreteRapido(token,ids);
+        const raws=ids.map(id=>detalhes?.mapa?.[String(id)]).filter(Boolean);
+
+        const resultados=new Array(raws.length);
+        let cursor=0;
+
+        const CONC=Math.max(
+            8,
+            Math.min(32,Number(process.env.ML_FREIGHT_V93_CONCURRENCY||20))
+        );
+
+        async function worker(){
+            while(true){
+                const idx=cursor++;
+                if(idx>=raws.length)return;
+
+                const item=raws[idx];
+                let ultimoErro=null;
+
+                for(let tentativa=1;tentativa<=5;tentativa++){
+                    try{
+                        const fr=await calcularFreteEscalaRobusto(item,token);
+
+                        resultados[idx]={
+                            id:String(item.id),
+                            sucesso:true,
+                            shipping_cost:Number(fr.custo||0),
+                            free_shipping:Boolean(fr.gratis),
+                            attempts:tentativa,
+                            erro:null
+                        };
+
+                        ultimoErro=null;
+                        break;
+                    }catch(e){
+                        ultimoErro=e;
+                        const msg=String(e?.message||e||'');
+
+                        const temporario=
+                          /429|408|500|502|503|504|timeout|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|socket|fetch|network/i.test(msg);
+
+                        if(!temporario || tentativa>=5)break;
+
+                        await esperarFrete(
+                            Math.min(7000,350*Math.pow(2,tentativa-1))
+                        );
+                    }
+                }
+
+                if(ultimoErro && !resultados[idx]){
+                    try{
+                        const custo=await calcularFreteExato(item,token);
+                        resultados[idx]={
+                            id:String(item.id),
+                            sucesso:true,
+                            shipping_cost:Number(custo||0),
+                            free_shipping:Boolean(item?.shipping?.free_shipping),
+                            fallback:true,
+                            erro:null
+                        };
+                    }catch(e2){
+                        resultados[idx]={
+                            id:String(item.id),
+                            sucesso:false,
+                            shipping_cost:null,
+                            free_shipping:Boolean(item?.shipping?.free_shipping),
+                            erro:String(e2?.message||ultimoErro?.message||'Falha ao consultar frete.')
+                        };
+                    }
+                }
+            }
+        }
+
+        await Promise.all(
+            Array.from(
+                {length:Math.min(CONC,Math.max(1,raws.length))},
+                ()=>worker()
+            )
+        );
+
+        const porId=new Map(
+            (resultados||[])
+              .filter(Boolean)
+              .map(x=>[String(x.id),x])
+        );
+
+        const saida=ids.map(id=>{
+            if(porId.has(String(id)))return porId.get(String(id));
+
+            return {
+                id:String(id),
+                sucesso:false,
+                shipping_cost:null,
+                free_shipping:false,
+                erro:detalhes?.falhas?.get?.(String(id))||
+                    'Mercado Livre não retornou os detalhes deste anúncio.'
+            };
+        });
+
+        return res.json({
+            sucesso:true,
+            mode:'direct_freight_v93_batch_1000',
+            total:saida.length,
+            falhas:saida.filter(x=>!x.sucesso).length,
+            resultados:saida
+        });
+    }catch(e){
+        const msg=String(e?.message||e||'');
+        const temp=/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|AbortError|timeout|socket|fetch|network|429|500|502|503|504/i.test(msg);
+
+        return respostaErro(
+            res,
+            temp?503:500,
+            temp
+              ? 'Instabilidade temporária no lote de fretes. Tente novamente; o checkpoint não foi perdido.'
+              : 'Erro ao puxar lote de 1.000 fretes: '+msg
+        );
+    }
+});
+
 app.post('/api/v89/fretes/direto',async(req,res)=>{
     const token=obterToken(req);
     if(!token)return respostaErro(res,401,'Token não fornecido.');
