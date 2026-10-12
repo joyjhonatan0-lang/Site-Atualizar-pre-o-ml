@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>ML Hub Pro | Secure Commerce OS V94</title>
+    <title>ML Hub Pro | Multiuser Commerce OS V95</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -20,7 +20,7 @@ function rotuloSituacaoV64(valor,contexto='anuncio'){
         finished:'Conclu\u00eddo',failed:'Falhou',error:'Erro',cancelled:'Cancelado',canceled:'Cancelado',
         opened:'Aberto',open:'Aberto',resolved:'Resolvido',on_hold:'Suspenso',expired:'Expirado'};
     const grupos={
-        pedido:{paid:'Pago',confirmed:'Confirmado',payment_required:'Aguardando pagamento',payment_in_processa:'Pagamento em processamento',
+        pedido:{paid:'Pago',confirmed:'Confirmado',payment_required:'Aguardando pagamento',payment_in_process:'Pagamento em processamento',
             partially_paid:'Parcialmente pago',partially_refunded:'Parcialmente reembolsado',refunded:'Reembolsado',closed:'Finalizado'},
         envio:{pending:'Pendente',handling:'Em prepara\u00e7\u00e3o',ready_to_ship:'Pronto para envio',shipped:'Enviado',delivered:'Entregue',
             not_delivered:'N\u00e3o entregue',to_be_agreed:'A combinar',not_verified:'Aguardando verifica\u00e7\u00e3o',label_printed:'Etiqueta impressa'},
@@ -805,7 +805,7 @@ button:disabled{
                         <div><span>03</span><div><strong>Auditoria</strong><small>Ações de escrita podem ser registradas para rastreabilidade.</small></div></div>
                     </div>
                 </div>
-                <div class="v93-login-brand-footer">ML HUB PRO · SECURE WORKSPACE V94</div>
+                <div class="v93-login-brand-footer">ML HUB PRO · MULTIUSER WORKSPACE V95</div>
             </section>
 
             <section class="v93-login-form">
@@ -815,13 +815,26 @@ button:disabled{
                 </div>
 
                 <div id="mlhub-app-login-stage-v94">
-                    <div class="v93-form-eyebrow">WORKSPACE SEGURO</div>
-                    <h2>Entrar no ML Hub Pro</h2>
-                    <p>Use o e-mail e a senha definidos no Render. Depois, conecte sua conta Mercado Livre com um clique.</p>
+                    <div class="v93-form-eyebrow">WORKSPACE MULTIUSUÁRIO</div>
+                    <h2 id="mlhub-login-title-v95">Entrar no ML Hub Pro</h2>
+                    <p id="mlhub-login-subtitle-v95">Entre na sua conta. Cada usuário conecta o próprio Mercado Livre depois do login.</p>
+
+                    <div class="flex gap-2 mt-5 p-1 bg-slate-950/70 border border-slate-800 rounded-xl">
+                        <button id="mlhub-tab-login-v95" onclick="modoAuthV95('login')" class="flex-1 bg-yellow-400 text-slate-950 text-[10px] font-black px-3 py-2 rounded-lg">Entrar</button>
+                        <button id="mlhub-tab-register-v95" onclick="modoAuthV95('register')" class="flex-1 text-slate-400 text-[10px] font-black px-3 py-2 rounded-lg">Criar conta</button>
+                    </div>
 
                     <div id="oauth-login-status" class="hidden v93-login-status"></div>
 
                     <div class="v93-login-fields">
+                        <label id="mlhub-name-field-v95" class="v93-field hidden">
+                            <span>Nome / empresa</span>
+                            <div class="v93-input-wrap">
+                                <div class="v93-input-icon">N</div>
+                                <input id="app-login-name-v95" type="text" autocomplete="name" placeholder="Seu nome ou empresa">
+                            </div>
+                        </label>
+
                         <label class="v93-field">
                             <span>E-mail</span>
                             <div class="v93-input-wrap">
@@ -834,7 +847,7 @@ button:disabled{
                             <span>Senha</span>
                             <div class="v93-input-wrap">
                                 <div class="v93-input-icon">••</div>
-                                <input id="app-login-password-v94" type="password" autocomplete="current-password" placeholder="Sua senha">
+                                <input id="app-login-password-v94" type="password" autocomplete="current-password" placeholder="Mínimo de 10 caracteres">
                             </div>
                         </label>
                     </div>
@@ -845,15 +858,19 @@ button:disabled{
                             <span class="v93-check"></span>
                             <span>
                                 <strong>Manter sessão neste computador</strong>
-                                <small>O navegador salva apenas a sessão segura, não a senha.</small>
+                                <small>A senha não é salva no navegador.</small>
                             </span>
                         </label>
                     </div>
 
                     <div class="v93-login-actions">
-                        <button onclick="entrarAppV94()" class="v93-primary-btn">
+                        <button id="mlhub-auth-submit-v95" onclick="entrarAppV95()" class="v93-primary-btn">
                             <span>Entrar no workspace</span><b>→</b>
                         </button>
+                    </div>
+
+                    <div class="text-[9px] text-slate-600 mt-4 leading-4">
+                        O Client ID e o Client Secret identificam o aplicativo ML Hub Pro. Eles não identificam a conta do vendedor. Cada seller autoriza sua própria conta e recebe tokens separados.
                     </div>
                 </div>
 
@@ -867,7 +884,7 @@ button:disabled{
                     <div class="mt-7 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
                         <div class="text-xs font-black text-white">Sem Client Secret no navegador</div>
                         <div class="text-[10px] text-slate-500 mt-2 leading-5">
-                            O Client ID, Client Secret, callback e renovação de tokens ficam configurados no servidor Render.
+                            O Client ID e Client Secret identificam o aplicativo ML Hub Pro. Cada vendedor autoriza a própria conta e recebe tokens separados, vinculados ao seu workspace.
                         </div>
                     </div>
 
@@ -1129,6 +1146,19 @@ button:disabled{
                     gap-2
                 "
             >
+
+                <div id="mlhub-account-switcher-v95" class="hidden items-center gap-2">
+                    <select id="mlhub-account-select-v95"
+                        onchange="trocarContaMLV95(this.value)"
+                        class="bg-slate-950 border border-slate-700 text-slate-200 text-[10px] font-bold rounded-xl px-3 py-2.5 min-w-[170px]"
+                        title="Trocar conta Mercado Livre">
+                    </select>
+                    <button onclick="iniciarOAuthML('config')"
+                        class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-yellow-400 text-[10px] font-black px-3 py-2.5 rounded-xl"
+                        title="Conectar outra conta Mercado Livre">
+                        + Conta ML
+                    </button>
+                </div>
 
                 <button
                     id="acao-voltar-inicio"
@@ -8419,6 +8449,163 @@ document.addEventListener('DOMContentLoaded', function () {
 const ML_HUB_FRONTEND_URL = window.location.origin + window.location.pathname;
 const ML_HUB_REMEMBER_EMAIL_V94='mlhub_last_email_v94';
 
+let authModeV95='login';
+
+function modoAuthV95(modo){
+    authModeV95=modo==='register'?'register':'login';
+
+    const reg=authModeV95==='register';
+    document.getElementById('mlhub-name-field-v95')?.classList.toggle('hidden',!reg);
+
+    const t=document.getElementById('mlhub-login-title-v95');
+    const s=document.getElementById('mlhub-login-subtitle-v95');
+    const btn=document.getElementById('mlhub-auth-submit-v95');
+    const tabLogin=document.getElementById('mlhub-tab-login-v95');
+    const tabReg=document.getElementById('mlhub-tab-register-v95');
+
+    if(t)t.innerText=reg?'Criar seu ML Hub Pro':'Entrar no ML Hub Pro';
+    if(s)s.innerText=reg
+      ?'Crie seu workspace e conecte sua própria conta Mercado Livre em seguida.'
+      :'Entre na sua conta. Cada usuário conecta o próprio Mercado Livre depois do login.';
+
+    if(btn){
+        btn.onclick=reg?criarContaAppV95:entrarAppV94;
+        btn.querySelector('span').innerText=reg?'Criar conta e continuar':'Entrar no workspace';
+    }
+
+    if(tabLogin){
+        tabLogin.className=reg
+          ?'flex-1 text-slate-400 text-[10px] font-black px-3 py-2 rounded-lg'
+          :'flex-1 bg-yellow-400 text-slate-950 text-[10px] font-black px-3 py-2 rounded-lg';
+    }
+    if(tabReg){
+        tabReg.className=reg
+          ?'flex-1 bg-yellow-400 text-slate-950 text-[10px] font-black px-3 py-2 rounded-lg'
+          :'flex-1 text-slate-400 text-[10px] font-black px-3 py-2 rounded-lg';
+    }
+}
+
+async function criarContaAppV95(){
+    const name=document.getElementById('app-login-name-v95')?.value.trim()||'';
+    const email=document.getElementById('app-login-email-v94')?.value.trim()||'';
+    const password=document.getElementById('app-login-password-v94')?.value||'';
+    const remember=document.getElementById('app-login-remember-v94')?.checked===true;
+
+    if(name.length<2)return mostrarStatusLoginOAuth('Informe seu nome ou nome da empresa.',true);
+    if(!email)return mostrarStatusLoginOAuth('Informe seu e-mail.',true);
+    if(password.length<10)return mostrarStatusLoginOAuth('A senha precisa ter pelo menos 10 caracteres.',true);
+
+    try{
+        mostrarStatusLoginOAuth('Criando seu workspace seguro...');
+
+        const r=await fetch(`${RENDER_URL}/api/app/register`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({name,email,password,remember})
+        });
+
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.authenticated)throw new Error(d.erro||'Não foi possível criar sua conta.');
+
+        localStorage.setItem(ML_HUB_REMEMBER_EMAIL_V94,email);
+        const pass=document.getElementById('app-login-password-v94');
+        if(pass)pass.value='';
+
+        mostrarEtapaMercadoLivreV94({
+            email:d.user?.email||email,
+            user:d.user
+        });
+    }catch(e){
+        mostrarStatusLoginOAuth(e.message,true);
+    }
+}
+
+async function carregarContasMLV95(){
+    const box=document.getElementById('mlhub-account-switcher-v95');
+    const select=document.getElementById('mlhub-account-select-v95');
+    if(!box||!select)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/oauth/connections?_=${Date.now()}`,{cache:'no-store'});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        const itens=Array.isArray(d.itens)?d.itens:[];
+        if(!itens.length){
+            box.classList.add('hidden');
+            box.classList.remove('flex');
+            select.innerHTML='';
+            return;
+        }
+
+        select.innerHTML=itens.map(x=>`
+          <option value="${String(x.id)}" ${x.is_active?'selected':''}>
+            ${escapeHtml(x.nickname||'Mercado Livre')} · ${escapeHtml(String(x.seller_id||''))}
+          </option>
+        `).join('');
+
+        box.classList.remove('hidden');
+        box.classList.add('flex');
+    }catch(e){
+        console.warn('[CONTAS ML V95]',e);
+    }
+}
+
+async function limparCacheContaV95(){
+    try{
+        const preservar=new Set([ML_HUB_REMEMBER_EMAIL_V94]);
+        const remover=[];
+        for(let i=0;i<localStorage.length;i++){
+            const k=localStorage.key(i);
+            if(!k||preservar.has(k))continue;
+            if(
+                k.startsWith('mlHubPro_') ||
+                k.startsWith('mlhub_') ||
+                k==='ml_oauth_connected' ||
+                k==='ml_access_token'
+            )remover.push(k);
+        }
+        remover.forEach(k=>localStorage.removeItem(k));
+    }catch(e){}
+
+    try{
+        if(window.indexedDB){
+            indexedDB.deleteDatabase('mlHubProAnunciosV43');
+        }
+    }catch(e){}
+
+    try{
+        masterAnunciosV32=[];
+        masterMapV32=new Map();
+        masterCarregadoV32=false;
+        dbCachePromiseV32=null;
+    }catch(e){}
+}
+
+async function trocarContaMLV95(connectionId){
+    if(!connectionId)return;
+
+    try{
+        const r=await fetch(`${RENDER_URL}/api/oauth/connections/${encodeURIComponent(connectionId)}/activate`,{
+            method:'POST'
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||'Não foi possível trocar a conta.');
+
+        await limparCacheContaV95();
+        localStorage.setItem('ml_oauth_connected','1');
+        await atualizarStatusOAuthML();
+        await carregarContasMLV95();
+
+        if(typeof mudarAba==='function')mudarAba('inicio');
+        if(typeof carregarDashboard==='function')carregarDashboard();
+    }catch(e){
+        alert(e.message);
+        carregarContasMLV95();
+    }
+}
+
+
 function mostrarStatusLoginOAuth(mensagem,erro=false,connect=false){
     const id=connect?'oauth-login-status-connect-v94':'oauth-login-status';
     const el=document.getElementById(id);
@@ -8480,9 +8667,13 @@ async function entrarAppV94(){
         const oauth=await consultarStatusOAuthML();
         if(oauth.connected){
             document.getElementById('oauth-login-gate')?.classList.add('hidden');
+            await carregarContasMLV95();
             if(typeof mudarAba==='function')mudarAba('inicio');
         }else{
-            mostrarEtapaMercadoLivreV94(d);
+            mostrarEtapaMercadoLivreV94({
+                email:d.user?.email||email,
+                user:d.user
+            });
         }
     }catch(e){
         mostrarStatusLoginOAuth(e.message,true);
@@ -8493,7 +8684,12 @@ async function sairAppV94(){
     try{
         await fetch(`${RENDER_URL}/api/app/logout`,{method:'POST'});
     }catch(e){}
+
+    await limparCacheContaV95();
     localStorage.removeItem('ml_oauth_connected');
+    localStorage.removeItem('ml_access_token');
+
+    modoAuthV95('login');
     mostrarEtapaLoginV94();
 }
 
@@ -8556,7 +8752,7 @@ async function iniciarOAuthML(origem='login'){
 }
 
 async function desconectarOAuthML(){
-    if(!confirm('Desconectar a conta Mercado Livre deste workspace?'))return;
+    if(!confirm('Desconectar a conta Mercado Livre ativa deste workspace?'))return;
 
     try{
         const r=await fetch(`${RENDER_URL}/api/oauth/disconnect`,{method:'POST'});
@@ -8566,9 +8762,21 @@ async function desconectarOAuthML(){
         return alert(e.message);
     }
 
+    await limparCacheContaV95();
     localStorage.removeItem('ml_oauth_connected');
+
     const sessao=await consultarSessaoAppV94();
-    mostrarEtapaMercadoLivreV94(sessao);
+    const contas=await fetch(`${RENDER_URL}/api/oauth/connections?_=${Date.now()}`,{cache:'no-store'})
+        .then(r=>r.json()).catch(()=>({itens:[]}));
+
+    if(Array.isArray(contas.itens)&&contas.itens.some(x=>x.is_active)){
+        localStorage.setItem('ml_oauth_connected','1');
+        document.getElementById('oauth-login-gate')?.classList.add('hidden');
+        await carregarContasMLV95();
+    }else{
+        mostrarEtapaMercadoLivreV94(sessao);
+    }
+
     atualizarStatusOAuthML();
 }
 
@@ -8582,7 +8790,7 @@ async function carregarSegurancaV94(){
 
         el.innerHTML=[
             `<div>Autenticação do workspace: <b class="${d.app_auth_configured?'text-emerald-400':'text-yellow-400'}">${d.app_auth_configured?'ATIVA':'COMPATIBILIDADE'}</b></div>`,
-            `<div class="mt-1">OAuth no servidor: <b class="${d.oauth_configured?'text-emerald-400':'text-red-300'}">${d.oauth_configured?'CONFIGURADO':'FALTA CONFIGURAR'}</b></div>`,
+            `<div class="mt-1">Aplicativo OAuth no servidor: <b class="${d.oauth_configured?'text-emerald-400':'text-red-300'}">${d.oauth_configured?'CONFIGURADO':'FALTA CONFIGURAR'}</b></div>`,
             `<div class="mt-1">Criptografia de tokens: <b class="${d.token_encryption?'text-emerald-400':'text-yellow-400'}">${d.token_encryption?'ATIVA':'RECOMENDADA'}</b></div>`,
             `<div class="mt-1">Login manual por token: <b class="${d.legacy_token_enabled?'text-yellow-400':'text-emerald-400'}">${d.legacy_token_enabled?'LEGADO ATIVO':'DESATIVADO'}</b></div>`
         ].join('');
@@ -8604,6 +8812,7 @@ function apagarLoginLocalV93(){
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
+    modoAuthV95('login');
     const emailSalvo=localStorage.getItem(ML_HUB_REMEMBER_EMAIL_V94)||'';
     const email=document.getElementById('app-login-email-v94');
     if(email&&!email.value)email.value=emailSalvo;
@@ -8627,12 +8836,15 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
     if(oauth==='success'){
         history.replaceState({},document.title,window.location.pathname);
+        await limparCacheContaV95();
+        localStorage.setItem('ml_oauth_connected','1');
     }
 
     const status=await consultarStatusOAuthML();
 
     if(status.connected){
         document.getElementById('oauth-login-gate')?.classList.add('hidden');
+        await carregarContasMLV95();
 
         const perfilNome=document.getElementById('perfil-nome-conta');
         const perfilStatus=document.getElementById('perfil-status-conta');
