@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>ML Hub Pro | Enterprise Commerce OS</title>
+    <title>ML Hub Pro | Secure Commerce OS V94</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -20,7 +20,7 @@ function rotuloSituacaoV64(valor,contexto='anuncio'){
         finished:'Conclu\u00eddo',failed:'Falhou',error:'Erro',cancelled:'Cancelado',canceled:'Cancelado',
         opened:'Aberto',open:'Aberto',resolved:'Resolvido',on_hold:'Suspenso',expired:'Expirado'};
     const grupos={
-        pedido:{paid:'Pago',confirmed:'Confirmado',payment_required:'Aguardando pagamento',payment_in_process:'Pagamento em processamento',
+        pedido:{paid:'Pago',confirmed:'Confirmado',payment_required:'Aguardando pagamento',payment_in_processa:'Pagamento em processamento',
             partially_paid:'Parcialmente pago',partially_refunded:'Parcialmente reembolsado',refunded:'Reembolsado',closed:'Finalizado'},
         envio:{pending:'Pendente',handling:'Em prepara\u00e7\u00e3o',ready_to_ship:'Pronto para envio',shipped:'Enviado',delivered:'Entregue',
             not_delivered:'N\u00e3o entregue',to_be_agreed:'A combinar',not_verified:'Aguardando verifica\u00e7\u00e3o',label_printed:'Etiqueta impressa'},
@@ -750,6 +750,27 @@ button:disabled{
 }
 </style>
 
+
+<style id="mlhub-v94-security-ui">
+#aviso-token{display:none!important}
+.mlhub-nav-group-v94{
+  margin:16px 12px 7px;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.17em;
+  color:#47566f;
+  text-transform:uppercase;
+}
+.mlhub-secure-card-v94{
+  border:1px solid rgba(52,225,161,.16);
+  background:linear-gradient(145deg,rgba(8,24,22,.52),rgba(8,12,20,.8));
+}
+.mlhub-health-dot-v94{
+  width:8px;height:8px;border-radius:50%;display:inline-block;
+  background:#34e1a1;box-shadow:0 0 14px rgba(52,225,161,.5);
+}
+</style>
+
 </head>
 
 <body
@@ -761,7 +782,6 @@ button:disabled{
         <div class="v93-login-card">
             <section class="v93-login-brand">
                 <div class="v93-login-brand-glow"></div>
-
                 <div class="relative z-10">
                     <div class="v93-brand-lockup">
                         <div class="v93-brand-mark">M</div>
@@ -772,88 +792,102 @@ button:disabled{
                     </div>
 
                     <div class="v93-login-copy">
-                        <div class="v93-pill"><span></span> Mercado Livre conectado</div>
-                        <h1>Uma central para operar em escala.</h1>
+                        <div class="v93-pill"><span></span> Enterprise workspace</div>
+                        <h1>Controle a operação sem expor credenciais.</h1>
                         <p>
-                            Controle anúncios, preços, promoções, reputação e performance em uma interface criada para grandes operações.
+                            O acesso ao painel é protegido por sessão segura. A conta Mercado Livre é conectada por OAuth e os tokens permanecem no servidor.
                         </p>
                     </div>
 
                     <div class="v93-login-points">
-                        <div><span>01</span><div><strong>Operação massiva</strong><small>Fluxos preparados para dezenas de milhares de anúncios.</small></div></div>
-                        <div><span>02</span><div><strong>Retomada automática</strong><small>Checkpoints preservam o progresso em processos longos.</small></div></div>
-                        <div><span>03</span><div><strong>Dados centralizados</strong><small>Gestão, vendas e indicadores em um único ambiente.</small></div></div>
+                        <div><span>01</span><div><strong>Sessão HttpOnly</strong><small>A senha do painel não fica armazenada no navegador.</small></div></div>
+                        <div><span>02</span><div><strong>OAuth Mercado Livre</strong><small>Client Secret e tokens deixam de ser digitados no frontend.</small></div></div>
+                        <div><span>03</span><div><strong>Auditoria</strong><small>Ações de escrita podem ser registradas para rastreabilidade.</small></div></div>
                     </div>
                 </div>
-
-                <div class="v93-login-brand-footer">ML HUB PRO · ENTERPRISE CONSOLE</div>
+                <div class="v93-login-brand-footer">ML HUB PRO · SECURE WORKSPACE V94</div>
             </section>
 
             <section class="v93-login-form">
-                <div class="v93-login-form-head">
-                    <div class="v93-login-mobile-logo">
-                        <div class="v93-brand-mark small">M</div>
-                        <div class="v93-brand-name">ML Hub <span>Pro</span></div>
+                <div class="v93-login-mobile-logo">
+                    <div class="v93-brand-mark small">M</div>
+                    <div class="v93-brand-name">ML Hub <span>Pro</span></div>
+                </div>
+
+                <div id="mlhub-app-login-stage-v94">
+                    <div class="v93-form-eyebrow">WORKSPACE SEGURO</div>
+                    <h2>Entrar no ML Hub Pro</h2>
+                    <p>Use o e-mail e a senha definidos no Render. Depois, conecte sua conta Mercado Livre com um clique.</p>
+
+                    <div id="oauth-login-status" class="hidden v93-login-status"></div>
+
+                    <div class="v93-login-fields">
+                        <label class="v93-field">
+                            <span>E-mail</span>
+                            <div class="v93-input-wrap">
+                                <div class="v93-input-icon">@</div>
+                                <input id="app-login-email-v94" type="email" autocomplete="username" placeholder="voce@empresa.com">
+                            </div>
+                        </label>
+
+                        <label class="v93-field">
+                            <span>Senha</span>
+                            <div class="v93-input-wrap">
+                                <div class="v93-input-icon">••</div>
+                                <input id="app-login-password-v94" type="password" autocomplete="current-password" placeholder="Sua senha">
+                            </div>
+                        </label>
                     </div>
-                    <div class="v93-form-eyebrow">ACESSO SEGURO</div>
-                    <h2>Entrar no painel</h2>
-                    <p>Preencha somente os três dados usados pela sua operação.</p>
+
+                    <div class="v93-login-options">
+                        <label class="v93-remember">
+                            <input id="app-login-remember-v94" type="checkbox">
+                            <span class="v93-check"></span>
+                            <span>
+                                <strong>Manter sessão neste computador</strong>
+                                <small>O navegador salva apenas a sessão segura, não a senha.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="v93-login-actions">
+                        <button onclick="entrarAppV94()" class="v93-primary-btn">
+                            <span>Entrar no workspace</span><b>→</b>
+                        </button>
+                    </div>
                 </div>
 
-                <div id="oauth-login-status" class="hidden v93-login-status"></div>
+                <div id="mlhub-ml-connect-stage-v94" class="hidden">
+                    <div class="v93-form-eyebrow">INTEGRAÇÃO OFICIAL</div>
+                    <h2>Conectar Mercado Livre</h2>
+                    <p>Você já entrou no ML Hub Pro. Agora autorize sua conta pelo fluxo oficial do Mercado Livre.</p>
 
-                <div class="v93-login-fields">
-                    <label class="v93-field">
-                        <span>Client ID / App ID</span>
-                        <div class="v93-input-wrap">
-                            <div class="v93-input-icon">ID</div>
-                            <input id="oauth-client-id-login" type="text" autocomplete="username" placeholder="Ex.: 8447530383468116">
+                    <div id="mlhub-session-email-v94" class="mt-5 text-xs text-slate-400"></div>
+
+                    <div class="mt-7 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                        <div class="text-xs font-black text-white">Sem Client Secret no navegador</div>
+                        <div class="text-[10px] text-slate-500 mt-2 leading-5">
+                            O Client ID, Client Secret, callback e renovação de tokens ficam configurados no servidor Render.
                         </div>
-                    </label>
+                    </div>
 
-                    <label class="v93-field">
-                        <span>Client Secret</span>
-                        <div class="v93-input-wrap">
-                            <div class="v93-input-icon">••</div>
-                            <input id="oauth-client-secret-login" type="password" autocomplete="current-password" placeholder="Seu Client Secret">
-                        </div>
-                    </label>
+                    <div class="v93-login-actions">
+                        <button onclick="iniciarOAuthML('login')" class="v93-primary-btn">
+                            <span>Conectar Mercado Livre</span><b>↗</b>
+                        </button>
+                        <button onclick="sairAppV94()" class="v93-secondary-btn">
+                            Sair do workspace
+                        </button>
+                    </div>
 
-                    <label class="v93-field">
-                        <span>Access Token</span>
-                        <div class="v93-input-wrap">
-                            <div class="v93-input-icon">AT</div>
-                            <input id="oauth-access-token-login" type="password" autocomplete="off" placeholder="APP_USR-...">
-                        </div>
-                    </label>
-                </div>
-
-                <div class="v93-login-options">
-                    <label class="v93-remember">
-                        <input id="oauth-remember-login-v93" type="checkbox">
-                        <span class="v93-check"></span>
-                        <span>
-                            <strong>Salvar neste navegador</strong>
-                            <small>Use somente em computador pessoal.</small>
-                        </span>
-                    </label>
-                    <button type="button" onclick="apagarLoginLocalV93()" class="v93-forget">Esquecer dados</button>
-                </div>
-
-                <div class="v93-login-actions">
-                    <button onclick="salvarCredenciaisEEntrar()" class="v93-primary-btn">
-                        <span>Entrar no ML Hub Pro</span><b>→</b>
-                    </button>
-                    <button onclick="iniciarOAuthML('login')" class="v93-secondary-btn">
-                        Autorizar pelo Mercado Livre
-                    </button>
+                    <div id="oauth-login-status-connect-v94" class="hidden v93-login-status"></div>
                 </div>
 
                 <div class="v93-login-security">
                     <span class="v93-security-dot"></span>
                     <div>
-                        <strong>Conexão protegida</strong>
-                        <small>A URL de retorno é configurada automaticamente pelo sistema.</small>
+                        <strong>Credenciais protegidas</strong>
+                        <small>Tokens do Mercado Livre são administrados no backend e podem ser criptografados em repouso.</small>
                     </div>
                 </div>
             </section>
@@ -1153,62 +1187,76 @@ button:disabled{
 
 <aside id="painel-sidebar-v24" aria-label="Menu principal do painel">
     <div class="painel-sidebar-v24-inner">
-        <div class="painel-sidebar-v24-titulo">PAINEL</div>
+        <div class="painel-sidebar-v24-titulo">ML HUB PRO</div>
 
+        <div class="mlhub-nav-group-v94">Operação</div>
+        <button class="painel-sidebar-v24-item" data-aba="central" onclick="mudarAba('central')">
+            <span class="painel-sidebar-v24-icone">◆</span><span>Central Executiva</span>
+        </button>
         <button class="painel-sidebar-v24-item" data-aba="gestao" onclick="mudarAba('gestao')">
-            <span class="painel-sidebar-v24-icone">&#9638;</span>
-            <span>Gest&#227;o de an&#250;ncios</span>
+            <span class="painel-sidebar-v24-icone">▦</span><span>Gestão de anúncios</span>
         </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="simulacao" onclick="mudarAba('simulacao')">
-            <span class="painel-sidebar-v24-icone">&#9672;</span>
-            <span>Simula&#231;&#227;o</span>
+        <button class="painel-sidebar-v24-item" data-aba="operacao" onclick="mudarAba('operacao')">
+            <span class="painel-sidebar-v24-icone">⚙</span><span>Operação em escala</span>
         </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="atualizacao" onclick="mudarAba('atualizacao')">
-            <span class="painel-sidebar-v24-icone">&#8635;</span>
-            <span>Atualiza&#231;&#227;o</span>
+        <button class="painel-sidebar-v24-item" data-aba="alertas" onclick="mudarAba('alertas')">
+            <span class="painel-sidebar-v24-icone">!</span><span>Alertas operacionais</span>
         </button>
-
         <button class="painel-sidebar-v24-item" data-aba="pedidos" onclick="mudarAba('pedidos')">
-            <span class="painel-sidebar-v24-icone">&#9636;</span>
-            <span>Pedidos</span>
+            <span class="painel-sidebar-v24-icone">▤</span><span>Pedidos</span>
         </button>
 
-        <button class="painel-sidebar-v24-item" data-aba="perguntas" onclick="mudarAba('perguntas')">
-            <span class="painel-sidebar-v24-icone">&#9635;</span>
-            <span>Perguntas</span>
+        <div class="mlhub-nav-group-v94">Comercial</div>
+        <button class="painel-sidebar-v24-item" data-aba="simulacao" onclick="mudarAba('simulacao')">
+            <span class="painel-sidebar-v24-icone">◇</span><span>Simulação & margem</span>
         </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="reclamacoes" onclick="mudarAba('reclamacoes')">
-            <span class="painel-sidebar-v24-icone">&#9888;</span>
-            <span>P&#243;s-venda</span>
+        <button class="painel-sidebar-v24-item" data-aba="atualizacao" onclick="mudarAba('atualizacao')">
+            <span class="painel-sidebar-v24-icone">↻</span><span>Atualização de preços</span>
         </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="criar-massa" onclick="mudarAba('criar-massa')">
-            <span class="painel-sidebar-v24-icone">&#10010;</span>
-            <span>Criar an&#250;ncios em massa</span>
-        </button>
-
-        <button class="painel-sidebar-v24-item" data-aba="anuncios-restritos" onclick="mudarAba('anuncios-restritos')">
-            <span class="painel-sidebar-v24-icone">&#9707;</span>
-            <span>An&#250;ncios inativos / revis&#227;o</span>
-        </button>
-
         <button class="painel-sidebar-v24-item" data-aba="promocoes" onclick="mudarAba('promocoes')">
-            <span class="painel-sidebar-v24-icone">&#9733;</span>
-            <span>Central de promo&#231;&#245;es · V91</span>
+            <span class="painel-sidebar-v24-icone">★</span><span>Central de promoções</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="criar-massa" onclick="mudarAba('criar-massa')">
+            <span class="painel-sidebar-v24-icone">＋</span><span>Criar anúncios em massa</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="oportunidades" onclick="mudarAba('oportunidades')">
+            <span class="painel-sidebar-v24-icone">↗</span><span>Oportunidades</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="qualidade" onclick="mudarAba('qualidade')">
+            <span class="painel-sidebar-v24-icone">◎</span><span>Qualidade dos anúncios</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="catalogo" onclick="mudarAba('catalogo')">
+            <span class="painel-sidebar-v24-icone">♛</span><span>Catálogo & competição</span>
+        </button>
+
+        <div class="mlhub-nav-group-v94">Atendimento</div>
+        <button class="painel-sidebar-v24-item" data-aba="perguntas" onclick="mudarAba('perguntas')">
+            <span class="painel-sidebar-v24-icone">□</span><span>Perguntas</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="reclamacoes" onclick="mudarAba('reclamacoes')">
+            <span class="painel-sidebar-v24-icone">⚠</span><span>Pós-venda</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="atendimento" onclick="mudarAba('atendimento')">
+            <span class="painel-sidebar-v24-icone">AI</span><span>Assistente operacional</span>
+        </button>
+
+        <div class="mlhub-nav-group-v94">Sistema</div>
+        <button class="painel-sidebar-v24-item" data-aba="anuncios-restritos" onclick="mudarAba('anuncios-restritos')">
+            <span class="painel-sidebar-v24-icone">▣</span><span>Inativos / revisão</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="integracoes" onclick="mudarAba('integracoes')">
+            <span class="painel-sidebar-v24-icone">⌁</span><span>Integrações</span>
+        </button>
+        <button class="painel-sidebar-v24-item" data-aba="configuracoes" onclick="mudarAba('configuracoes')">
+            <span class="painel-sidebar-v24-icone">⚙</span><span>Segurança & configurações</span>
         </button>
 
         <div class="painel-sidebar-v24-divisor"></div>
-
         <button class="painel-sidebar-v24-item painel-sidebar-v24-voltar" onclick="mudarAba('inicio')">
-            <span class="painel-sidebar-v24-icone">&#8592;</span>
-            <span>Voltar ao in&#237;cio</span>
+            <span class="painel-sidebar-v24-icone">←</span><span>Voltar ao início</span>
         </button>
     </div>
 </aside>
-
 
 <main
     id="app-main"
@@ -2361,7 +2409,7 @@ button:disabled{
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; 1.000 simult&#226;neos &#183; V93</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; 1.000 simult&#226;neos &#183; V94</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -3616,30 +3664,44 @@ button:disabled{
     </div>
 
 
-    <div class="panel rounded-2xl p-6">
-        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
-            <div>
-                <h2 class="text-sm font-black text-white">Conta Mercado Livre</h2>
-                <p class="text-xs text-slate-500 mt-1">
-                    A conta j&#225; est&#225; conectada. O acesso &#224;s APIs e a renova&#231;&#227;o do token s&#227;o gerenciados automaticamente pelo servidor.
-                </p>
-                <div id="oauth-status-config" class="text-xs text-yellow-400 font-bold mt-3">
-                    Verificando conex&#227;o...
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="panel rounded-2xl p-6 mlhub-secure-card-v94">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-[10px] uppercase tracking-[.14em] text-emerald-400 font-black">Segurança</div>
+                    <h2 class="text-sm font-black text-white mt-2">Workspace protegido</h2>
+                    <p class="text-xs text-slate-500 mt-2 leading-5">
+                        Sessão HttpOnly, CORS restrito, proteção de origem, rate limit de login e auditoria de alterações.
+                    </p>
                 </div>
+                <span class="mlhub-health-dot-v94"></span>
             </div>
-            <button onclick="desconectarOAuthML()" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold px-4 py-2.5 rounded-xl">
-                Desconectar
+            <div id="v94-security-status" class="text-[11px] text-slate-400 mt-5">Verificando configuração...</div>
+            <button onclick="sairAppV94()" class="mt-5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl">
+                Sair do workspace
             </button>
         </div>
 
-        <div class="mt-5">
-            <label class="text-[10px] uppercase tracking-[.12em] text-slate-500 font-bold">Access Token gerenciado</label>
-            <input id="oauth-token-gerado-config" type="text" readonly
-                class="mt-2 w-full bg-slate-950 border border-slate-700 text-emerald-300 px-4 py-3 rounded-xl text-xs"
-                placeholder="APP_USR-...">
-            <p class="text-[10px] text-slate-600 mt-2">
-                Este &#233; o acesso utilizado automaticamente pelo ML Hub Pro nas APIs do Mercado Livre.
-            </p>
+        <div class="panel rounded-2xl p-6">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-[10px] uppercase tracking-[.14em] text-yellow-400 font-black">Mercado Livre</div>
+                    <h2 class="text-sm font-black text-white mt-2">Conexão OAuth</h2>
+                    <p class="text-xs text-slate-500 mt-2 leading-5">
+                        Client Secret e tokens ficam somente no servidor. O navegador não precisa armazenar credenciais do Mercado Livre.
+                    </p>
+                    <div id="oauth-status-config" class="text-xs text-yellow-400 font-bold mt-4">Verificando conexão...</div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-5">
+                <button onclick="iniciarOAuthML('config')" class="bg-yellow-400 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl">
+                    Conectar / reconectar
+                </button>
+                <button onclick="desconectarOAuthML()" class="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-bold px-4 py-2.5 rounded-xl">
+                    Desconectar
+                </button>
+            </div>
         </div>
     </div>
 
@@ -4787,6 +4849,20 @@ button:disabled{
 const RENDER_URL =
     "https://site-atualizar-pre-o-ml.onrender.com";
 
+// V94: todas as chamadas ao backend carregam a sessão HttpOnly.
+// Nenhuma senha, Client Secret ou Access Token precisa ficar no JavaScript.
+const mlHubNativeFetchV94=window.fetch.bind(window);
+window.fetch=function(input,init={}){
+    try{
+        const url=typeof input==='string' ? input : String(input?.url||'');
+        if(url.startsWith(RENDER_URL)){
+            return mlHubNativeFetchV94(input,{...init,credentials:'include'});
+        }
+    }catch(e){}
+    return mlHubNativeFetchV94(input,init);
+};
+
+
 let cacheItens = [];
 
 const ML_HUB_CACHE_KEY = 'mlHubPro_cacheItens_v1';
@@ -4894,12 +4970,8 @@ function esconderLoading() {
 
 
 function obterToken() {
-    // Mant\u00e9m compatibilidade com as fun\u00e7\u00f5es existentes.
-    // Quando OAuth est\u00e1 conectado, o backend usa e renova o token automaticamente.
-    const legado = localStorage.getItem('ml_access_token');
-    if (legado) return legado;
-    if (localStorage.getItem('ml_oauth_connected') === '1') return 'AUTO';
-    return '';
+    // V94: o browser nunca precisa conhecer o Access Token.
+    return localStorage.getItem('ml_oauth_connected')==='1' ? 'AUTO' : '';
 }
 
 
@@ -4908,85 +4980,25 @@ function obterToken() {
 ========================================================= */
 
 function solicitarToken() {
-    if (localStorage.getItem('ml_oauth_connected') === '1') {
-        mudarAba('configuracoes');
-        atualizarStatusOAuthML();
-    } else {
-        const gate = document.getElementById('oauth-login-gate');
-        if (gate) gate.classList.remove('hidden');
-    }
+    const gate=document.getElementById('oauth-login-gate');
+    if(gate)gate.classList.remove('hidden');
+
+    consultarSessaoAppV94().then(sessao=>{
+        if(sessao.configured && !sessao.authenticated)mostrarEtapaLoginV94();
+        else mostrarEtapaMercadoLivreV94(sessao);
+    }).catch(()=>mostrarEtapaLoginV94());
 }
 
 
 function salvarTokenManual() {
-
-    const token =
-        document
-            .getElementById(
-                'input-token-manual'
-            )
-            .value
-            .trim();
-
-    if (!token) {
-
-        alert(
-            'Digite um token v\u00e1lido.'
-        );
-
-        return;
-    }
-
-    localStorage.setItem(
-        'ml_access_token',
-        token
-    );
-
-    document.getElementById(
-        'aviso-token'
-    ).classList.add(
-        'hidden'
-    );
-
-    atualizarStatusTokenHome();
-
-    alert(
-        'Token salvo neste navegador.'
-    );
+    alert('Por segurança, o Access Token não é mais salvo no navegador. Use Conectar Mercado Livre.');
+    solicitarToken();
 }
 
 
 function salvarTokenHome() {
-
-    const token =
-        document
-            .getElementById(
-                'input-token-home'
-            )
-            .value
-            .trim();
-
-    if (!token) {
-
-        alert(
-            'Digite um token v\u00e1lido.'
-        );
-
-        return;
-    }
-
-    localStorage.setItem(
-        'ml_access_token',
-        token
-    );
-
-    atualizarStatusTokenHome();
-
-    alert(
-        'Token salvo com sucesso.'
-    );
-
-    carregarDashboard();
+    alert('Por segurança, o Access Token não é mais salvo no navegador. Use Conectar Mercado Livre.');
+    solicitarToken();
 }
 
 
@@ -5131,6 +5143,7 @@ function mudarAba(aba) {
         if('requestIdleCallback' in window)requestIdleCallback(lazy,{timeout:1800});else setTimeout(lazy,250);
     }
     if (aba === 'integracoes' && typeof carregarIntegracoesPro === 'function') carregarIntegracoesPro();
+    if (aba === 'configuracoes' && typeof carregarSegurancaV94 === 'function') carregarSegurancaV94();
     if (aba === 'oportunidades' && typeof carregarOportunidades === 'function') carregarOportunidades();
     if (aba === 'operacao' && typeof carregarOperacaoV2 === 'function') carregarOperacaoV2(1);
     if (aba === 'alertas' && typeof carregarAlertasV2 === 'function') carregarAlertasV2();
@@ -8402,281 +8415,239 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 
-<script id="mlhub-oauth-renovavel">
+<script id="mlhub-oauth-v94-secure">
 const ML_HUB_FRONTEND_URL = window.location.origin + window.location.pathname;
+const ML_HUB_REMEMBER_EMAIL_V94='mlhub_last_email_v94';
 
-const ML_HUB_REDIRECT_URI_V93 = 'https://site-atualizar-pre-o-ml.onrender.com/auth/callback';
-const ML_HUB_LOGIN_STORAGE_V93 = 'mlhub_login_credentials_v93';
-
-function credenciaisLoginLocalV93(){
-    try{
-        const raw=localStorage.getItem(ML_HUB_LOGIN_STORAGE_V93);
-        return raw?JSON.parse(raw):null;
-    }catch(e){return null}
+function mostrarStatusLoginOAuth(mensagem,erro=false,connect=false){
+    const id=connect?'oauth-login-status-connect-v94':'oauth-login-status';
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.classList.remove('hidden');
+    el.className=`v93-login-status ${erro?'bg-red-500/10 text-red-300 border border-red-500/20':'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'}`;
+    el.innerText=mensagem;
 }
 
-function salvarLoginLocalV93(dados){
-    const lembrar=document.getElementById('oauth-remember-login-v93')?.checked===true;
+async function consultarSessaoAppV94(){
+    try{
+        const r=await fetch(`${RENDER_URL}/api/app/session`,{cache:'no-store'});
+        return await r.json();
+    }catch(e){
+        return {configured:true,authenticated:false,offline:true};
+    }
+}
 
-    if(!lembrar){
-        localStorage.removeItem(ML_HUB_LOGIN_STORAGE_V93);
+function mostrarEtapaLoginV94(){
+    document.getElementById('mlhub-app-login-stage-v94')?.classList.remove('hidden');
+    document.getElementById('mlhub-ml-connect-stage-v94')?.classList.add('hidden');
+    document.getElementById('oauth-login-gate')?.classList.remove('hidden');
+}
+
+function mostrarEtapaMercadoLivreV94(sessao={}){
+    document.getElementById('mlhub-app-login-stage-v94')?.classList.add('hidden');
+    document.getElementById('mlhub-ml-connect-stage-v94')?.classList.remove('hidden');
+    document.getElementById('oauth-login-gate')?.classList.remove('hidden');
+    const el=document.getElementById('mlhub-session-email-v94');
+    if(el)el.innerText=sessao?.email?`Workspace: ${sessao.email}`:'Workspace autenticado';
+}
+
+async function entrarAppV94(){
+    const email=document.getElementById('app-login-email-v94')?.value.trim()||'';
+    const password=document.getElementById('app-login-password-v94')?.value||'';
+    const remember=document.getElementById('app-login-remember-v94')?.checked===true;
+
+    if(!email||!password){
+        mostrarStatusLoginOAuth('Preencha e-mail e senha.',true);
         return;
     }
 
-    // Opção explícita do usuário. Evite ativar em computadores compartilhados.
-    localStorage.setItem(
-        ML_HUB_LOGIN_STORAGE_V93,
-        JSON.stringify({
-            client_id:String(dados.client_id||''),
-            client_secret:String(dados.client_secret||''),
-            access_token:String(dados.access_token||'')
-        })
-    );
+    try{
+        mostrarStatusLoginOAuth('Validando acesso seguro...');
+
+        const r=await fetch(`${RENDER_URL}/api/app/login`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({email,password,remember})
+        });
+
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.authenticated)throw new Error(d.erro||'Não foi possível entrar.');
+
+        localStorage.setItem(ML_HUB_REMEMBER_EMAIL_V94,email);
+        const pass=document.getElementById('app-login-password-v94');
+        if(pass)pass.value='';
+
+        const oauth=await consultarStatusOAuthML();
+        if(oauth.connected){
+            document.getElementById('oauth-login-gate')?.classList.add('hidden');
+            if(typeof mudarAba==='function')mudarAba('inicio');
+        }else{
+            mostrarEtapaMercadoLivreV94(d);
+        }
+    }catch(e){
+        mostrarStatusLoginOAuth(e.message,true);
+    }
 }
 
-function restaurarLoginLocalV93(){
-    const salvo=credenciaisLoginLocalV93();
-    if(!salvo)return;
-
-    const cid=document.getElementById('oauth-client-id-login');
-    const sec=document.getElementById('oauth-client-secret-login');
-    const tok=document.getElementById('oauth-access-token-login');
-    const chk=document.getElementById('oauth-remember-login-v93');
-
-    if(cid && !cid.value)cid.value=salvo.client_id||'';
-    if(sec && !sec.value)sec.value=salvo.client_secret||'';
-    if(tok && !tok.value)tok.value=salvo.access_token||'';
-    if(chk)chk.checked=true;
+async function sairAppV94(){
+    try{
+        await fetch(`${RENDER_URL}/api/app/logout`,{method:'POST'});
+    }catch(e){}
+    localStorage.removeItem('ml_oauth_connected');
+    mostrarEtapaLoginV94();
 }
 
-function apagarLoginLocalV93(){
-    localStorage.removeItem(ML_HUB_LOGIN_STORAGE_V93);
-
-    ['oauth-client-id-login','oauth-client-secret-login','oauth-access-token-login']
-      .forEach(id=>{
-          const el=document.getElementById(id);
-          if(el)el.value='';
-      });
-
-    const chk=document.getElementById('oauth-remember-login-v93');
-    if(chk)chk.checked=false;
-
-    mostrarStatusLoginOAuth('Dados salvos neste navegador foram apagados.');
-}
-
-
-
-function mostrarStatusLoginOAuth(mensagem, erro = false) {
-    const el = document.getElementById('oauth-login-status');
-    if (!el) return;
-    el.classList.remove('hidden');
-    el.className = `mt-4 p-3 rounded-xl text-xs font-bold ${erro ? 'bg-red-500/10 text-red-300 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'}`;
-    el.innerText = mensagem;
-}
-
-async function consultarStatusOAuthML() {
-    try {
-        const response = await fetch(`${RENDER_URL}/api/oauth/status`, { cache: 'no-store' });
-        const data = await response.json();
-        if (response.ok && data.connected) {
-            localStorage.setItem('ml_oauth_connected', '1');
+async function consultarStatusOAuthML(){
+    try{
+        const r=await fetch(`${RENDER_URL}/api/oauth/status`,{cache:'no-store'});
+        if(r.status===401)return {connected:false,session_expired:true};
+        const d=await r.json().catch(()=>({}));
+        if(r.ok&&d.connected){
+            localStorage.setItem('ml_oauth_connected','1');
             localStorage.removeItem('ml_access_token');
-
-            const resumoToken = data.token_preview || 'Acesso conectado \u00b7 renova\u00e7\u00e3o autom\u00e1tica';
-            const campoLogin = document.getElementById('oauth-token-gerado-login');
-            const campoConfig = document.getElementById('oauth-token-gerado-config');
-            if (campoLogin) campoLogin.value = resumoToken;
-            if (campoConfig) campoConfig.value = resumoToken;
-
-            return data;
+            return d;
         }
         localStorage.removeItem('ml_oauth_connected');
-        return data || { connected: false };
-    } catch (erro) {
-        // Se o servidor estiver temporariamente indispon\u00edvel, n\u00e3o destr\u00f3i a sess\u00e3o visual j\u00e1 salva.
-        return { connected: localStorage.getItem('ml_oauth_connected') === '1', offline: true };
+        return d||{connected:false};
+    }catch(e){
+        return {connected:localStorage.getItem('ml_oauth_connected')==='1',offline:true};
     }
 }
 
-async function atualizarStatusOAuthML() {
-    const data = await consultarStatusOAuthML();
-    const el = document.getElementById('oauth-status-config');
-    if (el) {
-        if (data.connected) {
-            el.className = 'text-xs text-emerald-400 font-bold mt-3';
-            el.innerText = `\u25cf Conta conectada${data.user_id ? ' \u00b7 Usu\u00e1rio ' + data.user_id : ''}${data.expires_at ? ' \u00b7 renova\u00e7\u00e3o autom\u00e1tica ativa' : ''}`;
-        } else {
-            el.className = 'text-xs text-yellow-400 font-bold mt-3';
-            el.innerText = '\u25cf Conta ainda n\u00e3o conectada por OAuth';
+async function atualizarStatusOAuthML(){
+    const data=await consultarStatusOAuthML();
+    const el=document.getElementById('oauth-status-config');
+
+    if(el){
+        if(data.connected){
+            el.className='text-xs text-emerald-400 font-bold mt-4';
+            el.innerText=`● Conta conectada${data.nickname?' · '+data.nickname:''}${data.renewable?' · renovação automática':''}`;
+        }else{
+            el.className='text-xs text-yellow-400 font-bold mt-4';
+            el.innerText='● Conta Mercado Livre não conectada';
         }
     }
+
     return data;
 }
 
-function lerCamposOAuth(origem) {
-    const sufixo = origem === 'config' ? 'config' : 'login';
-
-    if(origem==='login'){
-        return {
-            client_id: document.getElementById('oauth-client-id-login')?.value.trim() || '',
-            client_secret: document.getElementById('oauth-client-secret-login')?.value.trim() || '',
-            redirect_uri: ML_HUB_REDIRECT_URI_V93,
-            access_token: document.getElementById('oauth-access-token-login')?.value.trim() || '',
-            frontend_url: ML_HUB_FRONTEND_URL
-        };
-    }
-
-    return {
-        client_id: document.getElementById(`oauth-client-id-${sufixo}`)?.value.trim() || '',
-        client_secret: document.getElementById(`oauth-client-secret-${sufixo}`)?.value.trim() || '',
-        redirect_uri: document.getElementById(`oauth-redirect-uri-${sufixo}`)?.value.trim() || ML_HUB_REDIRECT_URI_V93,
-        access_token: document.getElementById(`oauth-access-token-${sufixo}`)?.value.trim() || '',
-        frontend_url: ML_HUB_FRONTEND_URL
-    };
-}
-
-
-async function salvarCredenciaisEEntrar() {
-    const dados = lerCamposOAuth('login');
-
-    if (!dados.client_id || !dados.client_secret || !dados.access_token) {
-        mostrarStatusLoginOAuth('Preencha Client ID, Client Secret e Access Token.', true);
-        return;
-    }
-
-    try {
-        mostrarStatusLoginOAuth('Validando credenciais e conectando sua conta...');
-
-        const response = await fetch(`${RENDER_URL}/api/oauth/manual-credentials`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...dados,
-                refresh_token:''
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.sucesso) {
-            throw new Error(data.erro || 'Não foi possível conectar a conta.');
+async function iniciarOAuthML(origem='login'){
+    try{
+        if(origem==='login'){
+            mostrarStatusLoginOAuth('Abrindo autorização oficial do Mercado Livre...',false,true);
         }
 
-        salvarLoginLocalV93(dados);
-
-        localStorage.setItem('ml_oauth_connected', '1');
-        localStorage.removeItem('ml_access_token');
-
-        const gate = document.getElementById('oauth-login-gate');
-        if (gate) gate.classList.add('hidden');
-
-        mostrarStatusLoginOAuth('Conta conectada com sucesso.');
-
-        await atualizarStatusOAuthML();
-
-        if (typeof mudarAba === 'function') mudarAba('inicio');
-    } catch (erro) {
-        mostrarStatusLoginOAuth(erro.message, true);
-    }
-}
-
-async function iniciarOAuthML(origem = 'login') {
-    const dados = lerCamposOAuth(origem);
-
-    if (!dados.client_id || !dados.client_secret || !dados.redirect_uri) {
-        const msg = origem==='login'
-            ? 'Preencha Client ID e Client Secret.'
-            : 'Preencha Client ID, Client Secret e URL de retorno.';
-
-        if (origem === 'login') mostrarStatusLoginOAuth(msg, true);
-        else alert(msg);
-        return;
-    }
-
-    if(origem==='login'){
-        salvarLoginLocalV93(dados);
-    }
-
-    try {
-        if (origem === 'login') mostrarStatusLoginOAuth('Preparando autorização segura...');
-
-        const response = await fetch(`${RENDER_URL}/api/oauth/configure`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dados)
+        const r=await fetch(`${RENDER_URL}/api/oauth/start`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({frontend_url:ML_HUB_FRONTEND_URL})
         });
 
-        const data = await response.json();
-
-        if (!response.ok || !data.sucesso || !data.authorization_url) {
-            throw new Error(data.erro || 'Não foi possível iniciar a autorização.');
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.authorization_url){
+            throw new Error(d.erro||'Não foi possível iniciar o OAuth.');
         }
 
-        window.location.href = data.authorization_url;
-    } catch (erro) {
-        if (origem === 'login') mostrarStatusLoginOAuth(erro.message, true);
-        else alert(erro.message);
+        window.location.href=d.authorization_url;
+    }catch(e){
+        if(origem==='login')mostrarStatusLoginOAuth(e.message,true,true);
+        else alert(e.message);
     }
 }
 
-async function salvarTokenTemporarioConfig() {
-    const token = document.getElementById('oauth-access-token-config')?.value.trim() || '';
-    if (!token) return alert('Cole o Access Token atual.');
-    try {
-        const response = await fetch(`${RENDER_URL}/api/oauth/manual-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ access_token: token })
-        });
-        const data = await response.json();
-        if (!response.ok || !data.sucesso) throw new Error(data.erro || 'N\u00e3o foi poss\u00edvel salvar o token.');
-        localStorage.setItem('ml_oauth_connected', '1');
-        localStorage.removeItem('ml_access_token');
-        await atualizarStatusOAuthML();
-        alert('Token atual salvo no servidor. Para renova\u00e7\u00e3o autom\u00e1tica, conclua tamb\u00e9m o OAuth.');
-    } catch (erro) {
-        alert(erro.message);
-    }
-}
+async function desconectarOAuthML(){
+    if(!confirm('Desconectar a conta Mercado Livre deste workspace?'))return;
 
-async function desconectarOAuthML() {
-    if (!confirm('Desconectar a conta do Mercado Livre deste servidor?')) return;
-    try {
-        await fetch(`${RENDER_URL}/api/oauth/disconnect`, { method: 'POST' });
-    } catch (erro) {}
+    try{
+        const r=await fetch(`${RENDER_URL}/api/oauth/disconnect`,{method:'POST'});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||'Não foi possível desconectar.');
+    }catch(e){
+        return alert(e.message);
+    }
+
     localStorage.removeItem('ml_oauth_connected');
-    localStorage.removeItem('ml_access_token');
-    const gate = document.getElementById('oauth-login-gate');
-    if (gate) gate.classList.remove('hidden');
+    const sessao=await consultarSessaoAppV94();
+    mostrarEtapaMercadoLivreV94(sessao);
     atualizarStatusOAuthML();
 }
 
-document.addEventListener('DOMContentLoaded', async function () {
-    restaurarLoginLocalV93();
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('oauth') === 'success') {
-        localStorage.setItem('ml_oauth_connected', '1');
-        history.replaceState({}, document.title, window.location.pathname);
+async function carregarSegurancaV94(){
+    const el=document.getElementById('v94-security-status');
+    if(!el)return;
+    try{
+        const r=await fetch(`${RENDER_URL}/api/v94/security/status?_=${Date.now()}`,{cache:'no-store'});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        el.innerHTML=[
+            `<div>Autenticação do workspace: <b class="${d.app_auth_configured?'text-emerald-400':'text-yellow-400'}">${d.app_auth_configured?'ATIVA':'COMPATIBILIDADE'}</b></div>`,
+            `<div class="mt-1">OAuth no servidor: <b class="${d.oauth_configured?'text-emerald-400':'text-red-300'}">${d.oauth_configured?'CONFIGURADO':'FALTA CONFIGURAR'}</b></div>`,
+            `<div class="mt-1">Criptografia de tokens: <b class="${d.token_encryption?'text-emerald-400':'text-yellow-400'}">${d.token_encryption?'ATIVA':'RECOMENDADA'}</b></div>`,
+            `<div class="mt-1">Login manual por token: <b class="${d.legacy_token_enabled?'text-yellow-400':'text-emerald-400'}">${d.legacy_token_enabled?'LEGADO ATIVO':'DESATIVADO'}</b></div>`
+        ].join('');
+    }catch(e){
+        el.innerText='Não foi possível consultar o status de segurança.';
+    }
+}
+
+// Compatibilidade com chamadas antigas.
+function lerCamposOAuth(){return {frontend_url:ML_HUB_FRONTEND_URL}}
+async function salvarCredenciaisEEntrar(){return entrarAppV94()}
+async function salvarTokenTemporarioConfig(){
+    alert('O login manual por Access Token foi removido da interface. Use Conectar Mercado Livre.');
+}
+function apagarLoginLocalV93(){
+    localStorage.removeItem(ML_HUB_REMEMBER_EMAIL_V94);
+    const el=document.getElementById('app-login-email-v94');
+    if(el)el.value='';
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
+    const emailSalvo=localStorage.getItem(ML_HUB_REMEMBER_EMAIL_V94)||'';
+    const email=document.getElementById('app-login-email-v94');
+    if(email&&!email.value)email.value=emailSalvo;
+
+    const params=new URLSearchParams(window.location.search);
+    const oauth=params.get('oauth');
+
+    const sessao=await consultarSessaoAppV94();
+
+    if(sessao.configured && !sessao.authenticated){
+        mostrarEtapaLoginV94();
+        return;
     }
 
-    const status = await consultarStatusOAuthML();
-    const gate = document.getElementById('oauth-login-gate');
-    if (gate) {
-        if (status.connected) gate.classList.add('hidden');
-        else gate.classList.remove('hidden');
+    if(oauth==='error'){
+        history.replaceState({},document.title,window.location.pathname);
+        mostrarEtapaMercadoLivreV94(sessao);
+        mostrarStatusLoginOAuth(params.get('message')||'O Mercado Livre não concluiu a autorização.',true,true);
+        return;
     }
 
-    const perfilNome = document.getElementById('perfil-nome-conta');
-    const perfilStatus = document.getElementById('perfil-status-conta');
-    if (status.connected) {
-        if (perfilNome && status.nickname) perfilNome.innerText = status.nickname;
-        if (perfilStatus) {
-            perfilStatus.innerText = '\u25cf Conta conectada \u00b7 renova\u00e7\u00e3o autom\u00e1tica';
-            perfilStatus.className = 'text-xs text-emerald-400 mt-2';
+    if(oauth==='success'){
+        history.replaceState({},document.title,window.location.pathname);
+    }
+
+    const status=await consultarStatusOAuthML();
+
+    if(status.connected){
+        document.getElementById('oauth-login-gate')?.classList.add('hidden');
+
+        const perfilNome=document.getElementById('perfil-nome-conta');
+        const perfilStatus=document.getElementById('perfil-status-conta');
+
+        if(perfilNome&&status.nickname)perfilNome.innerText=status.nickname;
+        if(perfilStatus){
+            perfilStatus.innerText='● Conta conectada · OAuth seguro';
+            perfilStatus.className='text-xs text-emerald-400 mt-2';
         }
+    }else{
+        mostrarEtapaMercadoLivreV94(sessao);
     }
 
     atualizarStatusOAuthML();
+    carregarSegurancaV94();
 });
 </script>
 
@@ -8776,21 +8747,87 @@ async function apiPro(path, options={}) {
   return d;
 }
 async function carregarCentralPro(){
-  const fila=document.getElementById('central-fila'); fila.innerHTML='<div class="panel rounded-2xl p-6 text-xs text-yellow-400">Analisando opera\u00e7\u00e3o...</div>';
+  const fila=document.getElementById('central-fila');
+  fila.innerHTML='<div class="panel rounded-2xl p-6 text-xs text-yellow-400">Analisando operação, filas e integrações...</div>';
+
   try{
-    const [a,c,s]=await Promise.allSettled([apiPro('/api/v2/alertas'),apiPro('/api/v3/claims?status=opened'),fetch(`${RENDER_URL}/api/v3/integracoes/status`).then(r=>r.json())]);
-    const alertas=a.status==='fulfilled'?(a.value.alertas||[]):[]; const claims=c.status==='fulfilled'?(c.value.reclamacoes||[]):[];
-    document.getElementById('central-alertas').innerText=alertas.length;
+    const [ops,a,c,s,audit]=await Promise.allSettled([
+      apiPro('/api/v94/operations/summary'),
+      apiPro('/api/v2/alertas'),
+      apiPro('/api/v3/claims?status=opened'),
+      fetch(`${RENDER_URL}/api/v3/integracoes/status?_=${Date.now()}`,{cache:'no-store'}).then(r=>r.json()),
+      apiPro('/api/v94/audit?limit=8')
+    ]);
+
+    const op=ops.status==='fulfilled'?ops.value:null;
+    const alertas=a.status==='fulfilled'?(a.value.alertas||[]):[];
+    const claims=c.status==='fulfilled'?(c.value.reclamacoes||[]):[];
+
+    document.getElementById('central-alertas').innerText=op
+      ? Number(op.itens?.sem_estoque||0)+Number(op.itens?.estoque_critico||0)+Number(op.itens?.frete_com_erro||0)
+      : alertas.length;
+
     document.getElementById('central-claims').innerText=claims.length;
-    document.getElementById('central-sku').innerText=alertas.filter(x=>x.tipo==='sem_sku').length;
-    document.getElementById('central-estoque').innerText=alertas.filter(x=>String(x.tipo).includes('estoque')).length;
-    if(s.status==='fulfilled') document.getElementById('central-integracoes').innerText=`ML \u2713 \u00b7 Bling ${s.value.bling?.configurado?'\u2713':'\u2014'} \u00b7 IA ${s.value.gemini?.configurado||s.value.openai?.configurado?'\u2713':'\u2014'}`;
-    const cards=[
-      ...claims.slice(0,5).map(x=>({t:`Reclama\u00e7\u00e3o #${x.id}`,d:`${rotuloSituacaoV64(x.stage,'reclamacao')} \u00b7 ${rotuloSituacaoV64(x.status,'reclamacao')}`,n:'ALTA'})),
-      ...alertas.slice(0,5).map(x=>({t:x.titulo||x.item_id,d:x.mensagem,n:String(x.nivel||'').toUpperCase()}))
-    ];
-    fila.innerHTML=cards.map(x=>`<div class="panel rounded-2xl p-4"><div class="flex justify-between gap-3"><div><div class="text-xs font-black text-white">${escapeHtml(x.t)}</div><div class="text-[11px] text-slate-500 mt-1">${escapeHtml(x.d)}</div></div><span class="text-[10px] font-black text-yellow-400">${escapeHtml(x.n)}</span></div></div>`).join('')||'<div class="panel rounded-2xl p-8 text-xs text-emerald-400">Nenhuma prioridade cr\u00edtica encontrada na consulta atual.</div>';
-  }catch(e){fila.innerHTML=`<div class="panel rounded-2xl p-6 text-xs text-red-300">${escapeHtml(e.message)}</div>`}
+    document.getElementById('central-sku').innerText=op?Number(op.itens?.sem_sku||0):alertas.filter(x=>x.tipo==='sem_sku').length;
+    document.getElementById('central-estoque').innerText=op
+      ? Number(op.itens?.sem_estoque||0)+Number(op.itens?.estoque_critico||0)
+      : alertas.filter(x=>String(x.tipo).includes('estoque')).length;
+
+    if(s.status==='fulfilled'){
+      document.getElementById('central-integracoes').innerText=
+        `ML ✓ · Bling ${s.value.bling?.configurado?'✓':'—'} · IA ${s.value.gemini?.configurado||s.value.openai?.configurado?'✓':'—'}`;
+    }
+
+    const cards=[];
+
+    if(op){
+      const jobsFalhos=Number(op.jobs?.failed||0);
+      const notifPendentes=Number(op.notifications?.queued||0)+Number(op.notifications?.running||0);
+      const semComissao=Number(op.itens?.sem_comissao||0);
+      const freteErro=Number(op.itens?.frete_com_erro||0);
+
+      if(jobsFalhos)cards.push({t:'Jobs com falha',d:`${jobsFalhos.toLocaleString('pt-BR')} processo(s) exigem atenção`,n:'ALTA'});
+      if(notifPendentes)cards.push({t:'Fila de notificações',d:`${notifPendentes.toLocaleString('pt-BR')} evento(s) aguardando processamento`,n:'MÉDIA'});
+      if(freteErro)cards.push({t:'Falhas de frete',d:`${freteErro.toLocaleString('pt-BR')} anúncio(s) com erro na última sincronização`,n:'ALTA'});
+      if(semComissao)cards.push({t:'Comissão pendente',d:`${semComissao.toLocaleString('pt-BR')} anúncio(s) sem comissão sincronizada`,n:'MÉDIA'});
+    }
+
+    cards.push(
+      ...claims.slice(0,4).map(x=>({
+        t:`Reclamação #${x.id}`,
+        d:`${rotuloSituacaoV64(x.stage,'reclamacao')} · ${rotuloSituacaoV64(x.status,'reclamacao')}`,
+        n:'ALTA'
+      })),
+      ...alertas.slice(0,4).map(x=>({
+        t:x.titulo||x.item_id,
+        d:x.mensagem,
+        n:String(x.nivel||'').toUpperCase()
+      }))
+    );
+
+    const aud=audit.status==='fulfilled'?(audit.value.itens||[]):[];
+    if(aud.length){
+      cards.push({
+        t:'Auditoria ativa',
+        d:`Última ação: ${aud[0].method} ${aud[0].path} · HTTP ${aud[0].status}`,
+        n:'LOG'
+      });
+    }
+
+    fila.innerHTML=cards.slice(0,12).map(x=>`
+      <div class="panel rounded-2xl p-4">
+        <div class="flex justify-between gap-3">
+          <div>
+            <div class="text-xs font-black text-white">${escapeHtml(x.t)}</div>
+            <div class="text-[11px] text-slate-500 mt-1">${escapeHtml(x.d)}</div>
+          </div>
+          <span class="text-[10px] font-black text-yellow-400">${escapeHtml(x.n)}</span>
+        </div>
+      </div>
+    `).join('')||'<div class="panel rounded-2xl p-8 text-xs text-emerald-400">Nenhuma prioridade crítica encontrada.</div>';
+  }catch(e){
+    fila.innerHTML=`<div class="panel rounded-2xl p-6 text-xs text-red-300">${escapeHtml(e.message)}</div>`;
+  }
 }
 function atalhoIA(t){document.getElementById('ia-pergunta').value=t; perguntarIA();}
 async function perguntarIA(){
