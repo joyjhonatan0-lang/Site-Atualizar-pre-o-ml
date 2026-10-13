@@ -3791,7 +3791,7 @@ button:disabled{
 
   <div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
     <div class="xl:col-span-3 panel rounded-2xl overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-800"><h2 class="text-sm font-black text-white">Primeira página analisada</h2><p class="text-[10px] text-slate-500 mt-1">Ordem recebida pela busca no momento da análise.</p></div>
+      <div class="px-5 py-4 border-b border-slate-800"><h2 id="intel-fonte-title-v98" class="text-sm font-black text-white">Referências do Mercado Livre</h2><p id="intel-fonte-sub-v98" class="text-[10px] text-slate-500 mt-1">A fonte utilizada aparecerá depois da análise.</p></div>
       <div class="overflow-x-auto max-h-[620px]"><table class="w-full text-left futuristic-table min-w-[920px]"><thead><tr><th class="p-3">#</th><th class="p-3">Anúncio</th><th class="p-3">Preço</th><th class="p-3">Vendidos</th><th class="p-3">Frete</th><th class="p-3">Fotos</th><th class="p-3">Ficha</th></tr></thead><tbody id="intel-concorrentes-v96"></tbody></table></div>
     </div>
     <div class="xl:col-span-2 panel rounded-2xl p-5">
@@ -16306,7 +16306,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div id="modal-conteudo-v96" class="hidden fixed inset-0 z-[12000] bg-black/75 backdrop-blur-sm overflow-y-auto p-4">
   <div class="max-w-6xl mx-auto my-5 rounded-3xl border border-slate-800 bg-[#070b13] shadow-2xl overflow-hidden">
     <div class="px-6 py-5 border-b border-slate-800 flex items-start justify-between gap-4 sticky top-0 bg-[#070b13]/95 backdrop-blur-xl z-20">
-      <div><div class="text-[9px] uppercase tracking-[.16em] text-yellow-400 font-black">Editor completo</div><h2 id="conteudo-modal-title-v96" class="text-lg font-black text-white mt-1">Conteúdo do anúncio</h2><div id="conteudo-modal-meta-v96" class="text-[10px] text-slate-500 mt-1"></div></div>
+      <div><div class="text-[9px] uppercase tracking-[.16em] text-yellow-400 font-black">Editor completo · V97</div><h2 id="conteudo-modal-title-v96" class="text-lg font-black text-white mt-1">Conteúdo do anúncio</h2><div id="conteudo-modal-meta-v96" class="text-[10px] text-slate-500 mt-1"></div></div>
       <button onclick="fecharEditorConteudoV96()" class="w-9 h-9 rounded-xl bg-slate-900 text-slate-400 hover:text-white">✕</button>
     </div>
     <div id="conteudo-modal-body-v96" class="p-6"><div class="text-xs text-slate-500">Carregando...</div></div>
@@ -16439,33 +16439,83 @@ async function uploadFotosConteudoV96(files){
 }
 
 function coletarPatchConteudoV96(){
+  const patch={};
+  const avisos=[];
+  const original=conteudoAtualV96||{};
+
   const pictures=[...document.querySelectorAll('#v96-fotos-list [data-v96-picture]')].map(el=>({id:el.dataset.id||undefined,url:el.dataset.url||undefined}));
+  const pictureKey=p=>String(p?.id||p?.url||'').trim();
+  const atuais=(Array.isArray(original.pictures)?original.pictures:[]).map(pictureKey);
+  const novas=pictures.map(pictureKey).filter(Boolean);
+  if(JSON.stringify(atuais)!==JSON.stringify(novas)){
+    if(!novas.length)throw new Error('O anúncio precisa manter pelo menos uma foto.');
+    patch.pictures=pictures;
+  }
+
+  const descOriginal=String(original.description||'').trim();
+  const descNova=String(document.getElementById('v96-description')?.value||'').trim();
+  if(descNova!==descOriginal){
+    if(descNova)patch.description=descNova;
+    else avisos.push('A descrição ficou vazia e não será enviada. O Mercado Livre não aceita descrição vazia.');
+  }
+
+  const originais=new Map([...(original.principais||[]),...(original.secundarias||[])].map(a=>[String(a.id),{
+    value_id:a?.value_id!==undefined&&a?.value_id!==null?String(a.value_id):'',
+    value:String(a?.value||'').trim()
+  }]));
   const attributes=[];
+
   document.querySelectorAll('[data-v96-attr]').forEach(el=>{
-    const id=el.dataset.v96Attr;let value_id='',value_name='';
+    const id=String(el.dataset.v96Attr||'').trim();if(!id)return;
+    const old=originais.get(id)||{value_id:'',value:''};
     if(el.tagName==='SELECT'){
-      value_id=String(el.value||'');
-      value_name=String(el.options[el.selectedIndex]?.dataset?.name||el.options[el.selectedIndex]?.textContent||'').trim();
-      if(value_id==='-1')value_name='';
-    }else value_name=String(el.value||'').trim();
-    if(value_id||value_name)attributes.push({id,value_id:value_id||undefined,value_name:value_name||undefined});
+      const value_id=String(el.value||'').trim();
+      const value_name=value_id&&value_id!=='-1'?String(el.options[el.selectedIndex]?.dataset?.name||el.options[el.selectedIndex]?.textContent||'').trim():'';
+      const oldComparable=old.value_id||old.value;
+      const newComparable=value_id==='-1'?'-1':(value_id||value_name);
+      if(String(oldComparable||'')===String(newComparable||''))return;
+      if(value_id==='-1')attributes.push({id,value_id:'-1',value_name:null});
+      else if(value_id)attributes.push({id,value_id});
+      else avisos.push(`O campo ${id} ficou sem valor e não será apagado automaticamente.`);
+      return;
+    }
+    const value_name=String(el.value||'').trim();
+    if(value_name===String(old.value||'').trim())return;
+    if(value_name)attributes.push({id,value_name});
+    else avisos.push(`O campo ${id} ficou vazio e não será apagado automaticamente.`);
   });
-  return {pictures,description:String(document.getElementById('v96-description')?.value||''),attributes};
+
+  if(attributes.length)patch.attributes=attributes;
+  return {patch,avisos};
 }
 
 async function salvarEditorConteudoV96(massa=false){
   if(!conteudoAtualV96)return;
-  const patch=coletarPatchConteudoV96();
   const status=document.getElementById('conteudo-modal-status-v96');
+  let coletado;
+  try{coletado=coletarPatchConteudoV96()}
+  catch(e){status.innerText='Erro: '+e.message;return}
+
+  const patch=coletado.patch||{};
+  const avisosLocais=coletado.avisos||[];
+  if(!Object.keys(patch).length){
+    status.innerText=avisosLocais.length?`Nenhuma alteração enviada. ${avisosLocais.join(' ')}`:'Nenhuma alteração foi detectada.';
+    return;
+  }
+
   if(!massa){
-    status.innerText='Salvando no Mercado Livre...';
+    status.innerText='Salvando somente os campos alterados no Mercado Livre...';
     try{
       const r=await fetch(`${RENDER_URL}/api/v96/anuncios/${encodeURIComponent(conteudoAtualV96.id)}/conteudo`,{method:'PUT',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify(patch)});
       const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-      aplicarDetalheLocalV96(d.detalhe);
-      conteudoAtualV96=d.detalhe;renderEditorConteudoV96(d.detalhe);status.innerText=`Salvo: ${(d.alteracoes||[]).join(', ')||'sem alterações'}.`;
+      aplicarDetalheLocalV96(d.detalhe);conteudoAtualV96=d.detalhe;renderEditorConteudoV96(d.detalhe);
+      const todosAvisos=[...avisosLocais,...(d.avisos||[])];
+      status.innerText=d.alteracoes?.length?`Salvo: ${d.alteracoes.join(', ')}.${todosAvisos.length?' Aviso: '+todosAvisos.join(' '):''}`:`Nenhuma alteração necessária.${todosAvisos.length?' '+todosAvisos.join(' '):''}`;
       await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
-    }catch(e){status.innerText='Erro: '+e.message}
+    }catch(e){
+      const msg=/plain\s*text.*null|plain\s*text.*empty/i.test(String(e.message||''))?'A descrição está vazia. Ela não pode ser enviada vazia ao Mercado Livre.':e.message;
+      status.innerText='Erro: '+msg;
+    }
     return;
   }
 
@@ -16474,7 +16524,10 @@ async function salvarEditorConteudoV96(massa=false){
   await carregarMasterLocalV32();
   const ids=masterAnunciosV32.filter(x=>String(x.sku||'').trim().toLowerCase()===sku.toLowerCase()).map(x=>String(x.id));
   if(!ids.length)return alert('Nenhum anúncio com este SKU foi encontrado.');
-  if(!confirm(`Aplicar fotos, descrição e características em ${ids.length.toLocaleString('pt-BR')} anúncio(s) do SKU ${sku}?\n\nUse isso apenas quando todos realmente representam o mesmo produto.`))return;
+  const nomes={pictures:'fotos',description:'descrição',attributes:'características',title:'título',sku:'SKU'};
+  const campos=Object.keys(patch).map(k=>nomes[k]||k);
+  if(!confirm(`Aplicar ${campos.join(', ')} em ${ids.length.toLocaleString('pt-BR')} anúncio(s) do SKU ${sku}?\n\nSomente os campos realmente alterados serão enviados.`))return;
+
   let done=0,fail=0;
   for(let i=0;i<ids.length;i+=25){
     const lote=ids.slice(i,i+25);status.innerText=`Atualizando SKU ${sku}: ${done}/${ids.length}...`;
@@ -16487,7 +16540,7 @@ async function salvarEditorConteudoV96(massa=false){
   }
   await idbSalvarItensV32(ids.map(id=>masterMapV32.get(id)).filter(Boolean));
   await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
-  status.innerText=`Concluído: ${done} atualizado(s), ${fail} falha(s).`;
+  status.innerText=`Concluído: ${done} atualizado(s), ${fail} falha(s).${avisosLocais.length?' '+avisosLocais.join(' '):''}`;
 }
 
 function aplicarDetalheLocalV96(d){
@@ -16509,24 +16562,184 @@ async function carregarInteligenciaV96(){
 async function analisarMercadoV96(monitor=false){
   const produto=document.getElementById('intel-produto-v96')?.value.trim()||'';
   const sku=document.getElementById('intel-sku-v96')?.value.trim()||'';
+
   if(!produto)return alert('Informe o nome do produto.');
-  const status=document.getElementById('intel-status-v96');status.innerText='Pesquisando a primeira página, lendo anúncios e analisando padrões...';
+
+  const status=document.getElementById('intel-status-v96');
+  status.innerText='Consultando o Mercado Livre e procurando as melhores referências disponíveis...';
+
   try{
     const file=document.getElementById('intel-foto-v96')?.files?.[0];
     const image_data_url=file?await fileDataUrlV96(file):'';
-    const r=await fetch(`${RENDER_URL}/api/v96/inteligencia/analisar`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({produto,sku,image_data_url,monitor})});
-    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
-    inteligenciaAtualV96=d;monitorAtualV96=d.monitor_id||monitorAtualV96;renderInteligenciaV96(d);status.innerText=`Análise concluída com ${Number(d.snapshot?.summary?.analyzed||0)} anúncios da primeira página.${d.monitor_id?' Monitoramento periódico ativado.':''}`;renderMeusAnunciosIntelV96();if(monitor)carregarMonitoresV96();
-  }catch(e){status.innerText='Erro: '+e.message}
+
+    const r=await fetch(
+      `${RENDER_URL}/api/v96/inteligencia/analisar`,
+      {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          Authorization:obterToken()
+        },
+        body:JSON.stringify({
+          produto,
+          sku,
+          image_data_url,
+          monitor
+        })
+      }
+    );
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+      throw new Error(d.erro||`HTTP ${r.status}`);
+    }
+
+    inteligenciaAtualV96=d;
+    monitorAtualV96=d.monitor_id||monitorAtualV96;
+
+    renderInteligenciaV96(d);
+
+    const fonte=d.snapshot?.source_label||'Mercado Livre';
+    const analisados=Number(d.snapshot?.summary?.analyzed||0);
+    const aviso=d.snapshot?.notice
+      ?` ${d.snapshot.notice}`
+      :'';
+
+    status.innerText=
+      `Análise concluída: ${analisados} referência(s) · ${fonte}.`+
+      aviso+
+      (d.monitor_id?' Monitoramento periódico ativado.':'');
+
+    renderMeusAnunciosIntelV96();
+
+    if(monitor)carregarMonitoresV96();
+  }catch(e){
+    const msg=String(e?.message||'');
+
+    status.innerText=/forbidden/i.test(msg)
+      ?'A busca textual foi bloqueada pela API. Atualize para a V98, que usa automaticamente o ranking oficial de mais vendidos como alternativa.'
+      :'Erro: '+msg;
+  }
 }
 
 function renderInteligenciaV96(d){
-  const s=d.snapshot?.summary||{};
-  const cards=[['Analisados',s.analyzed||0],['Preço mediano',moeda(Number(s.median_price||0))],['Frete grátis',`${Number(s.free_shipping_pct||0)}%`],['Com descrição',`${Number(s.description_pct||0)}%`],['Média de fotos',Number(s.avg_pictures||0).toFixed(1)],['Ficha principal',`${Number(s.avg_required_completion||0)}%`]];
-  const box=document.getElementById('intel-resumo-v96');box.classList.remove('hidden');box.innerHTML=cards.map(([l,v])=>`<div class="panel rounded-2xl p-4"><div class="text-[9px] uppercase text-slate-500 font-black">${escapeHtml(l)}</div><div class="text-xl font-black text-white mt-2">${escapeHtml(String(v))}</div></div>`).join('');
-  document.getElementById('intel-concorrentes-v96').innerHTML=(d.snapshot?.items||[]).map(x=>`<tr><td class="p-3 text-slate-500 font-black">${x.position}</td><td class="p-3"><div class="flex items-center gap-3"><img src="${escapeHtml(x.thumbnail||'')}" class="w-10 h-10 rounded-lg object-cover bg-white"><div><div class="text-[10px] font-black text-white max-w-[360px]">${escapeHtml(x.title)}</div><a href="${escapeHtml(x.permalink||'#')}" target="_blank" class="text-[8px] text-blue-400">${escapeHtml(x.id)}</a></div></div></td><td class="p-3 font-black text-white">${moeda(x.price)}</td><td class="p-3 text-slate-300">${Number(x.sold_quantity||0)}</td><td class="p-3 ${x.free_shipping?'text-emerald-400':'text-slate-500'}">${x.free_shipping?'Grátis':'Pago'}</td><td class="p-3 text-slate-300">${Number(x.picture_count||0)}</td><td class="p-3"><span class="${Number(x.required_completion)>=90?'text-emerald-400':'text-yellow-400'} font-black">${Number(x.required_completion||0)}%</span></td></tr>`).join('');
+  const snapshot=d.snapshot||{};
+  const s=snapshot.summary||{};
+
+  const fonteTitle=document.getElementById('intel-fonte-title-v98');
+  const fonteSub=document.getElementById('intel-fonte-sub-v98');
+
+  if(fonteTitle){
+    fonteTitle.innerText=snapshot.source_label||'Referências do Mercado Livre';
+  }
+
+  if(fonteSub){
+    const cat=snapshot.category_name
+      ?` · ${snapshot.category_name}`
+      :'';
+
+    fonteSub.innerText=snapshot.source==='highlights_category'
+      ?`Ranking oficial BEST_SELLER do Mercado Livre${cat}. A posição representa o ranking de mais vendidos.`
+      :`Ordem retornada pela busca do Mercado Livre no momento da análise${cat}.`;
+  }
+
+  const cards=[
+    ['Analisados',s.analyzed||0],
+    ['Preço mediano',Number(s.median_price||0)>0?moeda(Number(s.median_price||0)):'—'],
+    ['Frete grátis',`${Number(s.free_shipping_pct||0)}%`],
+    ['Com descrição',`${Number(s.description_pct||0)}%`],
+    ['Média de fotos',Number(s.avg_pictures||0).toFixed(1)],
+    ['Ficha técnica',`${Number(s.avg_required_completion||0)}%`]
+  ];
+
+  const box=document.getElementById('intel-resumo-v96');
+  box.classList.remove('hidden');
+  box.innerHTML=cards.map(([l,v])=>`
+    <div class="panel rounded-2xl p-4">
+      <div class="text-[9px] uppercase text-slate-500 font-black">${escapeHtml(l)}</div>
+      <div class="text-xl font-black text-white mt-2">${escapeHtml(String(v))}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('intel-concorrentes-v96').innerHTML=
+    (snapshot.items||[]).map(x=>{
+      const sales=x.sales_signal
+        ?escapeHtml(String(x.sales_signal))
+        :Number(x.sold_quantity||0).toLocaleString('pt-BR');
+
+      const price=Number(x.price||0)>0
+        ?moeda(Number(x.price||0))
+        :'—';
+
+      const frete=x.reference_type==='ITEM'
+        ?(x.free_shipping?'Grátis':'Pago')
+        :'—';
+
+      const link=x.permalink
+        ?`<a href="${escapeHtml(x.permalink)}" target="_blank" class="text-[8px] text-blue-400">${escapeHtml(x.id)}</a>`
+        :`<span class="text-[8px] text-slate-600">${escapeHtml(x.id)} · ${escapeHtml(x.reference_type||'')}</span>`;
+
+      const img=x.thumbnail
+        ?`<img src="${escapeHtml(x.thumbnail)}" class="w-10 h-10 rounded-lg object-cover bg-white">`
+        :`<div class="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 grid place-items-center text-[8px] text-slate-600">ML</div>`;
+
+      return `
+        <tr>
+          <td class="p-3 text-slate-500 font-black">${Number(x.position||0)}</td>
+          <td class="p-3">
+            <div class="flex items-center gap-3">
+              ${img}
+              <div>
+                <div class="text-[10px] font-black text-white max-w-[360px]">${escapeHtml(x.title||'')}</div>
+                ${link}
+              </div>
+            </div>
+          </td>
+          <td class="p-3 font-black text-white">${price}</td>
+          <td class="p-3 text-slate-300">${sales}</td>
+          <td class="p-3 ${x.free_shipping?'text-emerald-400':'text-slate-500'}">${frete}</td>
+          <td class="p-3 text-slate-300">${Number(x.picture_count||0)}</td>
+          <td class="p-3">
+            <span class="${Number(x.required_completion)>=90?'text-emerald-400':'text-yellow-400'} font-black">
+              ${Number(x.required_completion||0)}%
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
   const r=d.recommendations||{};
-  document.getElementById('intel-recomendacoes-v96').innerHTML=`<div class="rounded-xl bg-slate-950/70 border border-slate-800 p-4"><div class="text-[9px] uppercase text-yellow-400 font-black">Diagnóstico</div><div class="text-xs text-slate-300 mt-2 leading-5">${escapeHtml(r.diagnostic||'')}</div></div>${(r.priority_actions||[]).map((x,i)=>`<div class="rounded-xl border border-slate-800 p-3 flex gap-3"><span class="text-yellow-400 font-black text-[10px]">${String(i+1).padStart(2,'0')}</span><span class="text-xs text-slate-300">${escapeHtml(x)}</span></div>`).join('')}<div class="rounded-xl border border-slate-800 p-4 text-[10px] text-slate-400 space-y-2"><div><b class="text-white">Título:</b> ${escapeHtml(r.title_strategy||'')}</div><div><b class="text-white">Descrição:</b> ${escapeHtml(r.description_strategy||'')}</div><div><b class="text-white">Fotos:</b> ${escapeHtml(r.image_strategy||'')}</div><div><b class="text-white">Preço:</b> ${escapeHtml(r.pricing_strategy||'')}</div></div><div class="text-[9px] text-slate-600">${escapeHtml(r.caveat||'')}</div>`;
+
+  document.getElementById('intel-recomendacoes-v96').innerHTML=`
+    ${snapshot.notice?`
+      <div class="rounded-xl bg-blue-500/10 border border-blue-500/20 p-4">
+        <div class="text-[9px] uppercase text-blue-400 font-black">Fonte alternativa automática</div>
+        <div class="text-[10px] text-slate-300 mt-2 leading-5">${escapeHtml(snapshot.notice)}</div>
+      </div>
+    `:''}
+
+    <div class="rounded-xl bg-slate-950/70 border border-slate-800 p-4">
+      <div class="text-[9px] uppercase text-yellow-400 font-black">Diagnóstico</div>
+      <div class="text-xs text-slate-300 mt-2 leading-5">${escapeHtml(r.diagnostic||'')}</div>
+    </div>
+
+    ${(r.priority_actions||[]).map((x,i)=>`
+      <div class="rounded-xl border border-slate-800 p-3 flex gap-3">
+        <span class="text-yellow-400 font-black text-[10px]">${String(i+1).padStart(2,'0')}</span>
+        <span class="text-xs text-slate-300">${escapeHtml(x)}</span>
+      </div>
+    `).join('')}
+
+    <div class="rounded-xl border border-slate-800 p-4 text-[10px] text-slate-400 space-y-2">
+      <div><b class="text-white">Título:</b> ${escapeHtml(r.title_strategy||'')}</div>
+      <div><b class="text-white">Descrição:</b> ${escapeHtml(r.description_strategy||'')}</div>
+      <div><b class="text-white">Fotos:</b> ${escapeHtml(r.image_strategy||'')}</div>
+      <div><b class="text-white">Preço:</b> ${escapeHtml(r.pricing_strategy||'')}</div>
+    </div>
+
+    <div class="text-[9px] text-slate-600">${escapeHtml(r.caveat||'')}</div>
+  `;
 }
 
 function renderMeusAnunciosIntelV96(){
@@ -16559,17 +16772,34 @@ function fecharPropostaV96(){document.getElementById('modal-proposta-v96')?.clas
 async function aplicarPropostaV96(massa){
   if(!propostaAtualV96||!propostaItemV96)return;
   const item=masterMapV32.get(String(propostaItemV96));if(!item)return alert('Anúncio não encontrado no cache.');
-  const patch={title:String(document.getElementById('proposta-title-v96')?.value||'').trim(),description:String(document.getElementById('proposta-desc-v96')?.value||''),attributes:propostaAtualV96.attributes||[]};
+  const patch={};
+  const titulo=String(document.getElementById('proposta-title-v96')?.value||'').trim();
+  const descricao=String(document.getElementById('proposta-desc-v96')?.value||'').trim();
+  const attrs=Array.isArray(propostaAtualV96.attributes)?propostaAtualV96.attributes.filter(a=>a?.id&&(a?.value_id||a?.value_name)):[];
+  if(titulo)patch.title=titulo;if(descricao)patch.description=descricao;if(attrs.length)patch.attributes=attrs;
+  if(!Object.keys(patch).length)return alert('A proposta está vazia. Não há conteúdo seguro para aplicar.');
+
   if(!massa){
     mostrarLoading('Aplicando melhoria no Mercado Livre...');
-    try{const r=await fetch(`${RENDER_URL}/api/v96/anuncios/${encodeURIComponent(item.id)}/conteudo`,{method:'PUT',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify(patch)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);aplicarDetalheLocalV96(d.detalhe);alert((d.avisos||[]).length?`Conteúdo salvo com aviso: ${(d.avisos||[]).join(' | ')}`:'Melhoria aplicada.');fecharPropostaV96();await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true})}catch(e){alert(e.message)}finally{esconderLoading()}
+    try{
+      const r=await fetch(`${RENDER_URL}/api/v96/anuncios/${encodeURIComponent(item.id)}/conteudo`,{method:'PUT',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify(patch)});
+      const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+      aplicarDetalheLocalV96(d.detalhe);alert((d.avisos||[]).length?`Conteúdo salvo com aviso: ${(d.avisos||[]).join(' | ')}`:'Melhoria aplicada.');fecharPropostaV96();await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+    }catch(e){alert(e.message)}finally{esconderLoading()}
     return;
   }
   const sku=String(item.sku||'').trim();if(!sku)return alert('Este anúncio não tem SKU.');
   const ids=masterAnunciosV32.filter(x=>String(x.sku||'').trim().toLowerCase()===sku.toLowerCase()).map(x=>String(x.id));
-  if(!confirm(`Aplicar título quando permitido, descrição e características seguras em ${ids.length} anúncio(s) do SKU ${sku}?`))return;
+  if(!confirm(`Aplicar somente os campos preenchidos da proposta em ${ids.length} anúncio(s) do SKU ${sku}?`))return;
   mostrarLoading('Aplicando melhoria em massa por SKU...');let ok=0,fail=0;
-  try{for(let i=0;i<ids.length;i+=25){const r=await fetch(`${RENDER_URL}/api/v96/anuncios/conteudo-massa`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({ids:ids.slice(i,i+25),patch})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);ok+=Number(d.atualizados||0);fail+=Number(d.falhas||0);for(const rr of d.resultados||[])if(rr?.sucesso&&rr.detalhe)aplicarDetalheLocalV96(rr.detalhe)}alert(`Concluído: ${ok} atualizado(s), ${fail} falha(s).`);fecharPropostaV96();await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true})}catch(e){alert(e.message)}finally{esconderLoading()}
+  try{
+    for(let i=0;i<ids.length;i+=25){
+      const r=await fetch(`${RENDER_URL}/api/v96/anuncios/conteudo-massa`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({ids:ids.slice(i,i+25),patch})});
+      const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+      ok+=Number(d.atualizados||0);fail+=Number(d.falhas||0);for(const rr of d.resultados||[])if(rr?.sucesso&&rr.detalhe)aplicarDetalheLocalV96(rr.detalhe);
+    }
+    alert(`Concluído: ${ok} atualizado(s), ${fail} falha(s).`);fecharPropostaV96();await v88CarregarGestaoLocal(gestaoPagina,{silencioso:true});
+  }catch(e){alert(e.message)}finally{esconderLoading()}
 }
 
 async function melhorarTodosSkuV96(){
