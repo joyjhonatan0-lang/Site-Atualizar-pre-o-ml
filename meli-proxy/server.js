@@ -709,7 +709,7 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v95-multiuser-multiconta',
+        version: 'ml-hub-pro-v96-original-inteligencia',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
@@ -14668,6 +14668,725 @@ app.post('/api/v77/promocoes/acao-massa',async(req,res)=>{
     }catch(e){respostaErro(res,500,'Erro ao iniciar ação em massa: '+e.message)}
 });
 
+
+/* =========================================================
+   V96 — GESTÃO DE CONTEÚDO + INTELIGÊNCIA DE ANÚNCIOS
+   - fotos, descrição e ficha técnica na Gestão;
+   - atualização individual e em massa por SKU;
+   - auditoria de características principais/secundárias;
+   - análise da primeira página do Mercado Livre;
+   - monitoramento periódico e recomendações.
+========================================================= */
+
+const cacheCategoriaConteudoV96=new Map();
+let inteligenciaInitV96=null;
+let monitorInteligenciaTimerV96=null;
+let monitorInteligenciaBusyV96=false;
+
+function cacheGetV96(map,key,ttl){
+    const x=map.get(key);
+    if(!x)return null;
+    if(Date.now()-Number(x.at||0)>ttl){map.delete(key);return null;}
+    return x.data;
+}
+function cacheSetV96(map,key,data){map.set(key,{at:Date.now(),data});return data;}
+
+function atributoObrigatorioV96(a){
+    const t=a?.tags||{};
+    return Boolean(t.required||t.catalog_required||t.conditional_required||t.vip_required);
+}
+function atributoSomenteLeituraV96(a){
+    const t=a?.tags||{};
+    return Boolean(a?.read_only||t.read_only||t.hidden);
+}
+function atributoVariacaoV96(a){
+    const t=a?.tags||{};
+    return Boolean(a?.allow_variations||a?.variation_attribute||t.allow_variations||t.variation_attribute);
+}
+function valorAttrV96(a){
+    if(a?.value_name!==undefined&&a?.value_name!==null&&String(a.value_name).trim())return String(a.value_name).trim();
+    if(a?.value_id!==undefined&&a?.value_id!==null&&String(a.value_id).trim())return String(a.value_id).trim();
+    if(Array.isArray(a?.values)&&a.values.length){
+        return a.values.map(v=>v?.name||v?.id).filter(Boolean).join(', ');
+    }
+    return '';
+}
+
+async function definicoesCategoriaV96(token,categoryId){
+    const id=String(categoryId||'').trim();
+    if(!id)return [];
+    const cached=cacheGetV96(cacheCategoriaConteudoV96,id,60*60*1000);
+    if(cached)return cached;
+
+    const r=await mlFetch(`${ML_API}/categories/${encodeURIComponent(id)}/attributes`,token);
+    const d=await jsonSeguro(r);
+    if(!r.ok)throw new Error(formatarErroMercadoLivre(d)||`Falha ao consultar atributos da categoria ${id}.`);
+    return cacheSetV96(cacheCategoriaConteudoV96,id,Array.isArray(d)?d:[]);
+}
+
+async function descricaoItemV96(token,id){
+    const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}/description`,token);
+    const d=await jsonSeguro(r);
+    if(r.status===404)return {plain_text:'',existe:false};
+    if(!r.ok)return {plain_text:'',existe:false,erro:formatarErroMercadoLivre(d)||`HTTP ${r.status}`};
+    return {plain_text:String(d?.plain_text||d?.text||''),existe:Boolean(String(d?.plain_text||d?.text||'').trim()),raw:d};
+}
+
+function montarFichaV96(item,defs){
+    const atuais=new Map((Array.isArray(item?.attributes)?item.attributes:[]).map(a=>[String(a.id),a]));
+    const ignorar=new Set(['SELLER_SKU']);
+    const principais=[];
+    const secundarias=[];
+
+    for(const d of defs){
+        const id=String(d?.id||'');
+        if(!id||ignorar.has(id)||atributoSomenteLeituraV96(d)||atributoVariacaoV96(d))continue;
+        const atual=atuais.get(id)||null;
+        const row={
+            id,
+            name:String(d?.name||id),
+            value:valorAttrV96(atual),
+            value_id:atual?.value_id??null,
+            required:atributoObrigatorioV96(d),
+            group_id:String(d?.attribute_group_id||''),
+            group_name:String(d?.attribute_group_name||''),
+            value_type:String(d?.value_type||'string'),
+            values:(Array.isArray(d?.values)?d.values:[]).slice(0,150).map(v=>({id:v?.id??null,name:String(v?.name||'')})),
+            missing:!valorAttrV96(atual)
+        };
+        if(row.required)principais.push(row); else secundarias.push(row);
+    }
+
+    const missingMain=principais.filter(x=>x.missing);
+    const missingSecondary=secundarias.filter(x=>x.missing);
+    return {principais,secundarias,missingMain,missingSecondary};
+}
+
+async function detalheConteudoAnuncioV96(token,id){
+    const itemRes=await mlFetch(
+        `${ML_API}/items/${encodeURIComponent(id)}?include_attributes=all&include_internal_attributes=true`,
+        token
+    );
+    const item=await jsonSeguro(itemRes);
+    if(!itemRes.ok)throw Object.assign(new Error(formatarErroMercadoLivre(item)||'Anúncio não encontrado.'),{status:itemRes.status});
+
+    const [descricao,defs]=await Promise.all([
+        descricaoItemV96(token,id),
+        definicoesCategoriaV96(token,item.category_id).catch(()=>[])
+    ]);
+
+    const ficha=montarFichaV96(item,defs);
+    const pics=(Array.isArray(item.pictures)?item.pictures:[]).map(p=>({
+        id:p?.id||null,
+        url:p?.secure_url||p?.url||''
+    })).filter(p=>p.id||p.url);
+
+    const principalTotal=ficha.principais.length;
+    const secundariaTotal=ficha.secundarias.length;
+    const principalOk=principalTotal-ficha.missingMain.length;
+    const secundariaOk=secundariaTotal-ficha.missingSecondary.length;
+    const descriptionOk=Boolean(descricao.existe);
+    const picturesOk=pics.length>=4;
+
+    const score=Math.round(
+        (descriptionOk?25:0)+
+        Math.min(25,pics.length*5)+
+        (principalTotal?30*(principalOk/principalTotal):30)+
+        (secundariaTotal?20*(secundariaOk/secundariaTotal):20)
+    );
+
+    return {
+        id:String(item.id||id),
+        title:String(item.title||''),
+        sku:String((item.attributes||[]).find(a=>a.id==='SELLER_SKU')?.value_name||''),
+        seller_id:String(item.seller_id||''),
+        category_id:String(item.category_id||''),
+        user_product_id:item.user_product_id||null,
+        sold_quantity:Number(item.sold_quantity||0),
+        pictures:pics,
+        description:descricao.plain_text||'',
+        description_exists:descriptionOk,
+        attributes:Array.isArray(item.attributes)?item.attributes:[],
+        principais:ficha.principais,
+        secundarias:ficha.secundarias,
+        missing_main:ficha.missingMain,
+        missing_secondary:ficha.missingSecondary,
+        content_score:Math.max(0,Math.min(100,score)),
+        picture_count:pics.length
+    };
+}
+
+function normalizarPicturesV96(lista){
+    return (Array.isArray(lista)?lista:[]).map(p=>{
+        if(typeof p==='string'){
+            const v=p.trim();
+            if(!v)return null;
+            if(/^https?:\/\//i.test(v))return {source:v};
+            return {id:v};
+        }
+        if(p?.id)return {id:String(p.id)};
+        if(p?.source&&/^https?:\/\//i.test(String(p.source)))return {source:String(p.source)};
+        if(p?.url&&/^https?:\/\//i.test(String(p.url)))return {source:String(p.url)};
+        return null;
+    }).filter(Boolean).slice(0,30);
+}
+
+function normalizarAttributesV96(lista,defs=[]){
+    const permitidos=new Map(defs.map(x=>[String(x.id),x]));
+    return (Array.isArray(lista)?lista:[]).map(a=>{
+        const id=String(a?.id||'').trim();
+        if(!id||id==='SELLER_SKU')return null;
+        const def=permitidos.get(id);
+        if(def&&(atributoSomenteLeituraV96(def)||atributoVariacaoV96(def)))return null;
+        const valueId=a?.value_id!==undefined&&a?.value_id!==null?String(a.value_id).trim():'';
+        const valueName=a?.value_name!==undefined&&a?.value_name!==null?String(a.value_name).trim():'';
+        if(valueId==='-1')return {id,value_id:'-1',value_name:null};
+        if(valueId)return {id,value_id:valueId};
+        if(valueName)return {id,value_name:valueName.slice(0,1000)};
+        return null;
+    }).filter(Boolean);
+}
+
+async function putItemV96(token,id,payload){
+    const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}`,token,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify(payload)
+    });
+    const d=await jsonSeguro(r);
+    if(!r.ok)throw Object.assign(new Error(formatarErroMercadoLivre(d)||`Mercado Livre recusou a alteração (HTTP ${r.status}).`),{status:r.status,data:d});
+    return d;
+}
+
+async function atualizarDescricaoV96(token,id,texto){
+    const plain=String(texto??'').trim();
+    const atual=await descricaoItemV96(token,id);
+    const method=atual.existe?'PUT':'POST';
+    const suffix=method==='PUT'?'?api_version=2':'';
+    const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}/description${suffix}`,token,{
+        method,
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({plain_text:plain})
+    });
+    const d=await jsonSeguro(r);
+    if(!r.ok)throw Object.assign(new Error(formatarErroMercadoLivre(d)||'Mercado Livre recusou a descrição.'),{status:r.status,data:d});
+    return d;
+}
+
+async function atualizarTituloV96(token,item,title){
+    const novo=String(title||'').trim();
+    if(!novo||novo===String(item.title||'').trim())return {alterou:false};
+    if(novo.length>60)throw Object.assign(new Error('O título não pode ultrapassar 60 caracteres.'),{status:400});
+    if(Number(item.sold_quantity||0)>0)throw Object.assign(new Error('O Mercado Livre não permite alterar o título deste anúncio porque ele já possui vendas.'),{status:409});
+
+    if(item.user_product_id){
+        const upr=await mlFetch(`${ML_API}/user-products/${encodeURIComponent(item.user_product_id)}`,token);
+        const upd=await jsonSeguro(upr);
+        if(!upr.ok||!upd?.family_id)throw new Error(formatarErroMercadoLivre(upd)||'Família do User Product não encontrada.');
+        const fr=await mlFetch(`${ML_API}/user-products-families/${encodeURIComponent(upd.family_id)}`,token,{
+            method:'PUT',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({family_name:novo})
+        });
+        const fd=await jsonSeguro(fr);
+        if(!fr.ok)throw Object.assign(new Error(formatarErroMercadoLivre(fd)||'Título/família recusado pelo Mercado Livre.'),{status:fr.status});
+        return {alterou:true,via:'family_name'};
+    }
+
+    await putItemV96(token,item.id,{title:novo});
+    return {alterou:true,via:'title'};
+}
+
+async function aplicarPatchConteudoV96({token,id,patch,sellerId=null}){
+    const atualRes=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}?include_attributes=all&include_internal_attributes=true`,token);
+    const atual=await jsonSeguro(atualRes);
+    if(!atualRes.ok)throw Object.assign(new Error(formatarErroMercadoLivre(atual)||'Anúncio não encontrado.'),{status:atualRes.status});
+    if(sellerId&&String(atual.seller_id)!==String(sellerId))throw Object.assign(new Error('Este anúncio não pertence à conta Mercado Livre ativa.'),{status:403});
+
+    const defs=await definicoesCategoriaV96(token,atual.category_id).catch(()=>[]);
+    const alteracoes=[];
+    const avisos=[];
+
+    if(patch.title!==undefined){
+        try{
+            const r=await atualizarTituloV96(token,atual,patch.title);
+            if(r.alterou)alteracoes.push('título');
+        }catch(e){avisos.push(`Título: ${e.message}`)}
+    }
+
+    if(patch.pictures!==undefined){
+        const pictures=normalizarPicturesV96(patch.pictures);
+        if(!pictures.length)throw Object.assign(new Error('Informe pelo menos uma foto para substituir as imagens.'),{status:400});
+        await putItemV96(token,id,{pictures});
+        alteracoes.push('fotos');
+    }
+
+    if(patch.attributes!==undefined){
+        const attributes=normalizarAttributesV96(patch.attributes,defs);
+        if(attributes.length){
+            await putItemV96(token,id,{attributes});
+            alteracoes.push('características');
+        }
+    }
+
+    if(patch.description!==undefined){
+        await atualizarDescricaoV96(token,id,patch.description);
+        alteracoes.push('descrição');
+    }
+
+    if(patch.sku!==undefined){
+        const sku=String(patch.sku||'').trim();
+        await putItemV96(token,id,{attributes:[{id:'SELLER_SKU',value_name:sku||null}]});
+        alteracoes.push('SKU');
+    }
+
+    const detalhe=await detalheConteudoAnuncioV96(token,id);
+    return {id:String(id),sucesso:true,alteracoes,avisos,detalhe};
+}
+
+app.get('/api/v96/anuncios/:id/conteudo',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    try{
+        const d=await detalheConteudoAnuncioV96(token,String(req.params.id||''));
+        if(req.mlhubSellerId&&String(d.seller_id)!==String(req.mlhubSellerId))return respostaErro(res,403,'Anúncio de outra conta.');
+        res.json({sucesso:true,...d});
+    }catch(e){respostaErro(res,e.status||500,e.message)}
+});
+
+app.put('/api/v96/anuncios/:id/conteudo',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    try{
+        const r=await aplicarPatchConteudoV96({
+            token,id:String(req.params.id||''),patch:req.body||{},sellerId:req.mlhubSellerId||null
+        });
+        res.json(r);
+    }catch(e){respostaErro(res,e.status||500,e.message)}
+});
+
+app.post('/api/v96/anuncios/auditar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(String).filter(Boolean))].slice(0,50);
+    if(!ids.length)return res.json({sucesso:true,itens:[]});
+    const itens=await mapLimitV21(ids,5,async id=>{
+        try{
+            const d=await detalheConteudoAnuncioV96(token,id);
+            if(req.mlhubSellerId&&String(d.seller_id)!==String(req.mlhubSellerId))return {id,sucesso:false,erro:'Outra conta'};
+            return {
+                id,sucesso:true,picture_count:d.picture_count,description_exists:d.description_exists,
+                content_score:d.content_score,missing_main:d.missing_main.map(x=>({id:x.id,name:x.name})),
+                missing_secondary:d.missing_secondary.map(x=>({id:x.id,name:x.name}))
+            };
+        }catch(e){return {id,sucesso:false,erro:e.message}}
+    });
+    res.json({sucesso:true,itens:itens.filter(Boolean)});
+});
+
+app.post('/api/v96/anuncios/conteudo-massa',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(String).filter(Boolean))].slice(0,250);
+    const patch=req.body?.patch||{};
+    if(!ids.length)return respostaErro(res,400,'Nenhum anúncio informado.');
+    const resultados=await mapLimitV21(ids,5,async id=>{
+        try{return await aplicarPatchConteudoV96({token,id,patch,sellerId:req.mlhubSellerId||null})}
+        catch(e){return {id,sucesso:false,erro:e.message,status:e.status||500}}
+    });
+    const ok=resultados.filter(x=>x?.sucesso).length;
+    res.json({sucesso:true,total:ids.length,atualizados:ok,falhas:ids.length-ok,resultados});
+});
+
+async function garantirInteligenciaV96(){
+    if(inteligenciaInitV96)return inteligenciaInitV96;
+    inteligenciaInitV96=(async()=>{
+        if(!db)throw new Error('PostgreSQL é necessário para a Inteligência de Anúncios.');
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_product_monitors_v96(
+            id BIGSERIAL PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            seller_id TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            search_query TEXT NOT NULL,
+            target_sku TEXT,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            interval_minutes INTEGER NOT NULL DEFAULT 60,
+            last_scan_at TIMESTAMPTZ,
+            next_scan_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            locked_until TIMESTAMPTZ,
+            last_snapshot JSONB,
+            last_recommendations JSONB,
+            last_error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_monitor_v96_due ON ml_product_monitors_v96(enabled,next_scan_at)`);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_monitor_v96_workspace ON ml_product_monitors_v96(workspace_id,user_id,updated_at DESC)`);
+        await dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_product_monitor_runs_v96(
+            id BIGSERIAL PRIMARY KEY,
+            monitor_id BIGINT NOT NULL,
+            snapshot JSONB NOT NULL,
+            recommendations JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await dbQuery(`CREATE INDEX IF NOT EXISTS idx_monitor_runs_v96 ON ml_product_monitor_runs_v96(monitor_id,created_at DESC)`);
+    })().catch(e=>{inteligenciaInitV96=null;throw e});
+    return inteligenciaInitV96;
+}
+
+const STOPWORDS_TITULO_V96=new Set('de da do das dos para com sem em no na nos nas e o a os as um uma por kit produto original novo nova cor modelo tamanho tipo'.split(' '));
+function palavrasTituloV96(t){
+    return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(x=>x.length>=3&&!STOPWORDS_TITULO_V96.has(x));
+}
+function medianaV96(nums){
+    const a=nums.filter(Number.isFinite).sort((x,y)=>x-y);if(!a.length)return 0;
+    const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+
+async function buscarPrimeiraPaginaMercadoV96(token,produto){
+    const q=String(produto||'').trim();
+    if(!q)throw Object.assign(new Error('Informe o nome do produto.'),{status:400});
+
+    const sr=await mlFetch(`${ML_API}/sites/MLB/search?q=${encodeURIComponent(q)}&limit=24`,token);
+    const sd=await jsonSeguro(sr);
+    if(!sr.ok)throw Object.assign(new Error(formatarErroMercadoLivre(sd)||'Não foi possível pesquisar o Mercado Livre.'),{status:sr.status});
+
+    const results=Array.isArray(sd?.results)?sd.results.slice(0,24):[];
+    const ids=results.map(x=>String(x.id||'')).filter(Boolean);
+    if(!ids.length)return {query:q,total_search:Number(sd?.paging?.total||0),items:[],summary:{}};
+
+    const bulk=await buscarItensBulkFreteRapido(token,ids);
+    const order=new Map(ids.map((id,i)=>[id,i+1]));
+    const me=await usuarioML(token).catch(()=>({id:null}));
+    const ownSeller=String(me?.id||'');
+    const detalhes=ids.map(id=>bulk?.mapa?.[id]).filter(Boolean)
+      .filter(item=>!ownSeller || String(item?.seller_id||'')!==ownSeller);
+
+    const descs=await mapLimitV21(detalhes,6,async item=>{
+        const d=await descricaoItemV96(token,item.id).catch(()=>({plain_text:'',existe:false}));
+        return [String(item.id),d];
+    });
+    const descMap=new Map(descs.filter(Boolean));
+
+    const items=[];
+    for(const item of detalhes){
+        const defs=await definicoesCategoriaV96(token,item.category_id).catch(()=>[]);
+        const ficha=montarFichaV96(item,defs);
+        const required=ficha.principais.length;
+        const filled=required-ficha.missingMain.length;
+        const desc=descMap.get(String(item.id))||{plain_text:'',existe:false};
+        items.push({
+            position:order.get(String(item.id))||999,
+            id:String(item.id),
+            title:String(item.title||''),
+            price:Number(item.price||0),
+            sold_quantity:Number(item.sold_quantity||0),
+            free_shipping:Boolean(item.shipping?.free_shipping),
+            listing_type_id:String(item.listing_type_id||''),
+            picture_count:Array.isArray(item.pictures)?item.pictures.length:0,
+            description_exists:Boolean(desc.existe),
+            description_length:String(desc.plain_text||'').length,
+            required_attributes_total:required,
+            required_attributes_filled:filled,
+            required_completion:required?Math.round(100*filled/required):100,
+            category_id:String(item.category_id||''),
+            permalink:String(item.permalink||''),
+            thumbnail:String(item.thumbnail||'')
+        });
+    }
+    items.sort((a,b)=>a.position-b.position);
+
+    const precos=items.map(x=>x.price).filter(x=>x>0);
+    const freq=new Map();
+    items.forEach(x=>palavrasTituloV96(x.title).forEach(w=>freq.set(w,(freq.get(w)||0)+1)));
+    const keywords=[...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([term,count])=>({term,count}));
+
+    const summary={
+        analyzed:items.length,
+        total_search:Number(sd?.paging?.total||0),
+        median_price:Number(medianaV96(precos).toFixed(2)),
+        min_price:precos.length?Math.min(...precos):0,
+        max_price:precos.length?Math.max(...precos):0,
+        avg_sold:items.length?Number((items.reduce((a,x)=>a+x.sold_quantity,0)/items.length).toFixed(1)):0,
+        free_shipping_pct:items.length?Math.round(100*items.filter(x=>x.free_shipping).length/items.length):0,
+        description_pct:items.length?Math.round(100*items.filter(x=>x.description_exists).length/items.length):0,
+        avg_pictures:items.length?Number((items.reduce((a,x)=>a+x.picture_count,0)/items.length).toFixed(1)):0,
+        avg_required_completion:items.length?Math.round(items.reduce((a,x)=>a+x.required_completion,0)/items.length):0,
+        common_title_terms:keywords
+    };
+    return {query:q,total_search:Number(sd?.paging?.total||0),items,summary};
+}
+
+function fallbackRecomendacoesV96(snapshot){
+    const s=snapshot.summary||{};
+    const termos=(s.common_title_terms||[]).slice(0,8).map(x=>x.term).join(', ');
+    return {
+        diagnostic:'Análise baseada nos sinais observáveis dos anúncios retornados na primeira página. A posição de busca é dinâmica e a API não expõe a fórmula de ranking.',
+        opportunities:[
+            `Use os termos realmente pertinentes ao produto que aparecem com frequência: ${termos||'revise os termos principais da categoria'}.`,
+            `Compare seu preço com a mediana observada de R$ ${Number(s.median_price||0).toFixed(2)} sem reduzir abaixo da sua margem.`,
+            `A página analisada usa em média ${Number(s.avg_pictures||0).toFixed(1)} fotos; priorize fotos próprias, nítidas e completas.`,
+            `Preencha todas as características obrigatórias e as secundárias realmente conhecidas do produto.`
+        ],
+        title_strategy:'Título claro, específico, até 60 caracteres, usando o nome exato do produto e atributos confirmados mais relevantes.',
+        description_strategy:'Descrição original em texto simples, complementando a ficha técnica sem copiar concorrentes.',
+        image_strategy:'Use fotos próprias do produto, capa limpa e imagens adicionais mostrando ângulos e detalhes reais. Não copie imagens de concorrentes.',
+        pricing_strategy:'Use o preço da concorrência apenas como referência e respeite custo, comissão, frete, imposto e margem.',
+        priority_actions:['Completar características obrigatórias','Revisar título','Revisar fotos','Revisar descrição','Comparar preço e margem'],
+        caveat:'Correlação não prova causa. Nenhuma recomendação garante posição ou vendas.'
+    };
+}
+
+async function recomendacoesMercadoV96(snapshot,imageDataUrl=''){
+    const fallback=fallbackRecomendacoesV96(snapshot);
+    if(!String(process.env.GEMINI_API_KEY||'').trim())return fallback;
+
+    const dados=snapshot.items.slice(0,18).map(x=>({
+        position:x.position,title:x.title,price:x.price,sold_quantity:x.sold_quantity,
+        free_shipping:x.free_shipping,pictures:x.picture_count,description_length:x.description_length,
+        required_completion:x.required_completion,listing_type_id:x.listing_type_id
+    }));
+
+    const schema={type:'object',properties:{
+        diagnostic:{type:'string'},opportunities:{type:'array',items:{type:'string'}},
+        title_strategy:{type:'string'},description_strategy:{type:'string'},image_strategy:{type:'string'},
+        pricing_strategy:{type:'string'},priority_actions:{type:'array',items:{type:'string'}},caveat:{type:'string'}
+    },required:['diagnostic','opportunities','title_strategy','description_strategy','image_strategy','pricing_strategy','priority_actions','caveat']};
+
+    const prompt=`Analise os sinais OBSERVÁVEIS dos anúncios da primeira página da busca do Mercado Livre Brasil para o produto "${snapshot.query}".
+Não afirme conhecer a fórmula de ranking. Não diga que um fator causa posição ou vendas; use termos como correlação, padrão observado e hipótese prática.
+Não copie títulos, descrições ou imagens. Gere estratégias originais.
+Dados agregados: ${JSON.stringify(snapshot.summary)}
+Amostra ordenada por posição: ${JSON.stringify(dados)}
+Objetivo: encontrar padrões úteis de título, conteúdo, fotos, preço, frete e completude da ficha para melhorar anúncios próprios sem inventar especificações e sem prometer vendas.`;
+
+    const input=[{type:'text',text:prompt}];
+    if(imageDataUrl){
+        try{
+            const parsed=parseDataUrlV37(imageDataUrl);
+            if(parsed?.data){
+                const buf=Buffer.from(parsed.data,'base64');
+                if(buf.length<=6*1024*1024)input.push({type:'image',mime_type:parsed.mime||'image/jpeg',data:buf.toString('base64')});
+            }
+        }catch(e){}
+    }
+
+    try{
+        const g=await chamarGeminiInteracao({
+            input,
+            systemInstruction:'Você é um analista de marketplace. Use somente os dados fornecidos e fatos visuais claros. Não invente características do produto, não copie conteúdo de concorrentes e não prometa ranking ou vendas.',
+            responseSchema:schema
+        });
+        const obj=extrairJsonIA(g.texto);
+        return {...fallback,...obj,model:g.model};
+    }catch(e){
+        return {...fallback,ai_warning:e.message};
+    }
+}
+
+async function executarAnaliseMercadoV96({token,produto,imageDataUrl=''}){
+    const snapshot=await buscarPrimeiraPaginaMercadoV96(token,produto);
+    const recommendations=await recomendacoesMercadoV96(snapshot,imageDataUrl);
+    return {snapshot,recommendations};
+}
+
+async function salvarRunMonitorV96(monitorId,snapshot,recommendations){
+    await dbQuery(`INSERT INTO ml_product_monitor_runs_v96(monitor_id,snapshot,recommendations) VALUES($1,$2::jsonb,$3::jsonb)`,[
+        monitorId,JSON.stringify(snapshot),JSON.stringify(recommendations)
+    ]);
+    await dbQuery(`DELETE FROM ml_product_monitor_runs_v96 WHERE monitor_id=$1 AND id NOT IN (SELECT id FROM ml_product_monitor_runs_v96 WHERE monitor_id=$1 ORDER BY created_at DESC LIMIT 30)`,[monitorId]);
+}
+
+app.post('/api/v96/inteligencia/analisar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    const produto=String(req.body?.produto||'').trim().slice(0,300);
+    const sku=String(req.body?.sku||'').trim().slice(0,200);
+    const imageDataUrl=String(req.body?.image_data_url||'');
+    const monitor=Boolean(req.body?.monitor);
+    if(!produto)return respostaErro(res,400,'Informe o nome do produto.');
+    try{
+        const out=await executarAnaliseMercadoV96({token,produto,imageDataUrl});
+        let monitorId=null;
+        if(monitor){
+            await garantirInteligenciaV96();
+            const r=await dbQuery(`
+              INSERT INTO ml_product_monitors_v96(workspace_id,user_id,seller_id,product_name,search_query,target_sku,enabled,interval_minutes,last_scan_at,next_scan_at,last_snapshot,last_recommendations,updated_at)
+              VALUES($1,$2,$3,$4,$4,$5,TRUE,60,NOW(),NOW()+INTERVAL '60 minutes',$6::jsonb,$7::jsonb,NOW())
+              RETURNING id
+            `,[
+                String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||''),produto,sku||null,
+                JSON.stringify(out.snapshot),JSON.stringify(out.recommendations)
+            ]);
+            monitorId=Number(r.rows[0]?.id||0)||null;
+            if(monitorId)await salvarRunMonitorV96(monitorId,out.snapshot,out.recommendations);
+        }
+        res.json({sucesso:true,monitor_id:monitorId,...out});
+    }catch(e){respostaErro(res,e.status||500,'Erro na análise de mercado: '+e.message)}
+});
+
+app.get('/api/v96/inteligencia/monitores',async(req,res)=>{
+    try{
+        await garantirInteligenciaV96();
+        const r=await dbQuery(`
+          SELECT id,product_name,search_query,target_sku,enabled,interval_minutes,last_scan_at,next_scan_at,last_snapshot,last_recommendations,last_error,updated_at
+          FROM ml_product_monitors_v96
+          WHERE workspace_id=$1 AND user_id=$2 AND seller_id=$3
+          ORDER BY updated_at DESC
+          LIMIT 100
+        `,[String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||'')]);
+        res.json({sucesso:true,itens:r.rows});
+    }catch(e){respostaErro(res,500,'Erro ao carregar monitores: '+e.message)}
+});
+
+app.patch('/api/v96/inteligencia/monitores/:id',async(req,res)=>{
+    try{
+        await garantirInteligenciaV96();
+        const enabled=Boolean(req.body?.enabled);
+        const interval=Math.max(30,Math.min(1440,Number(req.body?.interval_minutes||60)));
+        const r=await dbQuery(`
+          UPDATE ml_product_monitors_v96 SET enabled=$5,interval_minutes=$6,
+            next_scan_at=CASE WHEN $5 THEN LEAST(next_scan_at,NOW()) ELSE next_scan_at END,updated_at=NOW()
+          WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND seller_id=$4
+          RETURNING *
+        `,[Number(req.params.id),String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||''),enabled,interval]);
+        if(!r.rowCount)return respostaErro(res,404,'Monitor não encontrado.');
+        res.json({sucesso:true,item:r.rows[0]});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
+app.post('/api/v96/inteligencia/monitores/:id/executar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    try{
+        await garantirInteligenciaV96();
+        const mr=await dbQuery(`SELECT * FROM ml_product_monitors_v96 WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND seller_id=$4 LIMIT 1`,[
+            Number(req.params.id),String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||'')
+        ]);
+        const m=mr.rows[0];if(!m)return respostaErro(res,404,'Monitor não encontrado.');
+        const out=await executarAnaliseMercadoV96({token,produto:m.search_query});
+        await dbQuery(`UPDATE ml_product_monitors_v96 SET last_scan_at=NOW(),next_scan_at=NOW()+($2::text||' minutes')::interval,last_snapshot=$3::jsonb,last_recommendations=$4::jsonb,last_error=NULL,locked_until=NULL,updated_at=NOW() WHERE id=$1`,[
+            m.id,String(Math.max(30,Number(m.interval_minutes||60))),JSON.stringify(out.snapshot),JSON.stringify(out.recommendations)
+        ]);
+        await salvarRunMonitorV96(m.id,out.snapshot,out.recommendations);
+        res.json({sucesso:true,...out});
+    }catch(e){respostaErro(res,e.status||500,e.message)}
+});
+
+app.get('/api/v96/inteligencia/monitores/:id/historico',async(req,res)=>{
+    try{
+        await garantirInteligenciaV96();
+        const own=await dbQuery(`SELECT id FROM ml_product_monitors_v96 WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND seller_id=$4`,[
+            Number(req.params.id),String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||'')
+        ]);
+        if(!own.rowCount)return respostaErro(res,404,'Monitor não encontrado.');
+        const r=await dbQuery(`SELECT id,snapshot,recommendations,created_at FROM ml_product_monitor_runs_v96 WHERE monitor_id=$1 ORDER BY created_at DESC LIMIT 30`,[Number(req.params.id)]);
+        res.json({sucesso:true,itens:r.rows});
+    }catch(e){respostaErro(res,500,e.message)}
+});
+
+app.post('/api/v96/inteligencia/melhorar',async(req,res)=>{
+    const token=obterToken(req);if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    const itemId=String(req.body?.item_id||'').trim();
+    const monitorId=Number(req.body?.monitor_id||0);
+    if(!itemId||!monitorId)return respostaErro(res,400,'Informe o anúncio e a análise de mercado.');
+    try{
+        await garantirInteligenciaV96();
+        const mr=await dbQuery(`SELECT * FROM ml_product_monitors_v96 WHERE id=$1 AND workspace_id=$2 AND user_id=$3 AND seller_id=$4 LIMIT 1`,[
+            monitorId,String(req.mlhubUser?.wid||''),String(req.mlhubUser?.uid||''),String(req.mlhubSellerId||'')
+        ]);
+        const m=mr.rows[0];if(!m)return respostaErro(res,404,'Monitor não encontrado.');
+        const own=await detalheConteudoAnuncioV96(token,itemId);
+        if(req.mlhubSellerId&&String(own.seller_id)!==String(req.mlhubSellerId))return respostaErro(res,403,'Anúncio de outra conta.');
+
+        const defs=[...own.principais,...own.secundarias].map(x=>({id:x.id,name:x.name,current:x.value,required:x.required,value_type:x.value_type}));
+        const market={summary:m.last_snapshot?.summary||{},recommendations:m.last_recommendations||{},top:(m.last_snapshot?.items||[]).slice(0,12).map(x=>({position:x.position,title:x.title,price:x.price,sold:x.sold_quantity,free_shipping:x.free_shipping,pictures:x.picture_count,required_completion:x.required_completion}))};
+
+        const fallback={
+            title:own.title,
+            description:own.description,
+            attributes:[],
+            needs_input:own.missing_main.map(x=>({id:x.id,name:x.name,reason:'Característica obrigatória faltando; precisa de dado real do produto.'})),
+            image_recommendations:[m.last_recommendations?.image_strategy||'Revise capa e fotos adicionais com imagens próprias do produto.'],
+            rationale:'A IA não estava disponível; revise as recomendações de mercado e preencha apenas dados confirmados.'
+        };
+
+        if(!String(process.env.GEMINI_API_KEY||'').trim())return res.json({sucesso:true,proposal:fallback});
+
+        const schema={type:'object',properties:{
+            title:{type:'string'},description:{type:'string'},
+            attributes:{type:'array',items:{type:'object',properties:{id:{type:'string'},value_name:{type:'string'}},required:['id','value_name']}},
+            needs_input:{type:'array',items:{type:'object',properties:{id:{type:'string'},name:{type:'string'},reason:{type:'string'}},required:['id','name','reason']}},
+            image_recommendations:{type:'array',items:{type:'string'}},rationale:{type:'string'}
+        },required:['title','description','attributes','needs_input','image_recommendations','rationale']};
+
+        const prompt=`Melhore um anúncio PRÓPRIO usando padrões observados na primeira página, sem copiar concorrentes e sem inventar especificações.
+ANÚNCIO PRÓPRIO: ${JSON.stringify({title:own.title,description:own.description,attributes:defs,sold_quantity:own.sold_quantity,picture_count:own.picture_count})}
+MERCADO OBSERVADO: ${JSON.stringify(market)}
+REGRAS:
+- título máximo 60 caracteres;
+- descrição original em texto simples;
+- só proponha valor de atributo quando ele estiver claramente confirmado pelo próprio anúncio (título, descrição ou atributos existentes). Nunca deduza uma especificação do concorrente;
+- atributos obrigatórios sem prova vão em needs_input, não em attributes;
+- não copie fotos; apenas recomende quais fotos próprias produzir;
+- nenhuma afirmação de ranking ou venda garantida.`;
+        const g=await chamarGeminiInteracao({input:prompt,systemInstruction:'Você otimiza anúncios de marketplace com foco em clareza e completude. Não invente fatos do produto e não copie conteúdo de terceiros.',responseSchema:schema});
+        const proposal={...fallback,...extrairJsonIA(g.texto),model:g.model};
+        proposal.title=String(proposal.title||own.title).slice(0,60);
+        const validIds=new Set(defs.map(x=>x.id));
+        proposal.attributes=(Array.isArray(proposal.attributes)?proposal.attributes:[]).filter(x=>validIds.has(String(x.id))&&String(x.value_name||'').trim());
+        res.json({sucesso:true,proposal});
+    }catch(e){respostaErro(res,e.status||500,'Erro ao gerar melhoria: '+e.message)}
+});
+
+async function executarMonitorBackgroundV96(m){
+    const token=await tokenParaSellerV95(String(m.seller_id));
+    if(!token)throw new Error('Token da conta Mercado Livre indisponível.');
+    const out=await executarAnaliseMercadoV96({token,produto:m.search_query});
+    await dbQuery(`UPDATE ml_product_monitors_v96 SET last_scan_at=NOW(),next_scan_at=NOW()+($2::text||' minutes')::interval,last_snapshot=$3::jsonb,last_recommendations=$4::jsonb,last_error=NULL,locked_until=NULL,updated_at=NOW() WHERE id=$1`,[
+        m.id,String(Math.max(30,Number(m.interval_minutes||60))),JSON.stringify(out.snapshot),JSON.stringify(out.recommendations)
+    ]);
+    await salvarRunMonitorV96(m.id,out.snapshot,out.recommendations);
+}
+
+async function processarMonitoresV96(){
+    if(monitorInteligenciaBusyV96||!db)return;
+    monitorInteligenciaBusyV96=true;
+    try{
+        await garantirInteligenciaV96();
+        const client=await db.connect();
+        let lista=[];
+        try{
+            await client.query('BEGIN');
+            const r=await client.query(`
+              SELECT * FROM ml_product_monitors_v96
+              WHERE enabled=TRUE AND next_scan_at<=NOW() AND (locked_until IS NULL OR locked_until<NOW())
+              ORDER BY next_scan_at ASC
+              FOR UPDATE SKIP LOCKED
+              LIMIT 2
+            `);
+            lista=r.rows;
+            for(const m of lista){
+                await client.query(`UPDATE ml_product_monitors_v96 SET locked_until=NOW()+INTERVAL '15 minutes',updated_at=NOW() WHERE id=$1`,[m.id]);
+            }
+            await client.query('COMMIT');
+        }catch(e){try{await client.query('ROLLBACK')}catch(_){};throw e}
+        finally{client.release()}
+
+        for(const m of lista){
+            try{await executarMonitorBackgroundV96(m)}
+            catch(e){
+                await dbQuery(`UPDATE ml_product_monitors_v96 SET last_error=$2,next_scan_at=NOW()+INTERVAL '20 minutes',locked_until=NULL,updated_at=NOW() WHERE id=$1`,[m.id,String(e.message||e).slice(0,1000)]).catch(()=>{});
+            }
+        }
+    }catch(e){console.warn('[INTELIGENCIA V96 WORKER]',e.message)}
+    finally{monitorInteligenciaBusyV96=false}
+}
+
+function iniciarMonitorInteligenciaV96(){
+    if(monitorInteligenciaTimerV96)return;
+    monitorInteligenciaTimerV96=setInterval(()=>processarMonitoresV96(),5*60*1000);
+    setTimeout(()=>processarMonitoresV96(),15000);
+}
+
 let coreEscalaIniciadoV80=false;
 
 async function iniciarCoreEscala(){
@@ -14688,6 +15407,13 @@ async function iniciarCoreEscala(){
             iniciarAtualizacaoAgentesV62();
         }catch(e){
             console.error('[AGENTES INIT V62]',e.message);
+        }
+
+        try{
+            await garantirInteligenciaV96();
+            iniciarMonitorInteligenciaV96();
+        }catch(e){
+            console.error('[INTELIGENCIA INIT V96]',e.message);
         }
 
         if(ML_WORKER_ENABLED){
