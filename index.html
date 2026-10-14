@@ -1983,7 +1983,7 @@ button:disabled{
                     mt-4
                 "
             >
-                Perguntas dos clientes
+                Perguntas dos clientes · IA V100
             </h3>
 
             <p
@@ -4731,29 +4731,64 @@ button:disabled{
                     mt-1
                 "
             >
-                Consulte e responda diretamente pelo Mercado Livre.
+                Consulte perguntas, use agentes com conhecimento de cada produto e gere respostas com IA para revisar antes do envio.
             </p>
 
         </div>
 
-        <button
-            onclick="carregarPerguntas()"
-            class="
-                bg-purple-500
-                hover:bg-purple-400
-                text-white
-                px-4
-                py-2.5
-                rounded-xl
-                text-xs
-                font-bold
-            "
-        >
-            Atualizar perguntas
-        </button>
+        <div class="flex flex-wrap gap-2">
+            <button
+                onclick="abrirAgentePerguntasV100()"
+                class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-black"
+            >
+                + Agente de produto
+            </button>
+
+            <button
+                onclick="gerarRespostasPendentesV100()"
+                class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black"
+            >
+                ✦ Gerar respostas com IA
+            </button>
+
+            <button
+                onclick="carregarPerguntas()"
+                class="bg-purple-500 hover:bg-purple-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold"
+            >
+                Atualizar perguntas
+            </button>
+        </div>
 
     </div>
 
+
+
+    <div class="panel rounded-2xl p-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-[.14em] text-yellow-400 font-black">Agentes de atendimento · V100</div>
+                <div class="text-xs text-slate-400 mt-1">
+                    Cada agente guarda informações confirmadas de um produto e pode ser vinculado por MLB, SKU ou como agente padrão.
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="perguntas-agente-global-v100"
+                    class="bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2.5 text-xs min-w-[240px]">
+                    <option value="">Carregando agentes...</option>
+                </select>
+
+                <button onclick="editarAgenteSelecionadoPerguntasV100()"
+                    class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold">
+                    Editar agente
+                </button>
+            </div>
+        </div>
+
+        <div id="perguntas-ia-status-v100" class="text-[10px] text-slate-500 mt-3">
+            A IA apenas prepara a resposta. Você revisa antes de enviar ao cliente.
+        </div>
+    </div>
 
     <div
         class="
@@ -4886,6 +4921,113 @@ button:disabled{
             Clique em "Atualizar perguntas".
         </div>
 
+    </div>
+
+
+    <div id="modal-agente-perguntas-v100" class="hidden fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="max-w-3xl mx-auto my-8 panel rounded-3xl overflow-hidden border border-slate-700">
+            <div class="p-5 border-b border-slate-800 flex items-start justify-between gap-4">
+                <div>
+                    <div class="text-[10px] uppercase tracking-[.16em] text-yellow-400 font-black">Agente de produto</div>
+                    <h2 id="agente-perguntas-modal-title-v100" class="text-xl font-black text-white mt-1">Novo agente</h2>
+                    <p class="text-[11px] text-slate-500 mt-1">
+                        Cadastre apenas informações confirmadas do produto. A IA usará estes dados para responder clientes sem inventar especificações.
+                    </p>
+                </div>
+                <button onclick="fecharAgentePerguntasV100()" class="text-slate-400 hover:text-white text-xl">×</button>
+            </div>
+
+            <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input id="agente-perguntas-id-v100" type="hidden">
+
+                <label class="md:col-span-1">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Nome do agente</span>
+                    <input id="agente-perguntas-name-v100" class="w-full rounded-xl px-3 py-2.5 text-xs" placeholder="Ex.: Agente Garrafa Térmica">
+                </label>
+
+                <label class="md:col-span-1">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Produto</span>
+                    <input id="agente-perguntas-product-v100" class="w-full rounded-xl px-3 py-2.5 text-xs" placeholder="Nome exato do produto">
+                </label>
+
+                <label>
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Marca</span>
+                    <input id="agente-perguntas-brand-v100" class="w-full rounded-xl px-3 py-2.5 text-xs" placeholder="Opcional">
+                </label>
+
+                <div>
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Vincular por</span>
+                    <div class="grid grid-cols-[140px_1fr] gap-2">
+                        <select id="agente-perguntas-match-type-v100" class="rounded-xl px-3 py-2.5 text-xs">
+                            <option value="item_id">MLB do anúncio</option>
+                            <option value="sku">SKU</option>
+                            <option value="default">Padrão da conta</option>
+                        </select>
+                        <input id="agente-perguntas-match-value-v100" class="rounded-xl px-3 py-2.5 text-xs" placeholder="MLB... ou SKU">
+                    </div>
+                </div>
+
+                <label class="md:col-span-2">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Informações confirmadas do produto</span>
+                    <textarea id="agente-perguntas-information-v100" rows="4" class="w-full rounded-xl p-3 text-xs"
+                        placeholder="Ex.: serve para bebidas quentes e frias; capacidade 500 ml; não aquece a água, apenas conserva a temperatura..."></textarea>
+                </label>
+
+                <label class="md:col-span-2">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Ficha técnica confirmada</span>
+                    <textarea id="agente-perguntas-technical-v100" rows="4" class="w-full rounded-xl p-3 text-xs"
+                        placeholder="Material, medidas, voltagem, compatibilidade, capacidade, itens inclusos, etc. Somente o que for confirmado."></textarea>
+                </label>
+
+                <label class="md:col-span-2">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Aplicações / modo de uso</span>
+                    <textarea id="agente-perguntas-applications-v100" rows="3" class="w-full rounded-xl p-3 text-xs"
+                        placeholder="Como o produto pode ser usado e para que serve."></textarea>
+                </label>
+
+                <label class="md:col-span-2">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Observações e limitações</span>
+                    <textarea id="agente-perguntas-notes-v100" rows="3" class="w-full rounded-xl p-3 text-xs"
+                        placeholder="Ex.: não aquece líquidos; não informar uma voltagem que não esteja confirmada; confirmar cor escolhida antes de afirmar..."></textarea>
+                </label>
+
+                <label class="md:col-span-2">
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Instruções de atendimento</span>
+                    <textarea id="agente-perguntas-instructions-v100" rows="3" class="w-full rounded-xl p-3 text-xs"
+                        placeholder="Ex.: responder curto e cordial; nunca afirmar compatibilidade sem confirmação."></textarea>
+                </label>
+
+                <div class="md:col-span-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-800 pt-4">
+                    <label class="flex items-center gap-2 text-xs text-slate-300">
+                        <input id="agente-perguntas-refresh-v100" type="checkbox" class="accent-yellow-400">
+                        Atualizar conhecimento periodicamente
+                    </label>
+
+                    <select id="agente-perguntas-interval-v100" class="rounded-xl px-3 py-2 text-xs">
+                        <option value="6">a cada 6 horas</option>
+                        <option value="12">a cada 12 horas</option>
+                        <option value="24" selected>a cada 24 horas</option>
+                        <option value="72">a cada 3 dias</option>
+                        <option value="168">a cada 7 dias</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="p-5 border-t border-slate-800 flex flex-wrap justify-end gap-2">
+                <button id="agente-perguntas-delete-v100" onclick="excluirAgentePerguntasV100()"
+                    class="hidden bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-2.5 rounded-xl text-xs font-bold">
+                    Excluir agente
+                </button>
+                <button onclick="fecharAgentePerguntasV100()"
+                    class="bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold">
+                    Cancelar
+                </button>
+                <button onclick="salvarAgentePerguntasV100()"
+                    class="bg-yellow-400 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black">
+                    Salvar agente
+                </button>
+            </div>
+        </div>
     </div>
 
 </section>
@@ -7417,487 +7559,581 @@ async function carregarDashboard() {
 }
 
 
+
+let perguntasAgentesV100=[];
+let perguntasUltimaListaV100=[];
+let perguntaPrefillAgenteV100=null;
+let geracaoRespostasV100EmCurso=false;
+
+function agenteLinkPrincipalV100(agente){
+    return Array.isArray(agente?.links)&&agente.links.length
+      ?agente.links[0]
+      :{match_type:'default',match_value:'*'};
+}
+
+function rotuloVinculoAgenteV100(link){
+    if(!link)return 'Sem vínculo';
+    if(link.match_type==='item_id')return `MLB ${link.match_value}`;
+    if(link.match_type==='sku')return `SKU ${link.match_value}`;
+    return 'Padrão da conta';
+}
+
+function agenteAutomaticoPerguntaV100(pergunta){
+    const itemId=String(pergunta?.item_id||'').toUpperCase();
+    const sku=String(pergunta?.sku||'').trim().toLowerCase();
+
+    const candidatos=[
+      ...perguntasAgentesV100.filter(a=>
+        (a.links||[]).some(l=>
+          l.match_type==='item_id' &&
+          String(l.match_value||'').toUpperCase()===itemId
+        )
+      ),
+      ...perguntasAgentesV100.filter(a=>
+        sku &&
+        (a.links||[]).some(l=>
+          l.match_type==='sku' &&
+          String(l.match_value||'').trim().toLowerCase()===sku
+        )
+      ),
+      ...perguntasAgentesV100.filter(a=>
+        (a.links||[]).some(l=>l.match_type==='default')
+      )
+    ];
+
+    return candidatos[0]||null;
+}
+
+function opcoesAgentesPerguntaV100(pergunta,selected=''){
+    const auto=agenteAutomaticoPerguntaV100(pergunta);
+    const sel=String(selected||auto?.id||'');
+
+    return [
+      `<option value="">Sem agente específico</option>`,
+      ...perguntasAgentesV100.map(a=>{
+        const link=agenteLinkPrincipalV100(a);
+        return `<option value="${escapeHtml(String(a.id))}" ${String(a.id)===sel?'selected':''}>${escapeHtml(a.name)} · ${escapeHtml(rotuloVinculoAgenteV100(link))}</option>`;
+      })
+    ].join('');
+}
+
+async function carregarAgentesPerguntasV100(){
+    try{
+        const r=await fetch(
+          `${RENDER_URL}/api/v100/perguntas/agentes?_=${Date.now()}`,
+          {headers:{Authorization:obterToken()},cache:'no-store'}
+        );
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        perguntasAgentesV100=Array.isArray(d.agentes)?d.agentes:[];
+
+        const select=document.getElementById('perguntas-agente-global-v100');
+        if(select){
+            select.innerHTML=[
+              '<option value="">Selecione um agente...</option>',
+              ...perguntasAgentesV100.map(a=>`
+                <option value="${escapeHtml(String(a.id))}">
+                  ${escapeHtml(a.name)} · ${escapeHtml(rotuloVinculoAgenteV100(agenteLinkPrincipalV100(a)))}
+                </option>
+              `)
+            ].join('');
+        }
+
+        return perguntasAgentesV100;
+    }catch(e){
+        const status=document.getElementById('perguntas-ia-status-v100');
+        if(status)status.textContent='Agentes indisponíveis: '+e.message;
+        perguntasAgentesV100=[];
+        return [];
+    }
+}
+
+function limparFormAgentePerguntasV100(){
+    [
+      'agente-perguntas-id-v100',
+      'agente-perguntas-name-v100',
+      'agente-perguntas-product-v100',
+      'agente-perguntas-brand-v100',
+      'agente-perguntas-match-value-v100',
+      'agente-perguntas-information-v100',
+      'agente-perguntas-technical-v100',
+      'agente-perguntas-applications-v100',
+      'agente-perguntas-notes-v100',
+      'agente-perguntas-instructions-v100'
+    ].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el)el.value='';
+    });
+
+    const type=document.getElementById('agente-perguntas-match-type-v100');
+    if(type)type.value='item_id';
+
+    const refresh=document.getElementById('agente-perguntas-refresh-v100');
+    if(refresh)refresh.checked=false;
+
+    const interval=document.getElementById('agente-perguntas-interval-v100');
+    if(interval)interval.value='24';
+
+    document.getElementById('agente-perguntas-delete-v100')?.classList.add('hidden');
+}
+
+
+function abrirAgentePerguntaPorIdV100(questionId){
+    const pergunta=perguntasUltimaListaV100.find(
+      x=>String(x.id)===String(questionId)
+    );
+    abrirAgentePerguntasV100(pergunta||null,'');
+}
+
+function abrirAgentePerguntasV100(pergunta=null,agenteId=''){
+    limparFormAgentePerguntasV100();
+
+    const modal=document.getElementById('modal-agente-perguntas-v100');
+    if(!modal)return;
+    modal.classList.remove('hidden');
+
+    let agente=agenteId
+      ?perguntasAgentesV100.find(a=>String(a.id)===String(agenteId))
+      :null;
+
+    if(agente){
+        const m=agente.manual||{};
+        const link=agenteLinkPrincipalV100(agente);
+
+        document.getElementById('agente-perguntas-id-v100').value=agente.id||'';
+        document.getElementById('agente-perguntas-name-v100').value=agente.name||'';
+        document.getElementById('agente-perguntas-product-v100').value=agente.product||'';
+        document.getElementById('agente-perguntas-brand-v100').value=agente.brand||'';
+        document.getElementById('agente-perguntas-match-type-v100').value=link.match_type||'item_id';
+        document.getElementById('agente-perguntas-match-value-v100').value=link.match_type==='default'?'':(link.match_value||'');
+        document.getElementById('agente-perguntas-information-v100').value=m.information||'';
+        document.getElementById('agente-perguntas-technical-v100').value=m.technical_sheet||'';
+        document.getElementById('agente-perguntas-applications-v100').value=m.applications||'';
+        document.getElementById('agente-perguntas-notes-v100').value=m.notes||'';
+        document.getElementById('agente-perguntas-instructions-v100').value=agente.instructions||'';
+        document.getElementById('agente-perguntas-refresh-v100').checked=Boolean(agente.refresh_enabled);
+        document.getElementById('agente-perguntas-interval-v100').value=String(agente.interval_hours||24);
+        document.getElementById('agente-perguntas-modal-title-v100').textContent='Editar agente';
+        document.getElementById('agente-perguntas-delete-v100')?.classList.remove('hidden');
+        return;
+    }
+
+    document.getElementById('agente-perguntas-modal-title-v100').textContent='Novo agente';
+
+    if(pergunta){
+        document.getElementById('agente-perguntas-name-v100').value=`Agente ${pergunta.titulo||pergunta.sku||pergunta.item_id}`;
+        document.getElementById('agente-perguntas-product-v100').value=pergunta.titulo||'';
+
+        if(pergunta.sku){
+            document.getElementById('agente-perguntas-match-type-v100').value='sku';
+            document.getElementById('agente-perguntas-match-value-v100').value=pergunta.sku;
+        }else{
+            document.getElementById('agente-perguntas-match-type-v100').value='item_id';
+            document.getElementById('agente-perguntas-match-value-v100').value=pergunta.item_id||'';
+        }
+    }
+}
+
+function fecharAgentePerguntasV100(){
+    document.getElementById('modal-agente-perguntas-v100')?.classList.add('hidden');
+}
+
+function editarAgenteSelecionadoPerguntasV100(){
+    const id=document.getElementById('perguntas-agente-global-v100')?.value||'';
+    if(!id)return alert('Selecione um agente para editar.');
+    abrirAgentePerguntasV100(null,id);
+}
+
+async function salvarAgentePerguntasV100(){
+    const id=document.getElementById('agente-perguntas-id-v100')?.value.trim()||'';
+    const payload={
+      name:document.getElementById('agente-perguntas-name-v100')?.value.trim()||'',
+      product:document.getElementById('agente-perguntas-product-v100')?.value.trim()||'',
+      brand:document.getElementById('agente-perguntas-brand-v100')?.value.trim()||'',
+      match_type:document.getElementById('agente-perguntas-match-type-v100')?.value||'item_id',
+      match_value:document.getElementById('agente-perguntas-match-value-v100')?.value.trim()||'',
+      information:document.getElementById('agente-perguntas-information-v100')?.value.trim()||'',
+      technical_sheet:document.getElementById('agente-perguntas-technical-v100')?.value.trim()||'',
+      applications:document.getElementById('agente-perguntas-applications-v100')?.value.trim()||'',
+      notes:document.getElementById('agente-perguntas-notes-v100')?.value.trim()||'',
+      instructions:document.getElementById('agente-perguntas-instructions-v100')?.value.trim()||'',
+      refresh_enabled:document.getElementById('agente-perguntas-refresh-v100')?.checked===true,
+      interval_hours:Number(document.getElementById('agente-perguntas-interval-v100')?.value||24)
+    };
+
+    if(!payload.name||!payload.product){
+        return alert('Informe o nome do agente e o produto.');
+    }
+
+    if(payload.match_type!=='default'&&!payload.match_value){
+        return alert('Informe o MLB ou SKU usado no vínculo.');
+    }
+
+    try{
+        const r=await fetch(
+          `${RENDER_URL}/api/v100/perguntas/agentes${id?'/'+encodeURIComponent(id):''}`,
+          {
+            method:id?'PUT':'POST',
+            headers:{
+              'Content-Type':'application/json',
+              Authorization:obterToken()
+            },
+            body:JSON.stringify(payload)
+          }
+        );
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        fecharAgentePerguntasV100();
+        await carregarAgentesPerguntasV100();
+        renderizarPerguntas(perguntasUltimaListaV100);
+    }catch(e){
+        alert(e.message);
+    }
+}
+
+async function excluirAgentePerguntasV100(){
+    const id=document.getElementById('agente-perguntas-id-v100')?.value.trim()||'';
+    if(!id)return;
+    if(!confirm('Excluir este agente de produto?'))return;
+
+    try{
+        const r=await fetch(
+          `${RENDER_URL}/api/v100/perguntas/agentes/${encodeURIComponent(id)}`,
+          {
+            method:'DELETE',
+            headers:{Authorization:obterToken()}
+          }
+        );
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        fecharAgentePerguntasV100();
+        await carregarAgentesPerguntasV100();
+        renderizarPerguntas(perguntasUltimaListaV100);
+    }catch(e){
+        alert(e.message);
+    }
+}
+
+function badgeConfiancaV100(conf){
+    if(conf==='high')return {txt:'Alta confiança',cls:'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'};
+    if(conf==='medium')return {txt:'Confiança média',cls:'text-yellow-300 bg-yellow-500/10 border-yellow-500/20'};
+    return {txt:'Baixa confiança',cls:'text-red-300 bg-red-500/10 border-red-500/20'};
+}
+
+async function gerarRespostaIAV100(questionId,silencioso=false){
+    const pergunta=perguntasUltimaListaV100.find(x=>String(x.id)===String(questionId));
+    if(!pergunta)return;
+
+    const textarea=document.getElementById(`resposta_${questionId}`);
+    const status=document.getElementById(`ia_status_${questionId}`);
+    const btn=document.getElementById(`ia_btn_${questionId}`);
+    const select=document.getElementById(`agente_${questionId}`);
+
+    if(!textarea)return;
+
+    if(btn)btn.disabled=true;
+    if(status){
+        status.innerHTML='<span class="text-blue-400">IA analisando anúncio + agente do produto...</span>';
+    }
+
+    try{
+        const r=await fetch(
+          `${RENDER_URL}/api/v100/perguntas/sugerir-resposta`,
+          {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              Authorization:obterToken()
+            },
+            body:JSON.stringify({
+              question_id:pergunta.id,
+              item_id:pergunta.item_id,
+              question_text:pergunta.pergunta,
+              agent_id:select?.value||''
+            })
+          }
+        );
+
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+        textarea.value=d.resposta||'';
+
+        const b=badgeConfiancaV100(d.confidence);
+        const faltas=(d.missing_information||[]);
+
+        if(status){
+            status.innerHTML=`
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-1 rounded-lg border text-[9px] font-black ${b.cls}">${b.txt}</span>
+                <span class="text-[9px] ${d.should_send?'text-emerald-400':'text-yellow-400'}">
+                  ${d.should_send?'Resposta sustentada pelos dados confirmados.':'Revise antes de enviar: faltam dados confirmados.'}
+                </span>
+                ${d.agente?`<span class="text-[9px] text-slate-500">Agente: ${escapeHtml(d.agente.name)}</span>`:''}
+              </div>
+              ${faltas.length?`
+                <div class="text-[9px] text-yellow-300 mt-2">
+                  Falta confirmar: ${escapeHtml(faltas.join(' · '))}
+                </div>
+              `:''}
+            `;
+        }
+
+        if(!silencioso){
+            textarea.focus();
+        }
+        return true;
+    }catch(e){
+        if(status)status.innerHTML=`<span class="text-red-300">${escapeHtml(e.message)}</span>`;
+        if(!silencioso)alert(e.message);
+        return false;
+    }finally{
+        if(btn)btn.disabled=false;
+    }
+}
+
+async function gerarRespostasPendentesV100(){
+    if(geracaoRespostasV100EmCurso)return;
+
+    const pendentes=perguntasUltimaListaV100.filter(p=>!p.respondida);
+    if(!pendentes.length)return alert('Não há perguntas pendentes.');
+
+    if(!confirm(
+      `Gerar rascunhos com IA para ${pendentes.length} pergunta(s)?\n\n`+
+      `Nada será enviado automaticamente ao cliente. Você continuará revisando cada resposta antes do envio.`
+    ))return;
+
+    geracaoRespostasV100EmCurso=true;
+    const status=document.getElementById('perguntas-ia-status-v100');
+
+    let idx=0;
+    let ok=0;
+    let falhas=0;
+
+    async function worker(){
+        while(true){
+            const p=pendentes[idx++];
+            if(!p)return;
+
+            if(status){
+                status.textContent=`Gerando respostas: ${ok+falhas}/${pendentes.length} concluídas...`;
+            }
+
+            try{
+                const gerou=await gerarRespostaIAV100(p.id,true);
+                if(gerou)ok++;
+                else falhas++;
+            }catch(e){
+                falhas++;
+            }
+        }
+    }
+
+    try{
+        await Promise.all([worker(),worker()]);
+
+        if(status){
+            status.textContent=
+              `IA concluiu ${ok} rascunho(s)`+
+              (falhas?` · ${falhas} falha(s)`:``)+
+              `. Revise antes de enviar.`;
+        }
+    }finally{
+        geracaoRespostasV100EmCurso=false;
+    }
+}
+
 /* =========================================================
    PERGUNTAS
 ========================================================= */
 
 async function carregarPerguntas() {
+    const token=obterToken();
 
-    const token =
-        obterToken();
-
-    if (!token) {
-
+    if(!token){
         solicitarToken();
-
         return;
     }
 
-    const container =
-        document.getElementById(
-            'lista-perguntas'
-        );
+    const container=document.getElementById('lista-perguntas');
 
-    if (container) {
-
-        container.innerHTML =
-            `
-            <div
-                class="
-                    panel
-                    rounded-2xl
-                    p-10
-                    text-center
-                "
-            >
-                <div
-                    class="
-                        loading-ring
-                        animate-spin
-                        rounded-full
-                        h-8
-                        w-8
-                        mx-auto
-                    "
-                ></div>
-
-                <div
-                    class="
-                        text-xs
-                        text-slate-500
-                        mt-4
-                    "
-                >
-                    Buscando perguntas...
-                </div>
+    if(container){
+        container.innerHTML=`
+          <div class="panel rounded-2xl p-10 text-center">
+            <div class="loading-ring animate-spin rounded-full h-8 w-8 mx-auto"></div>
+            <div class="text-xs text-slate-500 mt-4">
+              Buscando perguntas e agentes de produto...
             </div>
-            `;
+          </div>
+        `;
     }
 
-    try {
+    try{
+        await carregarAgentesPerguntasV100();
 
-        const response =
-            await fetch(
-                `${RENDER_URL}/api/perguntas?limit=100`,
-                {
-                    headers: {
-                        Authorization:
-                            token
-                    }
-                }
-            );
+        const response=await fetch(
+            `${RENDER_URL}/api/perguntas?limit=100`,
+            {headers:{Authorization:token}}
+        );
 
-        const data =
-            await response.json();
+        const data=await response.json();
 
-        if (
-            !response.ok ||
-            !data.sucesso
-        ) {
-
-            alert(
-                data.erro ||
-                'Erro ao buscar perguntas.'
-            );
-
+        if(!response.ok||!data.sucesso){
+            alert(data.erro||'Erro ao buscar perguntas.');
             return;
         }
 
-        renderizarPerguntas(
-            data.perguntas ||
-            []
-        );
-
-    } catch (error) {
-
-        console.error(
-            error
-        );
-
-        alert(
-            'Erro de comunica\u00e7\u00e3o ao buscar perguntas.'
-        );
+        perguntasUltimaListaV100=data.perguntas||[];
+        renderizarPerguntas(perguntasUltimaListaV100);
+    }catch(error){
+        console.error(error);
+        alert('Erro de comunicação ao buscar perguntas.');
     }
 }
 
 
-function renderizarPerguntas(
-    perguntas
-) {
+function renderizarPerguntas(perguntas){
+    const container=document.getElementById('lista-perguntas');
+    const total=perguntas.length;
+    const pendentes=perguntas.filter(pergunta=>!pergunta.respondida).length;
+    const respondidas=total-pendentes;
 
-    const container =
-        document.getElementById(
-            'lista-perguntas'
-        );
+    document.getElementById('perguntas-total').innerText=total;
+    document.getElementById('perguntas-pendentes').innerText=pendentes;
+    document.getElementById('perguntas-respondidas').innerText=respondidas;
 
-    const total =
-        perguntas.length;
-
-    const pendentes =
-        perguntas.filter(
-            pergunta =>
-                !pergunta.respondida
-        ).length;
-
-    const respondidas =
-        total -
-        pendentes;
-
-    document.getElementById(
-        'perguntas-total'
-    ).innerText =
-        total;
-
-    document.getElementById(
-        'perguntas-pendentes'
-    ).innerText =
-        pendentes;
-
-    document.getElementById(
-        'perguntas-respondidas'
-    ).innerText =
-        respondidas;
-
-    if (
-        !perguntas.length
-    ) {
-
-        container.innerHTML =
-            `
-            <div
-                class="
-                    panel
-                    rounded-2xl
-                    p-10
-                    text-center
-                "
-            >
-
-                <div
-                    class="
-                        text-3xl
-                    "
-                >
-                    \u2713
-                </div>
-
-                <div
-                    class="
-                        text-sm
-                        font-bold
-                        text-white
-                        mt-3
-                    "
-                >
-                    Nenhuma pergunta encontrada.
-                </div>
-
-                <div
-                    class="
-                        text-xs
-                        text-slate-500
-                        mt-2
-                    "
-                >
-                    Sua caixa de perguntas est\u00e1 vazia.
-                </div>
-
-            </div>
-            `;
-
+    if(!perguntas.length){
+        container.innerHTML=`
+          <div class="panel rounded-2xl p-10 text-center text-xs text-slate-600">
+            <div class="text-3xl">✓</div>
+            <div class="text-sm font-bold text-white mt-3">Nenhuma pergunta encontrada.</div>
+            <div class="text-xs text-slate-500 mt-2">Sua caixa de perguntas está vazia.</div>
+          </div>
+        `;
         return;
     }
 
-    container.innerHTML =
-        perguntas.map(
-            pergunta => {
+    container.innerHTML=perguntas.map(pergunta=>{
+        const respondida=pergunta.respondida;
+        const agenteAuto=agenteAutomaticoPerguntaV100(pergunta);
 
-                const respondida =
-                    pergunta.respondida;
+        return `
+          <div class="panel rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-slate-800">
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div class="flex items-center gap-3">
+                  ${pergunta.thumbnail?`
+                    <img src="${escapeHtml(pergunta.thumbnail)}"
+                      class="w-12 h-12 rounded-xl object-cover bg-slate-800">
+                  `:''}
 
-                return `
-                <div
-                    class="
-                        panel
-                        rounded-2xl
-                        overflow-hidden
-                    "
-                >
-
-                    <div
-                        class="
-                            p-5
-                            border-b
-                            border-slate-800
-                        "
-                    >
-
-                        <div
-                            class="
-                                flex
-                                flex-col
-                                md:flex-row
-                                md:items-center
-                                md:justify-between
-                                gap-3
-                            "
-                        >
-
-                            <div
-                                class="
-                                    flex
-                                    items-center
-                                    gap-3
-                                "
-                            >
-
-                                ${
-                                    pergunta.thumbnail
-                                        ? `
-                                        <img
-                                            src="${escapeHtml(
-                                                pergunta.thumbnail
-                                            )}"
-                                            class="
-                                                w-12
-                                                h-12
-                                                rounded-xl
-                                                object-cover
-                                                bg-slate-800
-                                            "
-                                        >
-                                        `
-                                        : ''
-                                }
-
-                                <div>
-
-                                    <div
-                                        class="
-                                            text-sm
-                                            font-bold
-                                            text-white
-                                        "
-                                    >
-                                        ${escapeHtml(
-                                            pergunta.titulo
-                                        )}
-                                    </div>
-
-                                    <div
-                                        class="
-                                            text-[10px]
-                                            text-slate-500
-                                            mt-1
-                                        "
-                                    >
-                                        ${escapeHtml(
-                                            pergunta.item_id
-                                        )}
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                            <div>
-
-                                <span
-                                    class="
-                                        inline-flex
-                                        px-2.5
-                                        py-1
-                                        rounded-lg
-                                        text-[10px]
-                                        font-bold
-                                        ${
-                                            respondida
-                                                ? 'bg-emerald-400/10 text-emerald-400'
-                                                : 'bg-yellow-400/10 text-yellow-400'
-                                        }
-                                    "
-                                >
-                                    ${
-                                        respondida
-                                            ? 'Respondida'
-                                            : 'Aguardando resposta'
-                                    }
-                                </span>
-
-                            </div>
-
-                        </div>
-
+                  <div>
+                    <div class="text-sm font-bold text-white">${escapeHtml(pergunta.titulo)}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                      ${escapeHtml(pergunta.item_id)}
+                      ${pergunta.sku?` · SKU: ${escapeHtml(pergunta.sku)}`:''}
+                      · ${Number(pergunta.vendas||0).toLocaleString('pt-BR')} venda(s)
                     </div>
-
-
-                    <div
-                        class="
-                            p-5
-                            space-y-4
-                        "
-                    >
-
-                        <div>
-
-                            <div
-                                class="
-                                    text-[10px]
-                                    uppercase
-                                    tracking-wider
-                                    text-slate-600
-                                    font-bold
-                                    mb-2
-                                "
-                            >
-                                Pergunta
-                            </div>
-
-                            <div
-                                class="
-                                    rounded-xl
-                                    bg-slate-950
-                                    border
-                                    border-slate-800
-                                    p-4
-                                    text-sm
-                                    text-slate-200
-                                    leading-6
-                                "
-                            >
-                                ${escapeHtml(
-                                    pergunta.pergunta
-                                )}
-                            </div>
-
-                        </div>
-
-
-                        ${
-                            respondida
-                                ? `
-                                <div>
-
-                                    <div
-                                        class="
-                                            text-[10px]
-                                            uppercase
-                                            tracking-wider
-                                            text-emerald-500
-                                            font-bold
-                                            mb-2
-                                        "
-                                    >
-                                        Sua resposta
-                                    </div>
-
-                                    <div
-                                        class="
-                                            rounded-xl
-                                            bg-emerald-400/5
-                                            border
-                                            border-emerald-400/10
-                                            p-4
-                                            text-sm
-                                            text-slate-300
-                                        "
-                                    >
-                                        ${escapeHtml(
-                                            pergunta.resposta
-                                        )}
-                                    </div>
-
-                                </div>
-                                `
-                                : `
-                                <div>
-
-                                    <div
-                                        class="
-                                            text-[10px]
-                                            uppercase
-                                            tracking-wider
-                                            text-yellow-400
-                                            font-bold
-                                            mb-2
-                                        "
-                                    >
-                                        Responder
-                                    </div>
-
-                                    <textarea
-                                        id="resposta_${pergunta.id}"
-                                        maxlength="2000"
-                                        rows="4"
-                                        placeholder="Digite sua resposta..."
-                                        class="
-                                            w-full
-                                            bg-slate-950
-                                            border
-                                            border-slate-800
-                                            rounded-xl
-                                            p-4
-                                            text-sm
-                                            text-white
-                                            outline-none
-                                            focus:border-yellow-400/50
-                                            resize-y
-                                        "
-                                    ></textarea>
-
-                                    <div
-                                        class="
-                                            flex
-                                            flex-col
-                                            sm:flex-row
-                                            sm:items-center
-                                            sm:justify-between
-                                            gap-3
-                                            mt-3
-                                        "
-                                    >
-
-                                        <span
-                                            class="
-                                                text-[10px]
-                                                text-slate-600
-                                            "
-                                        >
-                                            M\u00e1ximo de 2.000 caracteres.
-                                        </span>
-
-                                        <button
-                                            onclick="
-                                                responderPergunta(
-                                                    '${pergunta.id}'
-                                                )
-                                            "
-                                            class="
-                                                bg-yellow-400
-                                                hover:bg-yellow-300
-                                                text-slate-950
-                                                px-5
-                                                py-2.5
-                                                rounded-xl
-                                                text-xs
-                                                font-black
-                                            "
-                                        >
-                                            Enviar resposta
-                                        </button>
-
-                                    </div>
-
-                                </div>
-                                `
-                        }
-
-                    </div>
-
+                  </div>
                 </div>
-                `;
-            }
-        ).join('');
+
+                <div class="flex flex-wrap items-center gap-2">
+                  ${agenteAuto?`
+                    <span class="px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[9px] font-black">
+                      Agente automático: ${escapeHtml(agenteAuto.name)}
+                    </span>
+                  `:''}
+
+                  <span class="inline-flex px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                    respondida
+                      ?'bg-emerald-400/10 text-emerald-400'
+                      :'bg-yellow-400/10 text-yellow-400'
+                  }">
+                    ${respondida?'Respondida':'Aguardando resposta'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-5 space-y-4">
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-600 font-bold mb-2">
+                  Pergunta
+                </div>
+                <div class="rounded-xl bg-slate-950 border border-slate-800 p-4 text-sm text-slate-200 leading-6">
+                  ${escapeHtml(pergunta.pergunta)}
+                </div>
+              </div>
+
+              ${respondida?`
+                <div>
+                  <div class="text-[10px] uppercase tracking-wider text-emerald-500 font-bold mb-2">
+                    Sua resposta
+                  </div>
+                  <div class="rounded-xl bg-emerald-400/5 border border-emerald-400/10 p-4 text-sm text-slate-300">
+                    ${escapeHtml(pergunta.resposta)}
+                  </div>
+                </div>
+              `:`
+                <div class="rounded-2xl border border-slate-800 bg-slate-950/35 p-4">
+                  <div class="flex flex-col xl:flex-row xl:items-end gap-3">
+                    <label class="flex-1">
+                      <span class="block text-[9px] uppercase tracking-wider text-blue-400 font-black mb-2">
+                        Agente de produto para esta resposta
+                      </span>
+                      <select id="agente_${pergunta.id}"
+                        class="w-full rounded-xl px-3 py-2.5 text-xs">
+                        ${opcoesAgentesPerguntaV100(pergunta)}
+                      </select>
+                    </label>
+
+                    <button
+                      onclick="abrirAgentePerguntaPorIdV100('${pergunta.id}')"
+                      class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold">
+                      + Criar agente deste produto
+                    </button>
+
+                    <button
+                      id="ia_btn_${pergunta.id}"
+                      onclick="gerarRespostaIAV100('${pergunta.id}')"
+                      class="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2.5 rounded-xl text-xs font-black">
+                      ✦ Gerar resposta com IA
+                    </button>
+                  </div>
+
+                  <div id="ia_status_${pergunta.id}" class="text-[9px] text-slate-500 mt-3">
+                    A IA usa dados do anúncio e apenas informações confirmadas do agente.
+                  </div>
+                </div>
+
+                <div>
+                  <div class="text-[10px] uppercase tracking-wider text-yellow-400 font-bold mb-2">
+                    Resposta para revisar
+                  </div>
+
+                  <textarea id="resposta_${pergunta.id}" maxlength="2000" rows="4"
+                    placeholder="Digite sua resposta ou gere um rascunho com IA..."
+                    class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-white outline-none focus:border-yellow-400/50 resize-y"></textarea>
+
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
+                    <span class="text-[10px] text-slate-600">
+                      Máximo de 2.000 caracteres. A IA nunca envia automaticamente.
+                    </span>
+
+                    <button onclick="responderPergunta('${pergunta.id}')"
+                      class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black">
+                      Enviar resposta
+                    </button>
+                  </div>
+                </div>
+              `}
+            </div>
+          </div>
+        `;
+    }).join('');
 }
 
 
