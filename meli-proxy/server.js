@@ -709,7 +709,7 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v98-inteligencia-sem-forbidden',
+        version: 'ml-hub-pro-v99-restritos-cache-vendas',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
@@ -12426,56 +12426,193 @@ async function putItemV41(itemId,token,body){
     const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(itemId)}`,token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await jsonSeguro(r);return {ok:r.ok,status:r.status,data:d};
 }
-async function excluirItemRestritoV41(itemId,token,sellerId){
+async function excluirItemRestritoV41(itemId,token,sellerId,minSalesProtected=0){
     const id=String(itemId||'').trim();
-    if(!id)return {id,sucesso:false,erro:'ID do an\u00fancio inv\u00e1lido.'};
+    if(!id)return {id,sucesso:false,erro:'ID do anúncio inválido.'};
+
     try{
         const r=await mlFetch(`${ML_API}/items/${encodeURIComponent(id)}`,token);
         const item=await jsonSeguro(r);
-        if(!r.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(r.status,item)};
-        if(String(item?.seller_id||'')!==String(sellerId))return {id,sucesso:false,erro:'Este an\u00fancio n\u00e3o pertence \u00e0 conta Mercado Livre conectada.'};
+
+        if(!r.ok){
+            return {
+                id,
+                sucesso:false,
+                erro:erroExclusaoPtV41(r.status,item)
+            };
+        }
+
+        if(String(item?.seller_id||'')!==String(sellerId)){
+            return {
+                id,
+                sucesso:false,
+                erro:'Este anúncio não pertence à conta Mercado Livre conectada.'
+            };
+        }
+
+        const soldQuantity=Math.max(0,Number(item?.sold_quantity||0));
+        const limite=Math.max(0,Number(minSalesProtected||0));
+
+        // V99 — proteção comercial:
+        // Ex.: limite 5 => anúncios com 5 ou mais vendas NÃO são excluídos.
+        // Limite 0 => proteção por vendas desativada.
+        if(limite>0 && soldQuantity>=limite){
+            return {
+                id,
+                sucesso:false,
+                protegido:true,
+                sold_quantity:soldQuantity,
+                erro:`Protegido por vendas: ${soldQuantity.toLocaleString('pt-BR')} venda(s), limite de proteção ${limite.toLocaleString('pt-BR')}+.`
+            };
+        }
+
         const status=String(item?.status||'').toLowerCase();
         const allowed=new Set(['paused','inactive','closed','under_review']);
-        if(!allowed.has(status))return {id,sucesso:false,erro:`O an\u00fancio est\u00e1 com status ${status||'desconhecido'} e n\u00e3o pertence \u00e0 lista permitida para exclus\u00e3o nesta tela.`};
+
+        if(!allowed.has(status)){
+            return {
+                id,
+                sucesso:false,
+                sold_quantity:soldQuantity,
+                erro:`O anúncio está com status ${status||'desconhecido'} e não pertence à lista permitida para exclusão nesta tela.`
+            };
+        }
+
         const subs=substatusArrayV41(item?.sub_status);
         const proibido=status==='under_review'&&subs.some(s=>s.includes('forbidden'));
 
-        // Em forbidden, a documenta\u00e7\u00e3o permite exclus\u00e3o direta. Nos demais, fecha antes quando necess\u00e1rio.
         if(proibido){
             const del=await putItemV41(id,token,{deleted:true});
-            if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+            if(!del.ok){
+                return {
+                    id,
+                    sucesso:false,
+                    sold_quantity:soldQuantity,
+                    erro:erroExclusaoPtV41(del.status,del.data)
+                };
+            }
         }else{
             if(status!=='closed'){
                 const close=await putItemV41(id,token,{status:'closed'});
+
                 if(!close.ok){
-                    // Alguns estados moderados aceitam somente a exclus\u00e3o direta.
                     const direto=await putItemV41(id,token,{deleted:true});
-                    if(!direto.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(direto.status,direto.data)};
+
+                    if(!direto.ok){
+                        return {
+                            id,
+                            sucesso:false,
+                            sold_quantity:soldQuantity,
+                            erro:erroExclusaoPtV41(direto.status,direto.data)
+                        };
+                    }
                 }else{
                     const del=await putItemV41(id,token,{deleted:true});
-                    if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+
+                    if(!del.ok){
+                        return {
+                            id,
+                            sucesso:false,
+                            sold_quantity:soldQuantity,
+                            erro:erroExclusaoPtV41(del.status,del.data)
+                        };
+                    }
                 }
             }else{
                 const del=await putItemV41(id,token,{deleted:true});
-                if(!del.ok)return {id,sucesso:false,erro:erroExclusaoPtV41(del.status,del.data)};
+
+                if(!del.ok){
+                    return {
+                        id,
+                        sucesso:false,
+                        sold_quantity:soldQuantity,
+                        erro:erroExclusaoPtV41(del.status,del.data)
+                    };
+                }
             }
         }
-        try{await dbQuery(`DELETE FROM ml_items WHERE seller_id=$1 AND item_id=$2`,[sellerId,id])}catch(_){ }
-        return {id,sucesso:true};
-    }catch(e){return {id,sucesso:false,erro:'Erro ao excluir o an\u00fancio: '+e.message}}
+
+        try{
+            await dbQuery(
+                `DELETE FROM ml_items WHERE seller_id=$1 AND item_id=$2`,
+                [sellerId,id]
+            );
+        }catch(_){}
+
+        return {
+            id,
+            sucesso:true,
+            protegido:false,
+            sold_quantity:soldQuantity
+        };
+    }catch(e){
+        return {
+            id,
+            sucesso:false,
+            erro:'Erro ao excluir o anúncio: '+e.message
+        };
+    }
 }
 
 app.post('/api/v41/anuncios-restritos/excluir-lote',async(req,res)=>{
-    const token=obterToken(req);if(!token)return respostaErro(res,401,'Token n\u00e3o fornecido.');
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Token não fornecido.');
+
     try{
         const me=await usuarioML(token);
-        const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,100);
-        if(!ids.length)return respostaErro(res,400,'Nenhum an\u00fancio selecionado para exclus\u00e3o.');
-        const resultados=(await mapLimitV21(ids,8,async id=>excluirItemRestritoV41(id,token,me.id))).filter(Boolean);
+
+        const ids=[...new Set(
+            (Array.isArray(req.body?.ids)?req.body.ids:[])
+              .map(x=>String(x||'').trim())
+              .filter(Boolean)
+        )].slice(0,200);
+
+        if(!ids.length){
+            return respostaErro(
+                res,
+                400,
+                'Nenhum anúncio selecionado para exclusão.'
+            );
+        }
+
+        const minSalesProtected=Math.max(
+            0,
+            Math.floor(Number(req.body?.min_sales_protected||0))
+        );
+
+        const resultados=(
+            await mapLimitV21(
+                ids,
+                8,
+                async id=>excluirItemRestritoV41(
+                    id,
+                    token,
+                    me.id,
+                    minSalesProtected
+                )
+            )
+        ).filter(Boolean);
+
         const excluidos=resultados.filter(x=>x.sucesso).length;
-        const falhas=resultados.length-excluidos;
-        res.json({sucesso:true,total:resultados.length,excluidos,falhas,resultados});
-    }catch(e){respostaErro(res,500,'Erro ao excluir an\u00fancios selecionados: '+e.message)}
+        const protegidos=resultados.filter(x=>x.protegido).length;
+        const falhas=resultados.length-excluidos-protegidos;
+
+        res.json({
+            sucesso:true,
+            total:resultados.length,
+            excluidos,
+            protegidos,
+            falhas,
+            min_sales_protected:minSalesProtected,
+            resultados
+        });
+    }catch(e){
+        respostaErro(
+            res,
+            500,
+            'Erro ao excluir anúncios selecionados: '+e.message
+        );
+    }
 });
 
 /* V32 \u2014 somente an\u00fancios alterados desde o \u00faltimo cursor. */
