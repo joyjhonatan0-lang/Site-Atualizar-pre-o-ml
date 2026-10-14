@@ -709,7 +709,7 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v99-restritos-cache-vendas',
+        version: 'ml-hub-pro-v100-perguntas-agente-ia',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
@@ -3642,187 +3642,724 @@ app.get('/api/v21/pedidos', async (req,res)=>{
  * Busca perguntas recebidas pelo vendedor.
  */
 app.get('/api/perguntas', async (req, res) => {
-    const token =
-        obterToken(req);
+    const token=obterToken(req);
 
-    if (!token) {
-        return respostaErro(
-            res,
-            401,
-            'Token n\u00e3o fornecido.'
-        );
+    if(!token){
+        return respostaErro(res,401,'Token não fornecido.');
     }
 
-    try {
-        const userResponse =
-            await mlFetch(
-                `${ML_API}/users/me`,
-                token
-            );
+    try{
+        const userResponse=await mlFetch(`${ML_API}/users/me`,token);
+        const user=await jsonSeguro(userResponse);
 
-        const user =
-            await jsonSeguro(
-                userResponse
-            );
-
-        if (
-            !userResponse.ok ||
-            !user.id
-        ) {
-            return respostaErro(
-                res,
-                401,
-                'Token inv\u00e1lido ou expirado.'
-            );
+        if(!userResponse.ok||!user.id){
+            return respostaErro(res,401,'Token inválido ou expirado.');
         }
 
-        const sellerId =
-            user.id;
+        const sellerId=user.id;
+        const limit=Math.min(Number(req.query.limit||50),100);
+        const offset=Math.max(Number(req.query.offset||0),0);
+        const status=req.query.status||'';
 
-        const limit =
-            Math.min(
-                Number(
-                    req.query.limit || 50
-                ),
-                100
-            );
+        const params=new URLSearchParams({
+            seller_id:String(sellerId),
+            api_version:'4',
+            limit:String(limit),
+            offset:String(offset),
+            sort_fields:'date_created',
+            sort_types:'DESC'
+        });
 
-        const offset =
-            Math.max(
-                Number(
-                    req.query.offset || 0
-                ),
-                0
-            );
+        if(status)params.set('status',status);
 
-        const status =
-            req.query.status || '';
+        const response=await mlFetch(
+            `${ML_API}/questions/search?${params.toString()}`,
+            token
+        );
+        const data=await jsonSeguro(response);
 
-        const params =
-            new URLSearchParams({
-                seller_id:
-                    String(sellerId),
-                api_version:
-                    '4',
-                limit:
-                    String(limit),
-                offset:
-                    String(offset),
-                sort_fields:
-                    'date_created',
-                sort_types:
-                    'DESC'
-            });
-
-        if (status) {
-            params.set(
-                'status',
-                status
-            );
-        }
-
-        const response =
-            await mlFetch(
-                `${ML_API}/questions/search?${params.toString()}`,
-                token
-            );
-
-        const data =
-            await jsonSeguro(
-                response
-            );
-
-        if (!response.ok) {
+        if(!response.ok){
             return respostaErro(
                 res,
                 response.status,
-                formatarErroMercadoLivre(
-                    data
-                )
+                formatarErroMercadoLivre(data)
             );
         }
 
-        const perguntas =
-            data.questions ||
-            [];
+        const perguntas=Array.isArray(data.questions)?data.questions:[];
+        const ids=[...new Set(perguntas.map(p=>String(p.item_id||'')).filter(Boolean))];
+        const itens=await buscarItensBulk(token,ids);
 
-        const ids =
-            perguntas.map(
-                p => p.item_id
-            );
+        const resultado=perguntas.map(pergunta=>{
+            const item=itens[String(pergunta.item_id)]||{};
+            const attrs=Array.isArray(item.attributes)?item.attributes:[];
+            const sku=String(
+                attrs.find(a=>String(a?.id||'').toUpperCase()==='SELLER_SKU')?.value_name||
+                ''
+            ).trim();
 
-        const itens =
-            await buscarItensBulk(
-                token,
-                ids
-            );
-
-        const resultado =
-            perguntas.map(
-                pergunta => {
-                    const item =
-                        itens[
-                            pergunta.item_id
-                        ];
-
-                    return {
-                        id:
-                            pergunta.id,
-                        item_id:
-                            pergunta.item_id,
-                        titulo:
-                            item?.title ||
-                            pergunta.item_id,
-                        thumbnail:
-                            item?.thumbnail ||
-                            '',
-                        permalink:
-                            item?.permalink ||
-                            '#',
-                        pergunta:
-                            pergunta.text ||
-                            '',
-                        status:
-                            pergunta.status ||
-                            '',
-                        respondida:
-                            pergunta.status ===
-                            'ANSWERED' ||
-                            Boolean(
-                                pergunta.answer
-                            ),
-                        resposta:
-                            pergunta.answer?.text ||
-                            '',
-                        data:
-                            pergunta.date_created ||
-                            null
-                    };
-                }
-            );
-
-        res.json({
-            sucesso: true,
-            total:
-                data.total ||
-                resultado.length,
-            limit,
-            offset,
-            perguntas:
-                resultado
+            return {
+                id:pergunta.id,
+                item_id:pergunta.item_id,
+                sku,
+                titulo:item?.title||pergunta.item_id,
+                thumbnail:item?.thumbnail||item?.secure_thumbnail||'',
+                permalink:item?.permalink||'#',
+                pergunta:pergunta.text||'',
+                status:pergunta.status||'',
+                respondida:
+                    pergunta.status==='ANSWERED'||
+                    Boolean(pergunta.answer),
+                resposta:pergunta.answer?.text||'',
+                data:pergunta.date_created||null,
+                preco:Number(item?.price||0),
+                estoque:Number(item?.available_quantity||0),
+                vendas:Number(item?.sold_quantity||0),
+                categoria:String(item?.category_id||'')
+            };
         });
 
-    } catch (error) {
-        console.error(
-            'Erro perguntas:',
-            error
-        );
-
+        res.json({
+            sucesso:true,
+            total:Number(data.total||resultado.length),
+            limit,
+            offset,
+            perguntas:resultado
+        });
+    }catch(error){
+        console.error('Erro perguntas:',error);
         return respostaErro(
             res,
             500,
-            'Erro ao carregar perguntas: ' +
-            error.message
+            'Erro ao carregar perguntas: '+error.message
+        );
+    }
+});
+
+
+/* =========================================================
+   V100 — AGENTES DE PRODUTO + IA PARA PERGUNTAS
+========================================================= */
+
+let bancoPerguntasAgentesV100Promise=null;
+
+async function inicializarPerguntasAgentesV100(){
+    await inicializarAgentesV62();
+
+    if(!bancoPerguntasAgentesV100Promise){
+        bancoPerguntasAgentesV100Promise=dbQuery(`
+          CREATE TABLE IF NOT EXISTS ml_question_agent_links_v100(
+            seller_id BIGINT NOT NULL,
+            agent_id UUID NOT NULL REFERENCES ml_product_agents_v62(id) ON DELETE CASCADE,
+            match_type TEXT NOT NULL,
+            match_value TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(seller_id,match_type,match_value)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_question_agent_links_v100_agent
+          ON ml_question_agent_links_v100(seller_id,agent_id);
+        `).catch(e=>{
+            bancoPerguntasAgentesV100Promise=null;
+            throw e;
+        });
+    }
+
+    return bancoPerguntasAgentesV100Promise;
+}
+
+function normalizarVinculoPerguntaV100(tipo,valor){
+    const t=String(tipo||'').trim().toLowerCase();
+    let v=String(valor||'').trim();
+
+    if(!['item_id','sku','default'].includes(t)){
+        throw erroAgenteV62('Escolha o vínculo do agente: MLB, SKU ou padrão.');
+    }
+
+    if(t==='item_id'){
+        v=v.toUpperCase().replace(/\s+/g,'');
+        if(!/^MLB\d+$/i.test(v)){
+            throw erroAgenteV62('Informe um MLB válido para vincular este agente.');
+        }
+    }
+
+    if(t==='sku'&&!v){
+        throw erroAgenteV62('Informe o SKU para vincular este agente.');
+    }
+
+    if(t==='default')v='*';
+
+    return {match_type:t,match_value:v.slice(0,300)};
+}
+
+async function listarAgentesPerguntasV100(seller){
+    await inicializarPerguntasAgentesV100();
+
+    const [agentes,links]=await Promise.all([
+        dbQuery(
+          `SELECT * FROM ml_product_agents_v62
+           WHERE seller_id=$1
+           ORDER BY updated_at DESC
+           LIMIT 1000`,
+          [seller]
+        ),
+        dbQuery(
+          `SELECT seller_id,agent_id,match_type,match_value,updated_at
+           FROM ml_question_agent_links_v100
+           WHERE seller_id=$1`,
+          [seller]
+        )
+    ]);
+
+    const linkByAgent=new Map();
+    for(const l of links.rows){
+        if(!linkByAgent.has(String(l.agent_id)))linkByAgent.set(String(l.agent_id),[]);
+        linkByAgent.get(String(l.agent_id)).push({
+            match_type:l.match_type,
+            match_value:l.match_value,
+            updated_at:l.updated_at
+        });
+    }
+
+    return agentes.rows.map(row=>({
+        ...agentePublicoV62(row,false),
+        links:linkByAgent.get(String(row.id))||[]
+    }));
+}
+
+async function escolherAgentePerguntaV100(seller,{agentId='',itemId='',sku=''}={}){
+    await inicializarPerguntasAgentesV100();
+
+    if(agentId){
+        return obterAgenteV62(seller,agentId);
+    }
+
+    const item=String(itemId||'').trim().toUpperCase();
+    const skuClean=String(sku||'').trim();
+
+    const r=await dbQuery(`
+      SELECT a.*
+      FROM ml_question_agent_links_v100 l
+      JOIN ml_product_agents_v62 a
+        ON a.id=l.agent_id
+       AND a.seller_id=l.seller_id
+      WHERE l.seller_id=$1
+        AND (
+          (l.match_type='item_id' AND UPPER(l.match_value)=UPPER($2))
+          OR
+          (l.match_type='sku' AND LOWER(l.match_value)=LOWER($3))
+          OR
+          (l.match_type='default' AND l.match_value='*')
+        )
+      ORDER BY
+        CASE l.match_type
+          WHEN 'item_id' THEN 1
+          WHEN 'sku' THEN 2
+          ELSE 3
+        END
+      LIMIT 1
+    `,[seller,item,skuClean]);
+
+    return r.rows[0]?hidratarAcervoV65(r.rows[0]):null;
+}
+
+function fatosConfirmadosAgenteV100(row){
+    if(!row)return null;
+
+    const m=row.manual||{};
+
+    return {
+        id:row.id,
+        name:row.name,
+        product:row.product,
+        brand:row.brand,
+        information:String(m.information||'').slice(0,10000),
+        technical_sheet:String(m.technical_sheet||'').slice(0,10000),
+        applications:String(m.applications||'').slice(0,5000),
+        notes:String(m.notes||'').slice(0,8000),
+        approved_facts:Array.isArray(m.approved_facts)
+          ?m.approved_facts.slice(0,80)
+          :[],
+        instructions:String(row.instructions||'').slice(0,4000)
+    };
+}
+
+function compactarItemPerguntaV100(item,descricao=''){
+    const attrs=(Array.isArray(item?.attributes)?item.attributes:[])
+      .filter(a=>a?.id && (
+          a?.value_name ||
+          a?.value_id ||
+          (Array.isArray(a?.values)&&a.values.length)
+      ))
+      .slice(0,120)
+      .map(a=>({
+          id:String(a.id),
+          name:String(a.name||a.id),
+          value:String(
+              a.value_name||
+              a.values?.[0]?.name||
+              a.value_id||
+              ''
+          ).slice(0,500)
+      }));
+
+    const variations=(Array.isArray(item?.variations)?item.variations:[])
+      .slice(0,30)
+      .map(v=>({
+          id:v.id,
+          available_quantity:Number(v.available_quantity||0),
+          attributes:(v.attribute_combinations||[]).map(a=>({
+              id:a.id,
+              name:a.name,
+              value:a.value_name||a.value_id||''
+          }))
+      }));
+
+    return {
+        id:String(item?.id||''),
+        title:String(item?.title||''),
+        category_id:String(item?.category_id||''),
+        price:Number(item?.price||0),
+        available_quantity:Number(item?.available_quantity||0),
+        sold_quantity:Number(item?.sold_quantity||0),
+        condition:String(item?.condition||''),
+        warranty:String(item?.warranty||''),
+        shipping:{
+            free_shipping:Boolean(item?.shipping?.free_shipping),
+            logistic_type:String(item?.shipping?.logistic_type||''),
+            mode:String(item?.shipping?.mode||'')
+        },
+        attributes:attrs,
+        variations,
+        description:String(descricao||'').slice(0,12000)
+    };
+}
+
+app.get('/api/v100/perguntas/agentes',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const seller=await contaAgentesV62(req);
+        const agentes=await listarAgentesPerguntasV100(seller);
+
+        res.json({
+            sucesso:true,
+            agentes,
+            ia_habilitada:Boolean(String(process.env.GEMINI_API_KEY||'').trim()),
+            auto_refresh_habilitado:String(process.env.PRODUCT_AGENT_WORKER_ENABLED||'true').toLowerCase()!=='false'
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.post('/api/v100/perguntas/agentes',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const seller=await contaAgentesV62(req);
+        await inicializarPerguntasAgentesV100();
+
+        const normalized=normalizarAgenteV62({
+            name:req.body?.name,
+            product:req.body?.product,
+            brand:req.body?.brand,
+            manual:{
+                information:req.body?.information,
+                technical_sheet:req.body?.technical_sheet,
+                applications:req.body?.applications,
+                notes:req.body?.notes,
+                keywords:[]
+            },
+            instructions:req.body?.instructions,
+            urls:[],
+            refresh_enabled:Boolean(req.body?.refresh_enabled),
+            interval_hours:Number(req.body?.interval_hours||24)
+        });
+
+        const vinculo=normalizarVinculoPerguntaV100(
+            req.body?.match_type,
+            req.body?.match_value
+        );
+
+        const id=crypto.randomUUID();
+        const client=await db.connect();
+
+        try{
+            await client.query('BEGIN');
+
+            const ar=await client.query(`
+              INSERT INTO ml_product_agents_v62(
+                id,seller_id,name,product,brand,manual,urls,instructions,
+                refresh_enabled,interval_hours,next_refresh_at
+              )
+              VALUES(
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+                CASE WHEN $9 THEN NOW() ELSE NULL END
+              )
+              RETURNING *
+            `,[
+                id,
+                seller,
+                normalized.name,
+                normalized.product,
+                normalized.brand,
+                normalized.manual,
+                JSON.stringify(normalized.urls),
+                normalized.instructions,
+                normalized.refresh_enabled,
+                normalized.interval_hours
+            ]);
+
+            await client.query(`
+              INSERT INTO ml_question_agent_links_v100(
+                seller_id,agent_id,match_type,match_value
+              )
+              VALUES($1,$2,$3,$4)
+              ON CONFLICT(seller_id,match_type,match_value)
+              DO UPDATE SET
+                agent_id=EXCLUDED.agent_id,
+                updated_at=NOW()
+            `,[
+                seller,
+                id,
+                vinculo.match_type,
+                vinculo.match_value
+            ]);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                sucesso:true,
+                agente:{
+                    ...agentePublicoV62(ar.rows[0],false),
+                    links:[vinculo]
+                }
+            });
+        }catch(e){
+            try{await client.query('ROLLBACK')}catch(_){}
+            throw e;
+        }finally{
+            client.release();
+        }
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.put('/api/v100/perguntas/agentes/:id',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const seller=await contaAgentesV62(req);
+        await inicializarPerguntasAgentesV100();
+
+        const anterior=await obterAgenteV62(seller,req.params.id);
+        const normalized=normalizarAgenteV62({
+            name:req.body?.name,
+            product:req.body?.product,
+            brand:req.body?.brand,
+            manual:{
+                information:req.body?.information,
+                technical_sheet:req.body?.technical_sheet,
+                applications:req.body?.applications,
+                notes:req.body?.notes,
+                approved_facts:anterior.manual?.approved_facts||[],
+                keywords:anterior.manual?.keywords||[]
+            },
+            instructions:req.body?.instructions,
+            urls:anterior.urls||[],
+            refresh_enabled:Boolean(req.body?.refresh_enabled),
+            interval_hours:Number(req.body?.interval_hours||24)
+        },anterior);
+
+        const vinculo=normalizarVinculoPerguntaV100(
+            req.body?.match_type,
+            req.body?.match_value
+        );
+
+        const client=await db.connect();
+
+        try{
+            await client.query('BEGIN');
+
+            const ar=await client.query(`
+              UPDATE ml_product_agents_v62 SET
+                name=$3,
+                product=$4,
+                brand=$5,
+                manual=$6,
+                instructions=$7,
+                refresh_enabled=$8,
+                interval_hours=$9,
+                next_refresh_at=CASE
+                  WHEN $8 THEN COALESCE(next_refresh_at,NOW())
+                  ELSE NULL
+                END,
+                version=version+1,
+                updated_at=NOW()
+              WHERE id=$1 AND seller_id=$2
+              RETURNING *
+            `,[
+                anterior.id,
+                seller,
+                normalized.name,
+                normalized.product,
+                normalized.brand,
+                normalized.manual,
+                normalized.instructions,
+                normalized.refresh_enabled,
+                normalized.interval_hours
+            ]);
+
+            await client.query(
+              `DELETE FROM ml_question_agent_links_v100
+               WHERE seller_id=$1 AND agent_id=$2`,
+              [seller,anterior.id]
+            );
+
+            await client.query(`
+              INSERT INTO ml_question_agent_links_v100(
+                seller_id,agent_id,match_type,match_value
+              )
+              VALUES($1,$2,$3,$4)
+              ON CONFLICT(seller_id,match_type,match_value)
+              DO UPDATE SET
+                agent_id=EXCLUDED.agent_id,
+                updated_at=NOW()
+            `,[
+                seller,
+                anterior.id,
+                vinculo.match_type,
+                vinculo.match_value
+            ]);
+
+            await client.query('COMMIT');
+
+            res.json({
+                sucesso:true,
+                agente:{
+                    ...agentePublicoV62(ar.rows[0],false),
+                    links:[vinculo]
+                }
+            });
+        }catch(e){
+            try{await client.query('ROLLBACK')}catch(_){}
+            throw e;
+        }finally{
+            client.release();
+        }
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.delete('/api/v100/perguntas/agentes/:id',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const seller=await contaAgentesV62(req);
+        await inicializarPerguntasAgentesV100();
+
+        const r=await dbQuery(
+          `DELETE FROM ml_product_agents_v62
+           WHERE id=$1 AND seller_id=$2
+           RETURNING id`,
+          [req.params.id,seller]
+        );
+
+        if(!r.rowCount)return respostaErro(res,404,'Agente não encontrado.');
+        res.json({sucesso:true});
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.post('/api/v100/perguntas/sugerir-resposta',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    if(!String(process.env.GEMINI_API_KEY||'').trim()){
+        return respostaErro(
+            res,
+            503,
+            'Configure GEMINI_API_KEY no Render para gerar respostas com IA.'
+        );
+    }
+
+    const questionId=String(req.body?.question_id||'').trim();
+    const itemId=String(req.body?.item_id||'').trim();
+    const question=String(req.body?.question_text||'').trim().slice(0,4000);
+    const agentId=String(req.body?.agent_id||'').trim();
+
+    if(!itemId||!question){
+        return respostaErro(res,400,'Pergunta ou anúncio não informado.');
+    }
+
+    try{
+        const seller=await contaAgentesV62(req);
+
+        const ir=await mlFetch(
+            `${ML_API}/items/${encodeURIComponent(itemId)}?include_attributes=all&include_internal_attributes=true`,
+            token
+        );
+        const item=await jsonSeguro(ir);
+
+        if(!ir.ok||!item?.id){
+            return respostaErro(
+                res,
+                ir.status||404,
+                formatarErroMercadoLivre(item)||'Anúncio não encontrado.'
+            );
+        }
+
+        if(String(item.seller_id)!==String(seller)){
+            return respostaErro(
+                res,
+                403,
+                'Este anúncio não pertence à conta Mercado Livre conectada.'
+            );
+        }
+
+        const desc=await descricaoItemV96(token,itemId)
+          .catch(()=>({plain_text:'',existe:false}));
+
+        const sku=String(
+            (item.attributes||[])
+              .find(a=>String(a?.id||'').toUpperCase()==='SELLER_SKU')
+              ?.value_name||
+            ''
+        ).trim();
+
+        const agente=await escolherAgentePerguntaV100(
+            seller,
+            {agentId,itemId,sku}
+        );
+
+        const contextoItem=compactarItemPerguntaV100(
+            item,
+            desc.plain_text||''
+        );
+        const contextoAgente=fatosConfirmadosAgenteV100(agente);
+
+        const schema={
+            type:'object',
+            properties:{
+                answer:{type:'string'},
+                confidence:{
+                    type:'string',
+                    enum:['high','medium','low']
+                },
+                should_send:{type:'boolean'},
+                reason:{type:'string'},
+                missing_information:{
+                    type:'array',
+                    items:{type:'string'}
+                },
+                used_sources:{
+                    type:'array',
+                    items:{type:'string'}
+                }
+            },
+            required:[
+                'answer',
+                'confidence',
+                'should_send',
+                'reason',
+                'missing_information',
+                'used_sources'
+            ]
+        };
+
+        const systemInstruction=
+`Você é o agente de atendimento do vendedor no Mercado Livre Brasil.
+Sua função é elaborar UMA RESPOSTA CURTA, educada e correta para a pergunta do comprador.
+
+REGRAS OBRIGATÓRIAS:
+1. Use somente fatos confirmados no anúncio, na descrição, nos atributos do Mercado Livre e no cadastro manual do agente do produto.
+2. Não invente função, compatibilidade, voltagem, material, medida, autonomia, garantia, acessório ou qualquer especificação ausente.
+3. Informações pesquisadas automaticamente pelo agente não são consideradas confirmadas, a menos que estejam em approved_facts.
+4. Se a pergunta exigir um fato que não está confirmado, não chute. Escreva uma resposta segura dizendo que essa informação precisa ser confirmada antes de orientar o comprador.
+5. Não diga ao cliente que você é uma IA.
+6. Não mencione "banco de dados", "prompt", "agente", "API" ou processos internos.
+7. Não prometa entrega, estoque futuro ou desempenho que não estejam confirmados.
+8. Responda em português do Brasil, de forma natural, comercial e objetiva.
+9. Máximo recomendado: 500 caracteres.
+10. should_send só pode ser true quando a resposta estiver suficientemente sustentada pelos dados confirmados.`;
+
+        const input=
+`PERGUNTA DO CLIENTE:
+${question}
+
+ANÚNCIO CONFIRMADO:
+${JSON.stringify(contextoItem)}
+
+AGENTE DO PRODUTO — INFORMAÇÕES MANUAIS CONFIRMADAS:
+${JSON.stringify(contextoAgente||{})}
+
+ID da pergunta: ${questionId||'não informado'}
+
+Retorne somente o JSON solicitado.`;
+
+        const gr=await chamarGeminiInteracao({
+            input,
+            systemInstruction,
+            responseSchema:schema
+        });
+
+        let parsed;
+        try{
+            parsed=JSON.parse(gr.texto);
+        }catch(e){
+            const m=String(gr.texto||'').match(/\{[\s\S]*\}/);
+            if(!m)throw Object.assign(
+                new Error('A IA respondeu em formato inválido. Tente novamente.'),
+                {status:502}
+            );
+            parsed=JSON.parse(m[0]);
+        }
+
+        const answer=String(parsed?.answer||'').trim().slice(0,2000);
+        if(!answer){
+            throw Object.assign(
+                new Error('A IA não gerou uma resposta utilizável.'),
+                {status:502}
+            );
+        }
+
+        res.json({
+            sucesso:true,
+            resposta:answer,
+            confidence:['high','medium','low'].includes(parsed.confidence)
+              ?parsed.confidence
+              :'low',
+            should_send:Boolean(parsed.should_send),
+            reason:String(parsed.reason||'').slice(0,1000),
+            missing_information:Array.isArray(parsed.missing_information)
+              ?parsed.missing_information.map(x=>String(x).slice(0,300)).slice(0,20)
+              :[],
+            used_sources:Array.isArray(parsed.used_sources)
+              ?parsed.used_sources.map(x=>String(x).slice(0,120)).slice(0,20)
+              :[],
+            agente:agente?{
+                id:agente.id,
+                name:agente.name,
+                product:agente.product
+            }:null,
+            sku,
+            modelo:gr.model
+        });
+    }catch(e){
+        console.error('[PERGUNTAS IA V100]',e);
+        respostaErro(
+            res,
+            e.status||500,
+            'Erro ao gerar resposta com IA: '+e.message
         );
     }
 });
