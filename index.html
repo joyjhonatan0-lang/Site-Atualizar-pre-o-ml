@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>ML Hub Pro | Commerce Intelligence V96</title>
+    <title>ML Hub Pro | Operação Automática V101</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -2381,6 +2381,14 @@ button:disabled{
                     &#128666; Puxar fretes
                 </button>
 
+                <button onclick="abrirPausaMassaV101()" class="text-[10px] bg-amber-600 hover:bg-amber-500 px-3 py-2 rounded-lg text-white font-black" title="Pausar anúncios ativos em massa por todos, SKU ou MLB">&#9208; Pausar em massa</button>
+
+                <div class="flex items-center gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-1">
+                    <button id="auto-preco-iniciar-v101" onclick="iniciarAutomacaoPrecoV101()" class="text-[10px] bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 rounded-lg text-slate-950 font-black" title="Anúncios → preços → fretes → simulação → atualização automática">&#9654; Iniciar auto</button>
+                    <button id="auto-preco-pausar-v101" onclick="pausarAutomacaoPrecoV101()" class="text-[10px] bg-yellow-400/10 hover:bg-yellow-400/20 px-3 py-1.5 rounded-lg text-yellow-300 font-black">&#10074;&#10074; Pausar</button>
+                    <button id="auto-preco-parar-v101" onclick="pararAutomacaoPrecoV101()" class="text-[10px] bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg text-red-300 font-black">&#9632; Parar</button>
+                </div>
+
             </div>
 
         </div>
@@ -2449,6 +2457,17 @@ button:disabled{
                     <div id="sync-msg-fretes-v26" class="text-[10px] text-slate-500 mt-2">Clique em Puxar fretes.</div>
                 </div>
             </div>
+
+            <div class="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-[.12em] text-emerald-400 font-black">Automação de preços · V101</div>
+                        <div id="auto-preco-status-v101" class="text-[10px] text-slate-400 mt-1">Parada. Ao iniciar: anúncios → preços → fretes → simulação → atualização.</div>
+                    </div>
+                    <div id="auto-preco-etapa-v101" class="text-[10px] font-black text-slate-500">Aguardando</div>
+                </div>
+                <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden"><div id="auto-preco-bar-v101" class="h-full bg-emerald-400 transition-all duration-300" style="width:0%"></div></div>
+            </div>
         </div>
 
         <div
@@ -2457,7 +2476,7 @@ button:disabled{
 
             <table
                 class="
-                    w-full min-w-[1750px]
+                    w-full min-w-[1900px]
                     text-left
                     border-collapse
                     futuristic-table
@@ -2477,6 +2496,8 @@ button:disabled{
                         <th class="p-4">Descrição</th>
 
                         <th class="p-4">Características</th>
+
+                        <th class="p-4">Qualidade</th>
 
                         <th class="p-4">
                             Pre&#231;o
@@ -2534,6 +2555,48 @@ button:disabled{
 
     </div>
 
+
+
+    <div id="modal-pausa-massa-v101" class="hidden fixed inset-0 z-[13000] bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="max-w-xl mx-auto my-16 panel rounded-3xl overflow-hidden border border-slate-700">
+            <div class="p-5 border-b border-slate-800 flex items-start justify-between gap-3">
+                <div>
+                    <div class="text-[9px] uppercase tracking-[.16em] text-amber-400 font-black">Pausa em massa · V101</div>
+                    <h2 class="text-lg font-black text-white mt-1">Pausar anúncios ativos</h2>
+                    <p class="text-[10px] text-slate-500 mt-1">Escolha todos os ativos, um SKU exato ou um MLB específico.</p>
+                </div>
+                <button onclick="fecharPausaMassaV101()" class="text-slate-400 hover:text-white text-xl">×</button>
+            </div>
+
+            <div class="p-5 space-y-4">
+                <label>
+                    <span class="block text-[9px] uppercase font-black text-slate-500 mb-1">Modo</span>
+                    <select id="pausa-modo-v101" onchange="ajustarPausaMassaV101()" class="w-full rounded-xl px-3 py-2.5 text-xs">
+                        <option value="all">Todos os anúncios ativos</option>
+                        <option value="sku">Somente SKU exato</option>
+                        <option value="mlb">Somente MLB</option>
+                    </select>
+                </label>
+
+                <label id="pausa-valor-wrap-v101" class="hidden">
+                    <span id="pausa-valor-label-v101" class="block text-[9px] uppercase font-black text-slate-500 mb-1">SKU</span>
+                    <input id="pausa-valor-v101" class="w-full rounded-xl px-3 py-2.5 text-xs" placeholder="Digite o SKU ou MLB">
+                </label>
+
+                <div id="pausa-resumo-v101" class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-[11px] text-slate-400">Carregando base da Gestão...</div>
+
+                <div id="pausa-progresso-v101" class="hidden">
+                    <div class="h-2 bg-slate-800 rounded-full overflow-hidden"><div id="pausa-bar-v101" class="h-full bg-amber-400" style="width:0%"></div></div>
+                    <div id="pausa-msg-v101" class="text-[10px] text-slate-500 mt-2"></div>
+                </div>
+            </div>
+
+            <div class="p-5 border-t border-slate-800 flex justify-end gap-2">
+                <button onclick="fecharPausaMassaV101()" class="bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold">Cancelar</button>
+                <button id="pausa-executar-v101" onclick="executarPausaMassaV101()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black">Pausar anúncios</button>
+            </div>
+        </div>
+    </div>
 </section>
 
 
@@ -4663,9 +4726,10 @@ button:disabled{
                     <th class="p-4">Valor</th>
                     <th class="p-4">Pagamento</th>
                     <th class="p-4">Entrega</th>
+                    <th class="p-4">Nota fiscal</th>
                 </tr></thead>
                 <tbody id="pedidos-tabela" class="divide-y divide-slate-800 text-xs">
-                    <tr><td colspan="7" class="p-10 text-center text-slate-600">Abra a p&#225;gina para carregar os pedidos.</td></tr>
+                    <tr><td colspan="8" class="p-10 text-center text-slate-600">Abra a p&#225;gina para carregar os pedidos.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -6017,6 +6081,12 @@ function montarTabelaGestao(
                     </div>
                     <div class="text-[9px] text-slate-500 mt-1">${item.content_audited_at?`Secundárias: ${Number(item.missing_secondary?.length||0)} faltando · score ${Number(item.content_score||0)}%`:'Verificar ficha técnica'}</div>
                     <button onclick="abrirEditorConteudoV96(${index},'caracteristicas')" class="text-[9px] text-blue-400 font-bold mt-1">Editar características</button>
+                </td>
+
+                <td class="p-4 min-w-[125px]">
+                    <div id="quality_${safeIdV21(item.id)}">
+                      ${qualidadeHtmlV101(item)}
+                    </div>
                 </td>
 
                 <td class="p-4">
@@ -9645,20 +9715,12 @@ async function verificarModoEscala(){
 }
 
 function tituloSomenteV76(valor){
-  let t=String(valor??'')
+  return String(valor??'')
     .replace(/\u0000/g,' ')
     .replace(/<[^>]*>/g,' ')
     .replace(/\r?\n+/g,' ')
     .replace(/\s+/g,' ')
-    .replace(/^[\s,;:|·\-–—)]+/,'')
-    .replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'')
     .trim();
-
-  // Fallback visual V79. O servidor remove a cor usando os atributos reais.
-  // Aqui cobrimos apenas sufixos de cores muito explícitos caso o navegador
-  // ainda esteja mostrando um cache antigo.
-  t=t.replace(/(?:\s|[-–—/])+(?:dourado(?:[-\s]+escuro|[-\s]+claro)?|preto|branco|azul|vermelho|verde|rosa|roxo|cinza|prata|bege|marrom)(?:\s*)$/i,'').trim();
-  return t;
 }
 
 function normalizarItemEscala(i){
@@ -9678,7 +9740,12 @@ function normalizarItemEscala(i){
     content_score:Number(i.content_score||0),
     missing_main:Array.isArray(i.missing_main)?i.missing_main:[],
     missing_secondary:Array.isArray(i.missing_secondary)?i.missing_secondary:[],
-    content_audited_at:i.content_audited_at||null
+    content_audited_at:i.content_audited_at||null,
+    quality_score:(i.quality_score===null||i.quality_score===undefined||i.quality_score==='')?null:Number(i.quality_score),
+    quality_level:String(i.quality_level||''),
+    quality_pending_actions:Number(i.quality_pending_actions||0),
+    quality_checked_at:i.quality_checked_at||null,
+    quality_calculated_at:i.quality_calculated_at||null
   };
 }
 
@@ -10155,11 +10222,31 @@ function listaMasterFiltradaV32(){
 }
 async function aplicarMudancasV32(itens){
     if(!Array.isArray(itens)||!itens.length)return 0;
-    const normalizados=itens.map(normalizarItemEscala);
+
+    const normalizados=itens.map(raw=>{
+        const incoming=normalizarItemEscala(raw);
+        const anterior=masterMapV32.get(String(incoming.id));
+        if(!anterior)return incoming;
+
+        const rawTemQualidade=Object.prototype.hasOwnProperty.call(raw||{},'quality_score');
+        if(rawTemQualidade)return incoming;
+
+        return {
+            ...incoming,
+            quality_score:anterior.quality_score??null,
+            quality_level:anterior.quality_level||'',
+            quality_pending_actions:Number(anterior.quality_pending_actions||0),
+            quality_checked_at:anterior.quality_checked_at||null,
+            quality_calculated_at:anterior.quality_calculated_at||null
+        };
+    });
+
     normalizados.forEach(item=>masterMapV32.set(String(item.id),item));
     masterAnunciosV32=[...masterMapV32.values()];
     await idbSalvarItensV32(normalizados);
-    simFiltroRenderKeyV30='';atualFiltroRenderKeyV30='';anunciosEscalaCacheV30.clear();
+    simFiltroRenderKeyV30='';
+    atualFiltroRenderKeyV30='';
+    anunciosEscalaCacheV30.clear();
     return normalizados.length;
 }
 async function sincronizarMudancasV32({forcar=false,mostrarProgresso=false}={}){
@@ -11423,8 +11510,9 @@ async function carregarPedidosV21(page=1){
                   <td class="p-4 font-black text-emerald-400">${moeda(p.paid_amount||p.total_amount)}</td>
                   <td class="p-4"><span class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-[10px] font-bold">${escapeHtml(rotuloSituacaoV64(p.status,'pedido'))}</span></td>
                   <td class="p-4"><span class="px-2.5 py-1 rounded-lg ${bg} ${cor} text-[10px] font-black">${lbl}</span><div class="text-[9px] text-slate-600 mt-1">${escapeHtml(rotuloSituacaoV64(p.shipping?.status,'envio'))}</div></td>
+                  <td class="p-4">${htmlFiscalPedidoV101(String(p.id))}</td>
                 </tr>`;
-            }).join(''):'<tr><td colspan="7" class="p-10 text-center text-slate-500">Nenhum pedido encontrado.</td></tr>';
+            }).join(''):'<tr><td colspan="8" class="p-10 text-center text-slate-500">Nenhum pedido encontrado.</td></tr>';
         }
         const stats={
           pendente:pedidos.filter(x=>x.situacao==='pendente').length,
@@ -16270,7 +16358,7 @@ async function sincronizarAnunciosDiretoV88({retomarAutomatico=false}={}){
     let reiniciosCursor=0;
 
     try{
-        while(!syncV88Abortar){
+        while(!syncV88Abortar && !window.automationShouldYieldV101?.()){
             let d;
 
             try{
@@ -16590,6 +16678,11 @@ async function sincronizarFretesDiretoV89({retomarAutomatico=false}={}){
     });
 
     while(offset<total){
+      if(window.automationShouldYieldV101?.()){
+        await freteV89Checkpoint({offset,total,completed:false,failed,last_error:'pausado_pelo_usuario'});
+        atualizarProgressoV26('fretes',{status:'queued',atual:offset,total,mensagem:`Fretes pausados no checkpoint ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`});
+        return;
+      }
       const lote=lista.slice(offset,Math.min(total,offset+1000));
       const loteNumero=Math.floor(offset/1000)+1;
       const ids=lote.map(x=>String(x.id));
@@ -16917,6 +17010,11 @@ async function sincronizarPrecosDiretoV92({retomarAutomatico=false}={}){
     });
 
     while(offset<total){
+      if(window.automationShouldYieldV101?.()){
+        await precoV92SalvarCheckpoint({offset,total,completed:false,failed,last_error:'pausado_pelo_usuario'});
+        atualizarProgressoV26('precos',{status:'queued',atual:offset,total,mensagem:`Preços pausados no checkpoint ${offset.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`});
+        return;
+      }
       const lote=lista.slice(offset,Math.min(total,offset+1000));
       const loteNumero=Math.floor(offset/1000)+1;
       const ids=lote.map(x=>String(x.id));
@@ -17556,5 +17654,388 @@ function usarMonitorV96(id){const m=(window._monitoresV96||[]).find(x=>Number(x.
 async function executarMonitorV96(id){const status=document.getElementById('intel-status-v96');status.innerText='Atualizando monitor...';try{const r=await fetch(`${RENDER_URL}/api/v96/inteligencia/monitores/${id}/executar`,{method:'POST',headers:{Authorization:obterToken()}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);monitorAtualV96=Number(id);inteligenciaAtualV96={monitor_id:Number(id),...d};renderInteligenciaV96(d);status.innerText='Monitor atualizado.';carregarMonitoresV96()}catch(e){status.innerText='Erro: '+e.message}}
 async function toggleMonitorV96(id,enabled){try{const r=await fetch(`${RENDER_URL}/api/v96/inteligencia/monitores/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({enabled,interval_minutes:60})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);carregarMonitoresV96()}catch(e){alert(e.message)}}
 </script>
+<script id="mlhub-v101-runtime">
+/* =========================================================
+   V101 — Qualidade, pausa em massa, automação e NF-e
+========================================================= */
+const AUTOMACAO_PRECO_KEY_V101='mlhub_auto_preco_v101';
+let qualidadePaginaEmCursoV101=false;
+let pausaMassaExecutandoV101=false;
+const pedidoFiscalStatusV101=new Map();
+
+function qualidadeHtmlV101(item){
+  const score=item?.quality_score;
+  if(score===null||score===undefined||score===''){
+    return `<div class="text-[10px] font-black text-slate-500">Carregando...</div><div class="text-[8px] text-slate-600 mt-1">Qualidade ML</div>`;
+  }
+  const n=Math.max(0,Math.min(100,Number(score||0)));
+  const level=String(item?.quality_level||'');
+  const pend=Number(item?.quality_pending_actions||0);
+  const text=n>=80?'text-emerald-400':n>=60?'text-yellow-300':'text-red-300';
+  const bar=n>=80?'bg-emerald-400':n>=60?'bg-yellow-400':'bg-red-400';
+  return `<div class="min-w-[110px]">
+    <div class="flex items-center gap-2"><span class="text-base font-black ${text}">${n.toFixed(0)}%</span><span class="text-[8px] text-slate-500">${escapeHtml(level)}</span></div>
+    <div class="mt-1 h-1.5 rounded-full bg-slate-800 overflow-hidden"><div class="h-full ${bar}" style="width:${n}%"></div></div>
+    <div class="text-[8px] text-slate-600 mt-1">${pend?`${pend} ação(ões) pendente(s)`:'Sem ação pendente'}</div>
+  </div>`;
+}
+
+const montarTabelaGestaoBaseV101=montarTabelaGestao;
+montarTabelaGestao=function(itens){
+  montarTabelaGestaoBaseV101(itens);
+  setTimeout(()=>carregarQualidadePaginaV101(itens),60);
+};
+
+async function carregarQualidadePaginaV101(itens){
+  if(qualidadePaginaEmCursoV101)return;
+  const agora=Date.now();
+  const alvos=(Array.isArray(itens)?itens:[]).filter(x=>{
+    const ts=x?.quality_checked_at?new Date(x.quality_checked_at).getTime():0;
+    return x?.id && (!Number.isFinite(Number(x.quality_score)) || !ts || agora-ts>6*60*60*1000);
+  }).slice(0,100);
+  if(!alvos.length)return;
+
+  qualidadePaginaEmCursoV101=true;
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v101/anuncios/qualidade-lote`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:obterToken()},
+      body:JSON.stringify({ids:alvos.map(x=>x.id)})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+    const alterados=[];
+    for(const q of (d.resultados||[])){
+      const id=String(q.id||'');
+      const item=masterMapV32.get(id);
+      if(!item)continue;
+
+      if(q.title){
+        item.title=tituloSomenteV76(q.title);
+        const idx=cacheItens.findIndex(x=>String(x.id)===id);
+        if(idx>=0){
+          cacheItens[idx].title=item.title;
+          const input=document.getElementById(`titulo_gestao_${idx}`);
+          const count=document.getElementById(`contador_titulo_gestao_${idx}`);
+          if(input&&document.activeElement!==input)input.value=item.title;
+          if(count)count.textContent=`${item.title.length}/60`;
+        }
+      }
+
+      if(q.sucesso){
+        item.quality_score=q.score;
+        item.quality_level=q.level||'';
+        item.quality_pending_actions=Number(q.pending_actions||0);
+        item.quality_calculated_at=q.calculated_at||null;
+      }
+      item.quality_checked_at=new Date().toISOString();
+      alterados.push(item);
+
+      const box=document.getElementById(`quality_${safeIdV21(id)}`);
+      if(box)box.innerHTML=q.sucesso?qualidadeHtmlV101(item):`<div class="text-[9px] text-slate-500">Não disponível</div>`;
+    }
+
+    if(alterados.length){
+      masterAnunciosV32=[...masterMapV32.values()];
+      await idbSalvarItensV32(alterados);
+    }
+  }catch(e){
+    console.warn('[QUALIDADE V101]',e.message);
+  }finally{
+    qualidadePaginaEmCursoV101=false;
+  }
+}
+
+/* ---------------- Pausa em massa ---------------- */
+function abrirPausaMassaV101(){
+  document.getElementById('modal-pausa-massa-v101')?.classList.remove('hidden');
+  ajustarPausaMassaV101();
+}
+function fecharPausaMassaV101(){
+  if(pausaMassaExecutandoV101)return;
+  document.getElementById('modal-pausa-massa-v101')?.classList.add('hidden');
+}
+async function ajustarPausaMassaV101(){
+  await carregarMasterLocalV32();
+  const modo=document.getElementById('pausa-modo-v101')?.value||'all';
+  const valor=document.getElementById('pausa-valor-v101')?.value.trim()||'';
+  const wrap=document.getElementById('pausa-valor-wrap-v101');
+  const label=document.getElementById('pausa-valor-label-v101');
+  if(wrap)wrap.classList.toggle('hidden',modo==='all');
+  if(label)label.textContent=modo==='sku'?'SKU exato':'MLB exato';
+
+  const ativos=masterAnunciosV32.filter(x=>String(x.status)==='active');
+  let lista=ativos;
+  if(modo==='sku')lista=valor?ativos.filter(x=>String(x.sku||'').trim().toLowerCase()===valor.toLowerCase()):[];
+  if(modo==='mlb')lista=valor?ativos.filter(x=>String(x.id||'').toUpperCase()===valor.toUpperCase()):[];
+
+  const box=document.getElementById('pausa-resumo-v101');
+  if(box)box.innerHTML=`<b class="text-white">${lista.length.toLocaleString('pt-BR')}</b> anúncio(s) ativo(s) serão incluídos.<div class="text-[9px] text-slate-600 mt-2">Pausar é reversível. Itens inativos, em revisão ou finalizados não são alterados.</div>`;
+  return lista;
+}
+document.addEventListener('input',e=>{if(e.target?.id==='pausa-valor-v101')ajustarPausaMassaV101()});
+
+async function executarPausaMassaV101(){
+  if(pausaMassaExecutandoV101)return;
+  const lista=await ajustarPausaMassaV101();
+  if(!lista.length)return alert('Nenhum anúncio ativo corresponde ao filtro.');
+  if(!confirm(`Pausar ${lista.length.toLocaleString('pt-BR')} anúncio(s)?${(document.getElementById('pausa-modo-v101')?.value||'all')==='all'?'\n\nVocê selecionou TODOS os anúncios ativos da conta.':''}`))return;
+  if(lista.length>1000&&!confirm('Confirme novamente: esta operação vai pausar mais de 1.000 anúncios. Continuar?'))return;
+
+  pausaMassaExecutandoV101=true;
+  const btn=document.getElementById('pausa-executar-v101');
+  const prog=document.getElementById('pausa-progresso-v101');
+  const bar=document.getElementById('pausa-bar-v101');
+  const msg=document.getElementById('pausa-msg-v101');
+  if(btn)btn.disabled=true;if(prog)prog.classList.remove('hidden');
+  let done=0,ok=0,fail=0,ignored=0;
+
+  try{
+    const ids=lista.map(x=>String(x.id));
+    for(let i=0;i<ids.length;i+=200){
+      const lote=ids.slice(i,i+200);
+      const r=await fetch(`${RENDER_URL}/api/v101/anuncios/pausar-lote`,{
+        method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({ids:lote})
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+
+      for(const rr of (d.resultados||[])){
+        done++;
+        const item=masterMapV32.get(String(rr.id));
+        if(rr.sucesso){ok++;if(item)item.status='paused'}
+        else if(rr.ignorado){ignored++;if(item&&rr.status)item.status=rr.status}
+        else fail++;
+      }
+
+      const atualizados=lote.map(id=>masterMapV32.get(String(id))).filter(Boolean);
+      if(atualizados.length)await idbSalvarItensV32(atualizados);
+      if(bar)bar.style.width=`${Math.round(done/ids.length*100)}%`;
+      if(msg)msg.textContent=`${done.toLocaleString('pt-BR')}/${ids.length.toLocaleString('pt-BR')} · ${ok.toLocaleString('pt-BR')} pausados · ${fail.toLocaleString('pt-BR')} falhas`;
+    }
+
+    masterAnunciosV32=[...masterMapV32.values()];
+    await v88CarregarGestaoLocal(1,{silencioso:true});
+    if(msg)msg.textContent=`Concluído: ${ok.toLocaleString('pt-BR')} pausado(s), ${ignored.toLocaleString('pt-BR')} ignorado(s), ${fail.toLocaleString('pt-BR')} falha(s).`;
+  }catch(e){if(msg)msg.textContent='Erro: '+e.message;alert(e.message)}
+  finally{pausaMassaExecutandoV101=false;if(btn)btn.disabled=false}
+}
+
+/* ---------------- Automação de preços ---------------- */
+function lerAutomacaoPrecoV101(){
+  try{return JSON.parse(localStorage.getItem(AUTOMACAO_PRECO_KEY_V101)||'null')||{status:'stopped',step:'anuncios'}}catch{return {status:'stopped',step:'anuncios'}}
+}
+function salvarAutomacaoPrecoV101(state){
+  localStorage.setItem(AUTOMACAO_PRECO_KEY_V101,JSON.stringify({...state,updated_at:new Date().toISOString()}));
+  atualizarUiAutomacaoPrecoV101();
+}
+function etapaAutoLabelV101(step){
+  return {anuncios:'1/5 · Puxando anúncios',precos:'2/5 · Puxando preços',fretes:'3/5 · Puxando fretes',simulacao:'4/5 · Simulando margens',atualizacao:'5/5 · Atualizando preços',concluido:'Concluído'}[step]||'Aguardando';
+}
+function atualizarUiAutomacaoPrecoV101(){
+  const s=lerAutomacaoPrecoV101();
+  const status=document.getElementById('auto-preco-status-v101');
+  const etapa=document.getElementById('auto-preco-etapa-v101');
+  const bar=document.getElementById('auto-preco-bar-v101');
+  const pct={anuncios:10,precos:30,fretes:50,simulacao:75,atualizacao:90,concluido:100}[s.step]||0;
+  if(bar)bar.style.width=`${pct}%`;if(etapa)etapa.textContent=etapaAutoLabelV101(s.step);
+  if(status){
+    if(s.status==='running'){status.textContent='Executando automaticamente. O checkpoint é salvo ao longo do processo.';status.className='text-[10px] text-emerald-400 mt-1'}
+    else if(s.status==='paused'){status.textContent='Pausada. Clique em Iniciar auto para continuar do checkpoint.';status.className='text-[10px] text-yellow-300 mt-1'}
+    else if(s.status==='completed'){status.textContent='Ciclo concluído. Clique em Iniciar auto para iniciar outro ciclo.';status.className='text-[10px] text-emerald-400 mt-1'}
+    else{status.textContent='Parada. Sequência: anúncios → preços → fretes → simulação → atualização.';status.className='text-[10px] text-slate-400 mt-1'}
+  }
+}
+window.automationShouldYieldV101=()=>{const s=lerAutomacaoPrecoV101();return s.status==='paused'||s.status==='stopped'};
+
+async function esperarAutomacaoSyncV101(fn,metaKey){
+  await fn({retomarAutomatico:true});
+  const inicio=Date.now();
+  while(Date.now()-inicio<12*60*60*1000){
+    const state=lerAutomacaoPrecoV101();
+    if(state.status!=='running')return false;
+    const meta=await idbMetaV32(metaKey).catch(()=>null);
+    if(meta?.completed)return true;
+    await new Promise(r=>setTimeout(r,1200));
+  }
+  throw new Error('A etapa excedeu o tempo máximo de acompanhamento. O checkpoint foi preservado.');
+}
+
+async function atualizarPrecosAutomaticosV101(){
+  await carregarMasterLocalV32();
+  await carregarBaseSkuRapidaV42();
+  const tentados=new Set();
+  let processados=0,ok=0,erros=0;
+
+  const pendentes=()=>[...masterAnunciosV32].map(item=>({item,calc:calcularSimulacaoV21(item,parametrosSimV21(item))}))
+    .filter(x=>x.calc?.foraDaMargem && x.item.price_update_allowed!==false && String(x.item.status||'')==='active' && !tentados.has(String(x.item.id)));
+
+  let fila=pendentes();
+  atualizarPainelProgressoV31({total:fila.length,processados:0,sucessos:0,falhas:0,texto:`Automação: ${fila.length.toLocaleString('pt-BR')} preço(s) para revisar.`});
+
+  while(fila.length){
+    if(window.automationShouldYieldV101())return false;
+    const lote=fila.slice(0,20).map(({item,calc})=>({id:item.id,title:item.title,sku:item.sku,price:parseFloat(Number(calc.preco||item.price).toFixed(2))}));
+    lote.forEach(x=>tentados.add(String(x.id)));
+
+    const r=await fetch(`${RENDER_URL}/api/atualizar-precos`,{
+      method:'POST',headers:{'Content-Type':'application/json',Authorization:obterToken()},body:JSON.stringify({itens:lote.map(x=>({id:x.id,price:x.price}))})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok&&!Array.isArray(d.resultados))throw new Error(d.erro||`HTTP ${r.status}`);
+    const retorno=new Map((d.resultados||[]).map(x=>[String(x.id),x]));
+
+    for(const alvo of lote){
+      processados++;
+      const rr=retorno.get(String(alvo.id));
+      if(rr?.sucesso){
+        ok++;
+        atualizarPrecoNoCacheV30(alvo.id,alvo.price);
+        document.getElementById(`linha_atualizacao_${safeIdV21(alvo.id)}`)?.remove();
+        statusAtualizacaoV31.set(String(alvo.id),{estado:'sucesso',http_status:rr.http_status||200});
+      }else{
+        erros++;
+        statusAtualizacaoV31.set(String(alvo.id),{estado:'erro',motivo:rr?.erro||'Preço não atualizado.',http_status:rr?.http_status||null,codigo:rr?.codigo||null,tipo_falha:rr?.tipo_falha||'erro'});
+      }
+    }
+
+    atualizarPainelProgressoV31({total:Math.max(processados,fila.length),processados,sucessos:ok,falhas:erros,texto:`Automação: ${processados.toLocaleString('pt-BR')} processados · ${ok.toLocaleString('pt-BR')} atualizados · ${erros.toLocaleString('pt-BR')} impedidos/falhas.`});
+    await new Promise(r=>setTimeout(r,450));
+    fila=pendentes();
+  }
+
+  atualFiltroRenderKeyV30='';
+  atualItensV21=listaMasterFiltradaV32();
+  renderizarAtualizacaoCompletaV29(atualItensV21);
+  return true;
+}
+
+async function executarAutomacaoPrecoV101(){
+  let s=lerAutomacaoPrecoV101();if(s.status!=='running')return;
+  try{
+    if(s.step==='anuncios'){
+      syncV88Abortar=false;
+      if(!await esperarAutomacaoSyncV101(sincronizarAnunciosDiretoV88,'direct_sync_v88'))return;
+      salvarAutomacaoPrecoV101({...s,step:'precos'});s=lerAutomacaoPrecoV101();
+    }
+    if(s.step==='precos'){
+      if(!await esperarAutomacaoSyncV101(sincronizarPrecosDiretoV92,'direct_price_v92'))return;
+      salvarAutomacaoPrecoV101({...s,step:'fretes'});s=lerAutomacaoPrecoV101();
+    }
+    if(s.step==='fretes'){
+      if(!await esperarAutomacaoSyncV101(sincronizarFretesDiretoV89,'direct_freight_v92'))return;
+      salvarAutomacaoPrecoV101({...s,step:'simulacao'});s=lerAutomacaoPrecoV101();
+    }
+    if(s.step==='simulacao'){
+      await carregarBaseSkuRapidaV42();await carregarMasterLocalV32();
+      simItensV21=[...masterAnunciosV32];
+      simItensV21.forEach(item=>{simResultadosPorIdV21[item.id]=calcularSimulacaoV21(item,parametrosSimV21(item))});
+      atualItensV21=[...masterAnunciosV32];
+      salvarAutomacaoPrecoV101({...s,step:'atualizacao'});s=lerAutomacaoPrecoV101();
+    }
+    if(s.step==='atualizacao'){
+      if(!await atualizarPrecosAutomaticosV101())return;
+      salvarAutomacaoPrecoV101({...s,status:'completed',step:'concluido',completed_at:new Date().toISOString()});
+    }
+  }catch(e){
+    const now=lerAutomacaoPrecoV101();
+    salvarAutomacaoPrecoV101({...now,status:'paused',last_error:e.message});
+    const el=document.getElementById('auto-preco-status-v101');if(el)el.textContent='Automação pausada por erro: '+e.message;
+    console.error('[AUTOMAÇÃO V101]',e);
+  }
+}
+function iniciarAutomacaoPrecoV101(){
+  let s=lerAutomacaoPrecoV101();
+  if(s.status==='running')return;
+
+  const novoCiclo=s.status==='completed'||s.status==='stopped';
+  if(novoCiclo && !confirm(
+    'Iniciar a automação completa de preços?\n\n'+
+    'O sistema vai puxar anúncios, preços e fretes, recalcular as margens e ALTERAR automaticamente no Mercado Livre os preços que estiverem fora da margem configurada.\n\nContinuar?'
+  ))return;
+
+  if(novoCiclo)s={status:'running',step:'anuncios',started_at:new Date().toISOString()};
+  else s={...s,status:'running'};
+
+  syncV88Abortar=false;
+  salvarAutomacaoPrecoV101(s);
+  executarAutomacaoPrecoV101();
+}
+function pausarAutomacaoPrecoV101(){const s=lerAutomacaoPrecoV101();if(s.status!=='running')return;salvarAutomacaoPrecoV101({...s,status:'paused'});syncV88Abortar=true}
+async function pararAutomacaoPrecoV101(){
+  if(!confirm('Parar a automação? Os dados já sincronizados continuarão salvos, mas o próximo Iniciar fará um ciclo novo desde os anúncios.'))return;
+  const s=lerAutomacaoPrecoV101();
+  syncV88Abortar=true;
+  salvarAutomacaoPrecoV101({...s,status:'stopped',step:'anuncios'});
+
+  // Fecha apenas os checkpoints de execução. Os anúncios/preços/fretes já salvos não são apagados.
+  for(const key of ['direct_sync_v88','direct_price_v92','direct_freight_v92']){
+    try{
+      const meta=await idbMetaV32(key);
+      if(meta)await idbSalvarMetaV32({...meta,key,completed:true,stopped_at:new Date().toISOString()});
+    }catch(e){}
+  }
+}
+
+const atualizarPrecosMassaApiBaseV101=atualizarPrecosMassaApi;
+atualizarPrecosMassaApi=async function(){
+  await atualizarPrecosMassaApiBaseV101();
+  atualFiltroRenderKeyV30='';atualItensV21=listaMasterFiltradaV32();renderizarAtualizacaoCompletaV29(atualItensV21);
+};
+
+/* ---------------- NF-e / DANFE ---------------- */
+function rotuloFiscalV101(status){
+  const s=String(status||'').toLowerCase();
+  if(s==='authorized')return 'Autorizada';if(s==='processing'||s==='pending')return 'Processando';if(s==='cancelled'||s==='canceled')return 'Cancelada';if(s==='forbidden_disablement')return 'Bloqueada';return status||'Não emitida';
+}
+function htmlFiscalPedidoV101(orderId){
+  const st=pedidoFiscalStatusV101.get(String(orderId));
+  return `<div class="min-w-[190px] space-y-2">
+    <div id="fiscal_status_${orderId}" class="text-[9px] font-black ${st?.existe?'text-emerald-400':'text-slate-500'}">${st?.existe?escapeHtml(rotuloFiscalV101(st.status)):'NF-e não consultada'}</div>
+    <div class="flex flex-wrap gap-1.5">
+      <button onclick="consultarNfePedidoV101('${orderId}')" class="bg-slate-800 hover:bg-slate-700 text-blue-300 px-2.5 py-1.5 rounded-lg text-[9px] font-bold">Consultar</button>
+      <button onclick="emitirNfePedidoV101('${orderId}')" class="bg-yellow-400 hover:bg-yellow-300 text-slate-950 px-2.5 py-1.5 rounded-lg text-[9px] font-black">Emitir NF-e</button>
+      <button onclick="imprimirNfePedidoV101('${orderId}')" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-2.5 py-1.5 rounded-lg text-[9px] font-bold">Imprimir</button>
+    </div></div>`;
+}
+async function consultarNfePedidoV101(orderId,{silencioso=false}={}){
+  const el=document.getElementById(`fiscal_status_${orderId}`);if(el)el.textContent='Consultando NF-e...';
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v101/pedidos/${encodeURIComponent(orderId)}/nfe?_=${Date.now()}`,{cache:'no-store',headers:{Authorization:obterToken()}});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    const data=d.existe?{existe:true,status:d.invoice?.status||d.invoice?.transaction_status||'',invoice:d.invoice}:{existe:false,status:''};
+    pedidoFiscalStatusV101.set(String(orderId),data);
+    if(el){el.textContent=d.existe?`${rotuloFiscalV101(data.status)}${d.invoice?.invoice_number?` · NF ${d.invoice.invoice_number}`:''}`:'Ainda não emitida';el.className='text-[9px] font-black '+(d.existe&&String(data.status).toLowerCase()==='authorized'?'text-emerald-400':d.existe?'text-yellow-300':'text-slate-500')}
+    return data;
+  }catch(e){if(el){el.textContent='Fiscal: '+e.message;el.className='text-[9px] font-black text-red-300'}if(!silencioso)alert(e.message);return null}
+}
+async function emitirNfePedidoV101(orderId){
+  if(!confirm(`Emitir a NF-e do pedido ${orderId} pelo Faturador do Mercado Livre?\n\nA conta e os produtos precisam estar fiscalmente configurados.`))return;
+  const el=document.getElementById(`fiscal_status_${orderId}`);if(el)el.textContent='Solicitando emissão...';
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v101/pedidos/${encodeURIComponent(orderId)}/nfe/emitir`,{method:'POST',headers:{Authorization:obterToken()}});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||`HTTP ${r.status}`);
+    await consultarNfePedidoV101(orderId,{silencioso:true});
+    alert(d.ja_existia?'Este pedido já possui NF-e.':'Emissão solicitada. Se estiver processando, aguarde e consulte novamente.');
+  }catch(e){if(el){el.textContent='Erro fiscal: '+e.message;el.className='text-[9px] font-black text-red-300'}alert(e.message)}
+}
+async function imprimirNfePedidoV101(orderId){
+  const win=window.open('','_blank');if(!win)return alert('Libere pop-ups para imprimir o DANFE.');
+  win.document.write('<p style="font-family:Arial;padding:24px">Carregando DANFE...</p>');
+  try{
+    const r=await fetch(`${RENDER_URL}/api/v101/pedidos/${encodeURIComponent(orderId)}/nfe/danfe`,{cache:'no-store',headers:{Authorization:obterToken()}});
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.erro||`HTTP ${r.status}`)}
+    const blob=await r.blob();const url=URL.createObjectURL(blob);win.location.href=url;
+    setTimeout(()=>{try{win.focus();win.print()}catch(e){}},1800);setTimeout(()=>URL.revokeObjectURL(url),300000);
+  }catch(e){win.close();alert(e.message)}
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  atualizarUiAutomacaoPrecoV101();
+  setTimeout(()=>{const s=lerAutomacaoPrecoV101();if(s.status==='running'&&obterToken())executarAutomacaoPrecoV101()},1800);
+});
+</script>
+
 </body>
 </html>
