@@ -709,7 +709,7 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v100-perguntas-agente-ia',
+        version: 'ml-hub-pro-v101-automacao-pausa-qualidade-nfe',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
@@ -3590,6 +3590,7 @@ app.get('/api/v21/pedidos', async (req,res)=>{
 
             return {
                 id:order.id,
+                pack_id:order.pack_id||null,
                 date_created:order.date_created,
                 date_closed:order.date_closed,
                 status:order.status,
@@ -3631,6 +3632,482 @@ app.get('/api/v21/pedidos', async (req,res)=>{
         respostaErro(res,500,'Erro ao buscar pedidos: '+e.message);
     }
 });
+
+/* =========================================================
+   V101 — GESTÃO EM MASSA / QUALIDADE / NF-e / AUTOMAÇÃO
+========================================================= */
+
+function erroFiscalV101(status,data){
+    const causa=Array.isArray(data?.cause)
+      ?data.cause.map(x=>x?.message||x?.code||'').filter(Boolean).join(' · ')
+      :'';
+
+    const msg=String(
+      data?.display_message||
+      data?.message||
+      data?.error||
+      causa||
+      `HTTP ${status}`
+    );
+
+    if(Number(status)===403){
+        return 'O Mercado Livre negou acesso ao faturamento. Verifique se a permissão funcional "Faturamento" está habilitada no aplicativo e se esta conta está habilitada no Faturador do Mercado Livre. Detalhe: '+msg;
+    }
+
+    return msg;
+}
+
+function invoiceObjetoV101(data){
+    if(!data)return null;
+    if(Array.isArray(data))return data[0]||null;
+    if(Array.isArray(data?.results))return data.results[0]||null;
+    if(Array.isArray(data?.invoices))return data.invoices[0]||null;
+    return typeof data==='object'?data:null;
+}
+
+async function consultarInvoicePedidoV101(token,sellerId,orderId){
+    const r=await mlFetch(
+      `${ML_API}/users/${encodeURIComponent(sellerId)}/invoices/orders/${encodeURIComponent(orderId)}`,
+      token
+    );
+    const d=await jsonSeguro(r);
+
+    if(r.status===404){
+        return {existe:false,status_http:404,invoice:null};
+    }
+
+    if(!r.ok){
+        const e=new Error(erroFiscalV101(r.status,d));
+        e.status=r.status;
+        e.data=d;
+        throw e;
+    }
+
+    return {
+        existe:true,
+        status_http:r.status,
+        invoice:invoiceObjetoV101(d),
+        raw:d
+    };
+}
+
+async function idsOrdersMesmoSellerV101(token,sellerId,order){
+    const baseId=String(order?.id||'').trim();
+    const packId=String(order?.pack_id||'').trim();
+
+    if(!packId)return baseId?[baseId]:[];
+
+    const pr=await mlFetch(
+      `${ML_API}/packs/${encodeURIComponent(packId)}`,
+      token
+    );
+    const pd=await jsonSeguro(pr);
+
+    if(!pr.ok || !Array.isArray(pd?.orders)){
+        return baseId?[baseId]:[];
+    }
+
+    const ids=pd.orders
+      .map(x=>String(x?.id||'').trim())
+      .filter(Boolean);
+
+    if(!ids.length)return baseId?[baseId]:[];
+
+    const detalhes=await mapLimitV21(ids,6,async id=>{
+        const or=await mlFetch(`${ML_API}/orders/${encodeURIComponent(id)}`,token);
+        const od=await jsonSeguro(or);
+        if(!or.ok)return null;
+        return String(od?.seller?.id||'')===String(sellerId)
+          ?String(od.id||id)
+          :null;
+    });
+
+    const filtrados=[...new Set(detalhes.filter(Boolean))];
+    return filtrados.length?filtrados:(baseId?[baseId]:[]);
+}
+
+app.post('/api/v101/anuncios/pausar-lote',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+
+        const ids=[...new Set(
+          (Array.isArray(req.body?.ids)?req.body.ids:[])
+            .map(x=>String(x||'').trim().toUpperCase())
+            .filter(x=>/^MLB\d+$/.test(x))
+        )].slice(0,500);
+
+        if(!ids.length){
+            return respostaErro(res,400,'Nenhum MLB válido foi informado.');
+        }
+
+        const bulk=await buscarItensBulkFreteRapido(token,ids);
+        const mapa=bulk?.mapa||{};
+
+        const resultados=(
+          await mapLimitV21(ids,10,async id=>{
+            const item=mapa[id];
+
+            if(!item){
+                return {id,sucesso:false,erro:'Anúncio não encontrado.'};
+            }
+
+            if(String(item.seller_id||'')!==sellerId){
+                return {id,sucesso:false,erro:'Anúncio não pertence à conta conectada.'};
+            }
+
+            const status=String(item.status||'').toLowerCase();
+
+            if(status==='paused'){
+                return {
+                    id,
+                    sucesso:true,
+                    ja_estava_pausado:true,
+                    status:'paused'
+                };
+            }
+
+            if(status!=='active'){
+                return {
+                    id,
+                    sucesso:false,
+                    ignorado:true,
+                    status,
+                    erro:`Status ${status||'desconhecido'} não pode ser pausado por esta operação.`
+                };
+            }
+
+            const rr=await mlFetch(
+              `${ML_API}/items/${encodeURIComponent(id)}`,
+              token,
+              {
+                method:'PUT',
+                headers:{
+                    'Content-Type':'application/json',
+                    Accept:'application/json'
+                },
+                body:JSON.stringify({status:'paused'})
+              }
+            );
+            const dd=await jsonSeguro(rr);
+
+            if(!rr.ok){
+                return {
+                    id,
+                    sucesso:false,
+                    status,
+                    erro:formatarErroMercadoLivre(dd)||`HTTP ${rr.status}`
+                };
+            }
+
+            return {
+                id,
+                sucesso:true,
+                status:'paused'
+            };
+          })
+        ).filter(Boolean);
+
+        res.json({
+            sucesso:true,
+            total:resultados.length,
+            pausados:resultados.filter(x=>x.sucesso&&!x.ja_estava_pausado).length,
+            ja_pausados:resultados.filter(x=>x.ja_estava_pausado).length,
+            falhas:resultados.filter(x=>!x.sucesso&&!x.ignorado).length,
+            ignorados:resultados.filter(x=>x.ignorado).length,
+            resultados
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao pausar anúncios: '+e.message);
+    }
+});
+
+app.post('/api/v101/anuncios/qualidade-lote',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+
+        const ids=[...new Set(
+          (Array.isArray(req.body?.ids)?req.body.ids:[])
+            .map(x=>String(x||'').trim().toUpperCase())
+            .filter(x=>/^MLB\d+$/.test(x))
+        )].slice(0,100);
+
+        if(!ids.length){
+            return res.json({sucesso:true,resultados:[]});
+        }
+
+        const bulk=await buscarItensBulkFreteRapido(token,ids);
+        const mapa=bulk?.mapa||{};
+
+        const resultados=(
+          await mapLimitV21(ids,6,async id=>{
+            const item=mapa[id];
+
+            if(!item || String(item.seller_id||'')!==sellerId){
+                return {
+                    id,
+                    sucesso:false,
+                    erro:'Anúncio não encontrado na conta conectada.'
+                };
+            }
+
+            let r=await mlFetch(
+              `${ML_API}/item/${encodeURIComponent(id)}/performance`,
+              token
+            );
+            let d=await jsonSeguro(r);
+
+            if(r.status===404){
+                r=await mlFetch(
+                  `${ML_API}/items/${encodeURIComponent(id)}/performance`,
+                  token
+                );
+                d=await jsonSeguro(r);
+            }
+
+            if(!r.ok){
+                return {
+                    id,
+                    sucesso:false,
+                    title:String(item.title||''),
+                    erro:formatarErroMercadoLivre(d)||`HTTP ${r.status}`
+                };
+            }
+
+            return {
+                id,
+                sucesso:true,
+                title:String(item.title||''),
+                score:Number.isFinite(Number(d?.score))
+                  ?Math.max(0,Math.min(100,Number(d.score)))
+                  :null,
+                level:String(d?.level_wording||d?.level||''),
+                calculated_at:d?.calculated_at||null,
+                pending_actions:Array.isArray(d?.buckets)
+                  ?d.buckets.filter(x=>String(x?.status||'').toUpperCase()==='PENDING').length
+                  :0
+            };
+          })
+        ).filter(Boolean);
+
+        res.json({sucesso:true,resultados});
+    }catch(e){
+        respostaErro(res,500,'Erro ao consultar qualidade dos anúncios: '+e.message);
+    }
+});
+
+app.get('/api/v101/pedidos/:orderId/nfe',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const info=await consultarInvoicePedidoV101(
+          token,
+          String(me.id),
+          orderId
+        );
+
+        if(!info.existe){
+            return res.json({
+                sucesso:true,
+                existe:false,
+                order_id:orderId,
+                mensagem:'Ainda não há NF-e emitida para este pedido.'
+            });
+        }
+
+        const inv=info.invoice||{};
+        res.json({
+            sucesso:true,
+            existe:true,
+            order_id:orderId,
+            invoice:{
+                id:inv.id||null,
+                status:inv.status||null,
+                transaction_status:inv.transaction_status||null,
+                issued_date:inv.issued_date||null,
+                invoice_series:inv.invoice_series||null,
+                invoice_number:inv.invoice_number||null,
+                invoice_key:inv?.attributes?.invoice_key||inv.invoice_key||null,
+                status_description:inv?.attributes?.status_description||null,
+                danfe_available:Boolean(
+                  inv?.attributes?.danfe_location||
+                  inv?.danfe_location||
+                  inv?.attributes?.danfe||
+                  inv?.danfe
+                )
+            }
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.post('/api/v101/pedidos/:orderId/nfe/emitir',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const or=await mlFetch(
+          `${ML_API}/orders/${encodeURIComponent(orderId)}`,
+          token
+        );
+        const order=await jsonSeguro(or);
+
+        if(!or.ok){
+            return respostaErro(
+              res,
+              or.status,
+              formatarErroMercadoLivre(order)||'Pedido não encontrado.'
+            );
+        }
+
+        if(String(order?.seller?.id||'')!==sellerId){
+            return respostaErro(
+              res,
+              403,
+              'Este pedido não pertence à conta Mercado Livre conectada.'
+            );
+        }
+
+        try{
+            const existente=await consultarInvoicePedidoV101(token,sellerId,orderId);
+            if(existente.existe){
+                return res.json({
+                    sucesso:true,
+                    ja_existia:true,
+                    invoice:invoiceObjetoV101(existente.raw)||existente.invoice
+                });
+            }
+        }catch(e){
+            if(Number(e.status)===403)throw e;
+        }
+
+        const orders=await idsOrdersMesmoSellerV101(
+          token,
+          sellerId,
+          order
+        );
+
+        if(!orders.length){
+            return respostaErro(res,400,'Não foi possível identificar as vendas do pedido para faturamento.');
+        }
+
+        const rr=await mlFetch(
+          `${ML_API}/users/${encodeURIComponent(sellerId)}/invoices/orders`,
+          token,
+          {
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                Accept:'application/json'
+            },
+            body:JSON.stringify({
+                orders:orders.map(x=>Number(x))
+            })
+          }
+        );
+        const dd=await jsonSeguro(rr);
+
+        if(!rr.ok){
+            return respostaErro(
+              res,
+              rr.status,
+              erroFiscalV101(rr.status,dd)
+            );
+        }
+
+        res.json({
+            sucesso:true,
+            ja_existia:false,
+            orders,
+            invoice:invoiceObjetoV101(dd)||dd
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.get('/api/v101/pedidos/:orderId/nfe/danfe',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const info=await consultarInvoicePedidoV101(
+          token,
+          sellerId,
+          orderId
+        );
+
+        if(!info.existe){
+            return respostaErro(res,404,'Ainda não há NF-e emitida para este pedido.');
+        }
+
+        const inv=info.invoice||{};
+        let location=
+          inv?.attributes?.danfe_location||
+          inv?.danfe_location||
+          inv?.attributes?.danfe||
+          inv?.danfe||
+          '';
+
+        location=String(location||'').trim();
+
+        if(!location){
+            return respostaErro(
+              res,
+              409,
+              'A NF-e existe, mas o DANFE ainda não está disponível. Aguarde a autorização e tente novamente.'
+            );
+        }
+
+        const url=/^https?:\/\//i.test(location)
+          ?location
+          :`${ML_API}${location.startsWith('/')?'':'/'}${location}`;
+
+        const rr=await mlFetch(url,token);
+        if(!rr.ok){
+            const dd=await jsonSeguro(rr);
+            return respostaErro(
+              res,
+              rr.status,
+              erroFiscalV101(rr.status,dd)
+            );
+        }
+
+        const buffer=Buffer.from(await rr.arrayBuffer());
+        const contentType=rr.headers.get('content-type')||'application/pdf';
+
+        res.setHeader('Content-Type',contentType);
+        res.setHeader(
+          'Content-Disposition',
+          `inline; filename="DANFE-${orderId}.pdf"`
+        );
+        res.setHeader('Cache-Control','private, no-store');
+        return res.end(buffer);
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
 
 /* =========================================================
    PERGUNTAS E RESPOSTAS
@@ -4818,62 +5295,12 @@ app.put('/api/alterar-status-anuncio', async (req, res) => {
 
 
 function limparTituloRealV76(valor,raw=null){
-    let t=String(valor??'')
+    return String(valor??'')
       .replace(/\u0000/g,' ')
       .replace(/<[^>]*>/g,' ')
       .replace(/\r?\n+/g,' ')
       .replace(/\s+/g,' ')
-      .replace(/^[\s,;:|·\-–—)]+/,'')
       .trim();
-
-    // Remove metadados técnicos anexados por alguma origem/cache legado.
-    t=t.replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'').trim();
-
-    // V79: alguns anúncios com variação retornam a COR anexada ao fim do título.
-    // Usamos a própria ficha do item para remover SOMENTE uma cor confirmada
-    // e SOMENTE quando ela aparece como sufixo final.
-    const obj=(raw&&typeof raw==='object')?raw:{};
-    const cores=new Set();
-
-    const adicionarCor=(v)=>{
-        const s=String(v??'').replace(/\s+/g,' ').trim();
-        if(s && s.length<=80)cores.add(s);
-    };
-
-    const attrs=Array.isArray(obj.attributes)?obj.attributes:[];
-    for(const a of attrs){
-        const id=String(a?.id||'').toUpperCase();
-        const nome=String(a?.name||'').toLowerCase();
-        if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
-            adicionarCor(a?.value_name);
-            for(const v of (Array.isArray(a?.values)?a.values:[]))adicionarCor(v?.name||v?.value_name);
-        }
-    }
-
-    const vars=Array.isArray(obj.variations)?obj.variations:[];
-    for(const v of vars){
-        for(const a of [...(Array.isArray(v?.attribute_combinations)?v.attribute_combinations:[]),...(Array.isArray(v?.attributes)?v.attributes:[])]){
-            const id=String(a?.id||'').toUpperCase();
-            const nome=String(a?.name||'').toLowerCase();
-            if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
-                adicionarCor(a?.value_name);
-                for(const vv of (Array.isArray(a?.values)?a.values:[]))adicionarCor(vv?.name||vv?.value_name);
-            }
-        }
-    }
-
-    const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const normPattern=s=>esc(s).replace(/[\s\-–—_/]+/g,'[\\s\\-–—_/]+');
-
-    for(const cor of [...cores].sort((a,b)=>b.length-a.length)){
-        const rg=new RegExp(`(?:\\s|\\-|–|—|/)+${normPattern(cor)}\\s*$`,'i');
-        if(rg.test(t)){
-            t=t.replace(rg,'').trim();
-            break;
-        }
-    }
-
-    return t;
 }
 
 function normalizarItemGestao(item) {
