@@ -7299,7 +7299,54 @@ function registrarErroPoolV104(pool,label='primary'){
         }
     });
 }
+
 registrarErroPoolV104(db,'primary');
+
+/* =========================================================
+   V106 — CLIENTES POSTGRES CHECKED-OUT RESILIENTES
+   O node-postgres pode emitir "error" diretamente em um Client
+   que está fora do pool durante uma transação. Sem listener,
+   isso vira Unhandled 'error' event e derruba o processo Node.
+========================================================= */
+const clientesPgMonitoradosV106=new WeakSet();
+
+function prepararClientePgV106(client){
+    if(!client || clientesPgMonitoradosV106.has(client))return client;
+    clientesPgMonitoradosV106.add(client);
+
+    client.__mlhubPgDeadV106=false;
+
+    client.on('error',err=>{
+        client.__mlhubPgDeadV106=true;
+        if(erroPostgresTemporarioV80(err)){
+            ativarCooldownDbV83(err);
+            console.warn(
+                '[POSTGRES V106 CLIENT] conexão temporariamente perdida:',
+                err?.code||'',
+                err?.message||err
+            );
+        }else{
+            console.error('[POSTGRES V106 CLIENT] erro de conexão:',err);
+        }
+    });
+
+    // Se a conexão morreu enquanto estava checked-out, destrói o client
+    // ao liberar, em vez de devolvê-lo ao pool.
+    if(typeof client.release==='function' && !client.__mlhubReleaseWrappedV106){
+        const liberarOriginal=client.release.bind(client);
+        client.release=(err)=>{
+            if(err)return liberarOriginal(err);
+            if(client.__mlhubPgDeadV106){
+                return liberarOriginal(new Error('Conexão PostgreSQL encerrada durante o uso.'));
+            }
+            return liberarOriginal();
+        };
+        client.__mlhubReleaseWrappedV106=true;
+    }
+
+    return client;
+}
+
 
 async function ativarFallbackDbV104(causa){
     if(
@@ -7335,7 +7382,7 @@ async function dbConnectComRetryV104(opcoes={}){
         await esperarCooldownDbV83();
 
         try{
-            const client=await db.connect();
+            const client=prepararClientePgV106(await db.connect());
             limparCooldownDbV83();
             return client;
         }catch(e){
@@ -8200,12 +8247,140 @@ async function buscarPaginaScanV84({sellerId,token,scrollId}){
     throw ultimoErro||new Error('Falha ao consultar a lista de anúncios do Mercado Livre.');
 }
 
+
+/* =========================================================
+   V106 — HEARTBEAT + RECUPERAÇÃO DE FULL SYNC
+========================================================= */
+function heartbeatSyncV106(jobId,mensagem='Processando lote de anúncios...'){
+    let ocupado=false;
+
+    const timer=setInterval(async()=>{
+        if(ocupado)return;
+        ocupado=true;
+        try{
+            await dbQuery(`
+              UPDATE ml_jobs
+              SET updated_at=NOW(),
+                  message=CASE
+                    WHEN status='running' THEN COALESCE(NULLIF(message,''),$2)
+                    ELSE message
+                  END
+              WHERE id=$1 AND status='running'
+            `,[jobId,mensagem],{tentativas:1});
+        }catch(e){
+            // O heartbeat nunca derruba o worker. O checkpoint já salvo permanece.
+            if(!erroPostgresTemporarioV80(e)){
+                console.warn('[SYNC V106 HEARTBEAT]',e.message);
+            }
+        }finally{
+            ocupado=false;
+        }
+    },15000);
+
+    timer.unref?.();
+    return ()=>clearInterval(timer);
+}
+
+let recuperarSyncV106Busy=false;
+
+async function normalizarJobsFullSyncV106({startup=false}={}){
+    if(!db || recuperarSyncV106Busy)return 0;
+    recuperarSyncV106Busy=true;
+
+    try{
+        let retomados=0;
+
+        // No startup, qualquer job running pertence ao processo Node anterior.
+        // Em runtime, só recupera se perdeu heartbeat por tempo suficiente.
+        const rr=startup
+          ? await dbQuery(`
+              UPDATE ml_jobs
+              SET status='queued',
+                  locked_at=NULL,
+                  available_at=NOW(),
+                  message='Servidor reiniciado. Retomando automaticamente do último checkpoint.',
+                  updated_at=NOW()
+              WHERE type='full_sync' AND status='running'
+              RETURNING id,seller_id
+            `)
+          : await dbQuery(`
+              UPDATE ml_jobs
+              SET status='queued',
+                  locked_at=NULL,
+                  available_at=NOW(),
+                  message='Worker interrompido. Retomando automaticamente do último checkpoint.',
+                  updated_at=NOW()
+              WHERE type='full_sync'
+                AND status='running'
+                AND updated_at<NOW()-INTERVAL '120 seconds'
+              RETURNING id,seller_id
+            `,[],{tentativas:2});
+
+        retomados=Number(rr?.rowCount||0);
+
+        // Se versões anteriores criaram jobs duplicados para o mesmo seller,
+        // mantém somente o mais recente em queued/running.
+        const duplicados=await dbQuery(`
+          WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER(
+                     PARTITION BY seller_id
+                     ORDER BY GREATEST(COALESCE(progress_current,0),COALESCE(processed,0)) DESC,
+                              updated_at DESC,
+                              id DESC
+                   ) AS rn
+            FROM ml_jobs
+            WHERE type='full_sync'
+              AND status IN ('queued','running')
+          )
+          UPDATE ml_jobs j
+          SET status='failed',
+              locked_at=NULL,
+              finished_at=NOW(),
+              message='Processo duplicado encerrado automaticamente pela V106. O job mais recente continuará do checkpoint.',
+              updated_at=NOW()
+          FROM ranked r
+          WHERE j.id=r.id AND r.rn>1
+          RETURNING j.id
+        `,[],{tentativas:2});
+
+        if(retomados || Number(duplicados.rowCount||0)){
+            console.warn(
+              '[SYNC V106 RECOVERY]',
+              'retomados=',retomados,
+              'duplicados encerrados=',Number(duplicados.rowCount||0)
+            );
+            setTimeout(()=>acordarSyncV79(),200);
+        }
+
+        return retomados;
+    }catch(e){
+        if(!erroPostgresTemporarioV80(e)){
+            console.warn('[SYNC V106 RECOVERY]',e.message);
+        }
+        return 0;
+    }finally{
+        recuperarSyncV106Busy=false;
+    }
+}
+
+let syncRecoveryTimerV106=null;
+function iniciarRecoverySyncV106(){
+    if(syncRecoveryTimerV106)return;
+    syncRecoveryTimerV106=setInterval(
+        ()=>normalizarJobsFullSyncV106({startup:false}),
+        30000
+    );
+    syncRecoveryTimerV106.unref?.();
+}
+
+
 async function processarSyncCompleto(job) {
-    console.log('[SYNC V105 WORKER] iniciando job',job.id,'seller',job.seller_id);
+    console.log('[SYNC V106 WORKER] iniciando job',job.id,'seller',job.seller_id);
 
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token){
-        console.warn('[SYNC V105 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
+        console.warn('[SYNC V106 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
         throw new Error('Token Mercado Livre indisponível para o seller do job.');
     }
 
@@ -8361,13 +8536,24 @@ async function processarSyncCompleto(job) {
         ]);
 
         console.log(
-            '[SYNC V105 WORKER] job',job.id,
+            '[SYNC V106 WORKER] job',job.id,
             '· baixando detalhes do lote',
             idsLote.length,
             '· já processados',processed
         );
 
-        const detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+        const pararHeartbeatV106=heartbeatSyncV106(
+            job.id,
+            `Baixando detalhes do lote de até 1.000 anúncios · ${processed.toLocaleString('pt-BR')} já concluídos`
+        );
+
+        let detalhes;
+        try{
+            detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+        }finally{
+            pararHeartbeatV106();
+        }
+
         const itens=idsLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
 
         if(itens.length){
@@ -8405,7 +8591,7 @@ async function processarSyncCompleto(job) {
           para este checkpoint.
         */
         console.log(
-          '[SYNC V105 WORKER] job',job.id,
+          '[SYNC V106 WORKER] job',job.id,
           '· lote salvo ·',processed,'/',totalExibido,
           '· itens',itens.length,
           '· falhas',falhasLote
@@ -14006,7 +14192,33 @@ app.post('/api/scale/sync',async(req,res)=>{
             );
         }
 
-        console.log('[SYNC V105 START] seller=',sellerId,'· conexão OAuth persistente OK');
+        console.log('[SYNC V106 START] seller=',sellerId,'· conexão OAuth persistente OK');
+
+        // V106: limpa concorrência criada por versões antigas.
+        // Apenas o job ativo mais recente do seller pode continuar.
+        await dbQuery(`
+          WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER(
+                     PARTITION BY seller_id
+                     ORDER BY GREATEST(COALESCE(progress_current,0),COALESCE(processed,0)) DESC,
+                              updated_at DESC,
+                              id DESC
+                   ) AS rn
+            FROM ml_jobs
+            WHERE seller_id=$1
+              AND type='full_sync'
+              AND status IN ('queued','running')
+          )
+          UPDATE ml_jobs j
+          SET status='failed',
+              locked_at=NULL,
+              finished_at=NOW(),
+              message='Processo duplicado encerrado automaticamente. A sincronização mais recente continuará.',
+              updated_at=NOW()
+          FROM ranked r
+          WHERE j.id=r.id AND r.rn>1
+        `,[sellerId]);
 
         // Se o processo morreu com job "running", libera para retomada.
         await dbQuery(`
@@ -14090,7 +14302,7 @@ app.post('/api/scale/sync',async(req,res)=>{
 
         // 3) Nova varredura.
         const job=await criarJob(sellerId,'full_sync',{
-            source:'manual_v84',
+            source:'manual_v106',
             batch_size:1000,
             resume_strategy:'seen_checkpoint'
         });
@@ -17942,10 +18154,16 @@ async function iniciarCoreEscala(){
         }
 
         if(ML_WORKER_ENABLED){
+            // V106: após restart do Render, os jobs que estavam "running"
+            // pertencem ao processo anterior e devem voltar para queued.
+            await normalizarJobsFullSyncV106({startup:true});
+
             coreEscalaIniciadoV80=true;
             syncWorkerDedicadoV76();
             for(let i=1;i<=ML_WORKER_CONCURRENCY;i++)workerLoop(i);
-            console.log(`[ESCALA V83] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · circuit breaker PostgreSQL ativo.`);
+            iniciarRecoverySyncV106();
+
+            console.log(`[ESCALA V106] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · checkpoint + recovery automático ativos.`);
         }
     }catch(e){
         console.error('[ESCALA INIT V80]',e);
