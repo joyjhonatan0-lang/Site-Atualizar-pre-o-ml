@@ -2661,7 +2661,7 @@ button:disabled{opacity:.45!important}
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; job persistente &#183; V105</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; checkpoint &#183; V106</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -18505,7 +18505,7 @@ function nomeProcessoV103(tipo){
     fretes:'Sincronização de fretes',
     price_update:'Atualização de preços',
     pause_mass_v103:'Pausa em massa',
-    full_sync:'Sincronização da conta',
+    full_sync:'Sincronização de anúncios',
     price_sync:'Preços',
     freight_sync:'Fretes',
     price_update_mass:'Atualização de preços',
@@ -18575,6 +18575,20 @@ function atualizarProcessCenterV103(){
 }
 
 function registrarProcessoLocalV103(tipo,{status='running',atual=0,total=0,mensagem=''}={}){
+  // V106: o full_sync do servidor é a mesma sincronização representada
+  // localmente como "anuncios". Não exibir dois cards para o mesmo job.
+  if(tipo==='anuncios'){
+    const serverSync=[...processosLocaisV103.values()].find(
+      x=>x.server_job && x.type==='full_sync' &&
+         ['queued','running','paused'].includes(x.status)
+    );
+    if(serverSync){
+      processosLocaisV103.delete('local:anuncios');
+      atualizarProcessCenterV103();
+      return;
+    }
+  }
+
   processosLocaisV103.set(`local:${tipo}`,{
     id:`local:${tipo}`,
     type:tipo,
@@ -18599,6 +18613,10 @@ async function carregarJobsRecentesV103(){
     if(!r.ok)return;
 
     for(const j of (d.jobs||[])){
+      if(String(j.type||'')==='full_sync'){
+        processosLocaisV103.delete('local:anuncios');
+      }
+
       processosLocaisV103.set(`server:${j.id}`,{
         id:String(j.id),
         type:String(j.type||'job'),
@@ -20123,9 +20141,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 
-<script id="mlhub-v105-sync-anuncios-server-job">
+<script id="mlhub-v106-sync-anuncios-server-job">
 /* =========================================================
-   V105 — PUXAR ANÚNCIOS VIA JOB PERSISTENTE NO SERVIDOR
+   V106 — PUXAR ANÚNCIOS COM CHECKPOINT + RECOVERY AUTOMÁTICO
    - corrige conflito entre V88/V93 direto e Gestão V103/V104;
    - PostgreSQL passa a ser a fonte principal;
    - lote lógico de 1.000 no backend;
@@ -20158,6 +20176,29 @@ async function acompanharAnunciosV105(jobId){
     const j=d.job||{};
     const atual=Number(j.progress_current||j.processed||0);
     const total=Number(j.progress_total||0);
+
+    // V106: se o backend reiniciou ou perdeu o PostgreSQL e o job ficou
+    // sem heartbeat, solicita ao endpoint idempotente que acorde/retome
+    // o MESMO checkpoint. Limite de 1 tentativa por minuto.
+    const atualizadoEm=new Date(j.updated_at||0).getTime();
+    if(
+      j.status==='running' &&
+      atualizadoEm>0 &&
+      Date.now()-atualizadoEm>120000 &&
+      (!window.__mlhubV106UltimoWake || Date.now()-window.__mlhubV106UltimoWake>60000)
+    ){
+      window.__mlhubV106UltimoWake=Date.now();
+      fetch(`${RENDER_URL}/api/scale/sync`,{
+        method:'POST',
+        cache:'no-store',
+        headers:{
+          Authorization:obterToken(),
+          'Content-Type':'application/json',
+          Accept:'application/json'
+        },
+        body:'{}'
+      }).catch(()=>{});
+    }
 
     atualizarProgressoV26('anuncios',{
       status:j.status||'running',
@@ -20228,7 +20269,7 @@ async function acompanharAnunciosV105(jobId){
     atualizarProgressoV26('anuncios',{
       status:temporario?'running':'queued',
       mensagem:temporario
-        ? 'Servidor reconectando · checkpoint preservado · tentando novamente'
+        ? 'PostgreSQL reconectando · checkpoint preservado · retomada automática ativa'
         : 'Sincronização pausada: '+msg
     });
 
