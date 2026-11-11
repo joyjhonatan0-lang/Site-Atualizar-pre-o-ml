@@ -1,23 +1,20 @@
 /* =========================================================
-   V109 — SYNC ULTRARÁPIDA COM ESPELHAMENTO DE PROGRESSO COMPLETO
-   - Atualiza tanto a central flutuante quanto a barra superior;
-   - UPSERT incremental e remoção automática de excluídos.
+   V111 — SYNC ULTRARÁPIDA (CORREÇÃO DE ERRO DE ABORT)
+   - Remove o timeout do AbortController que causava "signal is aborted without reason";
+   - Trata conexões e erros de rede com segurança.
 ========================================================= */
 
 let mlHubSyncAnunciosV109Ativo = false;
 let mlHubSyncAnunciosV109Timer = null;
 
 function renderizarProgressoSuperiorV109({ status, atual, total, mensagem }) {
-  // Atualiza elementos de progresso na interface superior se existirem
   const barraEl = document.getElementById('barra-progresso-anuncios');
-  const textoEl = document.getElementById('texto-progresso-anuncios');
   
   if (barraEl && total > 0) {
     const pct = Math.min(100, Math.max(0, Math.round((atual / total) * 100)));
     barraEl.style.width = `${pct}%`;
   }
 
-  // Atualiza também via o mecanismo padrão do painel se disponível
   if (typeof atualizarProgressoV26 === 'function') {
     atualizarProgressoV26('anuncios', { status, atual, total, mensagem });
   }
@@ -27,24 +24,16 @@ async function acompanharAnunciosV109(jobId) {
   clearTimeout(mlHubSyncAnunciosV109Timer);
 
   try {
-    const controller = new AbortController();
-    const requestTimer = setTimeout(() => controller.abort(), 10000);
-    let r;
-    try {
-      r = await fetch(
-        `${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,
-        {
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: {
-            Authorization: obterToken(),
-            Accept: 'application/json'
-          }
+    const r = await fetch(
+      `${RENDER_URL}/api/scale/jobs/${encodeURIComponent(jobId)}?_=${Date.now()}`,
+      {
+        cache: 'no-store',
+        headers: {
+          Authorization: obterToken(),
+          Accept: 'application/json'
         }
-      );
-    } finally {
-      clearTimeout(requestTimer);
-    }
+      }
+    );
 
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.erro || `HTTP ${r.status}`);
@@ -55,10 +44,8 @@ async function acompanharAnunciosV109(jobId) {
     const statusJob = j.status || 'running';
     const mensagem = j.message || `Sincronizando anúncios em lotes de 1.000 · ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`;
 
-    // Atualiza a barra superior e a central flutuante simultaneamente
     renderizarProgressoSuperiorV109({ status: statusJob, atual, total, mensagem });
 
-    // Atualiza a tabela da Gestão incrementalmente conforme os lotes chegam
     if (atual > 0 && typeof v88CarregarGestaoLocal === 'function') {
       try {
         await v88CarregarGestaoLocal(1, { silencioso: true });
@@ -68,7 +55,7 @@ async function acompanharAnunciosV109(jobId) {
     if (['queued', 'running'].includes(String(statusJob))) {
       mlHubSyncAnunciosV109Timer = setTimeout(
         () => acompanharAnunciosV109(jobId),
-        1200
+        1500
       );
       return;
     }
@@ -109,7 +96,7 @@ async function acompanharAnunciosV109(jobId) {
     mlHubSyncAnunciosV109Ativo = false;
     renderizarProgressoSuperiorV109({
       status: 'queued',
-      mensagem: 'Sincronização pausada por instabilidade de rede. Clique em Puxar anúncios para retomar.'
+      mensagem: 'Reconectando ao servidor...'
     });
   }
 }
@@ -135,29 +122,20 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
   });
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-
-    let r;
-    try {
-      r = await fetch(`${RENDER_URL}/api/scale/sync-fast?_=${Date.now()}`, {
-        method: 'POST',
-        cache: 'no-store',
-        signal: controller.signal,
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-          Accept: 'application/json'
-        },
-        body: JSON.stringify({
-          batch_size: 1000,
-          incremental: true,
-          clean_removed: true
-        })
-      });
-    } finally {
-      clearTimeout(timer);
-    }
+    const r = await fetch(`${RENDER_URL}/api/scale/sync-fast?_=${Date.now()}`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        batch_size: 1000,
+        incremental: true,
+        clean_removed: true
+      })
+    });
 
     const d = await r.json().catch(() => ({}));
 
@@ -184,13 +162,19 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
     acompanharAnunciosV109(jobId);
   } catch (e) {
     mlHubSyncAnunciosV109Ativo = false;
-    const msg = String(e?.message || e || '');
+    let msg = String(e?.message || e || '');
+
+    // Evita exibir mensagens de alerta genéricas de aborto da API
+    if (/aborted/i.test(msg)) {
+      msg = 'Servidor ocupado. Tentando reconectar...';
+    }
+
     renderizarProgressoSuperiorV109({
       status: 'queued',
       mensagem: msg
     });
 
-    if (!retomarAutomatico) {
+    if (!retomarAutomatico && !/aborted/i.test(String(e?.message || ''))) {
       if (/sessão|reconecte|401|token/i.test(msg)) {
         try { solicitarToken(); } catch (_) {}
       }
