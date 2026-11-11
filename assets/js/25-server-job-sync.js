@@ -1,13 +1,15 @@
 /* =========================================================
-   V115 — SYNC ULTRARÁPIDA COM TOLERÂNCIA A FALHAS DE REDE/HTTP 404
-   - Trata erros de servidor e quedas de banco de forma silenciosa;
-   - Realiza novas tentativas automáticas sem exibir alertas incômodos.
+   V118 — SYNC ULTRARÁPIDA COM SALVAMENTO E FEEDBACK EM TEMPO REAL
+   - Processamento em lotes de 1.000 no servidor;
+   - Atualização e renderização instantânea da tabela a cada lote concluído;
+   - UPSERT incremental e Soft Delete automático.
 ========================================================= */
 
-let mlHubSyncAnunciosV115Ativo = false;
-let mlHubSyncAnunciosV115Timer = null;
+let mlHubSyncAnunciosV118Ativo = false;
+let mlHubSyncAnunciosV118Timer = null;
+let ultimoProcessadoV118 = -1;
 
-function renderizarProgressoSuperiorV115({ status, atual, total, mensagem }) {
+function renderizarProgressoSuperiorV118({ status, atual, total, mensagem }) {
   const barraEl = document.getElementById('barra-progresso-anuncios');
   
   if (barraEl && total > 0) {
@@ -20,8 +22,8 @@ function renderizarProgressoSuperiorV115({ status, atual, total, mensagem }) {
   }
 }
 
-async function acompanharAnunciosV115(jobId) {
-  clearTimeout(mlHubSyncAnunciosV115Timer);
+async function acompanharAnunciosV118(jobId) {
+  clearTimeout(mlHubSyncAnunciosV118Timer);
 
   try {
     const r = await fetch(
@@ -36,9 +38,8 @@ async function acompanharAnunciosV115(jobId) {
     );
 
     if (!r.ok) {
-      // Se der 404 ou instabilidade temporária, apenas aguarda e tenta de novo sem crashar
       if (r.status === 404 || r.status >= 500) {
-        mlHubSyncAnunciosV115Timer = setTimeout(() => acompanharAnunciosV115(jobId), 3000);
+        mlHubSyncAnunciosV118Timer = setTimeout(() => acompanharAnunciosV118(jobId), 2000);
         return;
       }
       throw new Error(`HTTP ${r.status}`);
@@ -49,20 +50,25 @@ async function acompanharAnunciosV115(jobId) {
     const atual = Number(j.progress_current || j.processed || 0);
     const total = Number(j.progress_total || 0);
     const statusJob = j.status || 'running';
-    const mensagem = j.message || `Sincronizando anúncios em lotes de 1.000 · ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`;
+    const mensagem = j.message || `Salvando lotes em tempo real · ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} anúncios`;
 
-    renderizarProgressoSuperiorV115({ status: statusJob, atual, total, mensagem });
+    renderizarProgressoSuperiorV118({ status: statusJob, atual, total, mensagem });
 
-    if (atual > 0 && typeof v88CarregarGestaoLocal === 'function') {
-      try {
-        await v88CarregarGestaoLocal(1, { silencioso: true });
-      } catch (e) {}
+    // Se novos itens foram salvos no lote pelo servidor, atualiza a tela na hora em tempo real
+    if (atual !== ultimoProcessadoV118) {
+      ultimoProcessadoV118 = atual;
+      if (typeof v88CarregarGestaoLocal === 'function') {
+        try {
+          await v88CarregarGestaoLocal(1, { silencioso: true });
+        } catch (e) {}
+      }
     }
 
     if (['queued', 'running'].includes(String(statusJob))) {
-      mlHubSyncAnunciosV115Timer = setTimeout(
-        () => acompanharAnunciosV115(jobId),
-        1500
+      // Polling agressivo de 800ms para feedback instantâneo na tela
+      mlHubSyncAnunciosV118Timer = setTimeout(
+        () => acompanharAnunciosV118(jobId),
+        800
       );
       return;
     }
@@ -71,57 +77,60 @@ async function acompanharAnunciosV115(jobId) {
       localStorage.removeItem('mlHubPro_sync_v105_anuncios');
       localStorage.removeItem('mlHubPro_sync_v26_anuncios');
 
-      renderizarProgressoSuperiorV115({
+      renderizarProgressoSuperiorV118({
         status: 'completed',
         atual,
         total,
-        mensagem: j.message || 'Sincronização concluída com sucesso!'
+        mensagem: j.message || 'Sincronização em tempo real concluída com sucesso!'
       });
 
-      try {
-        await v88CarregarGestaoLocal(1, { silencioso: true });
-      } catch (e) {}
+      if (typeof v88CarregarGestaoLocal === 'function') {
+        try { await v88CarregarGestaoLocal(1, { silencioso: true }); } catch (e) {}
+      }
 
-      mlHubSyncAnunciosV115Ativo = false;
+      mlHubSyncAnunciosV118Ativo = false;
+      ultimoProcessadoV118 = -1;
       return;
     }
 
     if (statusJob === 'failed') {
-      renderizarProgressoSuperiorV115({
+      renderizarProgressoSuperiorV118({
         status: 'queued',
         atual,
         total,
-        mensagem: 'Servidor reconectando ao banco de dados. Tentando novamente...'
+        mensagem: 'Sincronizadork pausado. Retomando automaticamente...'
       });
 
-      // Tenta retomar automaticamente após falha de conexão do banco
-      setTimeout(() => puxarAnunciosV105({ retomarAutomatico: true }), 4000);
+      mlHubSyncAnunciosV118Ativo = false;
+      setTimeout(() => puxarAnunciosV105({ retomarAutomatico: true }), 3000);
       return;
     }
 
-    mlHubSyncAnunciosV115Ativo = false;
+    mlHubSyncAnunciosV118Ativo = false;
   } catch (e) {
-    // Erros de rede/404 são tratados de forma resiliente em segundo plano
-    mlHubSyncAnunciosV115Timer = setTimeout(() => acompanharAnunciosV115(jobId), 4000);
+    mlHubSyncAnunciosV118Timer = setTimeout(() => acompanharAnunciosV118(jobId), 2500);
   }
 }
 
 async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
-  if (mlHubSyncAnunciosV115Ativo && !retomarAutomatico) return;
+  if (mlHubSyncAnunciosV118Ativo && !retomarAutomatico) return;
 
   const token = obterToken();
   if (!token) {
-    if (!retomarAutomatico) solicitarToken();
+    if (!retomarAutomatico && typeof solicitarToken === 'function') {
+      solicitarToken();
+    }
     return;
   }
 
-  mlHubSyncAnunciosV115Ativo = true;
+  mlHubSyncAnunciosV118Ativo = true;
+  ultimoProcessadoV118 = -1;
 
-  renderizarProgressoSuperiorV115({
+  renderizarProgressoSuperiorV118({
     status: 'queued',
     atual: 0,
     total: 0,
-    mensagem: 'Conectando ao worker para sincronização em lotes simultâneos...'
+    mensagem: 'Conectando ao worker para salvamento em tempo real (lotes de 1.000)...'
   });
 
   try {
@@ -143,23 +152,32 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
     const d = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      // Se o banco caiu no Render (404 ou 500), aguarda 5 segundos e tenta de novo automaticamente
-      if (r.status === 404 || r.status >= 500) {
-        renderizarProgressoSuperiorV115({
+      if (r.status === 401 || r.status === 403) {
+        mlHubSyncAnunciosV118Ativo = false;
+        renderizarProgressoSuperiorV118({
           status: 'queued',
-          mensagem: 'Banco acordando no Render. Tentando reconectar em instantes...'
+          mensagem: 'Sessão expirada. Reconecte a conta do Mercado Livre.'
         });
-        mlHubSyncAnunciosV115Ativo = false;
-        setTimeout(() => puxarAnunciosV105({ retomarAutomatico: true }), 5000);
+        if (typeof solicitarToken === 'function') solicitarToken();
         return;
       }
+
+      if (r.status === 404 || r.status >= 500) {
+        renderizarProgressoSuperiorV118({
+          status: 'queued',
+          mensagem: 'Servidor aquecendo no Render. Tentando novamente...'
+        });
+        mlHubSyncAnunciosV118Ativo = false;
+        setTimeout(() => puxarAnunciosV105({ retomarAutomatico: true }), 4000);
+        return;
+      }
+
       throw new Error(d.erro || `HTTP ${r.status}`);
     }
 
     const jobId = Number(d.job?.id || 0);
     if (!jobId) {
-      // Se não retornou ID mas deu ok, tenta recarregar a gestão local
-      mlHubSyncAnunciosV115Ativo = false;
+      mlHubSyncAnunciosV118Ativo = false;
       if (typeof v88CarregarGestaoLocal === 'function') {
         await v88CarregarGestaoLocal(1, { silencioso: true });
       }
@@ -169,23 +187,21 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
     localStorage.setItem('mlHubPro_sync_v105_anuncios', String(jobId));
     localStorage.removeItem('mlHubPro_sync_v26_anuncios');
 
-    renderizarProgressoSuperiorV115({
+    renderizarProgressoSuperiorV118({
       status: d.job?.status || 'queued',
       atual: Number(d.job?.progress_current || 0),
       total: Number(d.job?.progress_total || 0),
-      mensagem: d.mensagem || d.job?.message || 'Sincronização iniciada em lotes de 1.000...'
+      mensagem: d.mensagem || d.job?.message || 'Sincronização em tempo real iniciada...'
     });
 
-    acompanharAnunciosV115(jobId);
+    acompanharAnunciosV118(jobId);
   } catch (e) {
-    mlHubSyncAnunciosV115Ativo = false;
-    
-    // Tenta novamente de forma automática caso o servidor esteja inicializando no Render
+    mlHubSyncAnunciosV118Ativo = false;
     setTimeout(() => {
-      if (!mlHubSyncAnunciosV115Ativo) {
+      if (!mlHubSyncAnunciosV118Ativo) {
         puxarAnunciosV105({ retomarAutomatico: true });
       }
-    }, 6000);
+    }, 4000);
   }
 }
 
@@ -204,9 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
         0
       );
 
-      if (jobId && obterToken()) {
-        mlHubSyncAnunciosV115Ativo = true;
-        acompanharAnunciosV115(jobId);
+      if (jobId && typeof obterToken === 'function' && obterToken()) {
+        mlHubSyncAnunciosV118Ativo = true;
+        acompanharAnunciosV118(jobId);
       }
     } catch (e) {}
   }, 1100);
