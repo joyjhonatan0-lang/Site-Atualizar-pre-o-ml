@@ -1,5 +1,8 @@
 /* =========================================================
    V108 — SYNC ULTRARÁPIDA COM UPSERT INCREMENTAL + SOFT DELETE
+   - Puxa anúncios em lotes simultâneos otimizados;
+   - Acréscimo incremental (não reseta os dados existentes);
+   - Remove do painel os anúncios excluídos/finalizados no ML.
 ========================================================= */
 
 let mlHubSyncAnunciosV108Ativo = false;
