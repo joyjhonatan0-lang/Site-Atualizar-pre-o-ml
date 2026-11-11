@@ -1,0 +1,218 @@
+#btn-configuracoes-flutuante{
+    position:fixed; right:22px; bottom:22px; z-index:70;
+    width:48px; height:48px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    background:#facc15; color:#0f172a; font-size:21px; font-weight:900;
+    box-shadow:0 14px 35px rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.12);
+}
+#btn-configuracoes-flutuante:hover{transform:translateY(-2px)}
+#btn-ia-flutuante{
+    position:fixed; right:22px; bottom:82px; z-index:70;
+    width:48px; height:48px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:#0f172a; color:#facc15; font-size:20px; font-weight:900;
+    box-shadow:0 14px 35px rgba(0,0,0,.35);
+    border:1px solid rgba(250,204,21,.35);
+}
+#btn-ia-flutuante:hover{transform:translateY(-2px);border-color:#facc15}
+body.atendimento-isolado #app-header{display:none!important}
+body.atendimento-isolado #btn-ia-flutuante,
+body.atendimento-isolado #btn-configuracoes-flutuante{display:none!important}
+body.atendimento-isolado main{
+    max-width:1600px!important;
+    padding-top:28px!important;
+}
+body.atendimento-isolado #secao-atendimento{
+    min-height:calc(100vh - 56px);
+}
+body.atendimento-isolado #secao-atendimento .chat-voltar-v22{
+    display:inline-flex!important;
+}
+
+body.pagina-inicio-v23 #acao-anuncios{
+    display:none!important;
+}
+body.configuracoes-isolado-v23 #app-header nav{
+    display:none!important;
+}
+body.configuracoes-isolado-v23 #acao-voltar-inicio{
+    display:none!important;
+}
+
+/* =========================================================
+   V24 \2014  MENU LATERAL DO PAINEL
+========================================================= */
+#painel-sidebar-v24{
+    display:none;
+    position:fixed;
+    left:0;
+    top:72px;
+    bottom:0;
+    width:244px;
+    z-index:42;
+    border-right:1px solid rgba(51,65,85,.72);
+    background:rgba(3,7,18,.97);
+    backdrop-filter:blur(16px);
+    overflow-y:auto;
+}
+.painel-sidebar-v24-inner{
+    padding:20px 14px 28px;
+}
+.painel-sidebar-v24-titulo{
+    padding:0 12px 12px;
+    color:#64748b;
+    font-size:9px;
+    font-weight:900;
+    letter-spacing:.18em;
+}
+.painel-sidebar-v24-item{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 13px;
+    margin-bottom:5px;
+    border:1px solid transparent;
+    border-radius:12px;
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:700;
+    text-align:left;
+    transition:.18s ease;
+}
+.painel-sidebar-v24-item:hover{
+    color:#f8fafc;
+    background:#111827;
+    border-color:#1e293b;
+}
+.painel-sidebar-v24-item.active{
+    color:#0f172a;
+    background:#facc15;
+    border-color:#fde047;
+    box-shadow:0 8px 24px rgba(250,204,21,.10);
+}
+.painel-sidebar-v24-icone{
+    width:22px;
+    min-width:22px;
+    text-align:center;
+    font-size:15px;
+}
+.painel-sidebar-v24-divisor{
+    height:1px;
+    background:#1e293b;
+    margin:16px 8px;
+}
+.painel-sidebar-v24-voltar{
+    color:#cbd5e1;
+}
+
+/* Nas p\e1 ginas operacionais, o antigo menu horizontal some e entra o lateral. */
+body.painel-menu-v24 #app-header nav{
+    display:none!important;
+}
+body.painel-menu-v24 #app-header .top-actions{
+    display:none!important;
+}
+body.painel-menu-v24 #painel-sidebar-v24{
+    display:block;
+}
+body.painel-menu-v24 #app-main{
+    max-width:none!important;
+    width:auto!important;
+    margin-left:244px!important;
+    margin-right:0!important;
+    padding-left:28px!important;
+    padding-right:28px!important;
+}
+
+/* Perfil e Configura\e7 \f5 es ficam limpos:
+   somente logo no cabe\e7 alho + bot\e3 o "Voltar ao in\ed cio" dentro da p\e1 gina. */
+body.perfil-isolado-v24 #app-header nav,
+body.perfil-isolado-v24 #app-header .top-actions,
+body.configuracoes-isolado-v24 #app-header nav,
+body.configuracoes-isolado-v24 #app-header .top-actions{
+    display:none!important;
+}
+body.perfil-isolado-v24 #painel-sidebar-v24,
+body.configuracoes-isolado-v24 #painel-sidebar-v24,
+body.atendimento-isolado #painel-sidebar-v24,
+body.pagina-inicio-v23 #painel-sidebar-v24{
+    display:none!important;
+}
+body.perfil-isolado-v24 #app-main,
+body.configuracoes-isolado-v24 #app-main{
+    margin-left:auto!important;
+    margin-right:auto!important;
+    max-width:1800px!important;
+}
+
+/* O chat continua sendo uma p\e1 gina totalmente pr\f3 pria. */
+body.atendimento-isolado #app-main{
+    margin-left:auto!important;
+    margin-right:auto!important;
+}
+
+@media (max-width:1100px){
+    #painel-sidebar-v24{
+        width:206px;
+    }
+    body.painel-menu-v24 #app-main{
+        margin-left:206px!important;
+        padding-left:18px!important;
+        padding-right:18px!important;
+    }
+}
+@media (max-width:820px){
+    #painel-sidebar-v24{
+        position:sticky;
+        top:0;
+        width:auto;
+        height:auto;
+        border-right:0;
+        border-bottom:1px solid #1e293b;
+    }
+    .painel-sidebar-v24-inner{
+        display:flex;
+        gap:6px;
+        overflow-x:auto;
+        padding:10px;
+    }
+    .painel-sidebar-v24-titulo,
+    .painel-sidebar-v24-divisor{
+        display:none;
+    }
+    .painel-sidebar-v24-item{
+        min-width:max-content;
+        margin:0;
+        padding:10px 12px;
+    }
+    body.painel-menu-v24 #app-main{
+        margin-left:0!important;
+        padding-left:14px!important;
+        padding-right:14px!important;
+    }
+}
+
+.theme-option.tema-selecionado{border-color:#facc15!important;box-shadow:0 0 0 2px rgba(250,204,21,.15)}
+body.tema-escuro{background:#030712!important}
+body.tema-escuro header, body.tema-escuro .glass{background:rgba(3,7,18,.96)!important}
+body.tema-escuro .panel{background:#090d16!important}
+
+body.tema-claro{background:#f1f5f9!important;color:#0f172a!important}
+body.tema-claro header, body.tema-claro .glass{background:rgba(255,255,255,.96)!important;border-color:#cbd5e1!important}
+body.tema-claro .panel,
+body.tema-claro section > div[class*="bg-slate-900"]{background:#fff!important;border-color:#cbd5e1!important}
+body.tema-claro .bg-slate-950,
+body.tema-claro .bg-slate-950\/80{background:#e2e8f0!important}
+body.tema-claro .bg-slate-900,
+body.tema-claro .bg-slate-900\/80{background:#fff!important}
+body.tema-claro .bg-slate-800{background:#e2e8f0!important}
+body.tema-claro .text-white,
+body.tema-claro .text-slate-100{color:#0f172a!important}
+body.tema-claro .text-slate-300,
+body.tema-claro .text-slate-400,
+body.tema-claro .text-slate-500{color:#475569!important}
+body.tema-claro .border-slate-800,
+body.tema-claro .border-slate-700{border-color:#cbd5e1!important}
+body.tema-claro input{background:#fff!important;color:#0f172a!important}
