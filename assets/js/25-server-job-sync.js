@@ -1,15 +1,30 @@
 /* =========================================================
-   V108 — SYNC ULTRARÁPIDA COM UPSERT INCREMENTAL + SOFT DELETE
-   - Puxa anúncios em lotes simultâneos otimizados;
-   - Acréscimo incremental (não reseta os dados existentes);
-   - Remove do painel os anúncios excluídos/finalizados no ML.
+   V109 — SYNC ULTRARÁPIDA COM ESPELHAMENTO DE PROGRESSO COMPLETO
+   - Atualiza tanto a central flutuante quanto a barra superior;
+   - UPSERT incremental e remoção automática de excluídos.
 ========================================================= */
 
-let mlHubSyncAnunciosV108Ativo = false;
-let mlHubSyncAnunciosV108Timer = null;
+let mlHubSyncAnunciosV109Ativo = false;
+let mlHubSyncAnunciosV109Timer = null;
 
-async function acompanharAnunciosV108(jobId) {
-  clearTimeout(mlHubSyncAnunciosV108Timer);
+function renderizarProgressoSuperiorV109({ status, atual, total, mensagem }) {
+  // Atualiza elementos de progresso na interface superior se existirem
+  const barraEl = document.getElementById('barra-progresso-anuncios');
+  const textoEl = document.getElementById('texto-progresso-anuncios');
+  
+  if (barraEl && total > 0) {
+    const pct = Math.min(100, Math.max(0, Math.round((atual / total) * 100)));
+    barraEl.style.width = `${pct}%`;
+  }
+
+  // Atualiza também via o mecanismo padrão do painel se disponível
+  if (typeof atualizarProgressoV26 === 'function') {
+    atualizarProgressoV26('anuncios', { status, atual, total, mensagem });
+  }
+}
+
+async function acompanharAnunciosV109(jobId) {
+  clearTimeout(mlHubSyncAnunciosV109Timer);
 
   try {
     const controller = new AbortController();
@@ -37,65 +52,62 @@ async function acompanharAnunciosV108(jobId) {
     const j = d.job || {};
     const atual = Number(j.progress_current || j.processed || 0);
     const total = Number(j.progress_total || 0);
+    const statusJob = j.status || 'running';
+    const mensagem = j.message || `Sincronizando anúncios em lotes de 1.000 · ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`;
 
-    atualizarProgressoV26('anuncios', {
-      status: j.status || 'running',
-      atual,
-      total,
-      mensagem: j.message || `Sincronizando anúncios em lotes de 1.000 · ${atual.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')}`
-    });
+    // Atualiza a barra superior e a central flutuante simultaneamente
+    renderizarProgressoSuperiorV109({ status: statusJob, atual, total, mensagem });
 
-    // Atualiza a tabela da Gestão incrementalmente conforme o progresso avança
+    // Atualiza a tabela da Gestão incrementalmente conforme os lotes chegam
     if (atual > 0 && typeof v88CarregarGestaoLocal === 'function') {
       try {
         await v88CarregarGestaoLocal(1, { silencioso: true });
       } catch (e) {}
     }
 
-    if (['queued', 'running'].includes(String(j.status || ''))) {
-      // Polling rápido para feedback visual fluido e imediato
-      mlHubSyncAnunciosV108Timer = setTimeout(
-        () => acompanharAnunciosV108(jobId),
+    if (['queued', 'running'].includes(String(statusJob))) {
+      mlHubSyncAnunciosV109Timer = setTimeout(
+        () => acompanharAnunciosV109(jobId),
         1200
       );
       return;
     }
 
-    if (j.status === 'completed') {
+    if (statusJob === 'completed') {
       localStorage.removeItem('mlHubPro_sync_v105_anuncios');
       localStorage.removeItem('mlHubPro_sync_v26_anuncios');
 
-      atualizarProgressoV26('anuncios', {
+      renderizarProgressoSuperiorV109({
         status: 'completed',
         atual,
         total,
-        mensagem: j.message || 'Sincronização ultrarrápida concluída. Novos anúncios adicionados, atualizados e excluídos removidos.'
+        mensagem: j.message || 'Sincronização concluída com sucesso!'
       });
 
       try {
         await v88CarregarGestaoLocal(1, { silencioso: true });
       } catch (e) {}
 
-      mlHubSyncAnunciosV108Ativo = false;
+      mlHubSyncAnunciosV109Ativo = false;
       return;
     }
 
-    if (j.status === 'failed') {
-      atualizarProgressoV26('anuncios', {
+    if (statusJob === 'failed') {
+      renderizarProgressoSuperiorV109({
         status: 'queued',
         atual,
         total,
         mensagem: (j.message || 'Sincronização pausada.') + ' · Clique em Puxar anúncios para continuar.'
       });
 
-      mlHubSyncAnunciosV108Ativo = false;
+      mlHubSyncAnunciosV109Ativo = false;
       return;
     }
 
-    mlHubSyncAnunciosV108Ativo = false;
+    mlHubSyncAnunciosV109Ativo = false;
   } catch (e) {
-    mlHubSyncAnunciosV108Ativo = false;
-    atualizarProgressoV26('anuncios', {
+    mlHubSyncAnunciosV109Ativo = false;
+    renderizarProgressoSuperiorV109({
       status: 'queued',
       mensagem: 'Sincronização pausada por instabilidade de rede. Clique em Puxar anúncios para retomar.'
     });
@@ -103,7 +115,7 @@ async function acompanharAnunciosV108(jobId) {
 }
 
 async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
-  if (mlHubSyncAnunciosV108Ativo) return;
+  if (mlHubSyncAnunciosV109Ativo) return;
 
   const token = obterToken();
   if (!token) {
@@ -111,12 +123,11 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
     return;
   }
 
-  mlHubSyncAnunciosV108Ativo = true;
+  mlHubSyncAnunciosV109Ativo = true;
 
-  // Encerra qualquer processo legado antigo no navegador
   try { syncV88Abortar = true; } catch (e) {}
 
-  atualizarProgressoV26('anuncios', {
+  renderizarProgressoSuperiorV109({
     status: 'queued',
     atual: 0,
     total: 0,
@@ -139,9 +150,9 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
           Accept: 'application/json'
         },
         body: JSON.stringify({
-          batch_size: 1000,       // Processamento em blocos de 1.000
-          incremental: true,      // Preserva dados existentes e adiciona novos (UPSERT)
-          clean_removed: true     // Apaga da base os anúncios que foram excluídos no ML
+          batch_size: 1000,
+          incremental: true,
+          clean_removed: true
         })
       });
     } finally {
@@ -163,18 +174,18 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
     localStorage.setItem('mlHubPro_sync_v105_anuncios', String(jobId));
     localStorage.removeItem('mlHubPro_sync_v26_anuncios');
 
-    atualizarProgressoV26('anuncios', {
+    renderizarProgressoSuperiorV109({
       status: d.job?.status || 'queued',
       atual: Number(d.job?.progress_current || 0),
       total: Number(d.job?.progress_total || 0),
       mensagem: d.mensagem || d.job?.message || 'Sincronização iniciada em lotes de 1.000...'
     });
 
-    acompanharAnunciosV108(jobId);
+    acompanharAnunciosV109(jobId);
   } catch (e) {
-    mlHubSyncAnunciosV108Ativo = false;
+    mlHubSyncAnunciosV109Ativo = false;
     const msg = String(e?.message || e || '');
-    atualizarProgressoV26('anuncios', {
+    renderizarProgressoSuperiorV109({
       status: 'queued',
       mensagem: msg
     });
@@ -188,12 +199,12 @@ async function puxarAnunciosV105({ retomarAutomatico = false } = {}) {
   }
 }
 
-// Mantém total compatibilidade com todas as chamadas e botões existentes do sistema
+// Compatibilidade total com os botões e atalhos do sistema
 window.puxarAnunciosV105 = puxarAnunciosV105;
 window.sincronizarAnunciosDiretoV88 = puxarAnunciosV105;
 window.puxarNovosAnuncios = () => puxarAnunciosV105();
 
-// Retomada automática segura após refresh da página
+// Retomada automática segura após refresh
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(async () => {
     try {
@@ -204,8 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
       );
 
       if (jobId && obterToken()) {
-        mlHubSyncAnunciosV108Ativo = true;
-        acompanharAnunciosV108(jobId);
+        mlHubSyncAnunciosV109Ativo = true;
+        acompanharAnunciosV109(jobId);
       }
     } catch (e) {}
   }, 1100);
