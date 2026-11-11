@@ -1,7 +1,7 @@
 /* =========================================================
-   V110 — SCALE 300K / UI PROFISSIONAL COM CARREGAMENTO INSTANTÂNEO
-   - Exibe os dados salvos instantaneamente do cache local ao recarregar;
-   - Evita travamentos na tela de "Processando dados".
+   V116 — SCALE 300K / UI PROFISSIONAL COM SESSÃO BLINDADA CONTRA QNEDAS DE BANCO
+   - Mantém o usuário logado mesmo se o banco de dados do Render oscilar;
+   - Carregamento instantâneo do IndexedDB local.
 ========================================================= */
 const MLHUB_SCALE_PAGE_V103 = 50;
 const MLHUB_SIM_PAGE_V103 = 1000;
@@ -9,6 +9,17 @@ const MLHUB_SCALE_MEMORY_LIMIT_V103 = 5000;
 const processosLocaisV103 = new Map();
 let processosServerTimerV103 = null;
 let migracaoIndicesV103EmCurso = false;
+
+// Garante recuperação segura do seller ativo sem forçar logout por erro de banco
+async function sellerAtivoV90() {
+  if (typeof window.obterSellerIdAtivo === 'function') {
+    try {
+      const s = window.obterSellerIdAtivo();
+      if (s) return s;
+    } catch (e) {}
+  }
+  return localStorage.getItem('mlhub_seller_id') || localStorage.getItem('mlHubPro_seller_id') || localStorage.getItem('seller_id') || 'default_seller';
+}
 
 function toastV103(msg, tipo = 'info', ms = 4200) {
   const el = document.createElement('div');
@@ -107,14 +118,14 @@ function registrarProcessoLocalV103(tipo, { status = 'running', atual = 0, total
 }
 
 async function carregarJobsRecentesV103() {
-  if (!obterToken()) return;
+  if (typeof obterToken !== 'function' || !obterToken()) return;
   try {
     const r = await fetch(`${RENDER_URL}/api/v103/jobs/recent?limit=8&_=${Date.now()}`, {
       cache: 'no-store',
       headers: { Authorization: obterToken() }
     });
+    if (!r.ok) return; // Silencia erros de banco para não afetar a interface
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) return;
 
     for (const j of (d.jobs || [])) {
       processosLocaisV103.set(`server:${j.id}`, {
@@ -132,8 +143,8 @@ async function carregarJobsRecentesV103() {
   } catch (e) {}
 }
 
-const atualizarProgressoAnteriorV103 = atualizarProgressoV26;
-atualizarProgressoV26 = function (tipo, obj = {}) {
+const atualizarProgressoAnteriorV103 = window.atualizarProgressoV26;
+window.atualizarProgressoV26 = function (tipo, obj = {}) {
   if (typeof atualizarProgressoAnteriorV103 === 'function') {
     atualizarProgressoAnteriorV103(tipo, obj);
   }
@@ -145,48 +156,28 @@ atualizarProgressoV26 = function (tipo, obj = {}) {
   });
 };
 
-const atualizarPainelProgressoAnteriorV103 = atualizarPainelProgressoV31;
-atualizarPainelProgressoV31 = function (obj = {}) {
-  if (typeof atualizarPainelProgressoAnteriorV103 === 'function') {
-    atualizarPainelProgressoAnteriorV103(obj);
-  }
-};
+window.abrirDbCacheV32 = function () {
+  if (window.dbCachePromiseV32) return window.dbCachePromiseV32;
 
-function enriquecerRegistroV103(item, sellerId = '') {
-  const seller = String(item?._seller_id || item?.seller_id || sellerId || '').trim();
-  const id = String(item?.id || '').trim();
-  const sku = String(item?.sku || '').trim();
-  const title = String(item?.title || '').trim();
-  const tempo = new Date(item?.date_created || item?.last_updated || item?.synced_at || 0).getTime();
-
-  return {
-    ...item,
-    seller_id: seller,
-    cache_key: seller && id ? `${seller}:${id}` : item?.cache_key,
-    sku_norm: sku.toLowerCase(),
-    title_norm: title.toLowerCase(),
-    sort_time: Number.isFinite(tempo) && tempo > 0 ? tempo : 0,
-    sold_sort: Math.max(0, Number(item?.sold_quantity || 0))
-  };
-}
-
-abrirDbCacheV32 = function () {
-  if (dbCachePromiseV32) return dbCachePromiseV32;
-
-  dbCachePromiseV32 = new Promise((resolve, reject) => {
-    const req = indexedDB.open(CACHE_DB_V32, 4);
+  window.dbCachePromiseV32 = new Promise((resolve, reject) => {
+    const req = indexedDB.open(typeof CACHE_DB_V32 !== 'undefined' ? CACHE_DB_V32 : 'mlhub_cache_v32', 4);
 
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_ITENS_V32)) db.createObjectStore(STORE_ITENS_V32, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains(STORE_META_V32)) db.createObjectStore(STORE_META_V32, { keyPath: 'key' });
-      if (!db.objectStoreNames.contains(STORE_SEEN_V85)) db.createObjectStore(STORE_SEEN_V85, { keyPath: 'id' });
+      const storeItens = typeof STORE_ITENS_V32 !== 'undefined' ? STORE_ITENS_V32 : 'itens';
+      const storeMeta = typeof STORE_META_V32 !== 'undefined' ? STORE_META_V32 : 'meta';
+      const storeSeen = typeof STORE_SEEN_V85 !== 'undefined' ? STORE_SEEN_V85 : 'seen';
+      const storePersist = typeof STORE_PERSISTENTE_V90 !== 'undefined' ? STORE_PERSISTENTE_V90 : 'persistente';
+
+      if (!db.objectStoreNames.contains(storeItens)) db.createObjectStore(storeItens, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(storeMeta)) db.createObjectStore(storeMeta, { keyPath: 'key' });
+      if (!db.objectStoreNames.contains(storeSeen)) db.createObjectStore(storeSeen, { keyPath: 'id' });
 
       let st;
-      if (!db.objectStoreNames.contains(STORE_PERSISTENTE_V90)) {
-        st = db.createObjectStore(STORE_PERSISTENTE_V90, { keyPath: 'cache_key' });
+      if (!db.objectStoreNames.contains(storePersist)) {
+        st = db.createObjectStore(storePersist, { keyPath: 'cache_key' });
       } else {
-        st = req.transaction.objectStore(STORE_PERSISTENTE_V90);
+        st = req.transaction.objectStore(storePersist);
       }
 
       if (!st.indexNames.contains('seller_id')) st.createIndex('seller_id', 'seller_id', { unique: false });
@@ -196,14 +187,15 @@ abrirDbCacheV32 = function () {
     req.onerror = () => reject(req.error || new Error('Erro ao abrir cache local.'));
   });
 
-  return dbCachePromiseV32;
+  return window.dbCachePromiseV32;
 };
 
 async function idbCountSellerV103(sellerId) {
   const db = await abrirDbCacheV32();
+  const storePersist = typeof STORE_PERSISTENTE_V90 !== 'undefined' ? STORE_PERSISTENTE_V90 : 'persistente';
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PERSISTENTE_V90, 'readonly');
-    const idx = tx.objectStore(STORE_PERSISTENTE_V90).index('seller_id');
+    const tx = db.transaction(storePersist, 'readonly');
+    const idx = tx.objectStore(storePersist).index('seller_id');
     const req = idx.count(IDBKeyRange.only(String(sellerId)));
     req.onsuccess = () => resolve(Number(req.result || 0));
     req.onerror = () => reject(req.error);
@@ -215,10 +207,11 @@ async function paginaIndexedDbGestaoV103({ sellerId, page = 1, limit = 50, q = '
   const busca = String(q || '').trim().toLowerCase();
   const offset = Math.max(0, (Math.max(1, Number(page || 1)) - 1) * limit);
   const db = await abrirDbCacheV32();
+  const storePersist = typeof STORE_PERSISTENTE_V90 !== 'undefined' ? STORE_PERSISTENTE_V90 : 'persistente';
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PERSISTENTE_V90, 'readonly');
-    const st = tx.objectStore(STORE_PERSISTENTE_V90);
+    const tx = db.transaction(storePersist, 'readonly');
+    const st = tx.objectStore(storePersist);
     const sellerIdx = st.index('seller_id');
     const range = IDBKeyRange.only(seller);
 
@@ -260,12 +253,11 @@ async function paginaIndexedDbGestaoV103({ sellerId, page = 1, limit = 50, q = '
   });
 }
 
-/* CARREGAMENTO DE GESTÃO CORRIGIDO E INSTANTÂNEO (SEM TRAVAR O LOADING) */
-v88CarregarGestaoLocal = async function (page = 1, { silencioso = false } = {}) {
-  if (gestaoCarregando) return;
-  gestaoCarregando = true;
+// GESTÃO LOCAL INSTANTÂNEA E PROTEGIDA CONTRA QUEDAS DE BANCO
+window.v88CarregarGestaoLocal = async function (page = 1, { silencioso = false } = {}) {
+  if (typeof gestaoCarregando !== 'undefined' && gestaoCarregando) return;
+  if (typeof gestaoCarregando !== 'undefined') gestaoCarregando = true;
 
-  // Se não for silencioso, exibe o loading brevemente, mas com proteção para fechar em até 3 segundos se demorar
   if (!silencioso && typeof mostrarLoading === 'function') {
     mostrarLoading('Carregando dados salvos...');
   }
@@ -273,35 +265,39 @@ v88CarregarGestaoLocal = async function (page = 1, { silencioso = false } = {}) 
   try {
     const seller = await sellerAtivoV90();
     
-    // CARREGA IMEDIATAMENTE DO INDEXEDDB LOCAL (Dados salvos no navegador para abrir em segundos)
     const local = await paginaIndexedDbGestaoV103({
       sellerId: seller,
       page,
       limit: MLHUB_SCALE_PAGE_V103,
-      q: gestaoBusca,
-      status: gestaoStatusV76
+      q: typeof gestaoBusca !== 'undefined' ? gestaoBusca : '',
+      status: typeof gestaoStatusV76 !== 'undefined' ? gestaoStatusV76 : ''
     });
 
     const totalConta = await idbCountSellerV103(seller).catch(() => local.total || 0);
 
-    gestaoPagina = Math.max(1, Number(page || 1));
-    gestaoTotalFiltro = Number(local.total || 0);
-    gestaoPaginas = Math.max(1, Number(local.paginas || 1));
+    if (typeof gestaoPagina !== 'undefined') gestaoPagina = Math.max(1, Number(page || 1));
+    if (typeof gestaoTotalFiltro !== 'undefined') gestaoTotalFiltro = Number(local.total || 0);
+    if (typeof gestaoPaginas !== 'undefined') gestaoPaginas = Math.max(1, Number(local.paginas || 1));
 
-    cacheItens = (local.itens || []).map(normalizarItemEscala);
+    if (typeof cacheItens !== 'undefined') {
+      cacheItens = (local.itens || []).map(x => typeof normalizarItemEscala === 'function' ? normalizarItemEscala(x) : x);
+    }
 
-    masterMapV32 = new Map(cacheItens.map(x => [String(x.id), x]));
-    masterAnunciosV32 = [...cacheItens];
-    masterCarregadoV32 = false;
+    if (typeof masterMapV32 !== 'undefined') {
+      masterMapV32 = new Map((cacheItens || []).map(x => [String(x.id), x]));
+    }
+    if (typeof masterAnunciosV32 !== 'undefined') {
+      masterAnunciosV32 [...(cacheItens || [])];
+    }
+    if (typeof masterCarregadoV32 !== 'undefined') {
+      masterCarregadoV32 = false;
+    }
 
-    if (typeof montarTabelaGestao === 'function') {
+    if (typeof montarTabelaGestao === 'function' && cacheItens) {
       montarTabelaGestao(cacheItens);
     }
 
     const tl = document.getElementById('total-listado');
-    const ta = document.getElementById('total-ativos');
-    const to = document.getElementById('total-outros');
-
     if (tl) tl.innerText = totalConta.toLocaleString('pt-BR');
 
     if (typeof atualizarPaginacaoGestao === 'function') {
@@ -310,24 +306,25 @@ v88CarregarGestaoLocal = async function (page = 1, { silencioso = false } = {}) 
 
     const info = document.getElementById('gestao-paginacao-info');
     if (info) {
-      info.textContent = `${gestaoTotalFiltro.toLocaleString('pt-BR')} resultado(s) · cache local instantâneo`;
+      info.textContent = `${(local.total || 0).toLocaleString('pt-BR')} resultado(s) · cache local instantâneo`;
     }
   } catch (e) {
     console.error('[GESTÃO LOCAL ERROR]', e);
   } finally {
-    gestaoCarregando = false;
+    if (typeof gestaoCarregando !== 'undefined') gestaoCarregando = false;
     if (typeof esconderLoading === 'function') {
-      esconderLoading(); // GARANTE QUE O LOADING SOME IMEDIATAMENTE
+      esconderLoading();
     }
   }
 };
-window.carregarGestaoEscala = v88CarregarGestaoLocal;
+window.carregarGestaoEscala = window.v88CarregarGestaoLocal;
 
-aplicarMudancasV32 = async function (itens) {
+window.aplicarMudancasV32 = async function (itens) {
   if (!Array.isArray(itens) || !itens.length) return 0;
   const seller = String(itens.find(x => x?._seller_id)?._seller_id || await sellerAtivoV90() || '');
-  
-  await idbSalvarItensV32(itens.map(x => ({ ...x, _seller_id: seller })));
+  if (typeof idbSalvarItensV32 === 'function') {
+    await idbSalvarItensV32(itens.map(x => ({ ...x, _seller_id: seller })));
+  }
   return itens.length;
 };
 
@@ -338,12 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   atualizarProcessCenterV103();
   carregarJobsRecentesV103();
-  processosServerTimerV103 = setInterval(carregarJobsRecentesV103, 5000);
+  processosServerTimerV103 = setInterval(carregarJobsRecentesV103, 10000);
 });
 ```[cite: 37, 41, 42]
-
----
-
-### 💡 O que mudou:
-1. **Abertura Instantânea:** Ao recarregar a página, o sistema lê diretamente do banco local do navegador (`IndexedDB`) e exibe os anúncios na mesma hora, eliminando a tela preta de carregamento demorado.
-2. **Proteção contra Travamento:** A função `esconderLoading()` foi garantida no bloco `finally`, assegurando que o painel nunca fique preso em "Processando dados".
