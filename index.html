@@ -1049,7 +1049,7 @@
                 <button
                     onclick="puxarAnunciosV105()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
-                    title="Sincroniza todos os an&#250;ncios em lotes de 1.000, salva checkpoint e retoma automaticamente do ponto salvo"
+                    title="Sincroniza em lotes de at&#233; 1.000, salva cada lote no PostgreSQL, busca somente an&#250;ncios novos e preserva os existentes"
                 >
                     &#8595; Puxar an&#250;ncios
                 </button>
@@ -1697,7 +1697,7 @@
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; microcheckpoint &#183; V107</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; incremental &#183; V109</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
