@@ -1,3 +1,0 @@
-.v96-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid rgba(100,116,139,.22);border-radius:9px;background:rgba(2,6,23,.6);font-size:9px;color:#94a3b8}
-.v96-attr-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.4fr);gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(100,116,139,.10)}
-@media(max-width:700px){.v96-attr-row{grid-template-columns:1fr}}
