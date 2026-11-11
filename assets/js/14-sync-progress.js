@@ -50,7 +50,7 @@ async function iniciarJobSyncV26(tipo,url){
     atualizarProgressoV26(tipo,{
         status:'queued',
         mensagem:tipo==='anuncios'
-            ? 'Solicitando sincronização em lotes de 1.000...'
+            ? 'Solicitando sincronização incremental em lotes de até 1.000...'
             : 'Solicitando sincronização ao servidor...'
     });
 
