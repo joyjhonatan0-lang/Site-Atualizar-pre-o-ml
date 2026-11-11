@@ -1898,7 +1898,7 @@ app.post('/api/scale/sync',async(req,res)=>{
         // uma conexão OAuth persistente para este seller.
         const tokenPersistente=await obterTokenPersistenteParaSeller(sellerId);
         if(!tokenPersistente){
-            console.warn('[SYNC V105 START] Seller sem conexão OAuth persistente:',sellerId);
+            console.warn('[SYNC V109 START] Seller sem conexão OAuth persistente:',sellerId);
             return respostaErro(
                 res,
                 409,
@@ -1906,7 +1906,7 @@ app.post('/api/scale/sync',async(req,res)=>{
             );
         }
 
-        console.log('[SYNC V107 START] seller=',sellerId,'· conexão OAuth persistente OK');
+        console.log('[SYNC V109 START] seller=',sellerId,'· conexão OAuth persistente OK');
 
         // V106: limpa concorrência criada por versões antigas.
         // Apenas o job ativo mais recente do seller pode continuar.
@@ -2016,14 +2016,14 @@ app.post('/api/scale/sync',async(req,res)=>{
 
         // 3) Nova varredura.
         const job=await criarJob(sellerId,'full_sync',{
-            source:'manual_v106',
+            source:'manual_v109_incremental',
             batch_size:1000,
-            resume_strategy:'seen_checkpoint'
+            resume_strategy:'seen_checkpoint_incremental'
         });
 
         const jr=await dbQuery(`
           UPDATE ml_jobs SET
-            message='Preparando primeiro lote de até 1.000 anúncios.',
+            message='Preparando sincronização incremental em lotes de até 1.000 anúncios.',
             progress_current=0,
             processed=0,
             errors=0,
@@ -2040,10 +2040,10 @@ app.post('/api/scale/sync',async(req,res)=>{
             job:jr.rows[0],
             retomado:false,
             batch_size:1000,
-            mensagem:'Sincronização iniciada em lotes de 1.000 com checkpoint automático.'
+            mensagem:'Sincronização incremental iniciada em lotes de até 1.000. Só anúncios novos serão baixados; os existentes serão preservados.'
         });
     }catch(e){
-        console.error('[SYNC V84 START]',e);
+        console.error('[SYNC V109 START]',e);
         respostaErro(res,erroPostgresTemporarioV80(e)?503:500,
             erroPostgresTemporarioV80(e)
               ? 'PostgreSQL temporariamente indisponível. Tente novamente em alguns segundos; o progresso salvo não será perdido.'
