@@ -238,7 +238,7 @@ function itemParaDb(item, sellerId) {
     ];
 }
 
-async function upsertItensDb(sellerId, itens) {
+async function upsertItensDb(sellerId, itens, opcoes={}) {
     if(!Array.isArray(itens) || !itens.length)return;
 
     /*
@@ -246,10 +246,60 @@ async function upsertItensDb(sellerId, itens) {
       - blocos de até 1.000 itens;
       - até 2 blocos gravados em paralelo por padrão;
       - frete/comissão boa já existente continuam preservados.
-      Isso acelera 5.000 itens sem saturar o PostgreSQL do Render.
+      Isso grava lotes de até 1.000 itens sem saturar o PostgreSQL do Render.
     */
     const TAMANHO=Math.max(250,Math.min(1000,Number(process.env.ML_DB_UPSERT_BATCH||1000)));
     const CONC=1;
+    const conflitoSql=opcoes?.somenteNovos
+      ? 'ON CONFLICT(seller_id,item_id) DO NOTHING'
+      : `ON CONFLICT(seller_id,item_id) DO UPDATE SET
+          title=EXCLUDED.title,
+          sku=EXCLUDED.sku,
+          price=EXCLUDED.price,
+          available_quantity=EXCLUDED.available_quantity,
+          sold_quantity=EXCLUDED.sold_quantity,
+          status=EXCLUDED.status,
+          listing_type_id=EXCLUDED.listing_type_id,
+          category_id=EXCLUDED.category_id,
+          thumbnail=EXCLUDED.thumbnail,
+          permalink=EXCLUDED.permalink,
+          ml_updated_at=EXCLUDED.ml_updated_at,
+          sale_fee=CASE
+            WHEN EXCLUDED.commission_synced_at IS NOT NULL
+            THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END,
+          commission_percentage=CASE
+            WHEN EXCLUDED.commission_synced_at IS NOT NULL
+            THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END,
+          commission_synced_at=COALESCE(EXCLUDED.commission_synced_at,ml_items.commission_synced_at),
+          net_received=GREATEST(
+            0,
+            EXCLUDED.price - (
+              CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                   THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
+            ) - ml_items.shipping_cost
+          ),
+          raw=EXCLUDED.raw,
+          synced_at=CASE WHEN
+            ml_items.title IS DISTINCT FROM EXCLUDED.title OR
+            ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
+            ml_items.price IS DISTINCT FROM EXCLUDED.price OR
+            ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
+            ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
+            ml_items.status IS DISTINCT FROM EXCLUDED.status OR
+            ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
+            ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
+            ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
+            ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
+            ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
+            ml_items.sale_fee IS DISTINCT FROM (
+              CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                   THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
+            ) OR
+            ml_items.commission_percentage IS DISTINCT FROM (
+              CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
+                   THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
+            )
+          THEN NOW() ELSE ml_items.synced_at END`;
 
     const lotes=[];
     for(let inicio=0;inicio<itens.length;inicio+=TAMANHO){
@@ -320,74 +370,7 @@ async function upsertItensDb(sellerId, itens) {
                 commission_synced_at timestamptz,
                 net_received numeric
               )
-              ON CONFLICT(seller_id,item_id) DO UPDATE SET
-                title=EXCLUDED.title,
-                sku=EXCLUDED.sku,
-                price=EXCLUDED.price,
-                available_quantity=EXCLUDED.available_quantity,
-                sold_quantity=EXCLUDED.sold_quantity,
-                status=EXCLUDED.status,
-                listing_type_id=EXCLUDED.listing_type_id,
-                category_id=EXCLUDED.category_id,
-                thumbnail=EXCLUDED.thumbnail,
-                permalink=EXCLUDED.permalink,
-                ml_updated_at=EXCLUDED.ml_updated_at,
-
-                sale_fee=CASE
-                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                  THEN EXCLUDED.sale_fee
-                  ELSE ml_items.sale_fee
-                END,
-
-                commission_percentage=CASE
-                  WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                  THEN EXCLUDED.commission_percentage
-                  ELSE ml_items.commission_percentage
-                END,
-
-                commission_synced_at=COALESCE(
-                  EXCLUDED.commission_synced_at,
-                  ml_items.commission_synced_at
-                ),
-
-                net_received=GREATEST(
-                  0,
-                  EXCLUDED.price -
-                  (
-                    CASE
-                      WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                      THEN EXCLUDED.sale_fee
-                      ELSE ml_items.sale_fee
-                    END
-                  ) -
-                  ml_items.shipping_cost
-                ),
-
-                raw=EXCLUDED.raw,
-
-                synced_at=CASE WHEN
-                    ml_items.title IS DISTINCT FROM EXCLUDED.title OR
-                    ml_items.sku IS DISTINCT FROM EXCLUDED.sku OR
-                    ml_items.price IS DISTINCT FROM EXCLUDED.price OR
-                    ml_items.available_quantity IS DISTINCT FROM EXCLUDED.available_quantity OR
-                    ml_items.sold_quantity IS DISTINCT FROM EXCLUDED.sold_quantity OR
-                    ml_items.status IS DISTINCT FROM EXCLUDED.status OR
-                    ml_items.listing_type_id IS DISTINCT FROM EXCLUDED.listing_type_id OR
-                    ml_items.category_id IS DISTINCT FROM EXCLUDED.category_id OR
-                    ml_items.thumbnail IS DISTINCT FROM EXCLUDED.thumbnail OR
-                    ml_items.permalink IS DISTINCT FROM EXCLUDED.permalink OR
-                    ml_items.ml_updated_at IS DISTINCT FROM EXCLUDED.ml_updated_at OR
-                    ml_items.sale_fee IS DISTINCT FROM (
-                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                           THEN EXCLUDED.sale_fee ELSE ml_items.sale_fee END
-                    ) OR
-                    ml_items.commission_percentage IS DISTINCT FROM (
-                      CASE WHEN EXCLUDED.commission_synced_at IS NOT NULL
-                           THEN EXCLUDED.commission_percentage ELSE ml_items.commission_percentage END
-                    )
-                  THEN NOW()
-                  ELSE ml_items.synced_at
-                END
+              ${conflitoSql}
             `,[sellerId,JSON.stringify(lote)]);
         }
     }
@@ -683,7 +666,7 @@ async function syncWorkerDedicadoV76(){
                         `,[job.id,retry?'queued':'failed',
                            dbTemp?'PostgreSQL reiniciando. Retomada automática ativa.':String(e.message||e).slice(0,500)]);
                     }catch(e2){
-                        if(!erroPostgresTemporarioV80(e2))console.error('[SYNC WORKER V107 REQUEUE]',e2.message);
+                        if(!erroPostgresTemporarioV80(e2))console.error('[SYNC WORKER V109 REQUEUE]',e2.message);
                     }
                     if(dbTemp)await esperarDbV80(1500);
                 }
@@ -816,7 +799,7 @@ function heartbeatSyncV106(jobId,mensagem='Processando lote de anúncios...'){
         }catch(e){
             // O heartbeat nunca derruba o worker. O checkpoint já salvo permanece.
             if(!erroPostgresTemporarioV80(e)){
-                console.warn('[SYNC V106 HEARTBEAT]',e.message);
+                console.warn('[SYNC V109 HEARTBEAT]',e.message);
             }
         }finally{
             ocupado=false;
@@ -892,7 +875,7 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
 
         if(retomados || Number(duplicados.rowCount||0)){
             console.warn(
-              '[SYNC V106 RECOVERY]',
+              '[SYNC V109 RECOVERY]',
               'retomados=',retomados,
               'duplicados encerrados=',Number(duplicados.rowCount||0)
             );
@@ -902,7 +885,7 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
         return retomados;
     }catch(e){
         if(!erroPostgresTemporarioV80(e)){
-            console.warn('[SYNC V106 RECOVERY]',e.message);
+            console.warn('[SYNC V109 RECOVERY]',e.message);
         }
         return 0;
     }finally{
@@ -922,22 +905,29 @@ function iniciarRecoverySyncV106(){
 
 
 async function processarSyncCompleto(job) {
-    console.log('[SYNC V107 WORKER] iniciando job',job.id,'seller',job.seller_id);
+    console.log('[SYNC V109 WORKER] iniciando job',job.id,'seller',job.seller_id);
 
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token){
-        console.warn('[SYNC V107 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
+        console.warn('[SYNC V109 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
         throw new Error('Token Mercado Livre indisponível para o seller do job.');
     }
 
-    // Mantém o lote lógico de 1.000, mas baixa/grava em micro-lotes menores.
+    // V109: lotes de até 1.000 IDs percorridos por ciclo.
+    // Somente IDs ausentes em ml_items recebem busca de detalhes.
+    // Cada lote é gravado e confirmado no PostgreSQL antes de avançar o cursor.
     const TAMANHO_LOTE=1000;
-    const TAMANHO_SUBLOTE=Math.max(50,Math.min(250,Number(process.env.ML_SYNC_DETAIL_CHUNK||200)));
+    const detalheConfigurado=Number(process.env.ML_SYNC_DETAIL_CHUNK||1000);
+    const concorrenciaConfigurada=Number(process.env.ML_SYNC_BULK_CONCURRENCY||12);
+    const TAMANHO_SUBLOTE=Math.max(100,Math.min(1000,Number.isFinite(detalheConfigurado)?detalheConfigurado:1000));
+    const CONCORRENCIA_BULK_SYNC=Math.max(4,Math.min(16,Number.isFinite(concorrenciaConfigurada)?concorrenciaConfigurada:12));
+    const PAGINAS_POR_LOTE=Math.max(1,Math.ceil(TAMANHO_LOTE/100));
 
     let scrollId=job.cursor||null;
     let total=Number(job.progress_total||0);
     let errors=Number(job.errors||0);
-    let removidos=0;
+    let novosGravados=0;
+    let existentesPreservados=0;
 
     let seenCount=Number((await dbQuery(
         `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
@@ -945,9 +935,8 @@ async function processarSyncCompleto(job) {
     )).rows[0]?.total||0);
 
     let processed=Math.max(Number(job.processed||0),seenCount);
-    const processedBase=processed;
-    const seenInicial=seenCount;
 
+    // Só limpa o controle temporário deste job novo. Nunca apaga ml_items.
     if(processed===0 && !scrollId){
         await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
         seenCount=0;
@@ -963,8 +952,8 @@ async function processarSyncCompleto(job) {
       WHERE id=$1
     `,[job.id,processed,
        processed
-         ? `Retomando sincronização do checkpoint · ${processed.toLocaleString('pt-BR')} anúncio(s) já concluídos.`
-         : `Iniciando sincronização em micro-lotes de até ${TAMANHO_SUBLOTE.toLocaleString('pt-BR')} anúncios.`
+         ? `Retomando do checkpoint · ${processed.toLocaleString('pt-BR')} IDs já percorridos · lote de até 1.000 · somente anúncios novos serão baixados.`
+         : `Iniciando leitura incremental · lotes de até 1.000 · anúncios já salvos serão preservados.`
     ]);
 
     let terminou=false;
@@ -972,17 +961,27 @@ async function processarSyncCompleto(job) {
     let reiniciosCursor=0;
     const pararHeartbeat=heartbeatSyncV106(
         job.id,
-        'Sincronização ativa · checkpoint seguro · PostgreSQL monitorado'
+        'Sincronização incremental ativa · lotes de 1.000 · salvamento contínuo no PostgreSQL'
     );
 
     try{
       while(!terminou){
-        // Se o processo cair no meio do lote, a retomada começa neste cursor,
-        // não depois dos IDs que ainda estavam apenas na memória.
-        let cursorInicioLote=scrollId;
-        const idsLote=[];
+        const idsNovos=[];
+        const idsNovosSet=new Set();
+        const idsLidosSub=[];
+        const idsLidosSet=new Set();
+        let cursorSeguroSub=scrollId;
+        let cursorExpirou=false;
+        let paginasNoLote=0;
 
-        while(idsLote.length<TAMANHO_LOTE && !terminou){
+        // O scan do ML retorna até 100 IDs por página. A cada até 10 páginas,
+        // compara com o banco, baixa apenas IDs ausentes e salva o checkpoint.
+        while(
+          !terminou &&
+          idsLidosSub.length<TAMANHO_LOTE &&
+          idsNovos.length<TAMANHO_SUBLOTE &&
+          paginasNoLote<PAGINAS_POR_LOTE
+        ){
             const pagina=await buscarPaginaScanV84({
                 sellerId:job.seller_id,
                 token,
@@ -991,9 +990,8 @@ async function processarSyncCompleto(job) {
 
             if(pagina.cursor_expirado){
                 reiniciosCursor++;
+                cursorExpirou=true;
                 scrollId=null;
-                cursorInicioLote=null;
-
                 await dbQuery(`
                   UPDATE ml_jobs SET
                     cursor=NULL,
@@ -1001,13 +999,12 @@ async function processarSyncCompleto(job) {
                     updated_at=NOW()
                   WHERE id=$1
                 `,[job.id,
-                   `Cursor do Mercado Livre expirou. Reconstruindo a posição salva (${processed.toLocaleString('pt-BR')} já concluídos).`
+                   `Cursor do Mercado Livre expirou. Reconstruindo a leitura; anúncios já gravados continuam preservados.`
                 ]);
-
                 if(reiniciosCursor>10){
-                    throw new Error('O Mercado Livre invalidou o cursor repetidas vezes. A sincronização será retomada automaticamente.');
+                    throw new Error('O Mercado Livre invalidou o cursor repetidas vezes. A sincronização será retomada automaticamente do checkpoint.');
                 }
-                continue;
+                break;
             }
 
             if(total<=0 && pagina.total>0){
@@ -1017,39 +1014,63 @@ async function processarSyncCompleto(job) {
                 `,[job.id,total]);
             }
 
-            const idsPagina=pagina.results;
+            const idsPagina=Array.isArray(pagina.results)?pagina.results.map(String).filter(Boolean):[];
             if(!idsPagina.length){
                 terminou=true;
                 scrollId=null;
+                cursorSeguroSub=null;
                 break;
             }
 
-            const ja=await dbQuery(`
-              SELECT item_id
-              FROM ml_sync_seen
-              WHERE job_id=$1 AND item_id=ANY($2::text[])
-            `,[job.id,idsPagina]);
+            // Uma única consulta identifica IDs já salvos e IDs já contabilizados
+            // neste job. IDs ausentes no banco são candidatos a download, mesmo
+            // que tenham sido tentados em uma execução anterior e não retornaram.
+            const estado=await dbQuery(`
+              SELECT
+                p.item_id,
+                (m.item_id IS NOT NULL) AS existe_db,
+                (s.item_id IS NOT NULL) AS visto_job
+              FROM unnest($3::text[]) AS p(item_id)
+              LEFT JOIN ml_items m
+                ON m.seller_id=$1 AND m.item_id=p.item_id
+              LEFT JOIN ml_sync_seen s
+                ON s.job_id=$2 AND s.item_id=p.item_id
+            `,[job.seller_id,job.id,idsPagina]);
 
-            const vistos=new Set(ja.rows.map(r=>String(r.item_id)));
-            for(const id of idsPagina){
-                const itemId=String(id);
-                if(!vistos.has(itemId) && !idsLote.includes(itemId)){
-                    idsLote.push(itemId);
-                    if(idsLote.length>=TAMANHO_LOTE)break;
+            for(const row of estado.rows){
+                const itemId=String(row.item_id||'');
+                if(!itemId)continue;
+
+                if(!row.visto_job && !idsLidosSet.has(itemId)){
+                    idsLidosSet.add(itemId);
+                    idsLidosSub.push(itemId);
+                }
+
+                // Registros existentes nunca são baixados novamente neste fluxo.
+                // Se um ID ainda não existe no banco, ele volta a ser tentado.
+                if(!row.existe_db && !idsNovosSet.has(itemId)){
+                    idsNovosSet.add(itemId);
+                    idsNovos.push(itemId);
                 }
             }
 
             scrollId=pagina.scroll_id||null;
-            if(!scrollId){
-                terminou=true;
-                break;
+            cursorSeguroSub=scrollId;
+            paginasNoLote++;
+            if(!scrollId)terminou=true;
+
+            if(idsLidosSub.length===0 && idsNovos.length===0){
+                // Página totalmente conhecida: o cursor pode avançar sem download.
+                await dbQuery(`
+                  UPDATE ml_jobs SET cursor=$2,updated_at=NOW(),message=$3 WHERE id=$1
+                `,[job.id,scrollId,
+                   `Verificando IDs · ${processed.toLocaleString('pt-BR')} já percorridos · anúncios existentes preservados.`
+                ]);
             }
 
             paginasDesdeHeartbeat++;
             if(paginasDesdeHeartbeat>=5){
                 paginasDesdeHeartbeat=0;
-                // Atualiza apenas o heartbeat/mensagem. NÃO avança o cursor
-                // enquanto os IDs coletados ainda não foram persistidos.
                 await dbQuery(`
                   UPDATE ml_jobs SET
                     processed=$2,
@@ -1059,97 +1080,93 @@ async function processarSyncCompleto(job) {
                     updated_at=NOW()
                   WHERE id=$1
                 `,[job.id,processed,total,
-                   `Lendo anúncios do Mercado Livre · ${idsLote.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE.toLocaleString('pt-BR')} no lote · ${processed.toLocaleString('pt-BR')} salvos`
+                   `Lendo IDs · lote de até 1.000 · ${processed.toLocaleString('pt-BR')} já confirmados no checkpoint`
                 ],{tentativas:2});
             }
         }
 
-        if(!idsLote.length){
+        // Se o cursor expirou no meio do lote, recomeça a leitura. Os itens já
+        // gravados são reconhecidos por ml_items e não serão baixados de novo.
+        if(cursorExpirou)continue;
+
+        if(!idsLidosSub.length && !idsNovos.length){
             if(terminou)break;
             continue;
         }
 
-        const cursorFimLote=scrollId;
-        await dbQuery(`
-          UPDATE ml_jobs SET
-            message=$2,
-            updated_at=NOW()
-          WHERE id=$1
-        `,[job.id,
-           `Preparando ${idsLote.length.toLocaleString('pt-BR')} anúncios em micro-lotes de até ${TAMANHO_SUBLOTE.toLocaleString('pt-BR')} · ${processed.toLocaleString('pt-BR')} já salvos`
-        ]);
+        let itens=[];
+        let falhasSub=0;
 
-        for(let offset=0;offset<idsLote.length;offset+=TAMANHO_SUBLOTE){
-            const idsSub=idsLote.slice(offset,Math.min(idsLote.length,offset+TAMANHO_SUBLOTE));
-            // O heartbeat geral do job permanece ativo durante todo o processamento.
-            // Evitamos criar timers extras por micro-lote para não gerar consultas duplicadas.
-            const detalhes=await buscarItensBulkFreteRapido(token,idsSub);
+        if(idsNovos.length){
+            await dbQuery(`
+              UPDATE ml_jobs SET message=$2,updated_at=NOW() WHERE id=$1
+            `,[job.id,
+               `Baixando ${idsNovos.length.toLocaleString('pt-BR')} anúncio(s) novo(s) · ${idsLidosSub.length.toLocaleString('pt-BR')} IDs verificados neste lote.`
+            ]);
 
-            const itens=idsSub.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+            const detalhes=await buscarItensBulkFreteRapido(
+                token,
+                idsNovos,
+                {concurrency:CONCORRENCIA_BULK_SYNC}
+            );
+
+            itens=idsNovos.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+            falhasSub=Math.max(0,idsNovos.length-itens.length);
+
+            // Persiste imediatamente os detalhes retornados, antes do checkpoint.
+            // O upsert preserva campos locais de frete/comissão já existentes.
             if(itens.length){
-                await upsertItensDb(job.seller_id,itens);
+                await upsertItensDb(job.seller_id,itens,{somenteNovos:true});
+                novosGravados+=itens.length;
             }
+        }
 
-            // Marca como visitado somente depois de gravar os detalhes disponíveis.
+        // Registra os IDs lidos somente depois de terminar a gravação do lote.
+        // IDs sem detalhe continuam ausentes de ml_items e serão tentados de novo
+        // na próxima sincronização, sem apagar nem substituir registros antigos.
+        if(idsLidosSub.length){
             await dbQuery(`
               INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
               SELECT $1,$2,x
               FROM unnest($3::text[]) AS x
               ON CONFLICT(job_id,item_id) DO NOTHING
-            `,[job.id,job.seller_id,idsSub]);
-
-            const falhasSub=Math.max(0,idsSub.length-itens.length);
-            errors+=falhasSub;
-            seenCount+=idsSub.length;
-            processed=Math.max(seenCount,processedBase+(seenCount-seenInicial));
-
-            const subLoteFinal=offset+idsSub.length>=idsLote.length;
-            // Só avança o cursor depois que TODOS os IDs coletados neste lote
-            // já estão no PostgreSQL e registrados em ml_sync_seen.
-            const cursorSeguro=subLoteFinal?cursorFimLote:cursorInicioLote;
-            const totalExibido=total>0?total:processed;
-            const pct=totalExibido?Math.min(100,Math.round(processed/totalExibido*100)):0;
-
-            await dbQuery(`
-              UPDATE ml_jobs SET
-                status='running',
-                processed=$2,
-                progress_current=$2,
-                progress_total=CASE WHEN $3>0 THEN $3 ELSE progress_total END,
-                errors=$4,
-                cursor=$5,
-                message=$6,
-                updated_at=NOW()
-              WHERE id=$1
-            `,[job.id,processed,total,errors,cursorSeguro,
-               `Micro-lote salvo · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · ${itens.length.toLocaleString('pt-BR')} anúncios gravados${falhasSub?` · ${falhasSub} sem detalhe retornado pelo ML`:''}`
-            ]);
-
-            console.log(
-              '[SYNC V107 WORKER] job',job.id,
-              '· micro-lote salvo ·',processed,'/',totalExibido,
-              '· itens',itens.length,
-              '· falhas',falhasSub,
-              '· cursor',subLoteFinal?'avançado':'preservado'
-            );
+            `,[job.id,job.seller_id,idsLidosSub]);
+            seenCount+=idsLidosSub.length;
+            existentesPreservados+=Math.max(0,idsLidosSub.length-idsNovos.length);
         }
+
+        errors+=falhasSub;
+        processed=Math.max(processed,seenCount);
+        const totalExibido=total>0?total:processed;
+        const pct=totalExibido?Math.min(100,Math.round(processed/totalExibido*100)):0;
+        const existentesNoLote=Math.max(0,idsLidosSub.length-idsNovos.length);
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            status='running',
+            processed=$2,
+            progress_current=$2,
+            progress_total=CASE WHEN $3>0 THEN $3 ELSE progress_total END,
+            errors=$4,
+            cursor=$5,
+            message=$6,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,processed,total,errors,cursorSeguroSub,
+           `Checkpoint salvo · lote de 1.000 · ${itens.length.toLocaleString('pt-BR')} novo(s) salvo(s) · ${existentesNoLote.toLocaleString('pt-BR')} já existente(s) preservado(s) · total verificado ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} (${pct}%)${falhasSub?` · ${falhasSub} detalhe(s) não retornado(s); serão tentados novamente na próxima execução`:''}`
+        ]);
+
+        console.log(
+          '[SYNC V109 WORKER] job',job.id,
+          '· checkpoint',processed,'/',totalExibido,
+          '· novos',itens.length,
+          '· existentes preservados',existentesNoLote,
+          '· falhas detalhe',falhasSub
+        );
       }
 
-      // A limpeza só ocorre após o scan completo, nunca durante uma retomada.
-      const del=await dbQuery(`
-        DELETE FROM ml_items m
-        WHERE m.seller_id=$1
-          AND NOT EXISTS(
-            SELECT 1
-            FROM ml_sync_seen s
-            WHERE s.job_id=$2
-              AND s.seller_id=$1
-              AND s.item_id=m.item_id
-          )
-        RETURNING m.item_id
-      `,[job.seller_id,job.id]);
-
-      removidos=del.rowCount||0;
+      // V109 NÃO remove anúncios antigos. A tabela ml_items é cumulativa:
+      // somente anúncios novos são inseridos; o que já existe permanece salvo.
       await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
 
       const finalTotal=total>0?total:processed;
@@ -1166,7 +1183,7 @@ async function processarSyncCompleto(job) {
           updated_at=NOW()
         WHERE id=$1
       `,[job.id,processed,finalTotal,errors,
-         `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) percorridos em micro-lotes de até ${TAMANHO_SUBLOTE.toLocaleString('pt-BR')} · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base local.`
+         `Concluído: ${processed.toLocaleString('pt-BR')} IDs verificados · ${novosGravados.toLocaleString('pt-BR')} anúncio(s) novo(s) salvo(s) nesta execução · anúncios existentes preservados · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) e que poderão ser tentados novamente · ${existentesPreservados.toLocaleString('pt-BR')} existente(s) preservado(s) contabilizado(s) nesta execução. Nenhum anúncio existente foi apagado.`
       ]);
     }finally{
       pararHeartbeat();
