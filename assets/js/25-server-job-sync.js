@@ -1,9 +1,9 @@
 
 /* =========================================================
-   V107 — PUXAR ANÚNCIOS COM MICROCHeckpoint + RECOVERY AUTOMÁTICO
+   V109 — LOTES DE 1.000 COM SINCRONIZAÇÃO INCREMENTAL
    - corrige conflito entre V88/V93 direto e Gestão V103/V104;
    - PostgreSQL passa a ser a fonte principal;
-   - lote lógico de 1.000 no backend;
+   - lotes de até 1.000 IDs; somente anúncios ausentes são baixados;
    - checkpoint e retomada pelo ml_jobs;
    - página da Gestão atualiza durante o processamento.
 ========================================================= */
@@ -73,12 +73,12 @@ async function acompanharAnunciosV105(jobId){
       mensagem:j.message||'Sincronizando anúncios...'
     });
 
-    // Mostra os anúncios à medida que cada lote de ~1.000 chega ao PostgreSQL.
+    // Mostra os anúncios à medida que cada lote de ~500 chega ao PostgreSQL.
     if(
       atual>0 &&
       (
         mlHubSyncAnunciosV105UltimoRender===0 ||
-        atual-mlHubSyncAnunciosV105UltimoRender>=500
+        atual-mlHubSyncAnunciosV105UltimoRender>=1000
       )
     ){
       mlHubSyncAnunciosV105UltimoRender=atual;
@@ -219,7 +219,7 @@ async function puxarAnunciosV105({retomarAutomatico=false}={}){
       atual:Number(d.job?.progress_current||0),
       total:Number(d.job?.progress_total||0),
       mensagem:d.mensagem||d.job?.message||
-        'Job iniciado em lotes de 1.000.'
+        'Job incremental iniciado em lotes de até 1.000; anúncios existentes preservados.'
     });
 
     mlHubSyncAnunciosV105UltimoRender=0;
