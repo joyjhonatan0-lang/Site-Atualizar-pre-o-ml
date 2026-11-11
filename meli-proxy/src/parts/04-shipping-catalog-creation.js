@@ -1618,7 +1618,7 @@ function deveRepetirFrete(status){
     return status===408||status===429||status===500||status===502||status===503||status===504;
 }
 
-async function buscarItensBulkFreteRapido(token,ids){
+async function buscarItensBulkFreteRapido(token,ids,opcoes={}){
     const unicos=[...new Set((ids||[]).map(String).filter(Boolean))];
     const blocos=[];
     for(let i=0;i<unicos.length;i+=20)blocos.push(unicos.slice(i,i+20));
@@ -1626,8 +1626,10 @@ async function buscarItensBulkFreteRapido(token,ids){
     const mapa={};
     const falhas=new Map();
 
-    // V107: micro-lotes menores e concorrência moderada reduzem picos no Render/ML.
-    const concorrencia=Math.max(4,Math.min(12,Number(process.env.ML_BULK_CONCURRENCY||8)));
+    // V109: permite aumentar a concorrência apenas na sincronização incremental.
+    // Os demais fluxos mantêm o limite padrão configurado em ML_BULK_CONCURRENCY.
+    const concorrenciaInformada=Number(opcoes?.concurrency ?? process.env.ML_BULK_CONCURRENCY ?? 8);
+    const concorrencia=Math.max(4,Math.min(16,Number.isFinite(concorrenciaInformada)?concorrenciaInformada:8));
     let cursor=0;
 
     async function worker(){
