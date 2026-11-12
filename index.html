@@ -2013,7 +2013,7 @@ button:disabled{opacity:.45!important}
                 <button
                     onclick="puxarAnunciosV105()"
                     class="text-[10px] bg-yellow-400 hover:bg-yellow-300 px-3 py-2 rounded-lg text-slate-950 font-bold"
-                    title="Sincroniza todos os an&#250;ncios em lotes de 1.000, salva checkpoint e retoma automaticamente do ponto salvo"
+                    title="Puxa em lotes de 1.000 apenas os an&#250;ncios que ainda n&#227;o est&#227;o no site; os que j&#225; existem s&#227;o mantidos"
                 >
                     &#8595; Puxar an&#250;ncios
                 </button>
@@ -20207,24 +20207,27 @@ async function acompanharAnunciosV105(jobId){
       mensagem:j.message||'Sincronizando anúncios...'
     });
 
-    // Mostra os anúncios à medida que cada lote de ~1.000 chega ao PostgreSQL.
+    // V107: mostra os anúncios à medida que cada lote de ~1.000 chega ao PostgreSQL.
+    // Só marca o lote como "mostrado" se a Gestão realmente recarregou
+    // (se ela estava ocupada, tenta de novo no próximo ciclo).
     if(
       atual>0 &&
+      !gestaoCarregando &&
       (
         mlHubSyncAnunciosV105UltimoRender===0 ||
         atual-mlHubSyncAnunciosV105UltimoRender>=1000
       )
     ){
-      mlHubSyncAnunciosV105UltimoRender=atual;
       try{
         await v88CarregarGestaoLocal(1,{silencioso:true});
+        mlHubSyncAnunciosV105UltimoRender=atual;
       }catch(e){}
     }
 
     if(['queued','running'].includes(String(j.status||''))){
       mlHubSyncAnunciosV105Timer=setTimeout(
         ()=>acompanharAnunciosV105(jobId),
-        1500
+        1000
       );
       return;
     }
