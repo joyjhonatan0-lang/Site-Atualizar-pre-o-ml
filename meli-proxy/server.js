@@ -899,21 +899,10 @@ app.use('/api',(req,res,next)=>{
 });
 
 let oauthRefreshPromise = null;
-let cachedOAuthStore = null;
-let cachedOAuthStoreTime = 0;
-const OAUTH_CACHE_TTL_MS = 10000; // Cache de 10s em memória para evitar travamentos de I/O em lote
 
 function lerOAuthStore() {
-    const agora = Date.now();
-    if (cachedOAuthStore && (agora - cachedOAuthStoreTime < OAUTH_CACHE_TTL_MS)) {
-        return cachedOAuthStore;
-    }
     try {
-        if (!fs.existsSync(OAUTH_FILE)) {
-            cachedOAuthStore = {};
-            cachedOAuthStoreTime = agora;
-            return cachedOAuthStore;
-        }
+        if (!fs.existsSync(OAUTH_FILE)) return {};
         const bruto=fs.readFileSync(OAUTH_FILE,'utf8');
         const obj=JSON.parse(bruto)||{};
 
@@ -939,25 +928,18 @@ function lerOAuthStore() {
                 decipher.final()
             ]).toString('utf8');
 
-            const res = JSON.parse(texto)||{};
-            cachedOAuthStore = res;
-            cachedOAuthStoreTime = agora;
-            return res;
+            return JSON.parse(texto)||{};
         }
 
-        cachedOAuthStore = obj;
-        cachedOAuthStoreTime = agora;
         return obj;
     } catch (erro) {
         console.error('Erro ao ler OAuth store:', erro.message);
-        return cachedOAuthStore || {};
+        return {};
     }
 }
 
 function salvarOAuthStore(dados) {
     const seguro={...(dados||{})};
-    cachedOAuthStore = { ...seguro };
-    cachedOAuthStoreTime = Date.now();
 
     if(ML_HUB_TOKEN_ENCRYPTION_KEY){
         const key=crypto.createHash('sha256')
@@ -996,8 +978,6 @@ function salvarOAuthStore(dados) {
 }
 
 function limparOAuthStore() {
-    cachedOAuthStore = null;
-    cachedOAuthStoreTime = 0;
     try { if (fs.existsSync(OAUTH_FILE)) fs.unlinkSync(OAUTH_FILE); } catch (erro) {}
 }
 
@@ -2078,7 +2058,7 @@ app.get('/api/anuncios', async (req, res) => {
 
     if (!token) {
         return res.status(401).json({
-            erro: "Token não fornecido"
+            erro: "Token n\u00e3o fornecido"
         });
     }
 
@@ -2090,14 +2070,20 @@ app.get('/api/anuncios', async (req, res) => {
             : []
     );
 
-    const isAppendMode = existingIdsSet.size > 0;
+    const isAppendMode =
+        existingIdsSet.size > 0;
 
     try {
-        const userData = await usuarioML(token);
+        const userRes = await mlFetch(
+            `${ML_API}/users/me`,
+            token
+        );
 
-        if (!userData || !userData.id) {
+        const userData = await jsonSeguro(userRes);
+
+        if (!userData.id) {
             return res.status(401).json({
-                erro: "Token inválido ou expirado."
+                erro: "Token inv\u00e1lido ou expirado."
             });
         }
 
@@ -2105,143 +2091,234 @@ app.get('/api/anuncios', async (req, res) => {
         let scrollId = null;
         let hasMore = true;
 
-        // V107: limit=100 reduz o número de requisições de scan pela metade
         while (hasMore) {
-            let url = `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=100`;
+            let url =
+                `${ML_API}/users/${userData.id}/items/search?search_type=scan&limit=50`;
 
             if (scrollId) {
                 url += `&scroll_id=${encodeURIComponent(scrollId)}`;
             }
 
-            const searchRes = await mlFetch(url, token);
-            const searchData = await jsonSeguro(searchRes);
-            const results = searchData.results || [];
+            const searchRes = await mlFetch(
+                url,
+                token
+            );
+
+            const searchData =
+                await jsonSeguro(searchRes);
+
+            const results =
+                searchData.results || [];
 
             if (results.length > 0) {
-                allIds = allIds.concat(results);
+                allIds =
+                    allIds.concat(results);
             }
 
-            scrollId = searchData.scroll_id;
+            scrollId =
+                searchData.scroll_id;
 
-            if (results.length === 0 || !scrollId) {
+            if (
+                results.length === 0 ||
+                !scrollId
+            ) {
                 hasMore = false;
             }
         }
 
         if (allIds.length === 0) {
-            return res.json({ itens: [] });
+            return res.json({
+                itens: []
+            });
         }
 
         let targetIds = allIds;
 
         if (isAppendMode) {
-            targetIds = allIds.filter(id => !existingIdsSet.has(id));
+            targetIds =
+                allIds.filter(
+                    id => !existingIdsSet.has(id)
+                );
 
             if (targetIds.length === 0) {
                 return res.json({
                     itens: [],
-                    mensagem: "Nenhum anúncio novo encontrado."
+                    mensagem:
+                        "Nenhum an\u00fancio novo encontrado."
                 });
             }
         }
 
-        // V107: concorrência paralela e atributos enxutos para velocidade máxima sem travar
-        const chunks = [];
-        for (let i = 0; i < targetIds.length; i += 20) {
-            chunks.push(targetIds.slice(i, i + 20));
-        }
+        let listaFinal = [];
 
-        const mapaItens = new Map();
-        const concorrencia = Math.min(8, Math.max(1, chunks.length));
-        let chunkIndex = 0;
+        for (
+            let i = 0;
+            i < targetIds.length;
+            i += 20
+        ) {
+            const chunk =
+                targetIds.slice(
+                    i,
+                    i + 20
+                );
 
-        async function workerAnuncios() {
-            while (true) {
-                const idx = chunkIndex++;
-                if (idx >= chunks.length) return;
-                const chunk = chunks[idx];
-
-                try {
-                    const multiRes = await mlFetch(
-                        `${ML_API}/items?ids=${chunk.join(",")}&attributes=id,title,price,status,listing_type_id,available_quantity,sold_quantity,attributes,permalink,thumbnail,sale_fee,shipping`,
+            try {
+                const multiRes =
+                    await mlFetch(
+                        `${ML_API}/items?ids=${chunk.join(",")}`,
                         token
                     );
 
-                    const multiData = await jsonSeguro(multiRes);
-                    const itensArray = Array.isArray(multiData) ? multiData : [];
+                const multiData =
+                    await jsonSeguro(multiRes);
 
-                    for (const itemObj of itensArray) {
-                        if (itemObj && itemObj.code === 200 && itemObj.body) {
-                            const body = itemObj.body;
-                            const idItem = body.id;
-                            const preco = Number(body.price || 0);
-                            const listingType = body.listing_type_id || 'gold_special';
-                            const availableQty = Number(body.available_quantity || 0);
-                            const title = body.title || 'Sem Título';
-                            const permalink = body.permalink || '#';
-                            const thumbnail = body.thumbnail || '';
+                const itensArray =
+                    Array.isArray(multiData)
+                        ? multiData
+                        : [];
 
-                            let sku = 'Sem SKU';
-                            if (body.attributes) {
-                                const attrSku = body.attributes.find(a => a.id === 'SELLER_SKU');
-                                if (attrSku && attrSku.value_name) {
-                                    sku = attrSku.value_name;
-                                }
+                for (
+                    let itemObj
+                    of itensArray
+                ) {
+                    if (
+                        itemObj &&
+                        itemObj.code === 200 &&
+                        itemObj.body
+                    ) {
+                        const body =
+                            itemObj.body;
+
+                        const idItem =
+                            body.id;
+
+                        const preco =
+                            body.price || 0;
+
+                        const listingType =
+                            body.listing_type_id ||
+                            'gold_special';
+
+                        const availableQty =
+                            body.available_quantity ||
+                            0;
+
+                        const title =
+                            body.title ||
+                            'Sem T\u00edtulo';
+
+                        const permalink =
+                            body.permalink ||
+                            '#';
+
+                        const thumbnail =
+                            body.thumbnail ||
+                            '';
+
+                        let sku =
+                            'Sem SKU';
+
+                        if (body.attributes) {
+                            const attrSku =
+                                body.attributes.find(
+                                    a =>
+                                        a.id ===
+                                        'SELLER_SKU'
+                                );
+
+                            if (
+                                attrSku &&
+                                attrSku.value_name
+                            ) {
+                                sku =
+                                    attrSku.value_name;
                             }
+                        }
 
-                            const status = body.status || 'active';
-                            let comissao = body.sale_fee || (
-                                listingType === 'gold_pro' ? preco * 0.16 : preco * 0.11
+                        const status =
+                            body.status ||
+                            'active';
+
+                        let comissao =
+                            body.sale_fee ||
+                            (
+                                listingType ===
+                                'gold_pro'
+                                    ? preco * 0.16
+                                    : preco * 0.11
                             );
 
-                            const shipping = body.shipping || {};
-                            const freeShipping = shipping.free_shipping || false;
+                        const shipping =
+                            body.shipping || {};
 
-                            let custoEnvio = 0;
-                            if (Array.isArray(shipping.costs)) {
-                                const custoDoItem = shipping.costs.find(
-                                    c => Number.isFinite(Number(c?.cost))
-                                );
-                                if (custoDoItem) custoEnvio = Number(custoDoItem.cost);
-                            }
+                        const freeShipping =
+                            shipping.free_shipping ||
+                            false;
 
-                            let liquido = preco - comissao - custoEnvio;
-                            if (liquido < 0) liquido = 0;
-
-                            mapaItens.set(String(idItem), {
-                                id: idItem,
-                                title,
-                                price: preco,
-                                status,
-                                listing_type_id: listingType,
-                                available_quantity: availableQty,
-                                sold_quantity: Number(body.sold_quantity || 0),
-                                sku,
-                                permalink,
-                                thumbnail,
-                                sale_fee: comissao,
-                                shipping_cost: custoEnvio,
-                                free_shipping: freeShipping,
-                                net_received: liquido
-                            });
+                        // N\u00e3o consulta cota\u00e7\u00e3o de frete aqui: isso deixava o carregamento
+                        // de milhares de an\u00fancios extremamente lento. O frete correto
+                        // \u00e9 atualizado exclusivamente pelo bot\u00e3o "Puxar fretes".
+                        let custoEnvio = 0;
+                        if (Array.isArray(shipping.costs)) {
+                            const custoDoItem = shipping.costs.find(
+                                c => Number.isFinite(Number(c?.cost))
+                            );
+                            if (custoDoItem) custoEnvio = Number(custoDoItem.cost);
                         }
+
+                        // Valor l\u00edquido exibido no painel: pre\u00e7o - comiss\u00e3o - custo de envio.
+                        // O usu\u00e1rio pediu que o frete seja descontado sempre do campo "Voc\u00ea recebe".
+                        let liquido =
+                            preco -
+                            comissao -
+                            custoEnvio;
+
+                        if (liquido < 0) {
+                            liquido = 0;
+                        }
+
+                        listaFinal.push({
+                            id: idItem,
+                            title,
+                            price: preco,
+                            status,
+                            listing_type_id:
+                                listingType,
+                            available_quantity:
+                                availableQty,
+                            sold_quantity:
+                                Number(body.sold_quantity || 0),
+                            sku,
+                            permalink,
+                            thumbnail,
+                            sale_fee:
+                                comissao,
+                            shipping_cost:
+                                custoEnvio,
+                            free_shipping:
+                                freeShipping,
+                            net_received:
+                                liquido
+                        });
                     }
-                } catch (chunkErr) {
-                    console.error("Erro ao buscar lote de IDs:", chunkErr.message);
                 }
+            } catch (chunkErr) {
+                console.error(
+                    "Erro ao buscar lote de IDs:",
+                    chunkErr
+                );
             }
         }
 
-        await Promise.all(
-            Array.from({ length: concorrencia }, () => workerAnuncios())
-        );
-
-        const listaFinal = targetIds.map(id => mapaItens.get(String(id))).filter(Boolean);
-        res.json({ itens: listaFinal });
+        res.json({
+            itens: listaFinal
+        });
 
     } catch (e) {
         res.status(500).json({
-            erro: "Erro ao processar dados da API: " + e.message
+            erro:
+                "Erro ao processar dados da API: " +
+                e.message
         });
     }
 });
@@ -2254,61 +2331,73 @@ app.post('/api/sincronizar-precos', async (req, res) => {
     let token = obterToken(req);
 
     if (!token) {
-        return res.status(401).json({ erro: "Token não fornecido" });
+        return res.status(401).json({
+            erro: "Token n\u00e3o fornecido"
+        });
     }
 
     const { ids } = req.body;
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ erro: "Lista de IDs inválida." });
+    if (
+        !ids ||
+        !Array.isArray(ids) ||
+        ids.length === 0
+    ) {
+        return res.status(400).json({
+            erro:
+                "Lista de IDs inv\u00e1lida."
+        });
     }
 
     let precosMap = {};
 
     try {
-        const unicos = [...new Set(ids.map(String).filter(Boolean))];
-        const chunks = [];
-        for (let i = 0; i < unicos.length; i += 20) {
-            chunks.push(unicos.slice(i, i + 20));
-        }
+        for (
+            let i = 0;
+            i < ids.length;
+            i += 20
+        ) {
+            const blocoIds =
+                ids
+                    .slice(i, i + 20)
+                    .join(',');
 
-        const concorrencia = Math.min(8, Math.max(1, chunks.length));
-        let chunkIndex = 0;
+            const multiRes =
+                await mlFetch(
+                    `${ML_API}/items?ids=${blocoIds}`,
+                    token
+                );
 
-        async function workerPrecos() {
-            while (true) {
-                const idx = chunkIndex++;
-                if (idx >= chunks.length) return;
-                const bloco = chunks[idx];
+            const multiData =
+                await jsonSeguro(multiRes);
 
-                try {
-                    const multiRes = await mlFetch(
-                        `${ML_API}/items?ids=${bloco.join(',')}&attributes=id,price`,
-                        token
-                    );
-                    const multiData = await jsonSeguro(multiRes);
-
-                    if (Array.isArray(multiData)) {
-                        for (const itemObj of multiData) {
-                            if (itemObj?.code === 200 && itemObj?.body) {
-                                precosMap[itemObj.body.id] = itemObj.body.price;
-                            }
+            if (Array.isArray(multiData)) {
+                multiData.forEach(
+                    itemObj => {
+                        if (
+                            itemObj.code === 200 &&
+                            itemObj.body
+                        ) {
+                            precosMap[
+                                itemObj.body.id
+                            ] =
+                                itemObj.body.price;
                         }
                     }
-                } catch (chunkErr) {
-                    console.error("Erro ao sincronizar lote de preços:", chunkErr.message);
-                }
+                );
             }
         }
 
-        await Promise.all(
-            Array.from({ length: concorrencia }, () => workerPrecos())
-        );
-
-        res.json({ precos: precosMap });
+        res.json({
+            precos: precosMap
+        });
 
     } catch (e) {
-        res.status(500).json({ erro: "Erro ao buscar preços: " + e.message });
+        res.status(500).json({
+            erro:
+                "Erro ao buscar pre\u00e7os: " +
+                e.message
+        });
     }
 });
 
@@ -3006,45 +3095,68 @@ async function buscarPedidosDoVendedor(
  * Busca t\u00edtulos e informa\u00e7\u00f5es dos an\u00fancios
  * usados no ranking.
  */
-async function buscarItensBulk(token, ids) {
+async function buscarItensBulk(
+    token,
+    ids
+) {
     const mapa = {};
-    const idsUnicos = [...new Set((ids || []).map(String).filter(Boolean))];
-    if (idsUnicos.length === 0) return mapa;
 
-    const blocos = [];
-    for (let i = 0; i < idsUnicos.length; i += 20) {
-        blocos.push(idsUnicos.slice(i, i + 20));
-    }
+    const idsUnicos =
+        [...new Set(
+            ids.filter(Boolean)
+        )];
 
-    const concorrencia = Math.min(16, Math.max(4, blocos.length));
-    let cursor = 0;
+    for (
+        let i = 0;
+        i < idsUnicos.length;
+        i += 20
+    ) {
+        const bloco =
+            idsUnicos.slice(
+                i,
+                i + 20
+            );
 
-    async function worker() {
-        while (true) {
-            const idx = cursor++;
-            if (idx >= blocos.length) return;
-            const bloco = blocos[idx];
-            try {
-                const response = await mlFetch(`${ML_API}/items?ids=${bloco.join(',')}`, token);
-                const data = await jsonSeguro(response);
-                if (response.ok && Array.isArray(data)) {
-                    data.forEach(registro => {
-                        const body = registro?.body;
-                        const id = registro?.id || body?.id;
-                        if (id && body) {
-                            mapa[String(id)] = body;
-                        }
-                    });
+        if (bloco.length === 0) {
+            continue;
+        }
+
+        const response =
+            await mlFetch(
+                `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
+                token
+            );
+
+        const data =
+            await jsonSeguro(
+                response
+            );
+
+        if (!response.ok) {
+            continue;
+        }
+
+        if (Array.isArray(data)) {
+            data.forEach(
+                registro => {
+                    const body =
+                        registro.body;
+
+                    const id =
+                        registro.id ||
+                        body?.id;
+
+                    if (
+                        id &&
+                        body
+                    ) {
+                        mapa[id] =
+                            body;
+                    }
                 }
-            } catch (err) {
-                console.error('Erro ao buscar itens bulk:', err.message);
-            }
+            );
         }
     }
-
-    await Promise.all(
-        Array.from({ length: Math.min(concorrencia, blocos.length) }, () => worker())
-    );
 
     return mapa;
 }
@@ -6441,23 +6553,10 @@ function lerJsonArquivoSeguro(arquivo) {
 function salvarJsonArquivoSeguro(arquivo, dados) {
     fs.writeFileSync(arquivo, JSON.stringify(dados,null,2), {encoding:'utf8',mode:0o600});
 }
-const usuarioMLCache = new Map();
 async function usuarioML(token) {
-    if (!token) throw new Error('Token não fornecido.');
-    const agora = Date.now();
-    const emCache = usuarioMLCache.get(token);
-    if (emCache && (agora - emCache.ts < 60000)) {
-        return emCache.data;
-    }
-    const r = await mlFetch(`${ML_API}/users/me`, token);
-    const d = await jsonSeguro(r);
-    if (!r.ok || !d?.id) throw new Error('Não foi possível identificar a conta Mercado Livre.');
-    usuarioMLCache.set(token, { data: d, ts: agora });
-    if (usuarioMLCache.size > 200) {
-        for (const [k, v] of usuarioMLCache) {
-            if (agora - v.ts > 60000) usuarioMLCache.delete(k);
-        }
-    }
+    const r=await mlFetch(`${ML_API}/users/me`,token);
+    const d=await jsonSeguro(r);
+    if(!r.ok||!d?.id) throw new Error('N\u00e3o foi poss\u00edvel identificar a conta Mercado Livre.');
     return d;
 }
 
@@ -8291,6 +8390,8 @@ async function processarSyncCompleto(job) {
     let total=Number(job.progress_total||0);
     let errors=Number(job.errors||0);
     let removidos=0;
+    let novosSalvos=0;
+    let jaExistentes=0;
 
     /*
       O contador verdadeiro vem da tabela ml_sync_seen. Isso resolve o caso em que
@@ -8426,6 +8527,19 @@ async function processarSyncCompleto(job) {
             continue;
         }
 
+        /*
+          V107 — SOMENTE NOVOS: anúncios que já estão no site/banco são mantidos
+          como estão e NÃO são baixados de novo. Só os IDs ausentes em ml_items
+          têm os detalhes buscados no Mercado Livre.
+        */
+        const exLote=await dbQuery(`
+          SELECT item_id FROM ml_items
+          WHERE seller_id=$1 AND item_id=ANY($2::text[])
+        `,[job.seller_id,idsLote]);
+        const existentesLote=new Set(exLote.rows.map(r=>String(r.item_id)));
+        const idsNovosLote=idsLote.filter(id=>!existentesLote.has(String(id)));
+        jaExistentes+=idsLote.length-idsNovosLote.length;
+
         await dbQuery(`
           UPDATE ml_jobs SET
             cursor=$2,
@@ -8433,7 +8547,7 @@ async function processarSyncCompleto(job) {
             updated_at=NOW()
           WHERE id=$1
         `,[job.id,scrollId,
-           `Baixando detalhes de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) · lote de 1.000`
+           `Verificando lote de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) · ${idsNovosLote.length.toLocaleString('pt-BR')} novo(s) para baixar · ${(idsLote.length-idsNovosLote.length).toLocaleString('pt-BR')} já existem e foram mantidos`
         ]);
 
         console.log(
@@ -8448,17 +8562,20 @@ async function processarSyncCompleto(job) {
             `Baixando detalhes do lote de até 1.000 anúncios · ${processed.toLocaleString('pt-BR')} já concluídos`
         );
 
-        let detalhes;
+        let detalhes={mapa:{}};
         try{
-            detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+            if(idsNovosLote.length){
+                detalhes=await buscarItensBulkFreteRapido(token,idsNovosLote);
+            }
         }finally{
             pararHeartbeatV106();
         }
 
-        const itens=idsLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
+        const itens=idsNovosLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
 
         if(itens.length){
             await upsertItensDb(job.seller_id,itens);
+            novosSalvos+=itens.length;
         }
 
         /*
@@ -8473,7 +8590,7 @@ async function processarSyncCompleto(job) {
           ON CONFLICT(job_id,item_id) DO NOTHING
         `,[job.id,job.seller_id,idsLote]);
 
-        const falhasLote=Math.max(0,idsLote.length-itens.length);
+        const falhasLote=Math.max(0,idsNovosLote.length-itens.length);
         errors+=falhasLote;
 
         // Recalcula do banco para checkpoint idempotente.
@@ -8515,23 +8632,10 @@ async function processarSyncCompleto(job) {
     }
 
     /*
-      A exclusão local só acontece no final de uma varredura realmente concluída.
-      Durante pausas/restarts, nenhum anúncio existente é apagado.
+      V107: NENHUM anúncio é removido da base local. Os anúncios que já estão no
+      site são mantidos; a sincronização apenas acrescenta os que ainda não estão.
     */
-    const del=await dbQuery(`
-      DELETE FROM ml_items m
-      WHERE m.seller_id=$1
-        AND NOT EXISTS(
-          SELECT 1
-          FROM ml_sync_seen s
-          WHERE s.job_id=$2
-            AND s.seller_id=$1
-            AND s.item_id=m.item_id
-        )
-      RETURNING m.item_id
-    `,[job.seller_id,job.id]);
-
-    removidos=del.rowCount||0;
+    removidos=0;
 
     await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
 
@@ -8550,7 +8654,7 @@ async function processarSyncCompleto(job) {
         updated_at=NOW()
       WHERE id=$1
     `,[job.id,processed,finalTotal,errors,
-       `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) percorridos em lotes de 1.000 · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base local.`
+       `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) verificados · ${novosSalvos.toLocaleString('pt-BR')} novo(s) adicionado(s) · ${jaExistentes.toLocaleString('pt-BR')} já existiam (mantidos) · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · 0 removido(s).`
     ]);
 }
 
@@ -11423,7 +11527,7 @@ async function buscarItensBulkFreteRapido(token,ids){
             for(let tentativa=1;tentativa<=4;tentativa++){
                 try{
                     const r=await mlFetchFreteComTimeout(
-                        `${ML_API}/items?ids=${bloco.join(',')}`,
+                        `${ML_API}/items/bulk?ids=${bloco.join(',')}`,
                         token,
                         15000
                     );
