@@ -351,7 +351,7 @@ async function criarUsuarioV95({email,name,password}){
     const cleanName=String(name||'').trim().slice(0,120);
     const passHash=hashSenhaV95(password);
 
-    const client=await db.connect();
+    const client=await dbConnectComRetryV104();
     try{
         await client.query('BEGIN');
 
@@ -705,14 +705,59 @@ app.post('/api/app/logout',(req,res)=>{
     return res.json({sucesso:true});
 });
 
+
+app.get('/api/v104/database/status',async(req,res)=>{
+    const host=hostBancoSeguroV81();
+    const usingFallback=Boolean(dbUsandoFallbackV104);
+
+    if(!db){
+        return res.status(503).json({
+            ok:false,
+            database:false,
+            host,
+            using_fallback:usingFallback,
+            code:'DATABASE_NOT_CONFIGURED',
+            message:'DATABASE_URL não está configurada.'
+        });
+    }
+
+    try{
+        await dbQuery('SELECT 1 ok',[],{tentativas:2});
+        return res.json({
+            ok:true,
+            database:true,
+            host,
+            using_fallback:usingFallback,
+            code:'OK'
+        });
+    }catch(e){
+        const dns=erroDnsBancoV81(e);
+        return res.status(503).json({
+            ok:false,
+            database:false,
+            host,
+            using_fallback:usingFallback,
+            code:dns?'DB_DNS_UNAVAILABLE':'DB_TEMPORARY_UNAVAILABLE',
+            retryable:Boolean(erroPostgresTemporarioV80(e)),
+            message:dns
+                ?'O hostname do PostgreSQL não foi encontrado. Verifique DATABASE_URL e a região/workspace no Render.'
+                :'O PostgreSQL está temporariamente indisponível.',
+            detail:String(e?.code||e?.message||'').slice(0,180)
+        });
+    }
+});
+
 app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v100-perguntas-agente-ia',
+        version: 'ml-hub-pro-v104-oauth-db-resiliente',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
-        token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY)
+        token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY),
+        database_host:hostBancoSeguroV81(),
+        database_fallback_configured:Boolean(DATABASE_FALLBACK_URL),
+        database_using_fallback:Boolean(dbUsandoFallbackV104)
     });
 });
 
@@ -725,6 +770,7 @@ app.use('/api',(req,res,next)=>{
         '/api/app/session',
         '/api/app/logout',
         '/api/healthz',
+        '/api/v104/database/status',
         '/api/version',
         '/api/notifications',
         '/api/scale/notifications'
@@ -751,6 +797,7 @@ app.use('/api',async(req,res,next)=>{
         '/api/app/session',
         '/api/app/logout',
         '/api/healthz',
+        '/api/v104/database/status',
         '/api/version',
         '/api/oauth/start',
         '/api/oauth/status',
@@ -1278,7 +1325,7 @@ app.post('/api/oauth/connections/:id/activate',async(req,res)=>{
         const c=await conexaoPorIdV95(req.params.id,req.mlhubUser.uid,req.mlhubUser.wid);
         if(!c)return respostaErro(res,404,'Conta Mercado Livre não encontrada.');
 
-        const client=await db.connect();
+        const client=await dbConnectComRetryV104();
         try{
             await client.query('BEGIN');
             await client.query(`
@@ -1547,6 +1594,197 @@ app.post('/api/oauth/configure', async (req,res)=>{
 });
 
 
+
+/* =========================================================
+   V104 — OAUTH RESILIENTE A QUEDA/DNS TEMPORÁRIO DO POSTGRES
+========================================================= */
+const oauthPendingV104=new Map();
+const OAUTH_PENDING_TTL_V104=20*60*1000;
+
+function chaveOauthPendingV104(uid,wid){
+    return `${String(uid||'')}:${String(wid||'')}`;
+}
+
+function limparOauthPendingExpiradosV104(){
+    const agora=Date.now();
+    for(const [key,val] of oauthPendingV104.entries()){
+        if(!val || Number(val.expires_at||0)<=agora){
+            oauthPendingV104.delete(key);
+        }
+    }
+}
+
+setInterval(limparOauthPendingExpiradosV104,5*60*1000).unref?.();
+
+function guardarOauthPendingV104(tx,tokenData,me){
+    const key=chaveOauthPendingV104(tx?.uid,tx?.wid);
+    if(!tx?.uid||!tx?.wid||!key)return false;
+
+    oauthPendingV104.set(key,{
+        uid:String(tx.uid),
+        wid:String(tx.wid),
+        seller_id:String(tokenData?.user_id||me?.id||''),
+        nickname:me?.nickname||null,
+        access_token:String(tokenData?.access_token||''),
+        refresh_token:tokenData?.refresh_token?String(tokenData.refresh_token):null,
+        expires_in:Number(tokenData?.expires_in||21600),
+        scope:tokenData?.scope||null,
+        created_at:Date.now(),
+        expires_at:Date.now()+OAUTH_PENDING_TTL_V104
+    });
+
+    return true;
+}
+
+function mensagemDbOauthV104(e){
+    if(erroDnsBancoV81(e)){
+        const host=hostBancoSeguroV81();
+        return 'O Mercado Livre autorizou a conta, mas o PostgreSQL do Render não pôde ser localizado'+
+          (host?` (${host})`:'')+
+          '. Confira DATABASE_URL e confirme que o Web Service e o Postgres estão no mesmo workspace e região ao usar a URL interna.';
+    }
+
+    if(erroPostgresTemporarioV80(e)){
+        return 'O Mercado Livre autorizou a conta, mas o PostgreSQL está temporariamente indisponível. O ML Hub Pro preservou a autorização por alguns minutos e tentará concluir a conexão novamente.';
+    }
+
+    return 'O Mercado Livre autorizou a conta, mas não foi possível salvar a conexão no PostgreSQL: '+String(e?.message||e||'erro desconhecido');
+}
+
+async function salvarConexaoOauthSaasV104({uid,wid,tokenData,me}){
+    if(!db)throw Object.assign(
+        new Error('PostgreSQL não configurado. Adicione DATABASE_URL no Render.'),
+        {code:'DATABASE_NOT_CONFIGURED'}
+    );
+
+    await garantirSaasV95();
+
+    const sellerId=String(tokenData?.user_id||me?.id||'');
+    const expires=Date.now()+Number(tokenData?.expires_in||21600)*1000;
+    const client=await dbConnectComRetryV104({tentativas:8});
+
+    try{
+        await client.query('BEGIN');
+
+        await client.query(`
+          UPDATE ml_connections_v95
+          SET is_active=FALSE,updated_at=NOW()
+          WHERE user_id=$1 AND workspace_id=$2
+        `,[String(uid),String(wid)]);
+
+        await client.query(`
+          INSERT INTO ml_connections_v95(
+            workspace_id,user_id,seller_id,nickname,
+            access_token_enc,refresh_token_enc,expires_at,scope,
+            is_active,connected_at,updated_at
+          )
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,TRUE,NOW(),NOW())
+          ON CONFLICT(workspace_id,seller_id) DO UPDATE SET
+            user_id=EXCLUDED.user_id,
+            nickname=EXCLUDED.nickname,
+            access_token_enc=EXCLUDED.access_token_enc,
+            refresh_token_enc=EXCLUDED.refresh_token_enc,
+            expires_at=EXCLUDED.expires_at,
+            scope=EXCLUDED.scope,
+            is_active=TRUE,
+            updated_at=NOW()
+        `,[
+            String(wid),
+            String(uid),
+            sellerId,
+            me?.nickname||null,
+            criptografarV95(tokenData.access_token),
+            tokenData.refresh_token?criptografarV95(tokenData.refresh_token):null,
+            expires,
+            tokenData.scope||null
+        ]);
+
+        await client.query('COMMIT');
+        return {sellerId,expires};
+    }catch(e){
+        try{await client.query('ROLLBACK')}catch(_){}
+        throw e;
+    }finally{
+        try{client.release()}catch(_){}
+    }
+}
+
+async function salvarPendingOauthV104(req){
+    limparOauthPendingExpiradosV104();
+
+    const sessao=req?.mlhubUser;
+    if(!sessao?.uid||!sessao?.wid){
+        const e=new Error('A sessão do ML Hub Pro expirou. Entre novamente.');
+        e.status=401;
+        throw e;
+    }
+
+    const key=chaveOauthPendingV104(sessao.uid,sessao.wid);
+    const pending=oauthPendingV104.get(key);
+
+    if(!pending){
+        const e=new Error('Não existe autorização pendente para esta sessão. Conecte novamente ao Mercado Livre.');
+        e.status=404;
+        throw e;
+    }
+
+    if(Number(pending.expires_at||0)<=Date.now()){
+        oauthPendingV104.delete(key);
+        const e=new Error('A autorização pendente expirou. Conecte novamente ao Mercado Livre.');
+        e.status=410;
+        throw e;
+    }
+
+    const tokenData={
+        user_id:pending.seller_id,
+        access_token:pending.access_token,
+        refresh_token:pending.refresh_token,
+        expires_in:pending.expires_in,
+        scope:pending.scope
+    };
+    const me={
+        id:pending.seller_id,
+        nickname:pending.nickname
+    };
+
+    const saved=await salvarConexaoOauthSaasV104({
+        uid:pending.uid,
+        wid:pending.wid,
+        tokenData,
+        me
+    });
+
+    oauthPendingV104.delete(key);
+    return saved;
+}
+
+app.post('/api/oauth/retry-pending',async(req,res)=>{
+    if(!ML_HUB_SAAS_AUTH){
+        return respostaErro(res,409,'O modo SaaS não está ativo.');
+    }
+
+    try{
+        const saved=await salvarPendingOauthV104(req);
+        return res.json({
+            sucesso:true,
+            connected:true,
+            seller_id:saved.sellerId
+        });
+    }catch(e){
+        const temp=erroPostgresTemporarioV80(e);
+        return res.status(e.status||(temp?503:500)).json({
+            sucesso:false,
+            erro:mensagemDbOauthV104(e),
+            code:erroDnsBancoV81(e)
+                ?'DB_DNS_UNAVAILABLE'
+                :temp
+                  ?'DB_TEMPORARY_UNAVAILABLE'
+                  :'DB_SAVE_FAILED',
+            retryable:Boolean(temp)
+        });
+    }
+});
+
 app.get('/auth/callback', async (req, res) => {
     const { code, state, error, error_description } = req.query || {};
     const tx=lerTransacaoOAuthV94(req);
@@ -1592,9 +1830,11 @@ app.get('/auth/callback', async (req, res) => {
 
         if(!tokenRes.ok || !tokenData.access_token){
             limparCookieOAuthV94(res);
-            return res.status(tokenRes.status||400).send(
-                'Não foi possível gerar o token do Mercado Livre: '+
-                (formatarErroMercadoLivre(tokenData)||'erro desconhecido')
+            return res.redirect(
+                `${frontend}${frontend.includes('?')?'&':'?'}oauth=error&message=${encodeURIComponent(
+                    'Não foi possível gerar o token do Mercado Livre: '+
+                    (formatarErroMercadoLivre(tokenData)||'erro desconhecido')
+                )}`
             );
         }
 
@@ -1608,58 +1848,49 @@ app.get('/auth/callback', async (req, res) => {
 
         if(!meRes.ok || !me?.id){
             limparCookieOAuthV94(res);
-            return res.status(400).send('O Mercado Livre não retornou o usuário autorizado.');
+            return res.redirect(
+                `${frontend}${frontend.includes('?')?'&':'?'}oauth=error&message=${encodeURIComponent(
+                    'O Mercado Livre não retornou o usuário autorizado.'
+                )}`
+            );
         }
 
         const sellerId=String(tokenData.user_id||me.id);
         const expires=Date.now()+Number(tokenData.expires_in||21600)*1000;
 
         if(ML_HUB_SAAS_AUTH){
-            await garantirSaasV95();
-
-            const client=await db.connect();
             try{
-                await client.query('BEGIN');
+                await salvarConexaoOauthSaasV104({
+                    uid:String(tx.uid),
+                    wid:String(tx.wid),
+                    tokenData,
+                    me
+                });
+            }catch(dbError){
+                // O code OAuth já foi trocado por token. Se o banco oscilar agora,
+                // não obrigamos o usuário a autorizar novamente imediatamente.
+                guardarOauthPendingV104(tx,tokenData,me);
+                limparCookieOAuthV94(res);
 
-                await client.query(`
-                  UPDATE ml_connections_v95
-                  SET is_active=FALSE,updated_at=NOW()
-                  WHERE user_id=$1 AND workspace_id=$2
-                `,[String(tx.uid),String(tx.wid)]);
+                const msg=mensagemDbOauthV104(dbError);
+                const codeDb=erroDnsBancoV81(dbError)
+                    ?'DB_DNS_UNAVAILABLE'
+                    :erroPostgresTemporarioV80(dbError)
+                      ?'DB_TEMPORARY_UNAVAILABLE'
+                      :'DB_SAVE_FAILED';
 
-                await client.query(`
-                  INSERT INTO ml_connections_v95(
-                    workspace_id,user_id,seller_id,nickname,
-                    access_token_enc,refresh_token_enc,expires_at,scope,
-                    is_active,connected_at,updated_at
-                  )
-                  VALUES($1,$2,$3,$4,$5,$6,$7,$8,TRUE,NOW(),NOW())
-                  ON CONFLICT(workspace_id,seller_id) DO UPDATE SET
-                    user_id=EXCLUDED.user_id,
-                    nickname=EXCLUDED.nickname,
-                    access_token_enc=EXCLUDED.access_token_enc,
-                    refresh_token_enc=EXCLUDED.refresh_token_enc,
-                    expires_at=EXCLUDED.expires_at,
-                    scope=EXCLUDED.scope,
-                    is_active=TRUE,
-                    updated_at=NOW()
-                `,[
-                    String(tx.wid),
-                    String(tx.uid),
-                    sellerId,
-                    me.nickname||null,
-                    criptografarV95(tokenData.access_token),
-                    tokenData.refresh_token?criptografarV95(tokenData.refresh_token):null,
-                    expires,
-                    tokenData.scope||null
-                ]);
+                console.warn(
+                    `[OAUTH V104] autorização recebida, mas conexão não persistida (${codeDb}):`,
+                    dbError.code||'',
+                    dbError.message
+                );
 
-                await client.query('COMMIT');
-            }catch(e){
-                try{await client.query('ROLLBACK')}catch(_){}
-                throw e;
-            }finally{
-                client.release();
+                return res.redirect(
+                    `${frontend}${frontend.includes('?')?'&':'?'}oauth=pending_database`+
+                    `&seller=${encodeURIComponent(sellerId)}`+
+                    `&db_code=${encodeURIComponent(codeDb)}`+
+                    `&message=${encodeURIComponent(msg)}`
+                );
             }
         }else{
             salvarOAuthStore({
@@ -1685,7 +1916,16 @@ app.get('/auth/callback', async (req, res) => {
         );
     }catch(e){
         limparCookieOAuthV94(res);
-        return res.status(500).send('Erro interno ao concluir OAuth: '+e.message);
+
+        const msg=erroPostgresTemporarioV80(e)
+            ?mensagemDbOauthV104(e)
+            :'Erro ao concluir a conexão com o Mercado Livre: '+String(e?.message||e||'erro desconhecido');
+
+        console.error('[OAUTH V104]',e);
+
+        return res.redirect(
+            `${frontend}${frontend.includes('?')?'&':'?'}oauth=error&message=${encodeURIComponent(msg)}`
+        );
     }
 });
 
@@ -3590,6 +3830,7 @@ app.get('/api/v21/pedidos', async (req,res)=>{
 
             return {
                 id:order.id,
+                pack_id:order.pack_id||null,
                 date_created:order.date_created,
                 date_closed:order.date_closed,
                 status:order.status,
@@ -3631,6 +3872,482 @@ app.get('/api/v21/pedidos', async (req,res)=>{
         respostaErro(res,500,'Erro ao buscar pedidos: '+e.message);
     }
 });
+
+/* =========================================================
+   V101 — GESTÃO EM MASSA / QUALIDADE / NF-e / AUTOMAÇÃO
+========================================================= */
+
+function erroFiscalV101(status,data){
+    const causa=Array.isArray(data?.cause)
+      ?data.cause.map(x=>x?.message||x?.code||'').filter(Boolean).join(' · ')
+      :'';
+
+    const msg=String(
+      data?.display_message||
+      data?.message||
+      data?.error||
+      causa||
+      `HTTP ${status}`
+    );
+
+    if(Number(status)===403){
+        return 'O Mercado Livre negou acesso ao faturamento. Verifique se a permissão funcional "Faturamento" está habilitada no aplicativo e se esta conta está habilitada no Faturador do Mercado Livre. Detalhe: '+msg;
+    }
+
+    return msg;
+}
+
+function invoiceObjetoV101(data){
+    if(!data)return null;
+    if(Array.isArray(data))return data[0]||null;
+    if(Array.isArray(data?.results))return data.results[0]||null;
+    if(Array.isArray(data?.invoices))return data.invoices[0]||null;
+    return typeof data==='object'?data:null;
+}
+
+async function consultarInvoicePedidoV101(token,sellerId,orderId){
+    const r=await mlFetch(
+      `${ML_API}/users/${encodeURIComponent(sellerId)}/invoices/orders/${encodeURIComponent(orderId)}`,
+      token
+    );
+    const d=await jsonSeguro(r);
+
+    if(r.status===404){
+        return {existe:false,status_http:404,invoice:null};
+    }
+
+    if(!r.ok){
+        const e=new Error(erroFiscalV101(r.status,d));
+        e.status=r.status;
+        e.data=d;
+        throw e;
+    }
+
+    return {
+        existe:true,
+        status_http:r.status,
+        invoice:invoiceObjetoV101(d),
+        raw:d
+    };
+}
+
+async function idsOrdersMesmoSellerV101(token,sellerId,order){
+    const baseId=String(order?.id||'').trim();
+    const packId=String(order?.pack_id||'').trim();
+
+    if(!packId)return baseId?[baseId]:[];
+
+    const pr=await mlFetch(
+      `${ML_API}/packs/${encodeURIComponent(packId)}`,
+      token
+    );
+    const pd=await jsonSeguro(pr);
+
+    if(!pr.ok || !Array.isArray(pd?.orders)){
+        return baseId?[baseId]:[];
+    }
+
+    const ids=pd.orders
+      .map(x=>String(x?.id||'').trim())
+      .filter(Boolean);
+
+    if(!ids.length)return baseId?[baseId]:[];
+
+    const detalhes=await mapLimitV21(ids,6,async id=>{
+        const or=await mlFetch(`${ML_API}/orders/${encodeURIComponent(id)}`,token);
+        const od=await jsonSeguro(or);
+        if(!or.ok)return null;
+        return String(od?.seller?.id||'')===String(sellerId)
+          ?String(od.id||id)
+          :null;
+    });
+
+    const filtrados=[...new Set(detalhes.filter(Boolean))];
+    return filtrados.length?filtrados:(baseId?[baseId]:[]);
+}
+
+app.post('/api/v101/anuncios/pausar-lote',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+
+        const ids=[...new Set(
+          (Array.isArray(req.body?.ids)?req.body.ids:[])
+            .map(x=>String(x||'').trim().toUpperCase())
+            .filter(x=>/^MLB\d+$/.test(x))
+        )].slice(0,500);
+
+        if(!ids.length){
+            return respostaErro(res,400,'Nenhum MLB válido foi informado.');
+        }
+
+        const bulk=await buscarItensBulkFreteRapido(token,ids);
+        const mapa=bulk?.mapa||{};
+
+        const resultados=(
+          await mapLimitV21(ids,10,async id=>{
+            const item=mapa[id];
+
+            if(!item){
+                return {id,sucesso:false,erro:'Anúncio não encontrado.'};
+            }
+
+            if(String(item.seller_id||'')!==sellerId){
+                return {id,sucesso:false,erro:'Anúncio não pertence à conta conectada.'};
+            }
+
+            const status=String(item.status||'').toLowerCase();
+
+            if(status==='paused'){
+                return {
+                    id,
+                    sucesso:true,
+                    ja_estava_pausado:true,
+                    status:'paused'
+                };
+            }
+
+            if(status!=='active'){
+                return {
+                    id,
+                    sucesso:false,
+                    ignorado:true,
+                    status,
+                    erro:`Status ${status||'desconhecido'} não pode ser pausado por esta operação.`
+                };
+            }
+
+            const rr=await mlFetch(
+              `${ML_API}/items/${encodeURIComponent(id)}`,
+              token,
+              {
+                method:'PUT',
+                headers:{
+                    'Content-Type':'application/json',
+                    Accept:'application/json'
+                },
+                body:JSON.stringify({status:'paused'})
+              }
+            );
+            const dd=await jsonSeguro(rr);
+
+            if(!rr.ok){
+                return {
+                    id,
+                    sucesso:false,
+                    status,
+                    erro:formatarErroMercadoLivre(dd)||`HTTP ${rr.status}`
+                };
+            }
+
+            return {
+                id,
+                sucesso:true,
+                status:'paused'
+            };
+          })
+        ).filter(Boolean);
+
+        res.json({
+            sucesso:true,
+            total:resultados.length,
+            pausados:resultados.filter(x=>x.sucesso&&!x.ja_estava_pausado).length,
+            ja_pausados:resultados.filter(x=>x.ja_estava_pausado).length,
+            falhas:resultados.filter(x=>!x.sucesso&&!x.ignorado).length,
+            ignorados:resultados.filter(x=>x.ignorado).length,
+            resultados
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao pausar anúncios: '+e.message);
+    }
+});
+
+app.post('/api/v101/anuncios/qualidade-lote',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+
+        const ids=[...new Set(
+          (Array.isArray(req.body?.ids)?req.body.ids:[])
+            .map(x=>String(x||'').trim().toUpperCase())
+            .filter(x=>/^MLB\d+$/.test(x))
+        )].slice(0,100);
+
+        if(!ids.length){
+            return res.json({sucesso:true,resultados:[]});
+        }
+
+        const bulk=await buscarItensBulkFreteRapido(token,ids);
+        const mapa=bulk?.mapa||{};
+
+        const resultados=(
+          await mapLimitV21(ids,6,async id=>{
+            const item=mapa[id];
+
+            if(!item || String(item.seller_id||'')!==sellerId){
+                return {
+                    id,
+                    sucesso:false,
+                    erro:'Anúncio não encontrado na conta conectada.'
+                };
+            }
+
+            let r=await mlFetch(
+              `${ML_API}/item/${encodeURIComponent(id)}/performance`,
+              token
+            );
+            let d=await jsonSeguro(r);
+
+            if(r.status===404){
+                r=await mlFetch(
+                  `${ML_API}/items/${encodeURIComponent(id)}/performance`,
+                  token
+                );
+                d=await jsonSeguro(r);
+            }
+
+            if(!r.ok){
+                return {
+                    id,
+                    sucesso:false,
+                    title:String(item.title||''),
+                    erro:formatarErroMercadoLivre(d)||`HTTP ${r.status}`
+                };
+            }
+
+            return {
+                id,
+                sucesso:true,
+                title:String(item.title||''),
+                score:Number.isFinite(Number(d?.score))
+                  ?Math.max(0,Math.min(100,Number(d.score)))
+                  :null,
+                level:String(d?.level_wording||d?.level||''),
+                calculated_at:d?.calculated_at||null,
+                pending_actions:Array.isArray(d?.buckets)
+                  ?d.buckets.filter(x=>String(x?.status||'').toUpperCase()==='PENDING').length
+                  :0
+            };
+          })
+        ).filter(Boolean);
+
+        res.json({sucesso:true,resultados});
+    }catch(e){
+        respostaErro(res,500,'Erro ao consultar qualidade dos anúncios: '+e.message);
+    }
+});
+
+app.get('/api/v101/pedidos/:orderId/nfe',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const info=await consultarInvoicePedidoV101(
+          token,
+          String(me.id),
+          orderId
+        );
+
+        if(!info.existe){
+            return res.json({
+                sucesso:true,
+                existe:false,
+                order_id:orderId,
+                mensagem:'Ainda não há NF-e emitida para este pedido.'
+            });
+        }
+
+        const inv=info.invoice||{};
+        res.json({
+            sucesso:true,
+            existe:true,
+            order_id:orderId,
+            invoice:{
+                id:inv.id||null,
+                status:inv.status||null,
+                transaction_status:inv.transaction_status||null,
+                issued_date:inv.issued_date||null,
+                invoice_series:inv.invoice_series||null,
+                invoice_number:inv.invoice_number||null,
+                invoice_key:inv?.attributes?.invoice_key||inv.invoice_key||null,
+                status_description:inv?.attributes?.status_description||null,
+                danfe_available:Boolean(
+                  inv?.attributes?.danfe_location||
+                  inv?.danfe_location||
+                  inv?.attributes?.danfe||
+                  inv?.danfe
+                )
+            }
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.post('/api/v101/pedidos/:orderId/nfe/emitir',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const or=await mlFetch(
+          `${ML_API}/orders/${encodeURIComponent(orderId)}`,
+          token
+        );
+        const order=await jsonSeguro(or);
+
+        if(!or.ok){
+            return respostaErro(
+              res,
+              or.status,
+              formatarErroMercadoLivre(order)||'Pedido não encontrado.'
+            );
+        }
+
+        if(String(order?.seller?.id||'')!==sellerId){
+            return respostaErro(
+              res,
+              403,
+              'Este pedido não pertence à conta Mercado Livre conectada.'
+            );
+        }
+
+        try{
+            const existente=await consultarInvoicePedidoV101(token,sellerId,orderId);
+            if(existente.existe){
+                return res.json({
+                    sucesso:true,
+                    ja_existia:true,
+                    invoice:invoiceObjetoV101(existente.raw)||existente.invoice
+                });
+            }
+        }catch(e){
+            if(Number(e.status)===403)throw e;
+        }
+
+        const orders=await idsOrdersMesmoSellerV101(
+          token,
+          sellerId,
+          order
+        );
+
+        if(!orders.length){
+            return respostaErro(res,400,'Não foi possível identificar as vendas do pedido para faturamento.');
+        }
+
+        const rr=await mlFetch(
+          `${ML_API}/users/${encodeURIComponent(sellerId)}/invoices/orders`,
+          token,
+          {
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                Accept:'application/json'
+            },
+            body:JSON.stringify({
+                orders:orders.map(x=>Number(x))
+            })
+          }
+        );
+        const dd=await jsonSeguro(rr);
+
+        if(!rr.ok){
+            return respostaErro(
+              res,
+              rr.status,
+              erroFiscalV101(rr.status,dd)
+            );
+        }
+
+        res.json({
+            sucesso:true,
+            ja_existia:false,
+            orders,
+            invoice:invoiceObjetoV101(dd)||dd
+        });
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
+app.get('/api/v101/pedidos/:orderId/nfe/danfe',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        const sellerId=String(me.id);
+        const orderId=String(req.params.orderId||'').trim();
+
+        const info=await consultarInvoicePedidoV101(
+          token,
+          sellerId,
+          orderId
+        );
+
+        if(!info.existe){
+            return respostaErro(res,404,'Ainda não há NF-e emitida para este pedido.');
+        }
+
+        const inv=info.invoice||{};
+        let location=
+          inv?.attributes?.danfe_location||
+          inv?.danfe_location||
+          inv?.attributes?.danfe||
+          inv?.danfe||
+          '';
+
+        location=String(location||'').trim();
+
+        if(!location){
+            return respostaErro(
+              res,
+              409,
+              'A NF-e existe, mas o DANFE ainda não está disponível. Aguarde a autorização e tente novamente.'
+            );
+        }
+
+        const url=/^https?:\/\//i.test(location)
+          ?location
+          :`${ML_API}${location.startsWith('/')?'':'/'}${location}`;
+
+        const rr=await mlFetch(url,token);
+        if(!rr.ok){
+            const dd=await jsonSeguro(rr);
+            return respostaErro(
+              res,
+              rr.status,
+              erroFiscalV101(rr.status,dd)
+            );
+        }
+
+        const buffer=Buffer.from(await rr.arrayBuffer());
+        const contentType=rr.headers.get('content-type')||'application/pdf';
+
+        res.setHeader('Content-Type',contentType);
+        res.setHeader(
+          'Content-Disposition',
+          `inline; filename="DANFE-${orderId}.pdf"`
+        );
+        res.setHeader('Cache-Control','private, no-store');
+        return res.end(buffer);
+    }catch(e){
+        respostaErro(res,e.status||500,e.message);
+    }
+});
+
 
 /* =========================================================
    PERGUNTAS E RESPOSTAS
@@ -3986,7 +4703,7 @@ app.post('/api/v100/perguntas/agentes',async(req,res)=>{
         );
 
         const id=crypto.randomUUID();
-        const client=await db.connect();
+        const client=await dbConnectComRetryV104();
 
         try{
             await client.query('BEGIN');
@@ -4082,7 +4799,7 @@ app.put('/api/v100/perguntas/agentes/:id',async(req,res)=>{
             req.body?.match_value
         );
 
-        const client=await db.connect();
+        const client=await dbConnectComRetryV104();
 
         try{
             await client.query('BEGIN');
@@ -4818,62 +5535,12 @@ app.put('/api/alterar-status-anuncio', async (req, res) => {
 
 
 function limparTituloRealV76(valor,raw=null){
-    let t=String(valor??'')
+    return String(valor??'')
       .replace(/\u0000/g,' ')
       .replace(/<[^>]*>/g,' ')
       .replace(/\r?\n+/g,' ')
       .replace(/\s+/g,' ')
-      .replace(/^[\s,;:|·\-–—)]+/,'')
       .trim();
-
-    // Remove metadados técnicos anexados por alguma origem/cache legado.
-    t=t.replace(/\s*(?:\||·|-)\s*(?:SKU|MLB|ID|BRAND|MARCA|MODEL|MODELO|COLOR|COR|CATEGORY|CATEGORIA)\s*[:=].*$/i,'').trim();
-
-    // V79: alguns anúncios com variação retornam a COR anexada ao fim do título.
-    // Usamos a própria ficha do item para remover SOMENTE uma cor confirmada
-    // e SOMENTE quando ela aparece como sufixo final.
-    const obj=(raw&&typeof raw==='object')?raw:{};
-    const cores=new Set();
-
-    const adicionarCor=(v)=>{
-        const s=String(v??'').replace(/\s+/g,' ').trim();
-        if(s && s.length<=80)cores.add(s);
-    };
-
-    const attrs=Array.isArray(obj.attributes)?obj.attributes:[];
-    for(const a of attrs){
-        const id=String(a?.id||'').toUpperCase();
-        const nome=String(a?.name||'').toLowerCase();
-        if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
-            adicionarCor(a?.value_name);
-            for(const v of (Array.isArray(a?.values)?a.values:[]))adicionarCor(v?.name||v?.value_name);
-        }
-    }
-
-    const vars=Array.isArray(obj.variations)?obj.variations:[];
-    for(const v of vars){
-        for(const a of [...(Array.isArray(v?.attribute_combinations)?v.attribute_combinations:[]),...(Array.isArray(v?.attributes)?v.attributes:[])]){
-            const id=String(a?.id||'').toUpperCase();
-            const nome=String(a?.name||'').toLowerCase();
-            if(id.includes('COLOR') || nome==='cor' || nome.includes('cor principal')){
-                adicionarCor(a?.value_name);
-                for(const vv of (Array.isArray(a?.values)?a.values:[]))adicionarCor(vv?.name||vv?.value_name);
-            }
-        }
-    }
-
-    const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const normPattern=s=>esc(s).replace(/[\s\-–—_/]+/g,'[\\s\\-–—_/]+');
-
-    for(const cor of [...cores].sort((a,b)=>b.length-a.length)){
-        const rg=new RegExp(`(?:\\s|\\-|–|—|/)+${normPattern(cor)}\\s*$`,'i');
-        if(rg.test(t)){
-            t=t.replace(rg,'').trim();
-            break;
-        }
-    }
-
-    return t;
 }
 
 function normalizarItemGestao(item) {
@@ -5154,6 +5821,86 @@ async function enriquecerComissoesDiretoV87(rawItens,token){
 
 
 
+
+/* =========================================================
+   V103 — RESILIÊNCIA / MIRROR / JOB CONTROL
+========================================================= */
+function sleepV103(ms){
+    return new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(ms||0))));
+}
+
+function jitterV103(base=250){
+    const b=Math.max(50,Number(base||250));
+    return Math.floor(b*(0.75+Math.random()*0.5));
+}
+
+function erroTemporarioHttpV103(status,msg=''){
+    return [408,425,429,500,502,503,504].includes(Number(status)) ||
+      /timeout|timed out|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|socket|network|fetch/i.test(String(msg||''));
+}
+
+async function registrarEventoJobV103(jobId,sellerId,level,code,message,meta={}){
+    if(!db)return;
+    try{
+        await dbQuery(`
+          INSERT INTO ml_job_events_v103(job_id,seller_id,level,code,message,meta)
+          VALUES($1,$2,$3,$4,$5,$6::jsonb)
+        `,[
+          Number(jobId),
+          Number(sellerId),
+          String(level||'info').slice(0,30),
+          String(code||'').slice(0,80),
+          String(message||'').slice(0,800),
+          JSON.stringify(meta||{})
+        ],{tentativas:2});
+    }catch(e){}
+}
+
+async function estadoJobV103(jobId){
+    if(!db)return null;
+    const r=await dbQuery(
+      `SELECT id,status,type,progress_current,progress_total,processed,errors,cursor,message,result,updated_at
+       FROM ml_jobs WHERE id=$1`,
+      [Number(jobId)],
+      {tentativas:2}
+    );
+    return r.rows[0]||null;
+}
+
+async function espelharAnunciosDiretosV103(sellerId,raws,comissoes){
+    if(!db || !Array.isArray(raws) || !raws.length)return false;
+
+    const itens=raws.map(raw=>{
+        const fee=comissoes?.mapa?.get?.(String(raw?.id))||{};
+        return {
+            ...raw,
+            _sale_fee_amount:Number(fee.sale_fee||0),
+            _commission_percentage:Number(fee.commission_percentage||0),
+            _commission_synced_at:new Date().toISOString()
+        };
+    });
+
+    try{
+        await Promise.race([
+            upsertItensDb(sellerId,itens),
+            new Promise((_,reject)=>setTimeout(
+                ()=>reject(new Error('timeout_mirror_db_v103')),
+                12000
+            ))
+        ]);
+        return true;
+    }catch(e){
+        console.warn('[V103 MIRROR ANÚNCIOS]',e.message);
+        return false;
+    }
+}
+
+async function sellerIdRequestV103(req,token){
+    if(req?.mlhubSellerId)return String(req.mlhubSellerId);
+    const me=await usuarioML(token);
+    return String(me.id);
+}
+
 /* =========================================================
    V93 — ANÚNCIOS · LOTE REAL DE ATÉ 1.000
    - o scan do ML é encadeado (scroll_id), portanto as 10 páginas
@@ -5262,9 +6009,16 @@ app.get('/api/v93/anuncios/lote1000',async(req,res)=>{
             });
         }
 
+        const dbMirrored=await espelharAnunciosDiretosV103(
+            sellerId,
+            raws,
+            comissoes
+        );
+
         return res.json({
             sucesso:true,
             mode:'direct_v93_batch_1000',
+            db_mirrored:dbMirrored,
             seller_id:sellerId,
             total,
             ids_count:ids.length,
@@ -6445,18 +7199,27 @@ app.get('/api/v4/items/:id/competition',async(req,res)=>{
    PostgreSQL + fila persistente + worker + pagina\u00e7\u00e3o DB
 ========================================================= */
 const DATABASE_URL = process.env.DATABASE_URL || '';
+const DATABASE_FALLBACK_URL = process.env.DATABASE_FALLBACK_URL || '';
 const ML_WORKER_ENABLED = String(process.env.ML_WORKER_ENABLED || 'true').toLowerCase() !== 'false';
 const ML_WORKER_CONCURRENCY = Math.max(1, Math.min(10, Number(process.env.ML_WORKER_CONCURRENCY || 3)));
-const db = DATABASE_URL ? new Pool({
-    connectionString: DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    max: Math.max(2, Number(process.env.DB_POOL_MAX || 10)),
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 12000,
-    keepAlive:true,
-    keepAliveInitialDelayMillis:10000,
-    allowExitOnIdle:false
-}) : null;
+
+function criarPoolPostgresV104(connectionString){
+    if(!connectionString)return null;
+    return new Pool({
+        connectionString,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        max: Math.max(2, Number(process.env.DB_POOL_MAX || 10)),
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 12000,
+        keepAlive:true,
+        keepAliveInitialDelayMillis:10000,
+        allowExitOnIdle:false
+    });
+}
+
+let databaseUrlAtivaV104=DATABASE_URL;
+let db=criarPoolPostgresV104(databaseUrlAtivaV104);
+let dbUsandoFallbackV104=false;
 
 /* V80 — PostgreSQL resiliente no Render.
    O banco pode reiniciar/entrar em recovery e devolver:
@@ -6511,7 +7274,7 @@ function limparCooldownDbV83(){
 
 function hostBancoSeguroV81(){
     try{
-        return DATABASE_URL ? new URL(DATABASE_URL).hostname : '';
+        return databaseUrlAtivaV104 ? new URL(databaseUrlAtivaV104).hostname : '';
     }catch(e){return ''}
 }
 
@@ -6525,17 +7288,136 @@ function erroDnsBancoV81(e){
 }
 
 
-if(db){
-    db.on('error',err=>{
-        // Erros de conexão idle do pg precisam de listener; sem isso Node pode emitir
-        // "Unhandled error event" e reiniciar o serviço.
+function registrarErroPoolV104(pool,label='primary'){
+    if(!pool)return;
+    pool.on('error',err=>{
         if(erroPostgresTemporarioV80(err)){
             ativarCooldownDbV83(err);
-            console.warn('[POSTGRES V83] conexão temporariamente indisponível:',err.code||'',err.message);
+            console.warn(`[POSTGRES V104 ${label}] conexão temporariamente indisponível:`,err.code||'',err.message);
         }else{
-            console.error('[POSTGRES V80] erro de pool:',err);
+            console.error(`[POSTGRES V104 ${label}] erro de pool:`,err);
         }
     });
+}
+
+registrarErroPoolV104(db,'primary');
+
+/* =========================================================
+   V106 — CLIENTES POSTGRES CHECKED-OUT RESILIENTES
+   O node-postgres pode emitir "error" diretamente em um Client
+   que está fora do pool durante uma transação. Sem listener,
+   isso vira Unhandled 'error' event e derruba o processo Node.
+========================================================= */
+const clientesPgMonitoradosV106=new WeakSet();
+
+function prepararClientePgV106(client){
+    if(!client || clientesPgMonitoradosV106.has(client))return client;
+    clientesPgMonitoradosV106.add(client);
+
+    client.__mlhubPgDeadV106=false;
+
+    client.on('error',err=>{
+        client.__mlhubPgDeadV106=true;
+        if(erroPostgresTemporarioV80(err)){
+            ativarCooldownDbV83(err);
+            console.warn(
+                '[POSTGRES V106 CLIENT] conexão temporariamente perdida:',
+                err?.code||'',
+                err?.message||err
+            );
+        }else{
+            console.error('[POSTGRES V106 CLIENT] erro de conexão:',err);
+        }
+    });
+
+    // Se a conexão morreu enquanto estava checked-out, destrói o client
+    // ao liberar, em vez de devolvê-lo ao pool.
+    if(typeof client.release==='function' && !client.__mlhubReleaseWrappedV106){
+        const liberarOriginal=client.release.bind(client);
+        client.release=(err)=>{
+            if(err)return liberarOriginal(err);
+            if(client.__mlhubPgDeadV106){
+                return liberarOriginal(new Error('Conexão PostgreSQL encerrada durante o uso.'));
+            }
+            return liberarOriginal();
+        };
+        client.__mlhubReleaseWrappedV106=true;
+    }
+
+    return client;
+}
+
+
+async function ativarFallbackDbV104(causa){
+    if(
+        dbUsandoFallbackV104 ||
+        !DATABASE_FALLBACK_URL ||
+        DATABASE_FALLBACK_URL===databaseUrlAtivaV104
+    )return false;
+
+    if(!erroPostgresTemporarioV80(causa))return false;
+
+    const antigo=db;
+    const novo=criarPoolPostgresV104(DATABASE_FALLBACK_URL);
+    registrarErroPoolV104(novo,'fallback');
+
+    db=novo;
+    databaseUrlAtivaV104=DATABASE_FALLBACK_URL;
+    dbUsandoFallbackV104=true;
+    limparCooldownDbV83();
+
+    try{await antigo?.end?.()}catch(_){}
+
+    console.warn('[POSTGRES V104] alternando para DATABASE_FALLBACK_URL.');
+    return true;
+}
+
+async function dbConnectComRetryV104(opcoes={}){
+    if(!db)throw new Error('PostgreSQL não configurado. Adicione DATABASE_URL no Render.');
+
+    const maxTentativas=Math.max(1,Math.min(10,Number(opcoes.tentativas||7)));
+    let ultimo=null;
+
+    for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+        await esperarCooldownDbV83();
+
+        try{
+            const client=prepararClientePgV106(await db.connect());
+            limparCooldownDbV83();
+            return client;
+        }catch(e){
+            ultimo=e;
+
+            if(erroPostgresTemporarioV80(e)){
+                ativarCooldownDbV83(e);
+
+                if(
+                    tentativa>=2 &&
+                    DATABASE_FALLBACK_URL &&
+                    !dbUsandoFallbackV104
+                ){
+                    const trocou=await ativarFallbackDbV104(e);
+                    if(trocou)continue;
+                }
+            }
+
+            if(!erroPostgresTemporarioV80(e)||tentativa>=maxTentativas){
+                throw e;
+            }
+
+            const espera=Math.min(
+                12000,
+                450*Math.pow(2,tentativa-1)+Math.floor(Math.random()*350)
+            );
+
+            console.warn(
+                `[POSTGRES V104] connect tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Retry em ${espera}ms.`
+            );
+            await esperarDbV80(espera);
+        }
+    }
+
+    throw ultimo;
 }
 
 async function dbQuery(text, params=[], opcoes={}) {
@@ -6552,7 +7434,18 @@ async function dbQuery(text, params=[], opcoes={}) {
             return resposta;
         }catch(e){
             ultimo=e;
-            if(erroPostgresTemporarioV80(e))ativarCooldownDbV83(e);
+            if(erroPostgresTemporarioV80(e)){
+                ativarCooldownDbV83(e);
+
+                if(
+                    tentativa>=2 &&
+                    DATABASE_FALLBACK_URL &&
+                    !dbUsandoFallbackV104
+                ){
+                    const trocou=await ativarFallbackDbV104(e);
+                    if(trocou)continue;
+                }
+            }
             if(!erroPostgresTemporarioV80(e) || tentativa>=maxTentativas)throw e;
 
             // Backoff curto com limite. Em recovery do Render, insistimos sem derrubar o job.
@@ -6590,6 +7483,29 @@ async function aguardarPostgresProntoV80(){
     }
 }
 
+
+async function inicializarBuscaRapidaV103(){
+    if(!db)return false;
+
+    try{
+        await dbQuery(`CREATE EXTENSION IF NOT EXISTS pg_trgm`,[],{tentativas:2});
+        await dbQuery(`
+          CREATE INDEX IF NOT EXISTS idx_ml_items_title_trgm_v103
+          ON ml_items USING gin (lower(title) gin_trgm_ops)
+        `,[],{tentativas:2});
+        await dbQuery(`
+          CREATE INDEX IF NOT EXISTS idx_ml_items_sku_trgm_v103
+          ON ml_items USING gin (lower(sku) gin_trgm_ops)
+        `,[],{tentativas:2});
+        return true;
+    }catch(e){
+        // Alguns planos/provedores podem não permitir CREATE EXTENSION.
+        // O sistema continua funcional com os índices B-tree já existentes.
+        console.warn('[V103 BUSCA RÁPIDA] pg_trgm indisponível:',e.message);
+        return false;
+    }
+}
+
 async function inicializarBancoEscala() {
     if (!db) {
         console.warn('[ESCALA] DATABASE_URL ausente: modo 90k desativado at\u00e9 configurar PostgreSQL.');
@@ -6619,6 +7535,12 @@ async function inicializarBancoEscala() {
       CREATE INDEX IF NOT EXISTS idx_ml_items_seller_sold ON ml_items(seller_id,sold_quantity DESC);
       CREATE INDEX IF NOT EXISTS idx_ml_items_seller_updated ON ml_items(seller_id,ml_updated_at DESC NULLS LAST);
       CREATE INDEX IF NOT EXISTS idx_ml_items_title_lower ON ml_items(seller_id,lower(title));
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_status_updated_v103
+      ON ml_items(seller_id,status,ml_updated_at DESC NULLS LAST,item_id);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_sku_sold_v103
+      ON ml_items(seller_id,lower(sku),sold_quantity DESC,item_id);
+      CREATE INDEX IF NOT EXISTS idx_ml_items_seller_date_v103
+      ON ml_items(seller_id,((raw->>'date_created')),item_id);
 
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(18,2) NOT NULL DEFAULT 0;
       ALTER TABLE ml_items ADD COLUMN IF NOT EXISTS free_shipping BOOLEAN NOT NULL DEFAULT FALSE;
@@ -6666,6 +7588,23 @@ async function inicializarBancoEscala() {
       );
       CREATE INDEX IF NOT EXISTS idx_ml_jobs_queue ON ml_jobs(status,available_at,created_at);
       CREATE INDEX IF NOT EXISTS idx_ml_jobs_seller ON ml_jobs(seller_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_ml_jobs_seller_status_v103
+      ON ml_jobs(seller_id,status,updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS ml_job_events_v103(
+        id BIGSERIAL PRIMARY KEY,
+        job_id BIGINT NOT NULL,
+        seller_id BIGINT NOT NULL,
+        level TEXT NOT NULL DEFAULT 'info',
+        code TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_ml_job_events_v103_job
+      ON ml_job_events_v103(job_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_ml_job_events_v103_seller
+      ON ml_job_events_v103(seller_id,created_at DESC);
 
       CREATE TABLE IF NOT EXISTS ml_notifications (
         id BIGSERIAL PRIMARY KEY,
@@ -7130,7 +8069,7 @@ async function criarJob(sellerId,type,payload={}) {
     return r.rows[0];
 }
 async function claimJob() {
-    const client=await db.connect();
+    const client=await dbConnectComRetryV104();
     try {
         await client.query('BEGIN');
         const r=await client.query(`
@@ -7150,7 +8089,7 @@ async function claimJob() {
 
 
 async function claimJobTipoV76(type){
-    const client=await db.connect();
+    const client=await dbConnectComRetryV104();
     try{
         await client.query('BEGIN');
         const r=await client.query(`
@@ -7308,9 +8247,142 @@ async function buscarPaginaScanV84({sellerId,token,scrollId}){
     throw ultimoErro||new Error('Falha ao consultar a lista de anúncios do Mercado Livre.');
 }
 
+
+/* =========================================================
+   V106 — HEARTBEAT + RECUPERAÇÃO DE FULL SYNC
+========================================================= */
+function heartbeatSyncV106(jobId,mensagem='Processando lote de anúncios...'){
+    let ocupado=false;
+
+    const timer=setInterval(async()=>{
+        if(ocupado)return;
+        ocupado=true;
+        try{
+            await dbQuery(`
+              UPDATE ml_jobs
+              SET updated_at=NOW(),
+                  message=CASE
+                    WHEN status='running' THEN COALESCE(NULLIF(message,''),$2)
+                    ELSE message
+                  END
+              WHERE id=$1 AND status='running'
+            `,[jobId,mensagem],{tentativas:1});
+        }catch(e){
+            // O heartbeat nunca derruba o worker. O checkpoint já salvo permanece.
+            if(!erroPostgresTemporarioV80(e)){
+                console.warn('[SYNC V106 HEARTBEAT]',e.message);
+            }
+        }finally{
+            ocupado=false;
+        }
+    },15000);
+
+    timer.unref?.();
+    return ()=>clearInterval(timer);
+}
+
+let recuperarSyncV106Busy=false;
+
+async function normalizarJobsFullSyncV106({startup=false}={}){
+    if(!db || recuperarSyncV106Busy)return 0;
+    recuperarSyncV106Busy=true;
+
+    try{
+        let retomados=0;
+
+        // No startup, qualquer job running pertence ao processo Node anterior.
+        // Em runtime, só recupera se perdeu heartbeat por tempo suficiente.
+        const rr=startup
+          ? await dbQuery(`
+              UPDATE ml_jobs
+              SET status='queued',
+                  locked_at=NULL,
+                  available_at=NOW(),
+                  message='Servidor reiniciado. Retomando automaticamente do último checkpoint.',
+                  updated_at=NOW()
+              WHERE type='full_sync' AND status='running'
+              RETURNING id,seller_id
+            `)
+          : await dbQuery(`
+              UPDATE ml_jobs
+              SET status='queued',
+                  locked_at=NULL,
+                  available_at=NOW(),
+                  message='Worker interrompido. Retomando automaticamente do último checkpoint.',
+                  updated_at=NOW()
+              WHERE type='full_sync'
+                AND status='running'
+                AND updated_at<NOW()-INTERVAL '120 seconds'
+              RETURNING id,seller_id
+            `,[],{tentativas:2});
+
+        retomados=Number(rr?.rowCount||0);
+
+        // Se versões anteriores criaram jobs duplicados para o mesmo seller,
+        // mantém somente o mais recente em queued/running.
+        const duplicados=await dbQuery(`
+          WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER(
+                     PARTITION BY seller_id
+                     ORDER BY GREATEST(COALESCE(progress_current,0),COALESCE(processed,0)) DESC,
+                              updated_at DESC,
+                              id DESC
+                   ) AS rn
+            FROM ml_jobs
+            WHERE type='full_sync'
+              AND status IN ('queued','running')
+          )
+          UPDATE ml_jobs j
+          SET status='failed',
+              locked_at=NULL,
+              finished_at=NOW(),
+              message='Processo duplicado encerrado automaticamente pela V106. O job mais recente continuará do checkpoint.',
+              updated_at=NOW()
+          FROM ranked r
+          WHERE j.id=r.id AND r.rn>1
+          RETURNING j.id
+        `,[],{tentativas:2});
+
+        if(retomados || Number(duplicados.rowCount||0)){
+            console.warn(
+              '[SYNC V106 RECOVERY]',
+              'retomados=',retomados,
+              'duplicados encerrados=',Number(duplicados.rowCount||0)
+            );
+            setTimeout(()=>acordarSyncV79(),200);
+        }
+
+        return retomados;
+    }catch(e){
+        if(!erroPostgresTemporarioV80(e)){
+            console.warn('[SYNC V106 RECOVERY]',e.message);
+        }
+        return 0;
+    }finally{
+        recuperarSyncV106Busy=false;
+    }
+}
+
+let syncRecoveryTimerV106=null;
+function iniciarRecoverySyncV106(){
+    if(syncRecoveryTimerV106)return;
+    syncRecoveryTimerV106=setInterval(
+        ()=>normalizarJobsFullSyncV106({startup:false}),
+        30000
+    );
+    syncRecoveryTimerV106.unref?.();
+}
+
+
 async function processarSyncCompleto(job) {
+    console.log('[SYNC V106 WORKER] iniciando job',job.id,'seller',job.seller_id);
+
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
-    if(!token)throw new Error('Token Mercado Livre indisponível para o seller do job.');
+    if(!token){
+        console.warn('[SYNC V106 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
+        throw new Error('Token Mercado Livre indisponível para o seller do job.');
+    }
 
     const TAMANHO_LOTE=1000;
 
@@ -7463,7 +8535,25 @@ async function processarSyncCompleto(job) {
            `Baixando detalhes de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) · lote de 1.000`
         ]);
 
-        const detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+        console.log(
+            '[SYNC V106 WORKER] job',job.id,
+            '· baixando detalhes do lote',
+            idsLote.length,
+            '· já processados',processed
+        );
+
+        const pararHeartbeatV106=heartbeatSyncV106(
+            job.id,
+            `Baixando detalhes do lote de até 1.000 anúncios · ${processed.toLocaleString('pt-BR')} já concluídos`
+        );
+
+        let detalhes;
+        try{
+            detalhes=await buscarItensBulkFreteRapido(token,idsLote);
+        }finally{
+            pararHeartbeatV106();
+        }
+
         const itens=idsLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
 
         if(itens.length){
@@ -7500,6 +8590,13 @@ async function processarSyncCompleto(job) {
           foi salvo. Se Node/Render/PostgreSQL cair depois daqui, volta exatamente
           para este checkpoint.
         */
+        console.log(
+          '[SYNC V106 WORKER] job',job.id,
+          '· lote salvo ·',processed,'/',totalExibido,
+          '· itens',itens.length,
+          '· falhas',falhasLote
+        );
+
         await dbQuery(`
           UPDATE ml_jobs SET
             status='running',
@@ -7575,7 +8672,7 @@ async function obterTokenPersistenteParaSeller(sellerId) {
 
 async function processarNotificacaoFila() {
     if(!db) return;
-    const client=await db.connect();
+    const client=await dbConnectComRetryV104();
     let n=null;
     try {
         await client.query('BEGIN');
@@ -9731,6 +10828,506 @@ async function processarCriacaoMassaV36(job){
     ]);
 }
 
+
+async function pausarUmItemV103(token,id){
+    let ultimo=null;
+
+    for(let tentativa=1;tentativa<=5;tentativa++){
+        try{
+            const r=await mlFetch(
+              `${ML_API}/items/${encodeURIComponent(id)}`,
+              token,
+              {
+                method:'PUT',
+                headers:{
+                    'Content-Type':'application/json',
+                    Accept:'application/json'
+                },
+                body:JSON.stringify({status:'paused'})
+              }
+            );
+            const d=await jsonSeguro(r);
+
+            if(r.ok){
+                return {
+                    id:String(id),
+                    sucesso:true,
+                    status:r.status,
+                    tentativa
+                };
+            }
+
+            const msg=formatarErroMercadoLivre(d)||`HTTP ${r.status}`;
+            ultimo={status:r.status,msg};
+
+            if(!erroTemporarioHttpV103(r.status,msg) || tentativa>=5){
+                return {
+                    id:String(id),
+                    sucesso:false,
+                    status:r.status,
+                    erro:msg,
+                    tentativa
+                };
+            }
+
+            const retryAfter=Number(r.headers.get('retry-after')||0);
+            await sleepV103(
+              retryAfter>0
+                ?Math.min(15000,retryAfter*1000)
+                :Math.min(12000,jitterV103(500*Math.pow(2,tentativa-1)))
+            );
+        }catch(e){
+            ultimo={status:0,msg:e.message};
+            if(tentativa>=5 || !erroTemporarioHttpV103(0,e.message)){
+                return {
+                    id:String(id),
+                    sucesso:false,
+                    status:0,
+                    erro:String(e.message||e),
+                    tentativa
+                };
+            }
+            await sleepV103(Math.min(12000,jitterV103(500*Math.pow(2,tentativa-1))));
+        }
+    }
+
+    return {
+        id:String(id),
+        sucesso:false,
+        status:Number(ultimo?.status||0),
+        erro:String(ultimo?.msg||'Falha ao pausar anúncio.')
+    };
+}
+
+async function processarPausaMassaV103(job){
+    const token=await obterTokenPersistenteParaSeller(job.seller_id);
+    if(!token)throw new Error('Token Mercado Livre indisponível para pausar anúncios.');
+
+    const payload=job.payload||{};
+    const mode=String(payload.mode||'all').toLowerCase();
+    const value=String(payload.value||'').trim();
+
+    if(!['all','sku','mlb'].includes(mode)){
+        throw new Error('Modo de pausa inválido.');
+    }
+
+    const paramsBase=[job.seller_id];
+    let where=`seller_id=$1 AND status='active'`;
+
+    if(mode==='sku'){
+        paramsBase.push(value.toLowerCase());
+        where+=` AND lower(COALESCE(sku,''))=$${paramsBase.length}`;
+    }else if(mode==='mlb'){
+        paramsBase.push(value.toUpperCase());
+        where+=` AND upper(item_id)=$${paramsBase.length}`;
+    }
+
+    const totalR=await dbQuery(
+      `SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,
+      paramsBase
+    );
+    const total=Number(totalR.rows[0]?.total||0);
+
+    let cursor=String(job.cursor||'');
+    let processados=Number(job.processed||0);
+    let erros=Number(job.errors||0);
+    let sucessos=Math.max(0,processados-erros);
+    let concorrencia=Math.max(3,Math.min(16,Number(payload.concurrency||8)));
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        progress_total=$2,
+        progress_current=$3,
+        message=$4,
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+      job.id,
+      total,
+      processados,
+      `Pausa em massa: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · concorrência ${concorrencia}`
+    ]);
+
+    await registrarEventoJobV103(
+      job.id,
+      job.seller_id,
+      'info',
+      'pause_started',
+      'Pausa em massa iniciada.',
+      {mode,value,total,concorrencia}
+    );
+
+    const LOTE_DB=500;
+
+    while(true){
+        const controle=await estadoJobV103(job.id);
+        if(!controle)return;
+
+        if(controle.status==='paused'){
+            await registrarEventoJobV103(
+              job.id,job.seller_id,'info','pause_paused',
+              'Job pausado pelo usuário.',
+              {processados,total}
+            );
+            return;
+        }
+
+        if(controle.status==='cancelled'){
+            await registrarEventoJobV103(
+              job.id,job.seller_id,'info','pause_cancelled',
+              'Job cancelado pelo usuário.',
+              {processados,total}
+            );
+            return;
+        }
+
+        const params=[...paramsBase];
+        params.push(cursor);
+        const cursorPos=params.length;
+        params.push(LOTE_DB);
+        const limitPos=params.length;
+
+        const r=await dbQuery(`
+          SELECT item_id
+          FROM ml_items
+          WHERE ${where}
+            AND ($${cursorPos}::text='' OR item_id>$${cursorPos})
+          ORDER BY item_id
+          LIMIT $${limitPos}
+        `,params);
+
+        const ids=r.rows.map(x=>String(x.item_id));
+        if(!ids.length)break;
+
+        let posicao=0;
+        const pausadosLote=[];
+        const falhasLote=[];
+
+        while(posicao<ids.length){
+            const grupo=ids.slice(posicao,posicao+concorrencia);
+            const respostas=await Promise.all(
+              grupo.map(id=>pausarUmItemV103(token,id))
+            );
+
+            let teve429=false;
+            let teveTemporario=false;
+
+            for(const rr of respostas){
+                processados++;
+                if(rr.sucesso){
+                    sucessos++;
+                    pausadosLote.push(String(rr.id));
+                }else{
+                    erros++;
+                    falhasLote.push(rr);
+                    if(Number(rr.status)===429)teve429=true;
+                    if(erroTemporarioHttpV103(rr.status,rr.erro))teveTemporario=true;
+                }
+            }
+
+            if(teve429){
+                concorrencia=Math.max(2,Math.floor(concorrencia/2));
+                await sleepV103(jitterV103(1600));
+            }else if(teveTemporario){
+                concorrencia=Math.max(3,concorrencia-1);
+                await sleepV103(jitterV103(700));
+            }else if(concorrencia<16){
+                concorrencia++;
+            }
+
+            posicao+=grupo.length;
+        }
+
+        if(pausadosLote.length){
+            await dbQuery(`
+              UPDATE ml_items
+              SET status='paused',
+                  synced_at=NOW(),
+                  ml_updated_at=COALESCE(ml_updated_at,NOW())
+              WHERE seller_id=$1
+                AND item_id=ANY($2::text[])
+            `,[job.seller_id,pausadosLote]);
+        }
+
+        cursor=String(ids[ids.length-1]||cursor);
+
+        const result={
+            success:sucessos,
+            failed:erros,
+            concurrency:concorrencia,
+            mode,
+            value,
+            last_failures:falhasLote.slice(-25)
+        };
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            cursor=$2,
+            processed=$3,
+            progress_current=$3,
+            progress_total=$4,
+            errors=$5,
+            result=$6::jsonb,
+            message=$7,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+          job.id,
+          cursor,
+          processados,
+          total,
+          erros,
+          JSON.stringify(result),
+          `Pausa em massa: ${processados.toLocaleString('pt-BR')}/${total.toLocaleString('pt-BR')} · ${sucessos.toLocaleString('pt-BR')} pausados · ${erros.toLocaleString('pt-BR')} falhas · concorrência ${concorrencia}`
+        ]);
+
+        if(falhasLote.length){
+            await registrarEventoJobV103(
+              job.id,
+              job.seller_id,
+              'warn',
+              'pause_batch_failures',
+              `${falhasLote.length} falha(s) no lote.`,
+              {falhas:falhasLote.slice(-25)}
+            );
+        }
+
+        await sleepV103(40);
+    }
+
+    await dbQuery(`
+      UPDATE ml_jobs SET
+        status='completed',
+        processed=$2,
+        progress_current=$3,
+        progress_total=$3,
+        errors=$4,
+        cursor=NULL,
+        result=$5::jsonb,
+        message=$6,
+        finished_at=NOW(),
+        updated_at=NOW()
+      WHERE id=$1
+    `,[
+      job.id,
+      processados,
+      total,
+      erros,
+      JSON.stringify({
+        success:sucessos,
+        failed:erros,
+        mode,
+        value
+      }),
+      `Pausa concluída: ${sucessos.toLocaleString('pt-BR')} anúncio(s) pausado(s), ${erros.toLocaleString('pt-BR')} falha(s).`
+    ]);
+
+    await registrarEventoJobV103(
+      job.id,
+      job.seller_id,
+      'info',
+      'pause_completed',
+      'Pausa em massa concluída.',
+      {success:sucessos,failed:erros,total}
+    );
+}
+
+app.post('/api/v103/anuncios/pausar-job',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    if(!db)return respostaErro(res,503,'PostgreSQL indisponível. A pausa em massa de escala precisa do banco.');
+
+    try{
+        const me=await usuarioML(token);
+        const mode=String(req.body?.mode||'all').trim().toLowerCase();
+        const value=String(req.body?.value||'').trim();
+
+        if(!['all','sku','mlb'].includes(mode)){
+            return respostaErro(res,400,'Modo de pausa inválido.');
+        }
+        if(mode!=='all'&&!value){
+            return respostaErro(res,400,'Informe o SKU ou MLB.');
+        }
+        if(mode==='mlb'&&!/^MLB\d+$/i.test(value)){
+            return respostaErro(res,400,'Informe um MLB válido.');
+        }
+
+        const p=[me.id];
+        let where=`seller_id=$1 AND status='active'`;
+        if(mode==='sku'){
+            p.push(value.toLowerCase());
+            where+=` AND lower(COALESCE(sku,''))=$${p.length}`;
+        }else if(mode==='mlb'){
+            p.push(value.toUpperCase());
+            where+=` AND upper(item_id)=$${p.length}`;
+        }
+
+        const c=await dbQuery(
+          `SELECT COUNT(*)::int total FROM ml_items WHERE ${where}`,
+          p
+        );
+        const total=Number(c.rows[0]?.total||0);
+
+        if(!total){
+            return respostaErro(res,404,'Nenhum anúncio ativo corresponde a esse filtro.');
+        }
+
+        const job=await criarJob(
+          me.id,
+          'pause_mass_v103',
+          {
+            mode,
+            value,
+            concurrency:8,
+            created_from:'ml_hub_pro_v103'
+          }
+        );
+
+        await dbQuery(`
+          UPDATE ml_jobs SET
+            progress_total=$2,
+            message=$3,
+            updated_at=NOW()
+          WHERE id=$1
+        `,[
+          job.id,
+          total,
+          `Na fila para pausar ${total.toLocaleString('pt-BR')} anúncio(s).`
+        ]);
+
+        res.status(202).json({
+            sucesso:true,
+            job:{...job,progress_total:total},
+            total
+        });
+    }catch(e){
+        respostaErro(res,500,'Erro ao criar job de pausa: '+e.message);
+    }
+});
+
+app.post('/api/v103/jobs/:id/action',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    if(!db)return respostaErro(res,503,'PostgreSQL indisponível.');
+
+    try{
+        const me=await usuarioML(token);
+        const action=String(req.body?.action||'').toLowerCase();
+
+        const q=await dbQuery(`
+          SELECT * FROM ml_jobs
+          WHERE id=$1 AND seller_id=$2
+          LIMIT 1
+        `,[req.params.id,me.id]);
+
+        const job=q.rows[0];
+        if(!job)return respostaErro(res,404,'Processo não encontrado.');
+
+        if(job.type!=='pause_mass_v103'){
+            return respostaErro(
+              res,
+              409,
+              'Este processo ainda não suporta controle manual nesta versão.'
+            );
+        }
+
+        let status=null;
+        if(action==='pause' && ['queued','running'].includes(job.status))status='paused';
+        if(action==='resume' && ['paused','failed'].includes(job.status))status='queued';
+        if(action==='cancel' && ['queued','running','paused','failed'].includes(job.status))status='cancelled';
+
+        if(!status){
+            return respostaErro(res,409,'Ação não permitida para o estado atual do processo.');
+        }
+
+        const r=await dbQuery(`
+          UPDATE ml_jobs SET
+            status=$3,
+            locked_at=NULL,
+            available_at=CASE WHEN $3='queued' THEN NOW() ELSE available_at END,
+            finished_at=CASE WHEN $3='cancelled' THEN NOW() ELSE NULL END,
+            updated_at=NOW(),
+            message=CASE
+              WHEN $3='paused' THEN 'Processo pausado pelo usuário.'
+              WHEN $3='queued' THEN 'Processo retomado e aguardando worker.'
+              WHEN $3='cancelled' THEN 'Processo cancelado pelo usuário.'
+              ELSE message
+            END
+          WHERE id=$1 AND seller_id=$2
+          RETURNING *
+        `,[job.id,me.id,status]);
+
+        res.json({sucesso:true,job:r.rows[0]});
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
+});
+
+app.get('/api/v103/jobs/recent',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+    if(!db)return res.json({sucesso:true,jobs:[],database:false});
+
+    try{
+        const me=await usuarioML(token);
+        const limit=Math.max(1,Math.min(20,Number(req.query.limit||8)));
+        const r=await dbQuery(`
+          SELECT id,type,status,progress_current,progress_total,processed,
+                 errors,message,result,created_at,updated_at,finished_at
+          FROM ml_jobs
+          WHERE seller_id=$1
+          ORDER BY updated_at DESC
+          LIMIT $2
+        `,[me.id,limit]);
+
+        res.json({sucesso:true,database:true,jobs:r.rows});
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
+});
+
+app.get('/api/v103/runtime/status',async(req,res)=>{
+    const token=obterToken(req);
+    if(!token)return respostaErro(res,401,'Conecte uma conta Mercado Livre.');
+
+    try{
+        const me=await usuarioML(token);
+        let dbStatus={available:Boolean(db),items:0,jobs_running:0};
+
+        if(db){
+            try{
+                const [i,j]=await Promise.all([
+                    dbQuery(`SELECT COUNT(*)::int total FROM ml_items WHERE seller_id=$1`,[me.id]),
+                    dbQuery(`SELECT COUNT(*)::int total FROM ml_jobs WHERE seller_id=$1 AND status IN ('queued','running','paused')`,[me.id])
+                ]);
+                dbStatus={
+                    available:true,
+                    items:Number(i.rows[0]?.total||0),
+                    jobs_running:Number(j.rows[0]?.total||0)
+                };
+            }catch(e){
+                dbStatus={available:false,items:0,jobs_running:0,error:e.message};
+            }
+        }
+
+        res.json({
+            sucesso:true,
+            version:'V103',
+            seller_id:String(me.id),
+            database:dbStatus,
+            worker:Boolean(ML_WORKER_ENABLED),
+            limits:{
+                ui_page:50,
+                sync_batch:1000,
+                pause_db_batch:500,
+                pause_concurrency_max:16
+            }
+        });
+    }catch(e){
+        respostaErro(res,500,e.message);
+    }
+});
+
 async function workerLoop(indice) {
     while(true) {
         try {
@@ -9740,6 +11337,7 @@ async function workerLoop(indice) {
                 try {
                     if(job.type==='price_sync') await processarPrecosEscala(job);
                     else if(job.type==='freight_sync') await processarFretesEscala(job);
+                    else if(job.type==='pause_mass_v103') await processarPausaMassaV103(job);
                     else if(job.type==='price_update_mass') await processarAtualizacaoPrecosMassaV36(job);
                     else if(job.type==='mass_create') await processarCriacaoMassaV36(job);
                     else if(job.type==='mass_create_v37') await processarCriacaoMassaV37(job);
@@ -10322,11 +11920,28 @@ app.post('/api/v92/precos/direto',async(req,res)=>{
             };
         });
 
+        let db_mirrored=false;
+        if(db){
+            try{
+                const sellerId=await sellerIdRequestV103(req,token);
+                const linhas=resultados
+                  .filter(x=>x.sucesso&&Number.isFinite(Number(x.price)))
+                  .map(x=>({id:String(x.id),price:Number(x.price)}));
+                if(linhas.length){
+                    await atualizarPrecosDbLoteV26(sellerId,linhas);
+                }
+                db_mirrored=true;
+            }catch(e){
+                console.warn('[V103 MIRROR PREÇOS]',e.message);
+            }
+        }
+
         return res.json({
             sucesso:true,
             mode:'direct_price_v92',
             total:resultados.length,
             falhas:resultados.filter(x=>!x.sucesso).length,
+            db_mirrored,
             resultados
         });
     }catch(e){
@@ -10504,11 +12119,38 @@ app.post('/api/v93/fretes/lote1000',async(req,res)=>{
             };
         });
 
+        let db_mirrored=false;
+        if(db){
+            try{
+                const sellerId=await sellerIdRequestV103(req,token);
+                const bons=saida
+                  .filter(x=>x.sucesso&&Number.isFinite(Number(x.shipping_cost)))
+                  .map(x=>({
+                      id:String(x.id),
+                      custo:Number(x.shipping_cost||0),
+                      gratis:Boolean(x.free_shipping)
+                  }));
+                const ruins=saida
+                  .filter(x=>!x.sucesso)
+                  .map(x=>({
+                      id:String(x.id),
+                      erro:String(x.erro||'Falha ao consultar frete.')
+                  }));
+
+                if(bons.length)await atualizarFretesDbLote(sellerId,bons);
+                if(ruins.length)await marcarErrosFreteDbLote(sellerId,ruins);
+                db_mirrored=true;
+            }catch(e){
+                console.warn('[V103 MIRROR FRETES]',e.message);
+            }
+        }
+
         return res.json({
             sucesso:true,
             mode:'direct_freight_v93_batch_1000',
             total:saida.length,
             falhas:saida.filter(x=>!x.sucesso).length,
+            db_mirrored,
             resultados:saida
         });
     }catch(e){
@@ -12538,6 +14180,46 @@ app.post('/api/scale/sync',async(req,res)=>{
         const me=await usuarioML(token);
         const sellerId=me.id;
 
+        // V105: o worker roda fora da requisição HTTP, então precisa existir
+        // uma conexão OAuth persistente para este seller.
+        const tokenPersistente=await obterTokenPersistenteParaSeller(sellerId);
+        if(!tokenPersistente){
+            console.warn('[SYNC V105 START] Seller sem conexão OAuth persistente:',sellerId);
+            return respostaErro(
+                res,
+                409,
+                'A conta Mercado Livre não está salva para processamento em segundo plano. Reconecte sua conta Mercado Livre e tente novamente.'
+            );
+        }
+
+        console.log('[SYNC V106 START] seller=',sellerId,'· conexão OAuth persistente OK');
+
+        // V106: limpa concorrência criada por versões antigas.
+        // Apenas o job ativo mais recente do seller pode continuar.
+        await dbQuery(`
+          WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER(
+                     PARTITION BY seller_id
+                     ORDER BY GREATEST(COALESCE(progress_current,0),COALESCE(processed,0)) DESC,
+                              updated_at DESC,
+                              id DESC
+                   ) AS rn
+            FROM ml_jobs
+            WHERE seller_id=$1
+              AND type='full_sync'
+              AND status IN ('queued','running')
+          )
+          UPDATE ml_jobs j
+          SET status='failed',
+              locked_at=NULL,
+              finished_at=NOW(),
+              message='Processo duplicado encerrado automaticamente. A sincronização mais recente continuará.',
+              updated_at=NOW()
+          FROM ranked r
+          WHERE j.id=r.id AND r.rn>1
+        `,[sellerId]);
+
         // Se o processo morreu com job "running", libera para retomada.
         await dbQuery(`
           UPDATE ml_jobs SET
@@ -12620,7 +14302,7 @@ app.post('/api/scale/sync',async(req,res)=>{
 
         // 3) Nova varredura.
         const job=await criarJob(sellerId,'full_sync',{
-            source:'manual_v84',
+            source:'manual_v106',
             batch_size:1000,
             resume_strategy:'seen_checkpoint'
         });
@@ -14520,7 +16202,7 @@ function resultadoIdempotentePromocaoV91(action,e){
 async function criarJobPromocaoV91(sellerId,payload,targets){
     await inicializarPromocoesV91();
 
-    const client=await db.connect();
+    const client=await dbConnectComRetryV104();
 
     try{
         await client.query('BEGIN');
@@ -16406,7 +18088,7 @@ async function processarMonitoresV96(){
     monitorInteligenciaBusyV96=true;
     try{
         await garantirInteligenciaV96();
-        const client=await db.connect();
+        const client=await dbConnectComRetryV104();
         let lista=[];
         try{
             await client.query('BEGIN');
@@ -16454,6 +18136,7 @@ async function iniciarCoreEscala(){
         // Não abandona a inicialização se o PostgreSQL do Render estiver reiniciando.
         await aguardarPostgresProntoV80();
         await inicializarBancoEscala();
+        await inicializarBuscaRapidaV103();
 
         try{
             await inicializarAgentesV62();
@@ -16471,10 +18154,16 @@ async function iniciarCoreEscala(){
         }
 
         if(ML_WORKER_ENABLED){
+            // V106: após restart do Render, os jobs que estavam "running"
+            // pertencem ao processo anterior e devem voltar para queued.
+            await normalizarJobsFullSyncV106({startup:true});
+
             coreEscalaIniciadoV80=true;
             syncWorkerDedicadoV76();
             for(let i=1;i<=ML_WORKER_CONCURRENCY;i++)workerLoop(i);
-            console.log(`[ESCALA V83] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · circuit breaker PostgreSQL ativo.`);
+            iniciarRecoverySyncV106();
+
+            console.log(`[ESCALA V106] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · checkpoint + recovery automático ativos.`);
         }
     }catch(e){
         console.error('[ESCALA INIT V80]',e);
