@@ -8,7 +8,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>ML Hub Pro | Scale Commerce OS V104</title>
+    <title>ML Hub Pro | Scale Commerce OS V107.1</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -2661,7 +2661,7 @@ button:disabled{opacity:.45!important}
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div id="sync-card-anuncios-v26" class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; checkpoint &#183; V106</div>
+                        <div class="text-[10px] font-black uppercase tracking-[.12em] text-yellow-400">An&#250;ncios &#183; lotes de 1.000 &#183; checkpoint &#183; V107.1</div>
                         <div id="sync-status-anuncios-v26" class="text-[10px] text-slate-500">Aguardando</div>
                     </div>
                     <div class="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -20136,12 +20136,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   },900);
 
   carregarJobsRecentesV103();
-  processosServerTimerV103=setInterval(carregarJobsRecentesV103,5000);
+  processosServerTimerV103=setInterval(carregarJobsRecentesV103,15000);
 });
 </script>
 
 
-<script id="mlhub-v106-sync-anuncios-server-job">
+<script id="mlhub-v107-sync-anuncios-server-job">
 /* =========================================================
    V106 — PUXAR ANÚNCIOS COM CHECKPOINT + RECOVERY AUTOMÁTICO
    - corrige conflito entre V88/V93 direto e Gestão V103/V104;
@@ -20177,28 +20177,8 @@ async function acompanharAnunciosV105(jobId){
     const atual=Number(j.progress_current||j.processed||0);
     const total=Number(j.progress_total||0);
 
-    // V106: se o backend reiniciou ou perdeu o PostgreSQL e o job ficou
-    // sem heartbeat, solicita ao endpoint idempotente que acorde/retome
-    // o MESMO checkpoint. Limite de 1 tentativa por minuto.
-    const atualizadoEm=new Date(j.updated_at||0).getTime();
-    if(
-      j.status==='running' &&
-      atualizadoEm>0 &&
-      Date.now()-atualizadoEm>120000 &&
-      (!window.__mlhubV106UltimoWake || Date.now()-window.__mlhubV106UltimoWake>60000)
-    ){
-      window.__mlhubV106UltimoWake=Date.now();
-      fetch(`${RENDER_URL}/api/scale/sync`,{
-        method:'POST',
-        cache:'no-store',
-        headers:{
-          Authorization:obterToken(),
-          'Content-Type':'application/json',
-          Accept:'application/json'
-        },
-        body:'{}'
-      }).catch(()=>{});
-    }
+    // A tela apenas acompanha o job. O backend controla o recovery com
+    // heartbeat/lease; o navegador não tenta reiniciar um worker ativo.
 
     atualizarProgressoV26('anuncios',{
       status:j.status||'running',
@@ -20207,12 +20187,12 @@ async function acompanharAnunciosV105(jobId){
       mensagem:j.message||'Sincronizando anúncios...'
     });
 
-    // Mostra os anúncios à medida que cada lote de ~1.000 chega ao PostgreSQL.
+    // O backend salva por lote de 1.000; a tela recarrega a lista a cada 5.000 para evitar renderizações pesadas.
     if(
       atual>0 &&
       (
         mlHubSyncAnunciosV105UltimoRender===0 ||
-        atual-mlHubSyncAnunciosV105UltimoRender>=1000
+        atual-mlHubSyncAnunciosV105UltimoRender>=5000
       )
     ){
       mlHubSyncAnunciosV105UltimoRender=atual;
@@ -20224,7 +20204,7 @@ async function acompanharAnunciosV105(jobId){
     if(['queued','running'].includes(String(j.status||''))){
       mlHubSyncAnunciosV105Timer=setTimeout(
         ()=>acompanharAnunciosV105(jobId),
-        1500
+        3500
       );
       return;
     }
@@ -20276,7 +20256,7 @@ async function acompanharAnunciosV105(jobId){
     if(temporario){
       mlHubSyncAnunciosV105Timer=setTimeout(
         ()=>acompanharAnunciosV105(jobId),
-        3500
+        8000
       );
       return;
     }
