@@ -751,7 +751,7 @@ app.get('/api/healthz',(req,res)=>{
     res.json({
         ok:true,
         service:'ML Hub Pro',
-        version: 'ml-hub-pro-v104-oauth-db-resiliente',
+        version: 'ml-hub-pro-v107-sync-incremental-protegido',
         auth_configured:ML_HUB_SAAS_AUTH,
         oauth_configured:Boolean(ML_APP_CLIENT_ID&&ML_APP_CLIENT_SECRET&&ML_APP_REDIRECT_URI),
         token_encryption:Boolean(ML_HUB_TOKEN_ENCRYPTION_KEY),
@@ -7208,8 +7208,10 @@ function criarPoolPostgresV104(connectionString){
     return new Pool({
         connectionString,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-        max: Math.max(2, Number(process.env.DB_POOL_MAX || 10)),
-        idleTimeoutMillis: 30000,
+        // Um pool limitado evita tempestade de novas conexões/DNS quando
+        // vários workers e telas consultam o banco ao mesmo tempo.
+        max: Math.max(2, Math.min(8, Number(process.env.DB_POOL_MAX || 8))),
+        idleTimeoutMillis: 45000,
         connectionTimeoutMillis: 12000,
         keepAlive:true,
         keepAliveInitialDelayMillis:10000,
@@ -7257,13 +7259,16 @@ let dbFalhasConsecutivasV83=0;
 function ativarCooldownDbV83(e){
     if(!erroPostgresTemporarioV80(e))return;
     dbFalhasConsecutivasV83=Math.min(20,dbFalhasConsecutivasV83+1);
-    const ms=Math.min(15000,1000*Math.max(2,dbFalhasConsecutivasV83));
+    const dns=erroDnsBancoV81(e);
+    const base=dns?2500:1000;
+    const expoente=Math.min(3,Math.max(0,dbFalhasConsecutivasV83-1));
+    const ms=Math.min(15000,base*Math.pow(2,expoente))+Math.floor(Math.random()*500);
     dbCooldownAteV83=Math.max(dbCooldownAteV83,Date.now()+ms);
 }
 
 async function esperarCooldownDbV83(){
     const restante=dbCooldownAteV83-Date.now();
-    if(restante>0)await esperarDbV80(restante);
+    if(restante>0)await esperarDbV80(restante+Math.floor(Math.random()*350));
 }
 
 function limparCooldownDbV83(){
@@ -7405,13 +7410,12 @@ async function dbConnectComRetryV104(opcoes={}){
                 throw e;
             }
 
-            const espera=Math.min(
-                12000,
-                450*Math.pow(2,tentativa-1)+Math.floor(Math.random()*350)
-            );
+            const espera=erroDnsBancoV81(e)
+                ? 200+Math.floor(Math.random()*400)
+                : Math.min(10000,500*Math.pow(2,tentativa-1))+Math.floor(Math.random()*500);
 
             console.warn(
-                `[POSTGRES V104] connect tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Retry em ${espera}ms.`
+                `[POSTGRES V107] connect tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}); aguardando retry com backoff compartilhado.`
             );
             await esperarDbV80(espera);
         }
@@ -7448,12 +7452,15 @@ async function dbQuery(text, params=[], opcoes={}) {
             }
             if(!erroPostgresTemporarioV80(e) || tentativa>=maxTentativas)throw e;
 
-            // Backoff curto com limite. Em recovery do Render, insistimos sem derrubar o job.
-            const espera=Math.min(8000,350*Math.pow(2,tentativa-1));
+            // O cooldown compartilhado segura a tempestade de retries DNS.
+            // O pequeno atraso local apenas separa chamadas que falharam juntas.
+            const espera=erroDnsBancoV81(e)
+                ? 150+Math.floor(Math.random()*350)
+                : Math.min(5000,400*Math.pow(2,tentativa-1))+Math.floor(Math.random()*300);
             if(erroDnsBancoV81(e)){
-                console.warn(`[POSTGRES V81] DNS do PostgreSQL indisponível (${hostBancoSeguroV81()}) · tentativa ${tentativa}/${maxTentativas}.`);
+                console.warn(`[POSTGRES V107] DNS do PostgreSQL indisponível (${hostBancoSeguroV81()}) · tentativa ${tentativa}/${maxTentativas}; aguardando recuperação do DNS.`);
             }else{
-                console.warn(`[POSTGRES V81] tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Nova tentativa em ${espera}ms.`);
+                console.warn(`[POSTGRES V107] tentativa ${tentativa}/${maxTentativas} falhou (${e.code||e.message}). Nova tentativa em ${espera}ms.`);
             }
             await esperarDbV80(espera);
         }
@@ -7474,9 +7481,9 @@ async function aguardarPostgresProntoV80(){
             if(!erroPostgresTemporarioV80(e))throw e;
             const espera=Math.min(15000,1000*Math.min(tentativa,15));
             if(erroDnsBancoV81(e)){
-                console.warn(`[POSTGRES V81] DNS não encontrou o banco "${hostBancoSeguroV81()}". O serviço continuará tentando. Se persistir, atualize DATABASE_URL com a Internal Database URL atual do PostgreSQL no Render.`);
+                console.warn(`[POSTGRES V107] DNS não encontrou o banco "${hostBancoSeguroV81()}". O serviço continuará tentando sem recriar o banco; confira DATABASE_URL no Render se persistir.`);
             }else{
-                console.warn(`[POSTGRES V81] banco em inicialização/recovery. Tentando novamente em ${espera}ms...`);
+                console.warn(`[POSTGRES V107] banco em inicialização/recovery. Tentando novamente em ${espera}ms...`);
             }
             await esperarDbV80(espera);
         }
@@ -7672,8 +7679,11 @@ async function inicializarBancoEscala() {
       CREATE INDEX IF NOT EXISTS idx_ml_mass_create_results_job
       ON ml_mass_create_results(job_id,seq);
 
-      DELETE FROM ml_sync_seen
-      WHERE created_at < NOW() - INTERVAL '3 days';
+      DELETE FROM ml_sync_seen s
+      USING ml_jobs j
+      WHERE j.id=s.job_id
+        AND j.status IN ('completed','failed')
+        AND COALESCE(j.finished_at,j.updated_at)<NOW()-INTERVAL '7 days';
     `);
     console.log('[ESCALA] PostgreSQL pronto.');
 }
@@ -8288,17 +8298,16 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
     recuperarSyncV106Busy=true;
 
     try{
-        let retomados=0;
-
-        // No startup, qualquer job running pertence ao processo Node anterior.
-        // Em runtime, só recupera se perdeu heartbeat por tempo suficiente.
+        // No boot do processo anterior, os jobs running pertencem ao Node que
+        // acabou de ser encerrado. Em runtime, só recuperamos após 10 minutos
+        // sem heartbeat para não duplicar o worker durante pausas de DNS/DB.
         const rr=startup
           ? await dbQuery(`
               UPDATE ml_jobs
               SET status='queued',
                   locked_at=NULL,
                   available_at=NOW(),
-                  message='Servidor reiniciado. Retomando automaticamente do último checkpoint.',
+                  message='Servidor reiniciado. Retomando do último checkpoint confirmado pela V107.',
                   updated_at=NOW()
               WHERE type='full_sync' AND status='running'
               RETURNING id,seller_id
@@ -8308,18 +8317,18 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
               SET status='queued',
                   locked_at=NULL,
                   available_at=NOW(),
-                  message='Worker interrompido. Retomando automaticamente do último checkpoint.',
+                  message='Worker sem heartbeat por mais de 10 minutos. Retomando do último checkpoint confirmado.',
                   updated_at=NOW()
               WHERE type='full_sync'
                 AND status='running'
-                AND updated_at<NOW()-INTERVAL '120 seconds'
+                AND updated_at<NOW()-INTERVAL '10 minutes'
               RETURNING id,seller_id
             `,[],{tentativas:2});
 
-        retomados=Number(rr?.rowCount||0);
+        const retomados=Number(rr?.rowCount||0);
 
-        // Se versões anteriores criaram jobs duplicados para o mesmo seller,
-        // mantém somente o mais recente em queued/running.
+        // Se versões antigas criaram jobs duplicados para o mesmo seller,
+        // mantém somente o que tem maior progresso confirmado.
         const duplicados=await dbQuery(`
           WITH ranked AS (
             SELECT id,
@@ -8337,7 +8346,7 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
           SET status='failed',
               locked_at=NULL,
               finished_at=NOW(),
-              message='Processo duplicado encerrado automaticamente pela V106. O job mais recente continuará do checkpoint.',
+              message='Processo duplicado encerrado automaticamente pela V107. O job com maior checkpoint continuará.',
               updated_at=NOW()
           FROM ranked r
           WHERE j.id=r.id AND r.rn>1
@@ -8346,7 +8355,7 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
 
         if(retomados || Number(duplicados.rowCount||0)){
             console.warn(
-              '[SYNC V106 RECOVERY]',
+              '[SYNC V107 RECOVERY]',
               'retomados=',retomados,
               'duplicados encerrados=',Number(duplicados.rowCount||0)
             );
@@ -8356,7 +8365,7 @@ async function normalizarJobsFullSyncV106({startup=false}={}){
         return retomados;
     }catch(e){
         if(!erroPostgresTemporarioV80(e)){
-            console.warn('[SYNC V106 RECOVERY]',e.message);
+            console.warn('[SYNC V107 RECOVERY]',e.message);
         }
         return 0;
     }finally{
@@ -8376,35 +8385,57 @@ function iniciarRecoverySyncV106(){
 
 
 async function processarSyncCompleto(job) {
-    console.log('[SYNC V106 WORKER] iniciando job',job.id,'seller',job.seller_id);
+    // Heartbeat contínuo durante leitura do scan, download dos detalhes e gravação.
+    // Antes ele existia apenas durante o bulk, deixando o job parecer parado.
+    const pararHeartbeat=heartbeatSyncV106(
+        job.id,
+        'Worker ativo · sincronização incremental em andamento.'
+    );
+    try{
+        return await processarSyncCompletoInternoV107(job);
+    }finally{
+        pararHeartbeat();
+    }
+}
+
+async function processarSyncCompletoInternoV107(job) {
+    console.log('[SYNC V107 WORKER] iniciando job',job.id,'seller',job.seller_id);
 
     const token=await obterTokenPersistenteParaSeller(job.seller_id);
     if(!token){
-        console.warn('[SYNC V106 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
+        console.warn('[SYNC V107 WORKER] token persistente indisponível · job',job.id,'seller',job.seller_id);
         throw new Error('Token Mercado Livre indisponível para o seller do job.');
     }
 
     const TAMANHO_LOTE=1000;
-
     let scrollId=job.cursor||null;
     let total=Number(job.progress_total||0);
     let errors=Number(job.errors||0);
-    let removidos=0;
 
-    /*
-      O contador verdadeiro vem da tabela ml_sync_seen. Isso resolve o caso em que
-      o processo caiu depois de salvar o lote mas antes de atualizar ml_jobs.
-    */
-    let seenCount=Number((await dbQuery(
+    // Migra jobs V106 uma única vez: o cursor antigo podia ser confirmado
+    // antes do lote terminar e pular IDs. Recomeçamos o scan, mas pulamos
+    // todos os anúncios que já estão realmente salvos em ml_items.
+    const payloadAtual=job.payload&&typeof job.payload==='object'?job.payload:{};
+    if(payloadAtual.sync_engine_version!=='v107-safe-incremental'){
+        await dbQuery(`
+          UPDATE ml_jobs
+          SET cursor=NULL,
+              payload=COALESCE(payload,'{}'::jsonb) || $2::jsonb,
+              message='V107: reconstruindo a leitura para garantir que nenhum anúncio não salvo seja pulado. Anúncios já cadastrados serão preservados.',
+              updated_at=NOW()
+          WHERE id=$1
+        `,[job.id,JSON.stringify({sync_engine_version:'v107-safe-incremental'})]);
+        scrollId=null;
+        console.log('[SYNC V107 WORKER] job',job.id,'· migração segura do checkpoint V106 concluída');
+    }
+
+    let processed=Number((await dbQuery(
         `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
         [job.id]
     )).rows[0]?.total||0);
 
-    let processed=Math.max(Number(job.processed||0),seenCount);
-
     if(processed===0 && !scrollId){
         await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
-        seenCount=0;
     }
 
     await dbQuery(`
@@ -8417,33 +8448,50 @@ async function processarSyncCompleto(job) {
       WHERE id=$1
     `,[job.id,processed,
        processed
-         ? `Retomando sincronização do ponto salvo · ${processed.toLocaleString('pt-BR')} anúncio(s) concluído(s).`
-         : 'Iniciando sincronização em lotes de 1.000 anúncios.'
+         ? `Retomando com ${processed.toLocaleString('pt-BR')} anúncio(s) já confirmados; os anúncios salvos serão ignorados.`
+         : 'Iniciando leitura incremental em lotes de até 1.000 anúncios.'
     ]);
 
     let terminou=false;
-    let paginasDesdeHeartbeat=0;
     let reiniciosCursor=0;
+    let paginasSemNovosCheckpoint=0;
 
     while(!terminou){
         const idsLote=[];
+        const idsLoteSet=new Set();
+        let cursorLote=scrollId;
+        let reiniciarAposLote=false;
         let paginasLote=0;
 
         /*
-          Coleta até 1.000 IDs NOVOS. Quando o scroll expira, reiniciamos o scan
-          do começo, mas pulamos tudo que já está em ml_sync_seen. Assim a carga
-          continua logicamente do ponto salvo sem perder nem duplicar anúncios.
+          O cursor salvo em ml_jobs representa somente páginas cujos IDs já
+          foram processados. Enquanto juntamos um lote, o cursor fica em memória.
+          Assim, uma queda antes da gravação faz o scan repetir a partir do último
+          checkpoint confirmado, sem perder IDs que estavam no lote pendente.
         */
         while(idsLote.length<TAMANHO_LOTE && !terminou){
-            let pagina=await buscarPaginaScanV84({
+            const pagina=await buscarPaginaScanV84({
                 sellerId:job.seller_id,
                 token,
-                scrollId
+                scrollId:cursorLote
             });
 
             if(pagina.cursor_expirado){
                 reiniciosCursor++;
+                cursorLote=null;
                 scrollId=null;
+                paginasSemNovosCheckpoint=0;
+
+                if(reiniciosCursor>20){
+                    throw new Error('O Mercado Livre invalidou o cursor repetidas vezes. O último checkpoint permanece salvo para nova tentativa.');
+                }
+
+                if(idsLote.length){
+                    // Não descartamos os IDs já lidos. Salvamos esse lote e
+                    // depois recomeçamos o scan desde o início, pulando salvos.
+                    reiniciarAposLote=true;
+                    break;
+                }
 
                 await dbQuery(`
                   UPDATE ml_jobs SET
@@ -8452,13 +8500,8 @@ async function processarSyncCompleto(job) {
                     updated_at=NOW()
                   WHERE id=$1
                 `,[job.id,
-                   `Cursor do Mercado Livre expirou. Reconstruindo automaticamente a posição salva (${processed.toLocaleString('pt-BR')} já concluídos).`
+                   `Cursor do Mercado Livre expirou. Reiniciando a leitura com segurança; ${processed.toLocaleString('pt-BR')} anúncio(s) já confirmados serão ignorados.`
                 ]);
-
-                // Evita loop infinito se a API rejeitar repetidamente um cursor.
-                if(reiniciosCursor>10){
-                    throw new Error('O Mercado Livre invalidou o cursor repetidas vezes. A sincronização será retomada automaticamente.');
-                }
                 continue;
             }
 
@@ -8469,55 +8512,79 @@ async function processarSyncCompleto(job) {
                 `,[job.id,total]);
             }
 
-            const idsPagina=pagina.results;
+            const idsPagina=[...new Set((pagina.results||[]).map(String).filter(Boolean))];
             paginasLote++;
-            paginasDesdeHeartbeat++;
 
             if(!idsPagina.length){
                 terminou=true;
+                cursorLote=null;
                 scrollId=null;
                 break;
             }
 
-            /*
-              Consulta os IDs já confirmados neste mesmo job.
-              Na retomada após restart/cursor expirado, isso evita baixar tudo de novo.
-            */
-            const ja=await dbQuery(`
+            // O critério para pular detalhes é o anúncio existir em ml_items.
+            // ml_sync_seen sozinho não basta: versões anteriores também marcavam
+            // IDs cujo bulk falhou. Esses IDs são tentados novamente aqui.
+            const existentes=await dbQuery(`
               SELECT item_id
-              FROM ml_sync_seen
-              WHERE job_id=$1 AND item_id=ANY($2::text[])
-            `,[job.id,idsPagina]);
+              FROM ml_items
+              WHERE seller_id=$1 AND item_id=ANY($2::text[])
+            `,[job.seller_id,idsPagina]);
 
-            const vistos=new Set(ja.rows.map(r=>String(r.item_id)));
+            const salvos=new Set(existentes.rows.map(r=>String(r.item_id)));
+            const idsJaSalvos=idsPagina.filter(id=>salvos.has(String(id)));
+
+            if(idsJaSalvos.length){
+                const marcados=await dbQuery(`
+                  INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
+                  SELECT $1,$2,x
+                  FROM unnest($3::text[]) AS x
+                  ON CONFLICT(job_id,item_id) DO NOTHING
+                  RETURNING item_id
+                `,[job.id,job.seller_id,idsJaSalvos]);
+                processed+=Number(marcados.rowCount||0);
+            }
+
+            // Percorre a página inteira antes de fechar o lote. Isso evita
+            // pular os IDs que vêm depois do 1.000º novo ID na mesma página.
             for(const id of idsPagina){
-                if(!vistos.has(String(id)) && !idsLote.includes(String(id))){
-                    idsLote.push(String(id));
-                    if(idsLote.length>=TAMANHO_LOTE)break;
+                const chave=String(id);
+                if(!salvos.has(chave)&&!idsLoteSet.has(chave)){
+                    idsLoteSet.add(chave);
+                    idsLote.push(chave);
                 }
             }
 
-            scrollId=pagina.scroll_id||null;
-            if(!scrollId){
-                terminou=true;
-                break;
+            cursorLote=pagina.scroll_id||null;
+            scrollId=cursorLote;
+            if(!cursorLote)terminou=true;
+
+            if(idsLote.length===0){
+                paginasSemNovosCheckpoint++;
+                // Quando só encontramos anúncios já salvos, é seguro avançar
+                // o checkpoint imediatamente, pois não há detalhes pendentes.
+                if(paginasSemNovosCheckpoint>=5||!cursorLote){
+                    await dbQuery(`
+                      UPDATE ml_jobs SET
+                        cursor=$2,
+                        processed=$3,
+                        progress_current=$3,
+                        progress_total=CASE WHEN $4>0 THEN $4 ELSE progress_total END,
+                        message=$5,
+                        updated_at=NOW()
+                      WHERE id=$1
+                    `,[job.id,cursorLote,processed,total,
+                       `Leitura incremental · ${processed.toLocaleString('pt-BR')} anúncio(s) já salvos/confirmados · nenhum detalhe repetido`
+                    ]);
+                    paginasSemNovosCheckpoint=0;
+                }
+            }else{
+                paginasSemNovosCheckpoint=0;
             }
 
-            if(paginasDesdeHeartbeat>=5){
-                paginasDesdeHeartbeat=0;
-                await dbQuery(`
-                  UPDATE ml_jobs SET
-                    cursor=$2,
-                    processed=$3,
-                    progress_current=$3,
-                    progress_total=CASE WHEN $4>0 THEN $4 ELSE progress_total END,
-                    message=$5,
-                    updated_at=NOW()
-                  WHERE id=$1
-                `,[job.id,scrollId,processed,total,
-                   `Lendo Mercado Livre · próximo lote ${idsLote.length.toLocaleString('pt-BR')}/${TAMANHO_LOTE.toLocaleString('pt-BR')} · ${processed.toLocaleString('pt-BR')} já salvos`
-                ]);
-            }
+            // Fecha o lote somente depois de terminar a página inteira.
+            if(idsLote.length>=TAMANHO_LOTE)break;
+            if(!cursorLote)break;
         }
 
         if(!idsLote.length){
@@ -8525,76 +8592,71 @@ async function processarSyncCompleto(job) {
             continue;
         }
 
+        // Atualiza a mensagem, mas NÃO grava o cursor ainda: os detalhes deste
+        // lote precisam estar salvos e confirmados antes de avançar o checkpoint.
         await dbQuery(`
           UPDATE ml_jobs SET
-            cursor=$2,
-            message=$3,
+            message=$2,
             updated_at=NOW()
           WHERE id=$1
-        `,[job.id,scrollId,
-           `Baixando detalhes de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) · lote de 1.000`
+        `,[job.id,
+           `Baixando detalhes de ${idsLote.length.toLocaleString('pt-BR')} anúncio(s) novo(s) · lote de até 1.000 · ${processed.toLocaleString('pt-BR')} já confirmados`
         ]);
 
         console.log(
-            '[SYNC V106 WORKER] job',job.id,
-            '· baixando detalhes do lote',
-            idsLote.length,
-            '· já processados',processed
+            '[SYNC V107 WORKER] job',job.id,
+            '· detalhes somente de anúncios novos',idsLote.length,
+            '· já confirmados',processed,
+            '· páginas lidas',paginasLote
         );
 
-        const pararHeartbeatV106=heartbeatSyncV106(
-            job.id,
-            `Baixando detalhes do lote de até 1.000 anúncios · ${processed.toLocaleString('pt-BR')} já concluídos`
-        );
-
-        let detalhes;
-        try{
-            detalhes=await buscarItensBulkFreteRapido(token,idsLote);
-        }finally{
-            pararHeartbeatV106();
-        }
-
+        const detalhes=await buscarItensBulkFreteRapido(token,idsLote);
         const itens=idsLote.map(id=>detalhes.mapa[String(id)]).filter(Boolean);
 
         if(itens.length){
             await upsertItensDb(job.seller_id,itens);
         }
 
-        /*
-          Mesmo um anúncio permanentemente indisponível precisa ser contabilizado
-          como "visitado"; caso contrário uma retomada ficaria presa nele para sempre.
-          As falhas ficam registradas em errors.
-        */
-        await dbQuery(`
+        // Confirma IDs só depois do upsert. Se um detalhe não veio no bulk,
+        // ele fica contado como visitado, mas será tentado novamente se o scan
+        // precisar ser reconstruído, pois ainda não existe em ml_items.
+        const marcadosNovos=await dbQuery(`
           INSERT INTO ml_sync_seen(job_id,seller_id,item_id)
           SELECT $1,$2,x
           FROM unnest($3::text[]) AS x
           ON CONFLICT(job_id,item_id) DO NOTHING
+          RETURNING item_id
         `,[job.id,job.seller_id,idsLote]);
 
         const falhasLote=Math.max(0,idsLote.length-itens.length);
-        errors+=falhasLote;
-
-        // Recalcula do banco para checkpoint idempotente.
         processed=Number((await dbQuery(
             `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
             [job.id]
-        )).rows[0]?.total||processed+idsLote.length);
+        )).rows[0]?.total||processed+Number(marcadosNovos.rowCount||0));
+        const ausentesAteAgora=Number((await dbQuery(`
+          SELECT COUNT(*)::int total
+          FROM ml_sync_seen s
+          LEFT JOIN ml_items m
+            ON m.seller_id=s.seller_id AND m.item_id=s.item_id
+          WHERE s.job_id=$1 AND m.item_id IS NULL
+        `,[job.id])).rows[0]?.total||0);
+        errors=ausentesAteAgora;
 
         const totalExibido=total>0?total:processed;
         const pct=totalExibido?Math.min(100,Math.round(processed/totalExibido*100)):0;
 
-        /*
-          CHECKPOINT PROFISSIONAL:
-          cursor + quantidade + erros são persistidos somente depois que o lote
-          foi salvo. Se Node/Render/PostgreSQL cair depois daqui, volta exatamente
-          para este checkpoint.
-        */
+        if(reiniciarAposLote){
+            cursorLote=null;
+            scrollId=null;
+            terminou=false;
+        }
+
         console.log(
-          '[SYNC V106 WORKER] job',job.id,
+          '[SYNC V107 WORKER] job',job.id,
           '· lote salvo ·',processed,'/',totalExibido,
           '· itens',itens.length,
-          '· falhas',falhasLote
+          '· falhas',falhasLote,
+          '· checkpoint',cursorLote?'confirmado':'reiniciar/scan concluído'
         );
 
         await dbQuery(`
@@ -8608,31 +8670,27 @@ async function processarSyncCompleto(job) {
             message=$6,
             updated_at=NOW()
           WHERE id=$1
-        `,[job.id,processed,total,errors,scrollId,
-           `Lote concluído · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · ${itens.length.toLocaleString('pt-BR')} salvos${falhasLote?` · ${falhasLote} não retornados pelo ML`:''}`
+        `,[job.id,processed,total,errors,cursorLote,
+           `Lote salvo · ${processed.toLocaleString('pt-BR')}/${totalExibido.toLocaleString('pt-BR')} · ${pct}% · ${itens.length.toLocaleString('pt-BR')} novos salvos${falhasLote?` · ${falhasLote} detalhe(s) não retornado(s)`:''} · anúncios antigos preservados`
         ]);
+
+        scrollId=cursorLote;
     }
 
-    /*
-      A exclusão local só acontece no final de uma varredura realmente concluída.
-      Durante pausas/restarts, nenhum anúncio existente é apagado.
-    */
-    const del=await dbQuery(`
-      DELETE FROM ml_items m
-      WHERE m.seller_id=$1
-        AND NOT EXISTS(
-          SELECT 1
-          FROM ml_sync_seen s
-          WHERE s.job_id=$2
-            AND s.seller_id=$1
-            AND s.item_id=m.item_id
-        )
-      RETURNING m.item_id
-    `,[job.seller_id,job.id]);
+    // Confirma a contagem real e não remove anúncios que não apareceram no scan.
+    processed=Number((await dbQuery(
+        `SELECT COUNT(*)::int total FROM ml_sync_seen WHERE job_id=$1`,
+        [job.id]
+    )).rows[0]?.total||processed);
 
-    removidos=del.rowCount||0;
-
-    await dbQuery(`DELETE FROM ml_sync_seen WHERE job_id=$1`,[job.id]);
+    const ausentesDetalhe=Number((await dbQuery(`
+      SELECT COUNT(*)::int total
+      FROM ml_sync_seen s
+      LEFT JOIN ml_items m
+        ON m.seller_id=s.seller_id AND m.item_id=s.item_id
+      WHERE s.job_id=$1 AND m.item_id IS NULL
+    `,[job.id])).rows[0]?.total||0);
+    errors=ausentesDetalhe;
 
     const finalTotal=total>0?total:processed;
 
@@ -8649,7 +8707,7 @@ async function processarSyncCompleto(job) {
         updated_at=NOW()
       WHERE id=$1
     `,[job.id,processed,finalTotal,errors,
-       `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) percorridos em lotes de 1.000 · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · ${removidos.toLocaleString('pt-BR')} removido(s) da base local.`
+       `Concluído: ${processed.toLocaleString('pt-BR')} anúncio(s) verificados em lotes de até 1.000 · ${errors.toLocaleString('pt-BR')} detalhe(s) não retornado(s) · anúncios já cadastrados preservados · nenhuma exclusão automática.`
     ]);
 }
 
@@ -11818,7 +11876,7 @@ async function prepararJobEscalaV26(sellerId,type,payload,total,{retomarFalha=tr
       WHERE seller_id=$1
         AND type=$2
         AND status='running'
-        AND updated_at<NOW()-INTERVAL '45 seconds'
+        AND updated_at<NOW()-INTERVAL '10 minutes'
     `,[sellerId,type]);
 
     const ativo=await dbQuery(`
@@ -14220,19 +14278,8 @@ app.post('/api/scale/sync',async(req,res)=>{
           WHERE j.id=r.id AND r.rn>1
         `,[sellerId]);
 
-        // Se o processo morreu com job "running", libera para retomada.
-        await dbQuery(`
-          UPDATE ml_jobs SET
-            status='queued',
-            locked_at=NULL,
-            available_at=NOW(),
-            message='Servidor reiniciado. Retomada automática a partir do checkpoint.',
-            updated_at=NOW()
-          WHERE seller_id=$1
-            AND type='full_sync'
-            AND status='running'
-            AND updated_at<NOW()-INTERVAL '45 seconds'
-        `,[sellerId]);
+        // Não reclassifica jobs running pela idade nesta rota. O recovery V107
+        // só libera um worker sem heartbeat por 10 minutos.
 
         // 1) Se já existe queued/running, usa o MESMO job.
         const ativo=await dbQuery(`
@@ -14302,9 +14349,10 @@ app.post('/api/scale/sync',async(req,res)=>{
 
         // 3) Nova varredura.
         const job=await criarJob(sellerId,'full_sync',{
-            source:'manual_v106',
+            source:'manual_v107',
             batch_size:1000,
-            resume_strategy:'seen_checkpoint'
+            resume_strategy:'saved_rows_checkpoint',
+            sync_engine_version:'v107-safe-incremental'
         });
 
         const jr=await dbQuery(`
@@ -14466,11 +14514,20 @@ async function atualizarStatusRealRestritosV72(token,sellerId){
         for(const id of bloco)if(!retornados.has(String(id)))ausentes.push(String(id));
     });
     if(validos.length)await upsertItensDb(sellerId,validos);
-    if(ausentes.length){
-        const unicos=[...new Set(ausentes)];
-        await dbQuery(`DELETE FROM ml_items WHERE seller_id=$1 AND item_id=ANY($2::text[])`,[sellerId,unicos]);
+    // Uma resposta bulk parcial/temporária não prova que o anúncio foi excluído.
+    // Mantemos os registros locais e apenas informamos os IDs não confirmados.
+    const ausentesUnicos=[...new Set(ausentes)];
+    if(ausentesUnicos.length){
+        avisos.push(`${ausentesUnicos.length} anúncio(s) não foram confirmados pela resposta bulk; os registros locais foram preservados.`);
     }
-    return {consultados:lista.length,atualizados:validos.length,removidos:[...new Set(ausentes)].length,avisos,synced_at:new Date().toISOString()};
+    return {
+        consultados:lista.length,
+        atualizados:validos.length,
+        ausentes_nao_confirmados:ausentesUnicos.length,
+        removidos:0,
+        avisos,
+        synced_at:new Date().toISOString()
+    };
 }
 
 /* V74 — status visual REAL do Seller Center.
@@ -18163,7 +18220,7 @@ async function iniciarCoreEscala(){
             for(let i=1;i<=ML_WORKER_CONCURRENCY;i++)workerLoop(i);
             iniciarRecoverySyncV106();
 
-            console.log(`[ESCALA V106] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · checkpoint + recovery automático ativos.`);
+            console.log(`[ESCALA V107] ${ML_WORKER_CONCURRENCY} worker(s) + worker dedicado de sync iniciados · checkpoint seguro + recovery protegido ativos.`);
         }
     }catch(e){
         console.error('[ESCALA INIT V80]',e);
